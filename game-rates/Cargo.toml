@@ -1,0 +1,23 @@
+[package]
+name = "enshwick-building-materials"
+version = "0.1.0"
+description = "Building blocks, roofs, overgrowth, decor and furniture: twice the output of the vanilla recipes for the same cost"
+keywords = ["enshrouded", "mod", "building", "recipes"]
+categories = ["game-development"]
+readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+enshwick-api.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

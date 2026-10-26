@@ -1,5 +1,5 @@
 ---
-id: flame-altar-count
+id: enshwick.more-altars
 name: More Altars
 summary: Sets how many Flame Altars a world allows at each Flame level, up to 32 altars in 16 bases. The default doubles the usual count.
 needs: everyone
@@ -7,12 +7,12 @@ settings:
   - key: altars_per_flame_level
     default: "[2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]"
     range: 1 to 32 for each level
-    meaning: How many altars each Flame level allows, from level 0. Later levels use the last number. An empty list keeps the usual counts.
+    meaning: How many altars each Flame level allows. The first number is level 0, which comes before the Flame level 1 a new world starts at. Later levels use the last number. An empty list keeps the usual counts.
     applies: at-once
 ---
 
 - By default, each Flame level allows twice as many Flame Altars as in the base
-  game: 2 at level 0, up to 32 at level 11.
+  game: 4 at Flame level 1, up to 32 from level 11 on.
 - You choose the count for each Flame level.
 - A world holds at most 16 bases.
 
@@ -31,7 +31,10 @@ put it. It runs on enshwick.
 
 You change the counts in the game, as the
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
-shows. Counts above 32 become 32.
+shows: each Flame level has its own slider from 1 to 32. A value outside 1 to
+32 in the file is set to the nearest limit, with a warning in the log. On the
+first start the mod takes the counts you set under its former name,
+`flame-altar-count`.
 
 ## Multiplayer
 

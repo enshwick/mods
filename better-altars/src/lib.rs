@@ -13,7 +13,6 @@ use arc_swap::ArcSwap;
 use enshwick::abi::Side;
 use enshwick::altars::{RAISED_ALTAR_ZONES, VANILLA_ALTAR_ZONES, VANILLA_ALTARS_PER_FLAME_LEVEL};
 use enshwick::points::OwnedPoint;
-use enshwick::points::flame_altar_count::AltarLimit;
 use enshwick::{Load, Mod, Off};
 
 /// The most altars with the base limit raised.
@@ -23,16 +22,34 @@ const VANILLA_CAP: u8 = VANILLA_ALTAR_ZONES;
 /// The labels of the settings on the Mods screen, per language.
 const TEXTS: &str = include_str!("texts.toml");
 
+/// How many Flame Altars a Flame level allows, `flame-altar-count:limit`:
+/// the answer is the altars.
+///
+/// The mod answers from its table and keeps the result between 1 and
+/// `cap`, links' answers too, so a link cannot raise a level past `cap`.
+/// Asked whenever the game checks the limit, on the thread that checks it,
+/// on the server and on every client: a linking mod belongs on both sides
+/// with `join: true`, or the two disagree on the limit.
+#[enshwick::point(name = "flame-altar-count:limit", mode = Override, output = u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AltarLimit {
+    /// The Flame level, from 0.
+    pub flame_level: u32,
+    /// The most altars the game's grouping takes on this build.
+    pub cap: u8,
+}
+
 /// More Altars settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 struct Settings {
-    /// Altars allowed at each Flame level, from level 0; levels past the end use
-    /// the last entry. At most 32, in at most 16 bases: altars whose zones touch
+    /// Altars this Flame level allows, from 1 to 32; the list starts at level
+    /// 0, before the level 1 a new world starts at, and levels past it use
+    /// its last entry. All altars fit in 16 bases: altars whose zones touch
     /// share a base, and an altar that would start a 17th base is refused.
     /// Vanilla: [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]
     /// A joined player runs with the server's table.
-    #[config(sync, text = "config.altars")]
+    #[config(sync, range = 1..=CAP, first = 0, text = "config.altars")]
     altars_per_flame_level: Vec<u16>,
 }
 
@@ -51,15 +68,15 @@ struct AltarTable {
 }
 
 impl AltarTable {
-    /// A table from the settings: capped at `cap`, at least 1, the vanilla
-    /// table when empty.
+    /// A table from the settings, already within 1 to [`CAP`]: lowered to
+    /// `cap`, the vanilla table when empty.
     fn new(levels: &[u16], cap: u8) -> Self {
         let table = if levels.is_empty() {
             VANILLA_ALTARS_PER_FLAME_LEVEL.to_vec()
         } else {
             levels
                 .iter()
-                .map(|&n| u8::try_from(n.clamp(1, u16::from(cap))).unwrap_or(cap))
+                .map(|&n| u8::try_from(n.min(u16::from(cap))).unwrap_or(cap))
                 .collect()
         };
         Self { table }
@@ -73,9 +90,6 @@ impl AltarTable {
             .any(|&n| n > u16::from(cap))
         {
             enshwick::warn!("altars above {cap} lowered to {cap}: {}", cap_reason(cap));
-        }
-        if settings.altars_per_flame_level.contains(&0) {
-            enshwick::warn!("a level with 0 altars raised to 1: every level allows one");
         }
         let table = Self::new(&settings.altars_per_flame_level, cap);
         enshwick::info!("altars per Flame level: {:?}", table.table);
@@ -134,10 +148,12 @@ impl AltarCount {
 impl Mod for AltarCount {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "flame-altar-count",
+            id: "enshwick.more-altars",
             side: BOTH,
             name: "More Altars",
             join: true,
+            was: ["flame-altar-count"],
+            points: [AltarLimit],
         )
     }
 
@@ -186,6 +202,7 @@ enshwick::declare_mod!(AltarCount);
 #[cfg(test)]
 mod tests {
     use enshwick::config::Config as _;
+    use enshwick::i18n::Language;
 
     use super::*;
 
@@ -206,24 +223,42 @@ mod tests {
 
     #[test]
     fn values_are_capped_and_an_empty_table_is_vanilla() {
-        let table = AltarTable::new(&[0, 3, 40], CAP);
+        let table = AltarTable::new(&[1, 3, 32], CAP);
         assert_eq!(
             [table.altars(0), table.altars(1), table.altars(2)],
             [1, 3, 32]
         );
         assert_eq!(AltarTable::new(&[], CAP).altars(0), 1);
-        let unlifted = AltarTable::new(&[0, 3, 40], VANILLA_CAP);
+        let unlifted = AltarTable::new(&[1, 3, 32], VANILLA_CAP);
         assert_eq!(unlifted.altars(2), 16);
     }
 
     #[test]
-    fn the_settings_are_labelled_in_all_languages() {
-        let texts: toml::Table = toml::from_str(TEXTS).unwrap();
-        for (language, table) in &texts {
-            for key in ["config.altars", "config.altars.doc"] {
-                assert!(table.get(key).is_some(), "{key} has no {language}");
+    fn the_setting_has_its_label_and_description_in_all_languages() {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        for field in Settings::schema().fields {
+            let doc = format!("{}.doc", field.text);
+            let element = format!("{}.element", field.text);
+            for key in [&field.text, &doc, &element] {
+                assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
             }
         }
+    }
+
+    #[test]
+    fn a_level_outside_1_to_32_altars_is_held_to_the_range() {
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::CLIENT)
+            .settings("altars_per_flame_level = [0, 40, 5]\n")
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, enshwick::abi::Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.altar_limit(0), Some(1));
+        assert_eq!(loader.altar_limit(1), Some(32));
+        assert_eq!(loader.altar_limit(2), Some(5));
+        assert!(loader.faults().is_empty());
     }
 
     #[test]

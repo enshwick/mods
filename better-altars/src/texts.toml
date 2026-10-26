@@ -1,7 +1,9 @@
 [en]
 "config.altars" = "Altars per Flame level"
-"config.altars.doc" = "Altars allowed at each Flame level, from level 0; later levels use the last entry. At most 32, in at most 16 bases. Vanilla: 1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16. Players on a server use the server's table."
+"config.altars.element" = "Altars at Flame level {n}"
+"config.altars.doc" = "Altars this Flame level allows, from 1 to 32; level 0 comes before the Flame level 1 a new world starts at, and levels past the list use its last entry. All altars fit in 16 bases. Vanilla: 1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16. Players on a server use the server's table."
 
 [uk]
-"config.altars" = "Вівтарі на рівень Полум'я"
-"config.altars.doc" = "Скільки вівтарів дозволено на кожному рівні Полум'я, від рівня 0; вищі рівні беруть останнє число. Не більше 32, щонайбільше в 16 базах. Без мода: 1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16. Гравці на сервері грають із таблицею сервера."
+"config.altars" = "Олтарі за Рівнем Полумʼя"
+"config.altars.element" = "Олтарі на Рівні Полумʼя {n}"
+"config.altars.doc" = "Скільки Олтарів Полумʼя дозволяє цей Рівень Полумʼя, від 1 до 32; рівень 0 передує Рівню Полумʼя 1, з якого починається новий світ, а вищі рівні беруть останнє число списку. Усі олтарі вміщуються в 16 оплотів. Без мода: 1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16. Гравці на сервері грають із таблицею сервера."

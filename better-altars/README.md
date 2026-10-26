@@ -11,19 +11,24 @@ in 16 bases. The default doubles the vanilla count. An Enshrouded mod for the
 
 ## How do I change the count?
 
-Edit `mod-configs/flame-altar-count.toml`, which the mod writes on first
-start. Each world keeps its own copy of it (see
-[Settings](https://github.com/enshwick/enshwick#settings)). The file keeps the
-mod's old name, so settings from before the rename still apply.
+Open the mod's gear on the Mods screen: each Flame level has its own slider.
+The settings live in `mod-configs/enshwick.more-altars.toml`, which the mod
+writes on first start, and each world keeps its own copy of it (see
+[Settings](https://github.com/enshwick/enshwick#settings)). On the first
+start the mod copies the settings it had under its old name,
+`flame-altar-count`.
 
 ```toml
 altars_per_flame_level = [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]
 ```
 
-Levels past the end of the list use its last entry. An empty list is the
-vanilla table. Values above 32 become 32, and 0 becomes 1; the log warns about
-each. While the mod keeps the game's limit of 16, values above 16 become 16.
-A change applies while the game runs.
+The first entry is Flame level 0, which comes before the Flame level 1 a new
+world starts at. Levels past the end of the list use its last entry. An empty
+list is the vanilla table. Each level takes 1 to 32 altars: a value outside
+that range in the file is set to the nearest limit, with a warning in the log.
+While the mod keeps the game's limit of 16, values above 16 become 16. A
+change applies while the game runs. The number of levels in the list changes
+in the file only.
 
 The mod's gear on the Mods screen shows the table, in the player's language
 where [texts.toml](src/texts.toml) has it, else in English.
@@ -61,7 +66,7 @@ The server stops before the world loads when:
 `logs/enshwick/loader.log` says why. Update Enshwick and the mod, or remove
 altars down to 16 with the mod running. The hold goes once the loaded world has
 had 16 altar zones or fewer for a minute. To open the world anyway, at your own
-risk, delete `mod-data/flame-altar-count/hold.txt`.
+risk, delete `mod-data/enshwick.more-altars/hold.txt`.
 
 Only a dedicated server keeps the hold. A player who hosts such a world must
 keep the mod running and up to date.
@@ -93,7 +98,9 @@ own file says.
 ## How do other mods change the limit?
 
 Other mods change how many altars a Flame level allows at the extension
-point `flame-altar-count:limit`. The answer stays between 1 and the cap. See
+point `flame-altar-count:limit`. The answer stays between 1 and the cap.
+`cargo enshwick point flame-altar-count:limit` writes the point's definition
+for another mod from this mod's DLL. See
 [Extending other mods](https://github.com/enshwick/enshwick/blob/main/book/src/extending.md).
 
 Licensed under [MIT](LICENSE).

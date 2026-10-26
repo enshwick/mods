@@ -18,11 +18,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arc-swap = { version = "1.9.3", default-features = false }
-enshwick = "1.0.0-alpha.2"
+enshwick = "1.0.0-alpha.3"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
-enshwick = { version = "1.0.0-alpha.2", features = ["test"] }
+enshwick = { version = "1.0.0-alpha.3", features = ["test"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]

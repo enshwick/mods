@@ -366,46 +366,12 @@ mod tests {
         );
     }
 
-    /// Code holding the server's wait helper and game loop, as the patterns
-    /// see them.
-    fn code() -> &'static [u8] {
-        let mut code = vec![0xCC; 0x40];
-        // The division of rbx, then the clamp and the wait.
-        code.extend([0x48, 0xB8, 0xDB, 0x34, 0xB6, 0xD7, 0x82, 0xDE, 0x1B, 0x43]);
-        code.extend([
-            0xBF, 0xFF, 0xFF, 0xFF, 0xFF, 0x48, 0xF7, 0xEB, 0x48, 0xC1, 0xFA, 0x12,
-        ]);
-        code.extend([0x48, 0x3B, 0xD7, 0x44, 0x8B, 0xCF, 0x44, 0x0F, 0x4C, 0xCA]);
-        code.extend([0x48, 0x8B, 0x55, 0xD8, 0x45, 0x33, 0xC0, 0x8B, 0x4D, 0xE0]);
-        code.extend([
-            0xC7, 0x44, 0x24, 0x20, 0x01, 0x00, 0x00, 0x00, 0xFF, 0x15, 0, 0, 0, 0,
-        ]);
-        code.extend([0xCC; 0x10]);
-        // The game loop's wait.
-        code.extend([
-            0x44, 0x39, 0xBB, 0x3C, 0x05, 0x00, 0x00, 0x75, 0x08, 0x41, 0xB9, 0x00,
-        ]);
-        code.extend([
-            0x5A, 0x62, 0x02, 0xEB, 0x12, 0x48, 0x81, 0x7D, 0x67, 0x80, 0x9F, 0xD5,
-        ]);
-        code.extend([
-            0x00, 0x41, 0xB9, 0x40, 0x42, 0x0F, 0x00, 0x4C, 0x0F, 0x4F, 0xCF, 0x4D,
-        ]);
-        code.extend([
-            0x8B, 0xC4, 0x48, 0x8D, 0x55, 0xC7, 0x48, 0x8D, 0x4D, 0x77, 0xE8, 0, 0, 0, 0,
-        ]);
-        code.extend([0xCC; 0x10]);
-        code.leak()
-    }
-
     #[test]
     fn forced_on_the_waits_sleep_exactly_and_the_cap_stays_under_the_step() {
-        let code = code();
-        let base = code.as_ptr().addr() as u64;
-        let wait = base + 0x40 + 22 + 10;
-        let server = base + 0x40 + 22 + 34 + 0x10 + 35;
+        use core::sync::atomic::Ordering;
+
         let loader = enshwick::test::FakeHost::new()
-            .code(code)
+            .side(Side::SERVER)
             .settings(
                 "exact_waits = \"on\"\ntask_workers = 0\nserver_wait_cap_ms = 4\nmeasure = true\n",
             )
@@ -416,43 +382,22 @@ mod tests {
         waits::set_slack(0);
         waits::set_wake(0);
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        assert_eq!(loader.mid_hooks(), [wait, server]);
 
-        // A zero wait with 0.3 ms left sleeps them and keeps the zero wait.
-        let slept = waits::SLEEPS.load(core::sync::atomic::Ordering::Relaxed);
-        let mut registers = enshwick::abi::Registers {
-            r9: 0,
-            rbx: 300_000,
-            ..Default::default()
-        };
+        // A zero wait with 0.3 ms left sleeps them.
+        let slept = waits::SLEEPS.load(Ordering::Relaxed);
         let started = std::time::Instant::now();
-        assert_eq!(loader.run_at(wait, &mut registers), 1);
+        loader.loop_wait(0, 300_000);
         assert!(started.elapsed() >= std::time::Duration::from_micros(100));
-        assert_eq!(registers.r9, 0);
-        assert_eq!(
-            waits::SLEEPS.load(core::sync::atomic::Ordering::Relaxed),
-            slept + 1
-        );
+        assert_eq!(waits::SLEEPS.load(Ordering::Relaxed), slept + 1);
         // A timed wait is left alone.
-        let mut registers = enshwick::abi::Registers {
-            r9: 16,
-            rbx: 16_600_000,
-            ..Default::default()
-        };
-        assert_eq!(loader.run_at(wait, &mut registers), 1);
-        assert_eq!(
-            waits::SLEEPS.load(core::sync::atomic::Ordering::Relaxed),
-            slept + 1
-        );
+        loader.loop_wait(16, 16_600_000);
+        assert_eq!(waits::SLEEPS.load(Ordering::Relaxed), slept + 1);
 
         // Before any step the server wait stays vanilla; right after one it
         // grows to the cap; the idle wait never changes.
-        let mut registers = enshwick::abi::Registers {
-            r9: 1_000_000,
-            ..Default::default()
-        };
-        assert_eq!(loader.run_at(server, &mut registers), 1);
-        assert_eq!(registers.r9, 1_000_000);
+        let online = enshwick::pacing::SERVER_ONLINE_WAIT_NS;
+        let idle = enshwick::pacing::SERVER_IDLE_WAIT_NS;
+        assert_eq!(loader.server_wait(online), online);
         assert_eq!(
             loader.raise::<events::Ticked>(&enshwick::abi::TickData {
                 header: enshwick::abi::Header::of::<enshwick::abi::TickData>(),
@@ -460,36 +405,17 @@ mod tests {
             }),
             1
         );
-        assert_eq!(loader.run_at(server, &mut registers), 1);
-        assert_eq!(registers.r9, 4_000_000);
-        let mut registers = enshwick::abi::Registers {
-            r9: 40_000_000,
-            ..Default::default()
-        };
-        assert_eq!(loader.run_at(server, &mut registers), 1);
-        assert_eq!(registers.r9, 40_000_000);
+        assert_eq!(loader.server_wait(online), 4_000_000);
+        assert_eq!(loader.server_wait(idle), idle);
 
         // Off at once.
         loader.set_settings(
             "exact_waits = \"off\"\ntask_workers = 0\nserver_wait_cap_ms = 1\nmeasure = true\n",
         );
         assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);
-        let mut registers = enshwick::abi::Registers {
-            r9: 1_000_000,
-            ..Default::default()
-        };
-        assert_eq!(loader.run_at(server, &mut registers), 1);
-        assert_eq!(registers.r9, 1_000_000);
-        let mut registers = enshwick::abi::Registers {
-            r9: 0,
-            rbx: 300_000,
-            ..Default::default()
-        };
-        assert_eq!(loader.run_at(wait, &mut registers), 1);
-        assert_eq!(
-            waits::SLEEPS.load(core::sync::atomic::Ordering::Relaxed),
-            slept + 1
-        );
+        assert_eq!(loader.server_wait(online), online);
+        loader.loop_wait(0, 300_000);
+        assert_eq!(waits::SLEEPS.load(Ordering::Relaxed), slept + 1);
         assert!(
             loader
                 .status()

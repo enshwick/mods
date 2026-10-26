@@ -1,5 +1,5 @@
 [package]
-name = "enshwick-safes"
+name = "enshwick-personal-safes"
 version = "0.0.0-dev"
 description = "The Safe: a craftable chest only the player who placed it can open"
 keywords = ["enshrouded", "mod", "chest", "safe"]
@@ -9,8 +9,8 @@ authors = ["themaiby"]
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/enshwick/mod-safes"
-homepage = "https://github.com/enshwick/mod-safes"
+repository = "https://github.com/enshwick/mod-personal-safes"
+homepage = "https://github.com/enshwick/mod-personal-safes"
 publish = false
 
 [lib]
@@ -18,11 +18,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arc-swap = { version = "1.9.3", default-features = false }
-enshwick = "1.0.0-alpha.2"
+enshwick = "1.0.0-alpha.3"
+rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
-enshwick = { version = "1.0.0-alpha.2", features = ["test"] }
+enshwick = { version = "1.0.0-alpha.3", features = ["test"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]

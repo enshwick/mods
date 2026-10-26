@@ -1,4 +1,4 @@
-# Safes
+# Personal Safes
 
 The Safe: a chest crafted at the same workshop as the wooden chest, at twice
 its ingredients by default, that only the player who placed it can open, empty,
@@ -25,7 +25,7 @@ that back, even while they are away. The game confirms each change with a
 notice.
 
 The same list is on the Mods screen, from the pause menu: Mods, then
-Actions under Safes. It shows one action at a time: the list, and "Name
+Actions under Personal Safes. It shows one action at a time: the list, and "Name
 who may open it", which answers with a notice. The key is `actions_key` in
 the loader's settings.
 
@@ -44,7 +44,7 @@ upgrade would replace it with an ordinary chest.
 
 ## Settings
 
-`mod-configs/safes.toml`, written on first start; each
+`mod-configs/enshwick.personal-safes.toml`, written on first start; each
 world keeps its own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)):
 
 ```toml
@@ -63,14 +63,17 @@ name on a Safe, a language code such as
 game runs, to Safes named from then on. The window and the hint speak each
 player's own language.
 
-Texts come in every language of [texts.toml](src/texts.toml); a server
-can change or add them in `mod-configs/safes.texts.toml`, in the same form.
-Owners and the players they allowed are kept per world, in `mod-data/safes/worlds/<world>/owners.toml`, so every world a player
-hosts has its own; files from 0.1 load as they are.
+Texts come in every language of [texts.toml](src/texts.toml); a server can
+change or add them in `mod-configs/enshwick.personal-safes.texts.toml`, in the
+same form. Owners and the players they allowed are kept per world, in
+`mod-data/enshwick.personal-safes/worlds/<world>/owners.toml`, so every world
+a player hosts has its own; files from 0.1 load as they are. Settings, texts
+and owners kept under the mod's former id, `safes`, move to the new id on the
+first start.
 
 ## Install
 
-Download [`enshwick-safes.zip`](https://github.com/enshwick/mod-safes/releases/download/dev/enshwick-safes.zip)
+Download [`enshwick-personal-safes.zip`](https://github.com/enshwick/mod-personal-safes/releases/download/dev/enshwick-personal-safes.zip)
 and extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. It needs Enshwick Loader:
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)

@@ -6,7 +6,7 @@ mod tests {
     use enshwick::abi::Status;
     use enshwick::events::{ShutdownStarted, WorldLoaded};
     use enshwick::test::FakeHost;
-    use enshwick_safes::access::ACCESS;
+    use enshwick_personal_safes::access::snapshots;
 
     /// A loader that knows the item and recipe layouts the Safe needs.
     fn host() -> FakeHost {
@@ -59,8 +59,10 @@ mod tests {
 
     #[test]
     fn the_old_owners_file_moves_into_the_world_that_loads() {
-        let dir =
-            std::env::temp_dir().join(format!("enshwick-safes-worlds-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-worlds-{}",
+            std::process::id()
+        ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
@@ -76,21 +78,21 @@ mod tests {
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
-                enshwick_safes::enshwick_mod_init,
-                enshwick_safes::enshwick_mod_ready,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        assert!(ACCESS.owners.load().is_empty(), "no world yet");
+        assert!(snapshots().owners.load().is_empty(), "no world yet");
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        let owners = ACCESS.owners.load();
+        let owners = snapshots().owners.load();
         assert_eq!(owners.get(&(1, 2, 3)).map(|safe| safe.owner), Some(0xff));
         assert!(dir.join("worlds/world0-aa/owners.toml").exists());
         assert!(!dir.join("owners.toml").exists());
         assert!(dir.join("owners.toml.moved").exists());
         assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        assert_eq!(ACCESS.owners.load().len(), 1, "the world's own file");
+        assert_eq!(snapshots().owners.load().len(), 1, "the world's own file");
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }
@@ -100,8 +102,10 @@ mod tests {
         use enshwick::abi::{BuildingData, Header};
         use enshwick::events::{BuildingPlaced, BuildingRemoved, WorldSaved};
 
-        let dir =
-            std::env::temp_dir().join(format!("enshwick-safes-removed-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-removed-{}",
+            std::process::id()
+        ));
         let _gone = std::fs::remove_dir_all(&dir);
         let world = dir.join("worlds/world0-cc");
         std::fs::create_dir_all(&world).unwrap();
@@ -119,13 +123,13 @@ mod tests {
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
-                enshwick_safes::enshwick_mod_init,
-                enshwick_safes::enshwick_mod_ready,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        assert_eq!(ACCESS.seen(900, (4, 0, 4)), Some((0xff, (4, 0, 4))));
+        assert_eq!(snapshots().seen(900, (4, 0, 4)), Some((0xff, (4, 0, 4))));
         let removed = BuildingData {
             header: Header::of::<BuildingData>(),
             entity: 900,
@@ -137,7 +141,7 @@ mod tests {
             position: [0.0; 3],
         };
         assert!(loader.raise::<BuildingRemoved>(&removed) >= 1);
-        assert!(ACCESS.owners.load().is_empty(), "gone from the checks");
+        assert!(snapshots().owners.load().is_empty(), "gone from the checks");
         assert!(
             std::fs::read_to_string(&file)
                 .unwrap()
@@ -148,7 +152,7 @@ mod tests {
         let placed = BuildingData {
             kind: BuildingData::PLACED,
             entity: 901,
-            item: enshwick_safes::content::SAFE.id(),
+            item: enshwick_personal_safes::content::SAFE.id(),
             position: [10.0, 0.0, 10.0],
             ..removed
         };
@@ -184,12 +188,15 @@ mod tests {
         use enshwick::ecs::Entity;
         use enshwick::events::Ticked;
         use enshwick::interactions::{Interaction, Kind};
-        use enshwick_safes::access::{Safe, Seen};
+        use enshwick_personal_safes::access::{Safe, Seen};
 
-        let dir = std::env::temp_dir().join(format!("enshwick-safes-stock-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-stock-{}",
+            std::process::id()
+        ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let item = enshwick_safes::content::SAFE.id().to_le_bytes();
+        let item = enshwick_personal_safes::content::SAFE.id().to_le_bytes();
         let loader = host()
             .type_hash("keen::ecs::InventorySetup", 3)
             .placed(3, 700, [20.0, 1.0, 20.0])
@@ -206,13 +213,13 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
-                enshwick_safes::enshwick_mod_init,
-                enshwick_safes::enshwick_mod_ready,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        ACCESS.load_owners(std::collections::HashMap::from([(
+        snapshots().load_owners(rustc_hash::FxHashMap::from_iter([(
             (40, 2, 40),
             Safe::new(1, "Ann"),
         )]));
@@ -220,9 +227,9 @@ label_language = \"en\"
             key: 3,
             admin: false,
         };
-        ACCESS
+        snapshots()
             .players
-            .store(std::sync::Arc::new(std::collections::HashMap::from([(
+            .store(std::sync::Arc::new(rustc_hash::FxHashMap::from_iter([(
                 10, stranger,
             )])));
         let stock = Interaction {
@@ -232,14 +239,17 @@ label_language = \"en\"
             item: None,
             position: None,
         };
-        assert!(enshwick_safes::access::filter(&stock), "not seen yet");
+        assert!(
+            enshwick_personal_safes::access::filter(&stock),
+            "not seen yet"
+        );
         std::thread::sleep(std::time::Duration::from_millis(2100));
         let _ticked = loader.raise::<Ticked>(&TickData {
             header: enshwick::abi::Header::of::<TickData>(),
             step: 1,
         });
         assert!(
-            !enshwick_safes::access::filter(&stock),
+            !enshwick_personal_safes::access::filter(&stock),
             "the sweep found the Safe: {:?}",
             loader.logs()
         );
@@ -249,15 +259,18 @@ label_language = \"en\"
 
     #[test]
     fn other_mods_change_who_may_use_a_safe_at_its_point() {
-        use std::collections::HashMap;
+        use rustc_hash::FxHashMap;
         use std::sync::Arc;
 
         use enshwick::ecs::Entity;
         use enshwick::points::Verdict;
-        use enshwick::points::safes::{Access, SafeAction};
-        use enshwick_safes::access::{Action, Seen};
+        use enshwick_personal_safes::access::{Action, Seen};
+        use enshwick_personal_safes::points::{Access, SafeAction};
 
-        let dir = std::env::temp_dir().join(format!("enshwick-safes-point-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-point-{}",
+            std::process::id()
+        ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let loader = host()
@@ -273,8 +286,8 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
-                enshwick_safes::enshwick_mod_init,
-                enshwick_safes::enshwick_mod_ready,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
@@ -289,13 +302,14 @@ label_language = \"en\"
                 admin: false,
             },
         );
-        ACCESS
-            .players
-            .store(Arc::new(HashMap::from([(10, owner), (12, stranger)])));
-        ACCESS.placed(700, (40, 2, 40), owner.key, "Ann");
-        assert!(ACCESS.refused_seen(700, Entity(12)), "vanilla Safes");
-        assert!(ACCESS.may_manage((40, 2, 40), owner, Entity(10)));
-        assert!(!ACCESS.may_manage((40, 2, 40), stranger, Entity(12)));
+        snapshots().players.store(Arc::new(FxHashMap::from_iter([
+            (10, owner),
+            (12, stranger),
+        ])));
+        snapshots().placed(700, (40, 2, 40), owner.key, "Ann");
+        assert!(snapshots().refused_seen(700, Entity(12)), "vanilla Safes");
+        assert!(snapshots().may_manage((40, 2, 40), owner, Entity(10)));
+        assert!(!snapshots().may_manage((40, 2, 40), stranger, Entity(12)));
         assert!(loader.extend_point(|access: &Access, may: &bool| {
             match access.action {
                 SafeAction::USE if access.player == 3 => Verdict::Set(true),
@@ -304,11 +318,11 @@ label_language = \"en\"
             }
         }));
         assert!(
-            !ACCESS.refused_seen(700, Entity(12)),
+            !snapshots().refused_seen(700, Entity(12)),
             "the link lets them in"
         );
         assert!(
-            !ACCESS.may(
+            !snapshots().may(
                 owner.key,
                 (40, 2, 40),
                 Entity(700),
@@ -317,16 +331,16 @@ label_language = \"en\"
             ),
             "the link refuses even the owner"
         );
-        assert!(ACCESS.may(owner.key, (40, 2, 40), Entity(700), Entity(10), Action::Use));
+        assert!(snapshots().may(owner.key, (40, 2, 40), Entity(700), Entity(10), Action::Use));
         assert!(
-            !ACCESS.may_manage((40, 2, 40), owner, Entity(10)),
+            !snapshots().may_manage((40, 2, 40), owner, Entity(10)),
             "the access action hears the refusal too"
         );
         assert!(
-            ACCESS.refused_seen(700, Entity(14)),
+            snapshots().refused_seen(700, Entity(14)),
             "a player not registered yet stays refused"
         );
-        assert!(ACCESS.removed(700).is_some());
+        assert!(snapshots().removed(700).is_some());
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }
@@ -350,10 +364,12 @@ label_language = \"en\"
     fn the_access_actions_act_on_the_nearest_safe_the_player_may_manage() {
         use enshwick::abi::ActionCall;
         use enshwick::points::Verdict;
-        use enshwick::points::safes::{Access, SafeAction};
+        use enshwick_personal_safes::points::{Access, SafeAction};
 
-        let dir =
-            std::env::temp_dir().join(format!("enshwick-safes-manage-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-manage-{}",
+            std::process::id()
+        ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let at = |x: f64| -> Vec<u8> {
@@ -386,14 +402,14 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
-                enshwick_safes::enshwick_mod_init,
-                enshwick_safes::enshwick_mod_ready,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        ACCESS.placed(700, (2, 0, 0), 1, "Ann");
-        ACCESS.placed(701, (42, 0, 0), 2, "Bob");
+        snapshots().placed(700, (2, 0, 0), 1, "Ann");
+        snapshots().placed(701, (42, 0, 0), 2, "Bob");
         let run = |who, id, args: &str| {
             let reply = loader
                 .ask_actions(ActionCall::RUN, who, 0, id, args)
@@ -432,7 +448,7 @@ label_language = \"en\"
             access(&ann, 3, false),
             "You may not change who opens your Safe at (1, 0, 0)."
         );
-        let owners = ACCESS.owners.load();
+        let owners = snapshots().owners.load();
         assert_eq!(owners[&(2, 0, 0)].allowed.len(), 1, "Cat stays allowed");
         assert_eq!(owners[&(42, 0, 0)].allowed[0].key, 1);
         assert!(loader.faults().is_empty());
@@ -445,8 +461,10 @@ label_language = \"en\"
         use enshwick::actions::sheet::decode;
         use enshwick::i18n::Language;
 
-        let dir =
-            std::env::temp_dir().join(format!("enshwick-safes-window-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-window-{}",
+            std::process::id()
+        ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let at = |x: f64| -> Vec<u8> {
@@ -477,15 +495,15 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
-                enshwick_safes::enshwick_mod_init,
-                enshwick_safes::enshwick_mod_ready,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         // Bob's Safe is nearer, the administrator's own a little farther.
-        ACCESS.placed(700, (1, 0, 0), 2, "Bob");
-        ACCESS.placed(701, (6, 0, 0), 1, "Root");
+        snapshots().placed(700, (1, 0, 0), 2, "Bob");
+        snapshots().placed(701, (6, 0, 0), 1, "Root");
 
         let sheet = decode(
             &loader
@@ -506,8 +524,8 @@ label_language = \"en\"
             ran,
             "1Cat may now open your Safe at (3, 0, 0), the nearest you manage within 4 m."
         );
-        assert_eq!(ACCESS.owners.load()[&(6, 0, 0)].allowed[0].key, 3);
-        assert!(ACCESS.owners.load()[&(1, 0, 0)].allowed.is_empty());
+        assert_eq!(snapshots().owners.load()[&(6, 0, 0)].allowed[0].key, 3);
+        assert!(snapshots().owners.load()[&(1, 0, 0)].allowed.is_empty());
 
         // Off again, and Cat may be switched off while away.
         let ran = loader

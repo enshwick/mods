@@ -15,11 +15,17 @@ use enshwick::i18n::{Language, Texts};
 use enshwick::world::World;
 use enshwick::{Load, Off};
 
-use crate::access::{ACCESS, AllowOutcome, Cell, Safe, Seen, centre, nearest_own};
+use crate::access::{AllowOutcome, Cell, Safe, Seen, centre, nearest_own, snapshots};
+use crate::keys;
 
 /// How far from the player their Safe may be, in metres; `texts.toml` says
 /// "4 m" in its replies.
 pub const REACH: f64 = 4.0;
+
+/// The action that switches players on and off at the Safe at hand.
+const ACCESS_ACTION: &str = "access";
+/// The action that names who may open the Safe at hand.
+const LIST_ACTION: &str = "list";
 
 /// The mod's texts in the server's language, for the owner's name on a
 /// Safe.
@@ -84,11 +90,11 @@ type Say<'a> = dyn Fn(&str, &[(&str, &str)]) -> String + 'a;
 /// Whose Safe `safe` is, as `key` reads it in `say`'s language.
 fn whose(say: &Say<'_>, safe: &Safe, key: u64) -> String {
     if safe.owner == key {
-        say("command.yours", &[])
+        say(keys::YOURS, &[])
     } else if safe.owner_name.is_empty() {
-        say("command.unknown", &[])
+        say(keys::UNKNOWN, &[])
     } else {
-        say("command.theirs", &[("owner", &safe.owner_name)])
+        say(keys::THEIRS, &[(keys::value::OWNER, &safe.owner_name)])
     }
 }
 
@@ -98,24 +104,27 @@ fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, String> {
     let me = ask.player;
     let position = world
         .position(me.entity)
-        .ok_or_else(|| ask.say("command.no_safe", &[]))?;
+        .ok_or_else(|| ask.say(keys::NO_SAFE, &[]))?;
     let seen = Seen {
         key: me.key,
         admin: me.is_admin(),
     };
-    if let Some((at, safe)) = ACCESS.nearest_managed(seen, me.entity, position, REACH) {
+    if let Some((at, safe)) = snapshots().nearest_managed(seen, me.entity, position, REACH) {
         let say = |key: &str, values: &[(&str, &str)]| ask.say(key, values);
         let label = ask.say(
-            "action.subject",
-            &[("safe", &whose(&say, &safe, me.key)), ("at", &place(at))],
+            keys::SUBJECT,
+            &[
+                (keys::value::SAFE, &whose(&say, &safe, me.key)),
+                (keys::value::AT, &place(at)),
+            ],
         );
         return Ok(Subject::new(pack(at), label));
     }
     // An own Safe in reach that another mod's link keeps them from.
     Err(
-        match nearest_own(&ACCESS.owners.load(), me.key, position, REACH) {
-            Some(own) => ask.say("command.refused", &[("at", &place(own))]),
-            None => ask.say("command.no_safe", &[]),
+        match nearest_own(&snapshots().owners.load(), me.key, position, REACH) {
+            Some(own) => ask.say(keys::REFUSED, &[(keys::value::AT, &place(own))]),
+            None => ask.say(keys::NO_SAFE, &[]),
         },
     )
 }
@@ -123,7 +132,7 @@ fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, String> {
 /// The Safe a request acts on, its cell and record as they stand now.
 fn safe_of(request: &Request<'_>) -> Option<(Cell, Safe)> {
     let at = unpack(request.subject?.id);
-    Some((at, ACCESS.owners.load().get(&at)?.clone()))
+    Some((at, snapshots().owners.load().get(&at)?.clone()))
 }
 
 /// Switches a player on or off at the Safe at hand.
@@ -131,60 +140,67 @@ fn access(request: &Request<'_>, save: &impl Fn()) -> Outcome {
     let (Some((at, record)), [Value::Player { key, name }, Value::Toggle(on)]) =
         (safe_of(request), request.args)
     else {
-        return Outcome::refused(request.say("command.no_safe", &[]));
+        return Outcome::refused(request.say(keys::NO_SAFE, &[]));
     };
     let say = |key: &str, values: &[(&str, &str)]| request.say(key, values);
     let whose = whose(&say, &record, request.player.key);
     let here = place(at);
     let values = [
-        ("name", name.as_str()),
-        ("safe", whose.as_str()),
-        ("at", here.as_str()),
+        (keys::value::NAME, name.as_str()),
+        (keys::value::SAFE, whose.as_str()),
+        (keys::value::AT, here.as_str()),
     ];
     if !on {
-        return match ACCESS.change(at, |safe| safe.deny_key(*key)).flatten() {
+        return match snapshots().change(at, |safe| safe.deny_key(*key)).flatten() {
             Some(gone) => {
                 save();
                 Outcome::done(request.say(
-                    "command.denied",
-                    &[("name", &gone.name), ("safe", &whose), ("at", &here)],
+                    keys::DENIED,
+                    &[
+                        (keys::value::NAME, &gone.name),
+                        (keys::value::SAFE, &whose),
+                        (keys::value::AT, &here),
+                    ],
                 ))
             }
-            None => Outcome::refused(request.say("command.not_allowed", &values)),
+            None => Outcome::refused(request.say(keys::NOT_ALLOWED, &values)),
         };
     }
     if *key == request.player.key {
-        return Outcome::refused(request.say("command.self", &[]));
+        return Outcome::refused(request.say(keys::SELF, &[]));
     }
-    match ACCESS.change(at, |safe| safe.allow(*key, name)) {
+    match snapshots().change(at, |safe| safe.allow(*key, name)) {
         Some(AllowOutcome::Allowed) => {
             save();
-            Outcome::done(request.say("command.allowed", &values))
+            Outcome::done(request.say(keys::ALLOWED, &values))
         }
-        Some(AllowOutcome::Already) => Outcome::refused(request.say("command.already", &values)),
-        Some(AllowOutcome::Owner) => Outcome::refused(request.say("command.owner", &values)),
-        None => Outcome::refused(request.say("command.no_safe", &[])),
+        Some(AllowOutcome::Already) => Outcome::refused(request.say(keys::ALREADY, &values)),
+        Some(AllowOutcome::Owner) => Outcome::refused(request.say(keys::OWNER, &values)),
+        None => Outcome::refused(request.say(keys::NO_SAFE, &[])),
     }
 }
 
 /// Names who may use the Safe at hand.
 fn list(request: &Request<'_>) -> Outcome {
     let Some((at, safe)) = safe_of(request) else {
-        return Outcome::refused(request.say("command.no_safe", &[]));
+        return Outcome::refused(request.say(keys::NO_SAFE, &[]));
     };
     let say = |key: &str, values: &[(&str, &str)]| request.say(key, values);
     let whose = whose(&say, &safe, request.player.key);
     let here = place(at);
     let names: Vec<&str> = safe.allowed.iter().map(|a| a.name.as_str()).collect();
     Outcome::done(if names.is_empty() {
-        request.say("command.list_empty", &[("safe", &whose), ("at", &here)])
+        request.say(
+            keys::NAMES_EMPTY,
+            &[(keys::value::SAFE, &whose), (keys::value::AT, &here)],
+        )
     } else {
         request.say(
-            "command.list",
+            keys::NAMES,
             &[
-                ("safe", &whose),
-                ("at", &here),
-                ("names", &names.join(", ")),
+                (keys::value::SAFE, &whose),
+                (keys::value::AT, &here),
+                (keys::value::NAMES, &names.join(", ")),
             ],
         )
     })
@@ -204,24 +220,28 @@ pub fn declare(
 ) -> Result<(), Off> {
     let actions = load.actions(texts)?;
     actions.add(
-        Action::per_player("access", "action.access", |_ask, subject| {
+        Action::per_player(ACCESS_ACTION, keys::ACCESS, |_ask, subject| {
             let Some(at) = subject.map(|s| unpack(s.id)) else {
                 return Vec::new();
             };
-            ACCESS.owners.load().get(&at).map_or_else(Vec::new, |safe| {
-                safe.allowed
-                    .iter()
-                    .map(|a| (a.key, a.name.clone()))
-                    .collect()
-            })
+            snapshots()
+                .owners
+                .load()
+                .get(&at)
+                .map_or_else(Vec::new, |safe| {
+                    safe.allowed
+                        .iter()
+                        .map(|a| (a.key, a.name.clone()))
+                        .collect()
+                })
         })
-        .help("action.access.help")
+        .help(keys::ACCESS_HELP)
         .at(move |ask| at_hand(world, ask))
         .hint(),
         move |request| access(request, &save),
     )?;
     actions.add(
-        Action::new("list", "action.list").at(move |ask| at_hand(world, ask)),
+        Action::new(LIST_ACTION, keys::LIST).at(move |ask| at_hand(world, ask)),
         list,
     )
 }
@@ -239,38 +259,12 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_all_languages() {
-        let texts = Texts::parse(crate::content::TEXTS).unwrap();
-        let languages: std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<String, String>,
-        > = toml::from_str(crate::content::TEXTS).unwrap();
-        for (language, entries) in &languages {
-            for key in languages.values().flat_map(|other| other.keys()) {
-                assert!(entries.contains_key(key), "{key} has no {language}");
-            }
-        }
-        for key in [
-            "safe.label",
-            "action.access",
-            "action.access.help",
-            "action.list",
-            "action.subject",
-            "command.no_safe",
-            "command.self",
-            "command.allowed",
-            "command.already",
-            "command.denied",
-            "command.not_allowed",
-            "command.list",
-            "command.list_empty",
-            "command.refused",
-            "command.owner",
-            "command.yours",
-            "command.theirs",
-            "command.unknown",
-        ] {
+    fn every_text_the_mod_says_exists_in_all_languages() -> Result<(), Off> {
+        let texts = Texts::parse(crate::content::TEXTS)?;
+        assert_eq!(texts.untranslated(), []);
+        for &key in keys::ALL {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }
+        Ok(())
     }
 }

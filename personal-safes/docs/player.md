@@ -1,6 +1,6 @@
 ---
-id: safes
-name: Safes
+id: enshwick.personal-safes
+name: Personal Safes
 summary: Adds the Safe, a chest that only its owner and the players they allow can open. Only the owner picks it up.
 needs: everyone
 settings:
@@ -40,7 +40,7 @@ with every item still in it. You cannot upgrade a Safe.
 
 ## Install
 
-Safes comes in enshwick.zip, and the
+Personal Safes comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
 put it. It runs on enshwick.
 
@@ -52,8 +52,8 @@ shows.
 
 ## Multiplayer
 
-The server and every player need Safes in the same version. On a server, the
-crafting menu shows the server's cost.
+The server and every player need Personal Safes in the same version. On a
+server, the crafting menu shows the server's cost.
 
 ## Problems
 

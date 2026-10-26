@@ -59,16 +59,19 @@ pub const fn recipe(cost: u32) -> NewRecipe {
 
 #[cfg(test)]
 mod tests {
+    use enshwick::Off;
     use enshwick::i18n::{Language, Texts};
 
     use super::*;
 
     #[test]
-    fn the_texts_parse_and_cover_name_and_description() {
-        let texts = Texts::parse(TEXTS).unwrap();
-        for key in ["safe.name", "safe.description"] {
+    fn every_text_exists_in_all_languages_with_name_and_description() -> Result<(), Off> {
+        let texts = Texts::parse(TEXTS)?;
+        assert_eq!(texts.untranslated(), []);
+        for key in [crate::keys::SAFE_NAME, crate::keys::SAFE_DESCRIPTION] {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }
+        Ok(())
     }
 
     #[test]

@@ -7,7 +7,7 @@
 //! an ordinary chest with every item still in it. The placed chest keeps the
 //! Safe's item id in the save, which tells the mod which chests are Safes;
 //! owners and the players they allowed are kept per world, in
-//! `mod-data/safes/worlds/<world>/owners.toml`, by position.
+//! `mod-data/enshwick.personal-safes/worlds/<world>/owners.toml`, by position.
 //!
 //! The refusals run on the dedicated server and, on a client, in the built-in
 //! server while it hosts a game; the client's own world is left alone.
@@ -15,11 +15,13 @@
 pub mod access;
 pub mod actions;
 pub mod content;
+mod keys;
+pub mod points;
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use enshwick::abi::BuildingData;
@@ -30,12 +32,12 @@ use enshwick::events::{
     WorldLoaded, WorldSaved,
 };
 use enshwick::i18n::Language;
-use enshwick::state::{Store, WorldStore};
+use enshwick::state::{ModLocal, Store, WorldStore};
 use enshwick::world::Rename;
 use enshwick::world::{ComponentType, World};
 use enshwick::{Load, Mod, Off};
 
-use crate::access::{ACCESS, Action, Allowed, Cell, Safe, Seen};
+use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
 use crate::actions::Phrases;
 
 /// Safe settings.
@@ -81,11 +83,15 @@ impl Settings {
 }
 
 /// The Safe's cost, times the wooden chest's, from the settings in force.
-static COST: AtomicU32 = AtomicU32::new(2);
+static COST: ModLocal<AtomicU32> = ModLocal::new();
+
+fn cost_in_force() -> &'static AtomicU32 {
+    COST.get_or_init(|| AtomicU32::new(Settings::default().cost_multiplier))
+}
 
 /// Puts `cost` in force, building the recipes again when it changed.
 fn set_cost(cost: u32) {
-    if COST.swap(cost, Ordering::Relaxed) == cost {
+    if cost_in_force().swap(cost, Ordering::Relaxed) == cost {
         return;
     }
     match enshwick::content::recipes::rebuild_recipes() {
@@ -95,6 +101,14 @@ fn set_cost(cost: u32) {
         }
     }
 }
+
+/// The name of the owners' store, per world and in the mod-wide file of
+/// earlier versions.
+const OWNERS: &str = "owners";
+/// The mod-wide owners file from before owners were kept per world.
+const SHARED_OWNERS_FILE: &str = "owners.toml";
+/// Where the mod-wide owners file goes once a world took its owners.
+const MOVED_OWNERS_FILE: &str = "owners.toml.moved";
 
 /// The owners as stored: one record per Safe.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -129,7 +143,7 @@ fn hex(key: u64) -> String {
 }
 
 impl Owners {
-    fn from_map(owners: &HashMap<Cell, Safe>) -> Self {
+    fn from_map(owners: &FxHashMap<Cell, Safe>) -> Self {
         let mut safes: Vec<Record> = owners
             .iter()
             .map(|(&(x, y, z), safe)| Record {
@@ -150,7 +164,7 @@ impl Owners {
         Self { safes }
     }
 
-    fn to_map(&self) -> HashMap<Cell, Safe> {
+    fn to_map(&self) -> FxHashMap<Cell, Safe> {
         self.safes
             .iter()
             .filter_map(|r| {
@@ -177,13 +191,16 @@ impl Owners {
 /// Safes removed since the world last saved, with their owners: the world
 /// keeps a removal only when it saves, so a game that stops before that
 /// brings the Safe back, and its owner must still be on disk.
-static REMOVED: Mutex<Vec<(Cell, Safe)>> = Mutex::new(Vec::new());
+static REMOVED: ModLocal<Mutex<Vec<(Cell, Safe)>>> = ModLocal::new();
 
 /// The running world's owners store, once the mod has asked for it.
-static STORE: OnceLock<&'static WorldStore<Owners>> = OnceLock::new();
+static STORE: ModLocal<&'static WorldStore<Owners>> = ModLocal::new();
 
-fn removed() -> std::sync::MutexGuard<'static, Vec<(Cell, Safe)>> {
-    REMOVED.lock().unwrap_or_else(PoisonError::into_inner)
+fn removed() -> MutexGuard<'static, Vec<(Cell, Safe)>> {
+    REMOVED
+        .get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
 }
 
 /// The owners as the file keeps them: the Safes in force and those removed
@@ -191,9 +208,9 @@ fn removed() -> std::sync::MutexGuard<'static, Vec<(Cell, Safe)>> {
 fn on_disk() -> Owners {
     let removed = removed();
     if removed.is_empty() {
-        return Owners::from_map(&ACCESS.owners.load());
+        return Owners::from_map(&snapshots().owners.load());
     }
-    let mut owners = HashMap::clone(&ACCESS.owners.load());
+    let mut owners = FxHashMap::clone(&snapshots().owners.load());
     for (at, safe) in removed.iter() {
         owners.entry(*at).or_insert_with(|| safe.clone());
     }
@@ -236,15 +253,14 @@ fn save(store: &'static WorldStore<Owners>) {
 /// renamed out of the way.
 fn open_world(store: &WorldStore<Owners>, dir: &Path) {
     let mut owners = store.with(Owners::to_map).unwrap_or_default();
-    let shared = dir.join("owners.toml");
+    let shared = dir.join(SHARED_OWNERS_FILE);
     if owners.is_empty() && store.key().is_some() && shared.exists() {
-        match Store::<Owners>::new(dir, "owners").load() {
+        match Store::<Owners>::new(dir, OWNERS).load() {
             Ok(old) => {
                 owners = old.to_map();
                 store.update(|kept| *kept = old);
                 let moved = store.flush().map_err(|e| e.to_string()).and_then(|()| {
-                    std::fs::rename(&shared, dir.join("owners.toml.moved"))
-                        .map_err(|e| e.to_string())
+                    std::fs::rename(&shared, dir.join(MOVED_OWNERS_FILE)).map_err(|e| e.to_string())
                 });
                 match moved {
                     Ok(()) => enshwick::info!(
@@ -263,21 +279,23 @@ fn open_world(store: &WorldStore<Owners>, dir: &Path) {
         store.key().unwrap_or_default()
     );
     removed().clear();
-    ACCESS.forget_session();
-    ACCESS.load_owners(owners);
+    snapshots().forget_session();
+    snapshots().load_owners(owners);
 }
 
 /// The mod's state.
 #[derive(Debug)]
-pub struct Safes;
+pub struct PersonalSafes;
 
-impl Mod for Safes {
+impl Mod for PersonalSafes {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "safes",
+            id: "enshwick.personal-safes",
             side: BOTH,
-            name: "Safes",
+            name: "Personal Safes",
             join: true,
+            was: ["safes"],
+            points: [points::Access],
         )
     }
 
@@ -285,18 +303,18 @@ impl Mod for Safes {
         load.migrate(content::migrations())?;
         let settings: Settings = load.config()?;
         let cost = settings.cost_multiplier;
-        COST.store(cost, Ordering::Relaxed);
+        cost_in_force().store(cost, Ordering::Relaxed);
         let texts = load.texts(content::TEXTS)?;
         load.add_texts(
             &texts,
             &[
-                ("safe.name", content::SAFE_NAME),
-                ("safe.description", content::SAFE_DESCRIPTION),
+                (keys::SAFE_NAME, content::SAFE_NAME),
+                (keys::SAFE_DESCRIPTION, content::SAFE_DESCRIPTION),
             ],
         )?;
         load.add_item(content::item())?;
-        load.add_recipe_with(|| content::recipe(COST.load(Ordering::Relaxed)))?;
-        ACCESS
+        load.add_recipe_with(|| content::recipe(cost_in_force().load(Ordering::Relaxed)))?;
+        snapshots()
             .admins_open
             .store(settings.admins_can_open, Ordering::Relaxed);
         let phrases: &'static Phrases = Box::leak(Box::new(Phrases::new(
@@ -326,7 +344,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     })?;
     // The store opens on the world's load, before the handler below runs.
     let store: &'static WorldStore<Owners> =
-        Box::leak(Box::new(load.world_store::<Owners>("owners")?));
+        Box::leak(Box::new(load.world_store::<Owners>(OWNERS)?));
     let _first = STORE.set(store);
     load.on::<WorldLoaded>(move |()| open_world(store, &dir))?;
 
@@ -340,7 +358,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         }
     })?;
     load.on::<BuildingRemoved>(move |removed| {
-        if let Some(gone) = ACCESS.removed(removed.entity) {
+        if let Some(gone) = snapshots().removed(removed.entity) {
             enshwick::info!("Safe {} removed", removed.entity);
             self::removed().push(gone);
             let _open = hand_over(store);
@@ -350,13 +368,13 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         // Entities, players and owners belong to one hosted game's world.
         load.on::<ShutdownStarted>(|()| {
             removed().clear();
-            ACCESS.forget_session();
-            ACCESS.load_owners(HashMap::new());
+            snapshots().forget_session();
+            snapshots().load_owners(FxHashMap::default());
         })?;
         enshwick::info!("the Safe's checks act while this client hosts a game");
     }
     load.on_config_change(move |settings: Settings| {
-        ACCESS
+        snapshots()
             .admins_open
             .store(settings.admins_can_open, Ordering::Relaxed);
         phrases.set_language(settings.language().unwrap_or(Language::FALLBACK));
@@ -372,19 +390,22 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
 fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
     let entity = Entity(placed.player);
     let player = world.player(entity);
-    let key = player
-        .as_ref()
-        .map(|p| p.key)
-        .or_else(|| ACCESS.players.load().get(&entity.0).map(|seen| seen.key));
+    let key = player.as_ref().map(|p| p.key).or_else(|| {
+        snapshots()
+            .players
+            .load()
+            .get(&entity.0)
+            .map(|seen| seen.key)
+    });
     let Some(key) = key else {
         enshwick::warn!("a Safe was placed by no known player and stays open to all");
         return;
     };
     let name = player.map(|p| p.name).unwrap_or_default();
     let position = placed.position.map(f64::from);
-    ACCESS.placed(placed.entity, access::cell(position), key, &name);
+    snapshots().placed(placed.entity, access::cell(position), key, &name);
     if !name.is_empty() {
-        let label = phrases.say("safe.label", &[("owner", &name)]);
+        let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
         if !world.set_label(Entity(placed.entity), &label) {
             enshwick::warn!("Safe {} not labelled", placed.entity);
         }
@@ -399,12 +420,12 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
 /// what is not a Safe; the owner, or an administrator when allowed, for a
 /// Safe.
 fn may_rename(world: World, rename: &Rename) -> bool {
-    let known = ACCESS.safes.load().get(&rename.entity.0).copied();
+    let known = snapshots().safes.load().get(&rename.entity.0).copied();
     let found = known.or_else(|| {
         if !content::is_safe(world.used_item(rename.entity)?) {
             return None;
         }
-        ACCESS.seen(
+        snapshots().seen(
             rename.entity.0,
             access::cell(world.position(rename.entity)?),
         )
@@ -419,8 +440,8 @@ fn may_rename(world: World, rename: &Rename) -> bool {
         key: player.key,
         admin: player.is_admin(),
     };
-    let admins_open = ACCESS.admins_open.load(Ordering::Relaxed);
-    let owners = ACCESS.owners.load();
+    let admins_open = snapshots().admins_open.load(Ordering::Relaxed);
+    let owners = snapshots().owners.load();
     let fallback = Safe::new(owner, "");
     let safe = owners.get(&at).unwrap_or(&fallback);
     let entities = (player.entity, rename.entity);
@@ -435,14 +456,14 @@ fn may_rename(world: World, rename: &Rename) -> bool {
 /// base stock asks without the chest's item or position, so a Safe nobody
 /// looked at would otherwise lend its stock to anyone crafting nearby.
 fn learn_safes(world: World, containers: ComponentType) {
-    let known = ACCESS.safes.load();
+    let known = snapshots().safes.load();
     for placed in world.entities(containers) {
         if known.contains_key(&placed.entity.0)
             || !world.used_item(placed.entity).is_some_and(content::is_safe)
         {
             continue;
         }
-        let _owner = ACCESS.seen(placed.entity.0, access::cell(placed.position));
+        let _owner = snapshots().seen(placed.entity.0, access::cell(placed.position));
     }
 }
 
@@ -455,7 +476,7 @@ fn label_seen(
     phrases: &'static Phrases,
     store: &'static WorldStore<Owners>,
 ) -> Result<(), Off> {
-    let mut done: HashSet<u32> = HashSet::new();
+    let mut done: FxHashSet<u32> = FxHashSet::default();
     let containers = world.component_type(load, "keen::ecs::InventorySetup");
     if let Err(off) = &containers {
         enshwick::warn!("Safes nobody looked at this session lend their stock to crafting: {off}");
@@ -465,7 +486,7 @@ fn label_seen(
         if let Some(containers) = containers {
             learn_safes(world, containers);
         }
-        let safes = ACCESS.safes.load();
+        let safes = snapshots().safes.load();
         let mut learned = false;
         for (&entity, &(owner, at)) in safes.iter() {
             if done.contains(&entity) {
@@ -476,7 +497,7 @@ fn label_seen(
                 done.insert(entity);
                 continue;
             }
-            let mut name = ACCESS
+            let mut name = snapshots()
                 .owners
                 .load()
                 .get(&at)
@@ -486,13 +507,13 @@ fn label_seen(
                 && let Some(online) = world.player_by_key(owner)
             {
                 name = online.name;
-                ACCESS.change(at, |safe| safe.owner_name.clone_from(&name));
+                snapshots().change(at, |safe| safe.owner_name.clone_from(&name));
                 learned = true;
             }
             if name.is_empty() {
                 continue;
             }
-            let label = phrases.say("safe.label", &[("owner", &name)]);
+            let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
             if world.set_label(Entity(entity), &label) {
                 done.insert(entity);
             }
@@ -519,12 +540,12 @@ fn seen(player: &enshwick::world::Player) -> Seen {
 
 /// Retakes the players snapshot from the world, on the game thread.
 fn snapshot_players(world: World) {
-    let players: HashMap<u32, Seen> = world
+    let players: FxHashMap<u32, Seen> = world
         .players()
         .iter()
         .map(|p| (p.entity.0, seen(p)))
         .collect();
-    ACCESS.players.store(std::sync::Arc::new(players));
+    snapshots().players.store(std::sync::Arc::new(players));
 }
 
 /// Keeps the connected players' keys and administrator flags current: on
@@ -540,27 +561,27 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
             },
             |p| seen(&p),
         );
-        ACCESS.players.rcu(|players| {
-            let mut players = HashMap::clone(players);
+        snapshots().players.rcu(|players| {
+            let mut players = FxHashMap::clone(players);
             players.insert(entity.0, player);
             players
         });
     })?;
     load.on::<PlayerLeft>(|left| {
-        ACCESS.players.rcu(|players| {
-            let mut players = HashMap::clone(players);
+        snapshots().players.rcu(|players| {
+            let mut players = FxHashMap::clone(players);
             players.remove(&left.entity);
             players
         });
     })?;
     let caught_up = AtomicU64::new(0);
     load.on::<Ticked>(move |tick| {
-        if !ACCESS.unregistered.load(Ordering::Relaxed)
+        if !snapshots().unregistered.load(Ordering::Relaxed)
             || tick.step.wrapping_sub(caught_up.load(Ordering::Relaxed)) < CATCH_UP_STEPS
         {
             return;
         }
-        ACCESS.unregistered.store(false, Ordering::Relaxed);
+        snapshots().unregistered.store(false, Ordering::Relaxed);
         caught_up.store(tick.step, Ordering::Relaxed);
         snapshot_players(world);
     })?;
@@ -572,7 +593,7 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     Ok(())
 }
 
-enshwick::declare_mod!(Safes);
+enshwick::declare_mod!(PersonalSafes);
 
 #[cfg(test)]
 mod tests {
@@ -677,7 +698,7 @@ label_language = \"uk\"
 ",
         );
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-        assert_eq!(COST.load(Ordering::Relaxed), 5);
+        assert_eq!(cost_in_force().load(Ordering::Relaxed), 5);
         assert_eq!(
             loader.rebuilds().len(),
             allowed + 1,
@@ -700,7 +721,8 @@ label_language = \"uk\"
     fn owners_survive_the_file_with_keys_past_i64() {
         let mut friendly = Safe::new(5, "Ann");
         friendly.allow(u64::MAX - 1, "Bob Lee");
-        let owners = HashMap::from([((1, -2, 3), Safe::new(u64::MAX, "")), ((0, 0, 0), friendly)]);
+        let owners =
+            FxHashMap::from_iter([((1, -2, 3), Safe::new(u64::MAX, "")), ((0, 0, 0), friendly)]);
         let text = toml::to_string(&Owners::from_map(&owners)).unwrap();
         let back: Owners = toml::from_str(&text).unwrap();
         assert_eq!(back.to_map(), owners);
@@ -712,7 +734,7 @@ label_language = \"uk\"
         let back: Owners = toml::from_str(old).unwrap();
         assert_eq!(
             back.to_map(),
-            HashMap::from([((1, 2, 3), Safe::new(0xff, ""))])
+            FxHashMap::from_iter([((1, 2, 3), Safe::new(0xff, ""))])
         );
     }
 }

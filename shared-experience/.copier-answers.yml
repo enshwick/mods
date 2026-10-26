@@ -3,7 +3,7 @@ _commit: b224adf
 _src_path: gh:enshwick/template-mod
 crate_name: enshwick-shared-experience
 description: Every character on a server keeps up with the one furthest ahead in experience
-enshwick_version: 1.0.0-alpha.1
+enshwick_version: 1.0.0-alpha.2
 mod_id: shared-experience
 mod_name: Shared experience
 repository: enshwick/mod-shared-experience

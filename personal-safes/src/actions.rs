@@ -239,8 +239,17 @@ mod tests {
     }
 
     #[test]
-    fn every_text_the_mod_says_exists_in_english_and_ukrainian() {
+    fn every_text_exists_in_all_languages() {
         let texts = Texts::parse(crate::content::TEXTS).unwrap();
+        let languages: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<String, String>,
+        > = toml::from_str(crate::content::TEXTS).unwrap();
+        for (language, entries) in &languages {
+            for key in languages.values().flat_map(|other| other.keys()) {
+                assert!(entries.contains_key(key), "{key} has no {language}");
+            }
+        }
         for key in [
             "safe.label",
             "action.access",
@@ -261,13 +270,7 @@ mod tests {
             "command.theirs",
             "command.unknown",
         ] {
-            for language in [Language::FALLBACK, Language::UK_UA] {
-                assert!(
-                    texts.translations(key).any(|(other, _)| other == language),
-                    "{key} in {}",
-                    language.code()
-                );
-            }
+            assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }
     }
 }

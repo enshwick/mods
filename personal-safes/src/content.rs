@@ -68,7 +68,6 @@ mod tests {
         let texts = Texts::parse(TEXTS).unwrap();
         for key in ["safe.name", "safe.description"] {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
-            assert!(texts.get(key, Language::UK_UA).is_some(), "{key}");
         }
     }
 

@@ -63,12 +63,9 @@ name on a Safe, a language code such as
 game runs, to Safes named from then on. The window and the hint speak each
 player's own language.
 
-Texts are in English and Ukrainian; German, French, Spanish and Polish name
-and describe the Safe, and the window and replies in them fall back to
-English; a server
-can change or add them in `mod-configs/safes.texts.toml`, in the form of
-[texts.toml](src/texts.toml). Owners and the players they allowed are kept per
-world, in `mod-data/safes/worlds/<world>/owners.toml`, so every world a player
+Texts come in every language of [texts.toml](src/texts.toml); a server
+can change or add them in `mod-configs/safes.texts.toml`, in the same form.
+Owners and the players they allowed are kept per world, in `mod-data/safes/worlds/<world>/owners.toml`, so every world a player
 hosts has its own; files from 0.1 load as they are.
 
 ## Install

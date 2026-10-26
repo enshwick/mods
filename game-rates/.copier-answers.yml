@@ -4,7 +4,7 @@ _src_path: gh:enshwick/template-mod
 crate_name: enshwick-building-materials
 description: 'Building blocks, roofs, overgrowth, decor and furniture: twice the output
     of the vanilla recipes for the same cost'
-enshwick_version: 1.0.0-alpha.1
+enshwick_version: 1.0.0-alpha.2
 mod_id: building-materials
 mod_name: Building materials
 repository: enshwick/mod-building-materials

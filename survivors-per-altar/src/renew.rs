@@ -1,7 +1,8 @@
 //! Copy staffs from before charges get their charges at once: in the
-//! dedicated server and in a game a client hosts, every copy staff without an entity of its own, in a player's
-//! inventory or a container, is renewed full, when the world loads, when a
-//! player joins and every minute for containers loaded since.
+//! dedicated server and in a game a client hosts, every copy staff without
+//! an entity of its own, in a player's inventory, a built chest or a world
+//! chest, is renewed full, when the world loads, when a player joins and
+//! every minute for chests loaded since.
 
 use std::ops::ControlFlow;
 use std::time::Duration;
@@ -9,7 +10,7 @@ use std::time::Duration;
 use enshwick::ecs::Entity;
 use enshwick::events::{PlayerJoined, WorldLoaded};
 use enshwick::inventory::{Fill, Inventories};
-use enshwick::world::World;
+use enshwick::world::{ContainerKinds, World};
 use enshwick::{Load, Off};
 
 /// How often containers are looked through for old staffs.
@@ -29,12 +30,12 @@ fn renew(inventories: &Inventories, root: Entity, staffs: &[u32]) {
     }
 }
 
-/// Every player and container of the world.
-fn holders(world: &World, containers: Option<enshwick::world::ComponentType>) -> Vec<Entity> {
+/// Every player of the world, and every container players build or the
+/// world fills with loot.
+fn holders(world: &World) -> Vec<Entity> {
     let mut roots: Vec<Entity> = world.players().iter().map(|p| p.entity).collect();
-    if let Some(ty) = containers {
-        roots.extend(world.entities(ty).iter().map(|placed| placed.entity));
-    }
+    let containers = world.containers(ContainerKinds::PLACED | ContainerKinds::LOOT);
+    roots.extend(containers.iter().map(|placed| placed.entity));
     roots
 }
 
@@ -44,12 +45,11 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
     let inventories = load.inventories()?;
     let world = load.world()?;
     let scheduler = load.scheduler()?;
-    let containers = world.component_type(load, "keen::ecs::InventorySetup").ok();
     let staffs = crate::staffs::known_ids();
     let sweep = {
         let staffs = staffs.clone();
         move || {
-            for root in holders(&world, containers) {
+            for root in holders(&world) {
                 renew(&inventories, root, &staffs);
             }
         }

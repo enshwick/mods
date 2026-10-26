@@ -37,8 +37,8 @@ zone.
   a lockpick hold one at 2 %, a random survivor's each time; a dropped staff
   is full, or holds a random count when `copy_staff_charges_min` is above 0.
   A staff from before charges gets full charges when the world loads, when
-  its player joins and, in a chest, within a minute, on a dedicated server,
-  in single player and in a hosted game alike. Removing the mod removes
+  its player joins and, in a built or a world chest, within a minute, on a
+  dedicated server, in single player and in a hosted game alike. Removing the mod removes
   the staffs from inventories.
 
 ## Settings

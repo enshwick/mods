@@ -9,7 +9,7 @@
 //! transaction as the spawn or move, and only when that works.
 
 use enshwick::content::icons::{Icon, Pixels, Tint};
-use enshwick::content::items::{Meter, NewItem, Stat, StatFormat};
+use enshwick::content::items::{FuelSetup, ImpactUiValue, NewItem, StatFormat};
 use enshwick::content::{Guid, Id};
 use enshwick::i18n::{Language, Texts};
 use enshwick::migrations::Migrations;
@@ -216,15 +216,15 @@ fn survivor_name(staff: &Staff, language: Language) -> String {
 /// Adds every copy staff and its texts; a full staff holds `charges`.
 pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<(), Off> {
     load.add_texts(texts, &[("copy.full_charges", FULL_CHARGES)])?;
-    let meter = Meter {
+    let meter = FuelSetup {
         template: STAFF_ENTITY,
-        max: charges,
+        max_fuel_charges: charges,
         start: charges,
     };
-    let full = Stat {
-        label: FULL_CHARGES.guid(),
+    let full = ImpactUiValue {
+        loca_id: FULL_CHARGES.guid(),
         value: i32::from(charges),
-        format: StatFormat::Number,
+        value_format: StatFormat::Number,
     };
     for staff in staffs() {
         let vanilla = staff.survivor.staff();

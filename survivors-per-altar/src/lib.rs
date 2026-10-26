@@ -332,48 +332,59 @@ enshwick::declare_mod!(SurvivorsPerAltar);
 
 #[cfg(test)]
 mod tests {
+    use enshwick::content::types;
+
     use super::*;
+
+    /// The type hash the fake loader gives item resources.
+    const ITEM_INFO: u32 = 20;
 
     /// A loader that knows the item layout the copy staffs need, with
     /// settings that turn copy staffs off and keep them out of loot.
     fn host() -> enshwick::test::FakeHost {
-        let mut host = enshwick::test::FakeHost::new().type_size("keen::ImpactUiValue", 0x28);
-        for (field, at) in [
-            ("itemId", 0),
-            ("objectId", 4),
-            ("name", 0x48),
-            ("iconImage", 0x58),
-            ("description", 0x68),
-            ("flags", 0x78),
-            ("pidEntity", 0x80),
-            ("uiValues", 0x90),
+        let mut host = enshwick::test::FakeHost::new()
+            .type_size("item_stat", 0x28)
+            .type_size("fuel_setup", 8)
+            .type_hash("fuel_setup", 24)
+            .type_hash("current_transform", 1)
+            .type_hash("used_item", 2);
+        for (ty, hash) in [
+            (types::ITEM_INFO, ITEM_INFO),
+            (types::ITEM_REGISTRY_RESOURCE, 21),
+            (types::TEMPLATE_RESOURCE, 22),
+            (types::TEMPLATE_COLLECTION_RESOURCE, 23),
         ] {
-            host = host.field_offset("keen::ItemInfo", field, at);
+            host = host.type_hash(ty.id(), hash);
         }
-        for (field, at) in [
-            ("locaId", 0),
-            ("valueFormat", 4),
-            ("value", 8),
-            ("isSigned", 0x24),
+        for (id, at) in [
+            ("item_info.id", 0),
+            ("item_info.object", 4),
+            ("item_info.name", 0x48),
+            ("item_info.icon_image", 0x58),
+            ("item_info.description", 0x68),
+            ("item_info.flags", 0x78),
+            ("item_info.pid_entity", 0x80),
+            ("item_info.ui_values", 0x90),
+            ("item_stat.label", 0),
+            ("item_stat.format", 4),
+            ("item_stat.value", 8),
+            ("item_stat.signed", 0x24),
+            ("item_registry.refs", 0),
+            ("item_registry.names", 0x38),
+            ("template.components", 0x10),
+            ("template_collection.templates", 0),
+            ("fuel_setup.max", 0),
+            ("fuel_setup.start", 4),
         ] {
-            host = host.field_offset("keen::ImpactUiValue", field, at);
+            host = host.constant(id, at);
         }
-        host.field_offset("keen::ItemRegistryResource", "itemRefs", 0)
-            .field_offset("keen::ItemRegistryResource", "dbgNames", 0x38)
-            .field_offset("keen::ecs::TemplateResource", "components", 0x10)
-            .type_size("keen::ecs::FuelSetup", 8)
-            .field_offset("keen::ecs::FuelSetup", "maxFuelCharges", 0)
-            .field_offset("keen::ecs::FuelSetup", "initialFuelPercentage", 4)
-            .field_offset("keen::ecs::TemplateCollectionResource", "templates", 0)
-            .type_hash("keen::ecs::CurrentTransform", 1)
-            .type_hash("keen::ecs::UsedItem", 2)
-            .settings(
-                "per_altar = true
+        host.settings(
+            "per_altar = true
 copy_staffs = false
 copy_staff_boss_chance = 0.0
                  copy_staff_locked_chest_chance = 0.0
 ",
-            )
+        )
     }
 
     #[test]
@@ -591,18 +602,19 @@ copy_staff_locked_chest_chance = 0.0
             .constant("ecs.context_entity_world", 0x30)
             .constant("ecs.registry_type_map", 0x30)
             .constant("ecs.registry_type_map_fallback", 0x88)
-            .type_hash("keen::ecs::InventorySetup", 3)
-            .type_hash("keen::ecs::Inventory", 4)
-            .type_hash("keen::ecs::NetworkDurability", 5)
-            .type_hash("keen::ecs::NetworkFuel", 6)
-            .type_hash("keen::ecs::OwnerRelationship", 7)
-            .field_offset("keen::ecs::InventorySetup", "linksEntities", 0)
-            .field_offset("keen::ecs::InventorySetup", "linksCategories", 0x40)
-            .field_offset("keen::ecs::InventorySetup", "isInitialized", 0x53)
-            .field_offset("keen::ItemStack", "data", 4)
-            .field_offset("keen::ecs::NetworkDurability", "durabilityMax", 2)
-            .field_offset("keen::ecs::NetworkFuel", "fuelMax", 2)
-            .type_size("keen::ItemStack", 12)
+            .type_hash("inventory_setup", 3)
+            .type_hash("inventory", 4)
+            .type_hash("durability", 5)
+            .type_hash("fuel", 6)
+            .type_hash("owner", 7)
+            .constant("inventory_setup.links", 0)
+            .constant("inventory_setup.categories", 0x40)
+            .constant("inventory_setup.initialized", 0x53)
+            .constant("item_stack.count", 4)
+            .constant("item_stack.pide", 8)
+            .constant("durability.max", 2)
+            .constant("fuel.max", 2)
+            .type_size("item_stack", 12)
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
@@ -612,9 +624,88 @@ copy_staff_locked_chest_chance = 0.0
     }
 
     #[test]
+    fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
+        use enshwick::abi::{InventoryOp, Status};
+        use enshwick::events::WorldLoaded;
+
+        const SETUP: u32 = 3;
+        const INVENTORY: u32 = 4;
+        const BUILT: u32 = 50;
+        const LOOT: u32 = 51;
+        const DROP: u32 = 52;
+        /// The entity the game's inventory reads skip: none here.
+        static NOBODY: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+        let staff = staffs::known_ids()[0];
+        let mut setup = vec![0u8; 0x54];
+        setup[0x53] = 1;
+        let mut stacks = vec![0u8; 0x60];
+        stacks[..4].copy_from_slice(&staff.to_le_bytes());
+        stacks[4..8].copy_from_slice(&1u32.to_le_bytes());
+        let mut host = host()
+            .symbol("ecs.type_index", 0x1_4064_5cc0)
+            .symbol("ecs.component_read_raw", 0x1_4064_6b00)
+            .symbol("ecs.slot_root", 0x1_4093_5420)
+            .symbol("inventory.skip_entity", NOBODY.as_ptr().addr() as u64)
+            .constant("ecs.context_entity_world", 0x30)
+            .constant("ecs.registry_type_map", 0x30)
+            .constant("ecs.registry_type_map_fallback", 0x88)
+            .type_hash("inventory_setup", SETUP)
+            .type_hash("inventory", INVENTORY)
+            .type_hash("durability", 5)
+            .type_hash("fuel", 6)
+            .type_hash("owner", 7)
+            .constant("inventory_setup.links", 0)
+            .constant("inventory_setup.categories", 0x40)
+            .constant("inventory_setup.initialized", 0x53)
+            .constant("item_stack.count", 4)
+            .constant("item_stack.pide", 8)
+            .constant("durability.max", 2)
+            .constant("fuel.max", 2)
+            .type_size("item_stack", 12);
+        for (id, hash) in [
+            ("player_input", 8),
+            ("npc", 9),
+            ("animal", 10),
+            ("destroy_on_loot", 11),
+            ("loot_fill", 12),
+            ("resource_node", 13),
+        ] {
+            host = host.type_hash(id, hash);
+        }
+        for (root, markers) in [(BUILT, &[2][..]), (LOOT, &[12]), (DROP, &[11, 12])] {
+            let inventory = root + 100;
+            let mut links = setup.clone();
+            links[..4].copy_from_slice(&inventory.to_le_bytes());
+            host = markers
+                .iter()
+                .fold(host.placed(SETUP, root, [0.0; 3]), |host, &marker| {
+                    host.component(root, marker, &[])
+                })
+                .component(root, SETUP, &links)
+                .component(inventory, INVENTORY, &stacks);
+        }
+        let loader = host.install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
+        let mut renewed: Vec<u64> = loader
+            .inventory_requests()
+            .iter()
+            .flat_map(|request| request.ops.iter())
+            .filter(|op| op.kind == InventoryOp::RENEW)
+            .map(|op| op.target)
+            .collect();
+        renewed.sort_unstable();
+        let inventories = [BUILT + 100, LOOT + 100].map(u64::from);
+        assert_eq!(renewed, inventories, "the drop's staff stays");
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
     fn copy_staffs_take_the_survivor_s_name_in_the_game_s_language() {
         use enshwick::abi::Status;
-        use enshwick::content::{Guid, types};
+        use enshwick::content::Guid;
         use enshwick::i18n::Language;
         use enshwick::survivors::WorkshopSurvivor;
 
@@ -630,7 +721,7 @@ copy_staff_boss_chance = 0.0
 copy_staff_locked_chest_chance = 0.0
 ",
             )
-            .resource(alchemist.staff().key(types::ITEM_INFO), info)
+            .resource(alchemist.staff().key_by_hash(ITEM_INFO), info)
             .game_text(tag.id(), Language::EN_US, "Balthazar")
             .game_text(tag.id(), Language::UK_UA, "Бальтазар")
             .install();

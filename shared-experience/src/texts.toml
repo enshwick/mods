@@ -1,0 +1,9 @@
+[en]
+"config" = "Shared experience"
+"config.enabled" = "Shared experience"
+"config.enabled.doc" = "Every character catches up with the one furthest ahead in experience."
+
+[uk]
+"config" = "Спільний досвід"
+"config.enabled" = "Спільний досвід"
+"config.enabled.doc" = "Кожен персонаж наздоганяє того, хто має найбільше досвіду."

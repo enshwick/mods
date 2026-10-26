@@ -22,8 +22,11 @@ worlds.
 
 ## Settings
 
-`mod-configs/shared-experience.toml`, written on first start; each
-world keeps its own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)):
+`mod-configs/enshwick.shared-experience.toml`, written on first start; each
+world keeps its own copy of it (see
+[Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
+the Mods screen shows the setting in English or Ukrainian. On the first start
+the mod copies its settings and marks from its former id, `shared-experience`:
 
 ```toml
 enabled = true
@@ -46,10 +49,11 @@ the first release, 1.0.0, there are no others.
 Only the server, or the player who hosts the game. Players without the mod
 see their bar fill and their level rise. It does not count in the join check.
 The mark of each world is kept in
-`mod-data/shared-experience/worlds/<world>/experience.toml` across restarts,
-on a dedicated server and in a hosted game alike. A mark kept for the whole
-server by an older version, `mod-data/shared-experience/experience.toml`,
-moves once into the first world that loads without a mark of its own and is
-renamed `experience.toml.moved`.
+`mod-data/enshwick.shared-experience/worlds/<world>/experience.toml` across
+restarts, on a dedicated server and in a hosted game alike. A mark kept for
+the whole server by an older version,
+`mod-data/enshwick.shared-experience/experience.toml`, moves once into the
+first world that loads without a mark of its own and is renamed
+`experience.toml.moved`.
 
 Licensed under [MIT](LICENSE).

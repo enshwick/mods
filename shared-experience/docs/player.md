@@ -1,5 +1,5 @@
 ---
-id: shared-experience
+id: enshwick.shared-experience
 name: Shared experience
 summary: Friends who play at different hours stay on the same character level. Every character catches up with the one furthest ahead.
 needs: server
@@ -41,7 +41,8 @@ put it. It runs on enshwick.
 
 You change this value in the game, as the
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
-shows.
+shows. On the first start the mod keeps the value and each world's mark from
+its former name, `shared-experience`.
 
 ## Multiplayer
 

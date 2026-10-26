@@ -7,7 +7,7 @@
 //! its current level. The game then applies it and sends it to the player.
 //!
 //! The mark is kept per world, in
-//! `mod-data/shared-experience/worlds/<world>/experience.toml`.
+//! `mod-data/enshwick.shared-experience/worlds/<world>/experience.toml`.
 
 mod share;
 
@@ -17,10 +17,13 @@ use std::sync::{Arc, OnceLock};
 
 use enshwick::events::{ShutdownStarted, Ticked, WorldLoaded};
 use enshwick::progress::Experience;
-use enshwick::state::{Store, WorldStore};
+use enshwick::state::{ModLocal, Store, WorldStore};
 use enshwick::{Load, Mod, Off};
 
 pub use share::{Character, Levels, high_water};
+
+/// The labels and descriptions of the settings, a table per language.
+const TEXTS: &str = include_str!("texts.toml");
 
 /// Shared experience settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
@@ -44,15 +47,36 @@ struct Saved {
     high_water: u64,
 }
 
-static LEVELS: OnceLock<Levels> = OnceLock::new();
-static ENABLED: AtomicBool = AtomicBool::new(true);
-static HIGH_WATER: AtomicU64 = AtomicU64::new(0);
-/// The mark last handed to the world's store.
-static STORED: AtomicU64 = AtomicU64::new(0);
-/// The largest gain counted in this server step: the engine hands the
-/// characters over in several batches a step, and one kill shared by
-/// characters in two batches is still one moment.
-static MOMENT: AtomicU32 = AtomicU32::new(0);
+/// The mark and what moves it, for this mod life.
+#[derive(Debug)]
+struct Shared {
+    /// The experience each level needs, from the game's table once read.
+    levels: OnceLock<Levels>,
+    /// Whether characters catch up.
+    enabled: AtomicBool,
+    /// The most cumulative experience any character has reached in the
+    /// loaded world.
+    high_water: AtomicU64,
+    /// The mark last handed to the world's store.
+    stored: AtomicU64,
+    /// The largest gain counted in this server step: the engine hands the
+    /// characters over in several batches a step, and one kill shared by
+    /// characters in two batches is still one moment.
+    moment: AtomicU32,
+}
+
+static SHARED: ModLocal<Shared> = ModLocal::new();
+
+/// The mark of this mod life, 0 and on at first.
+fn shared() -> &'static Shared {
+    SHARED.get_or_init(|| Shared {
+        levels: OnceLock::new(),
+        enabled: AtomicBool::new(true),
+        high_water: AtomicU64::new(0),
+        stored: AtomicU64::new(0),
+        moment: AtomicU32::new(0),
+    })
+}
 
 const fn character(row: &Experience) -> Character {
     Character {
@@ -65,10 +89,11 @@ const fn character(row: &Experience) -> Character {
 
 /// Moves the high-water mark and raises every character below it.
 fn share_experience(rows: &mut [Experience], table: &enshwick::progress::Levels) {
-    if !ENABLED.load(Ordering::Relaxed) || rows.is_empty() {
+    let shared = shared();
+    if !shared.enabled.load(Ordering::Relaxed) || rows.is_empty() {
         return;
     }
-    let levels = LEVELS.get_or_init(|| {
+    let levels = shared.levels.get_or_init(|| {
         let levels = Levels::new(table.cap(), |level| table.need(level));
         enshwick::info!(
             "level cap {}, {} experience to reach it",
@@ -86,12 +111,14 @@ fn share_experience(rows: &mut [Experience], table: &enshwick::progress::Levels)
         .map(|r| levels.total(character(r)))
         .max()
         .unwrap_or(0);
-    let counted = MOMENT.fetch_max(most_gained, Ordering::Relaxed);
+    let counted = shared.moment.fetch_max(most_gained, Ordering::Relaxed);
     let new_gain = most_gained.saturating_sub(counted);
-    let moved = HIGH_WATER.try_update(Ordering::Relaxed, Ordering::Relaxed, |previous| {
-        let mark = high_water(previous, new_gain, furthest);
-        (mark != previous).then_some(mark)
-    });
+    let moved = shared
+        .high_water
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |previous| {
+            let mark = high_water(previous, new_gain, furthest);
+            (mark != previous).then_some(mark)
+        });
     let mark = match moved {
         Ok(previous) => high_water(previous, new_gain, furthest),
         Err(unchanged) => unchanged,
@@ -104,12 +131,13 @@ fn share_experience(rows: &mut [Experience], table: &enshwick::progress::Levels)
 /// Hands a moved mark to the world's store after a step, off the
 /// experience path; the store writes it as the world saves and at shutdown.
 fn keep(store: &WorldStore<Saved>) {
-    let mark = HIGH_WATER.load(Ordering::Relaxed);
-    if STORED.load(Ordering::Relaxed) == mark {
+    let shared = shared();
+    let mark = shared.high_water.load(Ordering::Relaxed);
+    if shared.stored.load(Ordering::Relaxed) == mark {
         return;
     }
     if store.update(|saved| saved.high_water = mark).is_some() {
-        STORED.store(mark, Ordering::Relaxed);
+        shared.stored.store(mark, Ordering::Relaxed);
     }
 }
 
@@ -118,14 +146,14 @@ fn keep(store: &WorldStore<Saved>) {
 /// per world, once; that file is then renamed out of the way.
 fn open_world(store: &WorldStore<Saved>, dir: &Path) {
     let mut mark = store.with(|saved| saved.high_water).unwrap_or(0);
-    let shared = dir.join("experience.toml");
-    if mark == 0 && store.key().is_some() && shared.exists() {
+    let server_wide = dir.join("experience.toml");
+    if mark == 0 && store.key().is_some() && server_wide.exists() {
         match Store::<Saved>::new(dir, "experience").load() {
             Ok(old) => {
                 mark = old.high_water;
                 store.update(|saved| saved.high_water = mark);
                 let moved = store.flush().map_err(|e| e.to_string()).and_then(|()| {
-                    std::fs::rename(&shared, dir.join("experience.toml.moved"))
+                    std::fs::rename(&server_wide, dir.join("experience.toml.moved"))
                         .map_err(|e| e.to_string())
                 });
                 match moved {
@@ -138,8 +166,12 @@ fn open_world(store: &WorldStore<Saved>, dir: &Path) {
             Err(error) => enshwick::warn!("experience.toml not read: {error}"),
         }
     }
-    STORED.store(mark, Ordering::Relaxed);
-    let mark = HIGH_WATER.fetch_max(mark, Ordering::Relaxed).max(mark);
+    let shared = shared();
+    shared.stored.store(mark, Ordering::Relaxed);
+    let mark = shared
+        .high_water
+        .fetch_max(mark, Ordering::Relaxed)
+        .max(mark);
     enshwick::info!(
         "experience mark {mark} in world {}",
         store.key().unwrap_or_default()
@@ -153,15 +185,17 @@ pub struct SharedExperience;
 impl Mod for SharedExperience {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "shared-experience",
+            id: "enshwick.shared-experience",
             side: SERVER,
             name: "Shared experience",
+            was: ["shared-experience"],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+        let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
-        ENABLED.store(settings.enabled, Ordering::Relaxed);
+        shared().enabled.store(settings.enabled, Ordering::Relaxed);
         load.on_experience(share_experience)?;
         let dir = load.data_dir()?;
         // The store closes at shutdown in a handler of its own: the mark the
@@ -178,17 +212,18 @@ impl Mod for SharedExperience {
         let _first = last.set(store.clone());
         let kept = store.clone();
         load.on::<Ticked>(move |_| {
-            MOMENT.store(0, Ordering::Relaxed);
+            shared().moment.store(0, Ordering::Relaxed);
             keep(&kept);
         })?;
         load.on::<WorldLoaded>(move |()| open_world(&store, &dir))?;
         // The next game may be another world.
         load.on::<ShutdownStarted>(|()| {
-            HIGH_WATER.store(0, Ordering::Relaxed);
-            STORED.store(0, Ordering::Relaxed);
+            let shared = shared();
+            shared.high_water.store(0, Ordering::Relaxed);
+            shared.stored.store(0, Ordering::Relaxed);
         })?;
         load.on_config_change(|settings: Settings| {
-            ENABLED.store(settings.enabled, Ordering::Relaxed);
+            shared().enabled.store(settings.enabled, Ordering::Relaxed);
             enshwick::info!("shared experience {}", on_off(settings.enabled));
         })?;
         enshwick::info!("shared experience {}", on_off(settings.enabled));
@@ -214,6 +249,23 @@ mod tests {
         assert!(settings.enabled);
     }
 
+    #[test]
+    fn every_setting_has_its_label_and_description_in_all_languages() {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        let schema = Settings::schema();
+        let keys = std::iter::once(schema.text).chain(
+            schema
+                .fields
+                .into_iter()
+                .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+        );
+        for key in keys {
+            let found = texts.get(&key, enshwick::i18n::Language::FALLBACK);
+            assert!(found.is_some(), "{key}");
+        }
+    }
+
     fn tick(loader: &enshwick::test::Installed, step: u64) {
         use enshwick::abi::{Header, TickData};
 
@@ -236,8 +288,6 @@ mod tests {
         // SAFETY: the exports of `declare_mod!`.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK);
-        HIGH_WATER.store(0, Ordering::Relaxed);
-        STORED.store(0, Ordering::Relaxed);
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "{:?}", loader.logs());
         loader
     }
@@ -263,7 +313,7 @@ mod tests {
 
         let loader = game(&dir, "first");
         assert_eq!(
-            HIGH_WATER.load(Ordering::Relaxed),
+            shared().high_water.load(Ordering::Relaxed),
             30,
             "moved into the first world"
         );
@@ -296,7 +346,7 @@ mod tests {
         assert_eq!(loader.raise::<ShutdownStarted>(&()), 3);
         assert_eq!(mark_of(&dir, "first"), 70, "kept before the store closed");
         assert_eq!(
-            HIGH_WATER.load(Ordering::Relaxed),
+            shared().high_water.load(Ordering::Relaxed),
             0,
             "the next game starts clean"
         );
@@ -322,7 +372,7 @@ mod tests {
         )
         .unwrap();
         let _loader = game(&dir, "second");
-        assert_eq!(HIGH_WATER.load(Ordering::Relaxed), 0);
+        assert_eq!(shared().high_water.load(Ordering::Relaxed), 0);
         let _cleaned = std::fs::remove_dir_all(&dir);
     }
 
@@ -346,7 +396,7 @@ mod tests {
         )
         .unwrap();
         let _loader = game(&dir, "first");
-        assert_eq!(HIGH_WATER.load(Ordering::Relaxed), 70);
+        assert_eq!(shared().high_water.load(Ordering::Relaxed), 70);
         assert!(dir.join("experience.toml").exists());
         let _cleaned = std::fs::remove_dir_all(&dir);
     }
@@ -367,8 +417,6 @@ mod tests {
         // SAFETY: the exports of `declare_mod!`.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK);
-        HIGH_WATER.store(0, Ordering::Relaxed);
-        STORED.store(0, Ordering::Relaxed);
         let row = |entity, progress, gained| Experience {
             entity: enshwick::ecs::Entity(entity),
             level: 1,
@@ -388,7 +436,7 @@ mod tests {
         let mut b = [row(2, 0, 120)];
         loader.experience(&mut a, 10, |_| 1000);
         loader.experience(&mut b, 10, |_| 1000);
-        assert_eq!(HIGH_WATER.load(Ordering::Relaxed), 120);
+        assert_eq!(shared().high_water.load(Ordering::Relaxed), 120);
         assert_eq!((a[0].gained, b[0].gained), (120, 120));
         tick(2);
         let mut both = [row(1, 120, 0), row(2, 120, 0)];
@@ -397,7 +445,7 @@ mod tests {
         // The next step's kill counts again.
         let mut a = [row(1, 120, 50)];
         loader.experience(&mut a, 10, |_| 1000);
-        assert_eq!(HIGH_WATER.load(Ordering::Relaxed), 170);
+        assert_eq!(shared().high_water.load(Ordering::Relaxed), 170);
         let _cleaned = std::fs::remove_dir_all(&dir);
     }
 

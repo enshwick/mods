@@ -1,0 +1,10 @@
+# Written by copier; `copier update` reads it to merge template changes.
+_commit: c9030cf
+_src_path: gh:enshwick/template-mod
+crate_name: enshwick-flame-altar-count
+description: How many Flame Altars each Flame level allows, from a table in the settings
+enshwick_version: 1.0.0-alpha.2
+mod_id: flame-altar-count
+mod_name: Flame altar count
+repository: enshwick/mod-flame-altar-count
+side: both

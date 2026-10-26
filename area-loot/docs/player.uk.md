@@ -1,5 +1,5 @@
 ---
-id: area-loot
+id: enshwick.area-loot
 name: Area loot
 summary: Обшукайте одне тіло ворога, і здобич з тіл і мішків ворогів навколо прийде разом із ним.
 needs: server

@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use enshwick::ecs::Entity;
-use enshwick::loot::{Container, near};
+use enshwick::loot::Container;
+use enshwick::world::near;
 
 /// How long a take holds a container: no one else takes from it, and its
 /// emptying starts nothing.

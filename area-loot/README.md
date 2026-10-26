@@ -18,7 +18,7 @@ in vanilla.
 
 ## Settings
 
-`mod-configs/area-loot.toml`, written on first start; each
+`mod-configs/enshwick.area-loot.toml`, written on first start; each
 world keeps its own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)):
 
 ```toml
@@ -32,8 +32,8 @@ and down from it, both in metres: `radius` from 0.1 to 50, `height` from 0.1
 to 20. A file with a value outside these is skipped, and the running values
 stay.
 Switched back on, the mod starts watching afresh, so nothing emptied while it
-was off is taken. A change applies at once,
-without a restart.
+was off is taken. A change applies at once, without a restart. Settings kept
+under the mod's former id, `area-loot`, move to the new id on the first start.
 
 ## Install
 

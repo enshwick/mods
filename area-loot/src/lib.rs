@@ -4,6 +4,7 @@
 //! containers another player has open stay as they are. Items on the ground
 //! keep the game's own pickup.
 
+pub mod points;
 mod take;
 mod tracker;
 
@@ -53,9 +54,11 @@ pub struct AreaLoot;
 impl Mod for AreaLoot {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "area-loot",
+            id: "enshwick.area-loot",
             side: SERVER,
             name: "Area loot",
+            was: ["area-loot"],
+            points: [points::Eligible],
         )
     }
 

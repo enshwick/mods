@@ -6,19 +6,20 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use enshwick::ecs::Entity;
 use enshwick::inventory::{Batch, Inventories, Op, Outcome};
-use enshwick::loot::{Container, LootPass, near};
+use enshwick::loot::{Container, LootPass};
 use enshwick::points::OwnedPoint;
-use enshwick::points::area_loot::Eligible;
+use enshwick::state::ModLocal;
 use enshwick::time::StepClock;
-use enshwick::world::World;
+use enshwick::world::{World, near};
 use enshwick::{Load, Off};
 
 use crate::Settings;
+use crate::points::Eligible;
 use crate::tracker::Tracker;
 
 /// Another player's interaction keeps a container out for this long.
@@ -29,22 +30,46 @@ const OPEN_RANGE: f64 = 4.0;
 /// How often the pass prunes what it remembers.
 const PRUNE_EVERY: Duration = Duration::from_secs(60);
 
-static INVENTORIES: OnceLock<Inventories> = OnceLock::new();
+/// The settings in force and the pass's switches.
+#[derive(Debug)]
+struct Switches {
+    enabled: AtomicBool,
+    /// Radius and height in metres, as `f32` bits.
+    radius: AtomicU32,
+    height: AtomicU32,
+    /// Set once the pass panicked: vanilla from then on.
+    off: AtomicBool,
+    /// Counts the games run, so a take chain never reaches into the next one.
+    game: AtomicU64,
+}
+
+impl Default for Switches {
+    fn default() -> Self {
+        let settings = Settings::default();
+        Self {
+            enabled: AtomicBool::new(settings.enabled),
+            radius: AtomicU32::new(settings.radius.to_bits()),
+            height: AtomicU32::new(settings.height.to_bits()),
+            off: AtomicBool::new(false),
+            game: AtomicU64::new(0),
+        }
+    }
+}
+
+static SWITCHES: ModLocal<Switches> = ModLocal::new();
+static INVENTORIES: ModLocal<Inventories> = ModLocal::new();
 /// Where players stand, for the check right before a container's turn.
-static WORLD: OnceLock<World> = OnceLock::new();
-static TRACKER: Mutex<Option<Tracker>> = Mutex::new(None);
-static LAST_PRUNE: Mutex<Option<Duration>> = Mutex::new(None);
+static WORLD: ModLocal<World> = ModLocal::new();
+static TRACKER: ModLocal<Mutex<Option<Tracker>>> = ModLocal::new();
+static LAST_PRUNE: ModLocal<Mutex<Option<Duration>>> = ModLocal::new();
 /// The time the holds and the busy window count in: the server's steps.
-static CLOCK: OnceLock<&'static StepClock> = OnceLock::new();
-static ENABLED: AtomicBool = AtomicBool::new(true);
-/// Radius and height in metres, as `f32` bits.
-static RADIUS: AtomicU32 = AtomicU32::new(0x4140_0000);
-static HEIGHT: AtomicU32 = AtomicU32::new(0x4080_0000);
-static OFF: AtomicBool = AtomicBool::new(false);
-/// Counts the games run, so a take chain never reaches into the next one.
-static GAME: AtomicU64 = AtomicU64::new(0);
+static CLOCK: ModLocal<&'static StepClock> = ModLocal::new();
 /// The extension point `area-loot:eligible`, once defined.
-static ELIGIBLE: OnceLock<OwnedPoint<Eligible>> = OnceLock::new();
+static ELIGIBLE: ModLocal<OwnedPoint<Eligible>> = ModLocal::new();
+
+fn switches() -> &'static Switches {
+    SWITCHES.get_or_init(Switches::default)
+}
 
 /// Whether `container`, `distance` metres across the ground from the
 /// container `emptied` that `player` emptied, comes along: yes, unless
@@ -63,7 +88,7 @@ fn eligible(player: Entity, emptied: Entity, container: Entity, distance: f32) -
 
 /// Applies `settings` from now on.
 pub(crate) fn apply(settings: &Settings) {
-    let was = ENABLED.swap(settings.enabled, Ordering::Relaxed);
+    let was = switches().enabled.swap(settings.enabled, Ordering::Relaxed);
     // Off, the tracker stood still: what was emptied meanwhile must not count
     // as emptied now, with its loot sent to whoever opened it last.
     if settings.enabled
@@ -72,8 +97,12 @@ pub(crate) fn apply(settings: &Settings) {
     {
         t.clear();
     }
-    RADIUS.store(settings.radius.to_bits(), Ordering::Relaxed);
-    HEIGHT.store(settings.height.to_bits(), Ordering::Relaxed);
+    switches()
+        .radius
+        .store(settings.radius.to_bits(), Ordering::Relaxed);
+    switches()
+        .height
+        .store(settings.height.to_bits(), Ordering::Relaxed);
 }
 
 /// The step clock's time; zero before the mod linked it.
@@ -82,7 +111,10 @@ fn now() -> Duration {
 }
 
 fn tracker() -> MutexGuard<'static, Option<Tracker>> {
-    TRACKER.lock().unwrap_or_else(PoisonError::into_inner)
+    TRACKER
+        .get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Links the pass.
@@ -102,7 +134,7 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
     load.on_loot_pass(check)?;
     // Entity ids belong to one game.
     load.on::<enshwick::events::ShutdownStarted>(|()| {
-        GAME.fetch_add(1, Ordering::AcqRel);
+        switches().game.fetch_add(1, Ordering::AcqRel);
         if let Some(t) = tracker().as_mut() {
             t.clear();
         }
@@ -110,11 +142,11 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
 }
 
 fn check(loot: &LootPass<'_>) {
-    if OFF.load(Ordering::Acquire) || !ENABLED.load(Ordering::Relaxed) {
+    if switches().off.load(Ordering::Acquire) || !switches().enabled.load(Ordering::Relaxed) {
         return;
     }
     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pass(loot))).is_err()
-        && !OFF.swap(true, Ordering::AcqRel)
+        && !switches().off.swap(true, Ordering::AcqRel)
     {
         enshwick::warn!("area loot off, vanilla from now on: the pass panicked");
     }
@@ -134,7 +166,10 @@ fn pass(loot: &LootPass<'_>) {
                 emptied.push((*c, by));
             }
         });
-        let mut last = LAST_PRUNE.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut last = LAST_PRUNE
+            .get_or_init(Mutex::default)
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         if last.is_none_or(|at| now.saturating_sub(at) >= PRUNE_EVERY) {
             t.prune(now);
             *last = Some(now);
@@ -150,7 +185,7 @@ fn pass(loot: &LootPass<'_>) {
                     container.entity.0,
                     queue.len()
                 );
-                take_next(player, queue, GAME.load(Ordering::Acquire));
+                take_next(player, queue, switches().game.load(Ordering::Acquire));
             }
         }
     }
@@ -164,8 +199,8 @@ fn gather(
     player: Entity,
     now: Duration,
 ) -> VecDeque<Entity> {
-    let radius = f64::from(f32::from_bits(RADIUS.load(Ordering::Relaxed)));
-    let height = f64::from(f32::from_bits(HEIGHT.load(Ordering::Relaxed)));
+    let radius = f64::from(f32::from_bits(switches().radius.load(Ordering::Relaxed)));
+    let height = f64::from(f32::from_bits(switches().height.load(Ordering::Relaxed)));
     let mut guard = tracker();
     let Some(t) = guard.as_mut() else {
         return VecDeque::new();
@@ -220,9 +255,9 @@ fn take_next(player: Entity, mut queue: VecDeque<Entity>, game: u64) {
         return;
     };
     // Switched off, stopped by a panic or another game since: the rest stays.
-    if OFF.load(Ordering::Acquire)
-        || !ENABLED.load(Ordering::Relaxed)
-        || GAME.load(Ordering::Acquire) != game
+    if switches().off.load(Ordering::Acquire)
+        || !switches().enabled.load(Ordering::Relaxed)
+        || switches().game.load(Ordering::Acquire) != game
     {
         if let Some(t) = tracker().as_mut() {
             for rest in queue {
@@ -351,10 +386,14 @@ mod tests {
             height: 2.5,
             enabled: false,
         });
-        assert!(!ENABLED.load(Ordering::Relaxed));
-        assert!((f32::from_bits(RADIUS.load(Ordering::Relaxed)) - 20.0).abs() < f32::EPSILON);
-        assert!((f32::from_bits(HEIGHT.load(Ordering::Relaxed)) - 2.5).abs() < f32::EPSILON);
+        assert!(!switches().enabled.load(Ordering::Relaxed));
+        assert!(
+            (f32::from_bits(switches().radius.load(Ordering::Relaxed)) - 20.0).abs() < f32::EPSILON
+        );
+        assert!(
+            (f32::from_bits(switches().height.load(Ordering::Relaxed)) - 2.5).abs() < f32::EPSILON
+        );
         apply(&Settings::default());
-        assert!(ENABLED.load(Ordering::Relaxed));
+        assert!(switches().enabled.load(Ordering::Relaxed));
     }
 }

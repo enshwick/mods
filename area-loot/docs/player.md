@@ -1,5 +1,5 @@
 ---
-id: area-loot
+id: enshwick.area-loot
 name: Area loot
 summary: Empty one enemy corpse, and the loot of the enemy corpses and loot bags around it comes along.
 needs: server

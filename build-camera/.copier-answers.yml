@@ -4,7 +4,7 @@ _src_path: gh:enshwick/template-mod
 crate_name: enshwick-build-camera
 description: Airborne Architect's building fly mode for every player, within the vanilla
     limits
-enshwick_version: 1.0.0-alpha.1
+enshwick_version: 1.0.0-alpha.2
 mod_id: build-camera
 mod_name: Build camera
 repository: enshwick/mod-build-camera

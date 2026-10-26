@@ -51,10 +51,10 @@ impl Tracker {
     pub(crate) fn observe(&mut self, container: &Container, now: Duration) -> Option<Entity> {
         let (guest, accepted_at) = container
             .offer
-            .map_or((None, 0), |o| (o.guest, o.accepted_at));
+            .map_or((None, 0), |o| (o.guest_id, o.last_accept_time));
         let fresh = Seen {
             position: container.position,
-            empty: container.empty,
+            empty: container.is_empty,
             guest,
             accepted_at,
             since: now,
@@ -66,7 +66,7 @@ impl Tracker {
         {
             seen.since = was.since;
         }
-        let turned = !was.empty && container.empty;
+        let turned = !was.empty && container.is_empty;
         guest.filter(|_| turned && !self.holds(container.entity, now))
     }
 
@@ -83,13 +83,13 @@ impl Tracker {
         let Some(offer) = container.offer else {
             return false;
         };
-        if offer.guest.is_none_or(|guest| guest == player) {
+        if offer.guest_id.is_none_or(|guest| guest == player) {
             return false;
         }
         let since = self
             .seen
             .get(&container.entity)
-            .filter(|s| (s.guest, s.accepted_at) == (offer.guest, offer.accepted_at))
+            .filter(|s| (s.guest, s.accepted_at) == (offer.guest_id, offer.last_accept_time))
             .map_or(now, |s| s.since);
         now.saturating_sub(since) < window
     }
@@ -202,7 +202,7 @@ impl Tracker {
 
 #[cfg(test)]
 mod tests {
-    use enshwick::loot::Offer;
+    use enshwick::loot::InteractionOfferRuntime;
 
     use super::*;
 
@@ -213,13 +213,13 @@ mod tests {
         Container {
             entity: Entity(id),
             position: [x, 0.0, 0.0],
-            empty,
+            is_empty: empty,
             expires: true,
             area_loot: Some(true),
-            offer: Some(Offer {
-                guest,
-                accepted_at: at,
-                disabled: false,
+            offer: Some(InteractionOfferRuntime {
+                guest_id: guest,
+                last_accept_time: at,
+                is_disabled: false,
             }),
         }
     }

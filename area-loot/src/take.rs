@@ -217,7 +217,7 @@ fn gather(
         if t.busy(&c, player, now, BUSY) {
             continue;
         }
-        if let Some(guest) = c.offer.and_then(|o| o.guest)
+        if let Some(guest) = c.offer.and_then(|o| o.guest_id)
             && guest != player
         {
             let at = loot.position(guest);
@@ -333,7 +333,7 @@ fn emptied(outcome: &Outcome) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use enshwick::inventory::{Done, OpResult};
+    use enshwick::inventory::{Done, OpError, OpResult};
 
     use super::*;
 
@@ -343,12 +343,12 @@ mod tests {
             done: Done::Committed,
             ops: vec![OpResult { error, remaining }],
         };
-        assert!(emptied(&full(0, 0)));
-        assert!(!emptied(&full(OpResult::NO_ROOM, 0)));
+        assert!(emptied(&full(None, 0)));
+        assert!(!emptied(&full(Some(OpError::InvalidState), 0)));
         assert!(!emptied(&Outcome {
             done: Done::RolledBack,
             ops: vec![OpResult {
-                error: 0,
+                error: None,
                 remaining: 0
             }],
         }));

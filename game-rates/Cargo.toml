@@ -2,7 +2,7 @@
 name = "enshwick-building-materials"
 version = "0.1.0"
 description = "Building blocks, roofs, overgrowth, decor and furniture: twice the output of the vanilla recipes for the same cost"
-keywords = ["enshrouded", "mod"]
+keywords = ["enshrouded", "mod", "building", "recipes"]
 categories = ["game-development"]
 readme = "README.md"
 authors = ["themaiby"]
@@ -19,6 +19,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 enshwick = "1.0.0-alpha.1"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [dev-dependencies]
 enshwick = { version = "1.0.0-alpha.1", features = ["test"] }

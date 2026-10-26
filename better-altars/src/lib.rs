@@ -1,260 +1,276 @@
-//! How many Flame Altars each Flame level allows, up to 32 in 16 bases.
+//! Better Altars: how many Flame Altars each Flame level allows, up to 32 in
+//! 16 bases, and Flame Altar zones that touch grow together and can be built
+//! across.
 //!
-//! The table is a join value: a client joined to a server runs with the
-//! server's. The platform raises the game's grouping to 32 altar zones in its
-//! 16 bases; where it cannot, the table stays capped at 16. Other mods change
-//! the limit at the extension point `flame-altar-count:limit`.
+//! The two parts were the mods More Altars and Flame altar zones; their
+//! settings are the groups `[count]` and `[zones]`, and their former ids carry
+//! over through the manifest's `was` and a migration.
 
+mod count;
+pub mod geometry;
 mod hold;
+mod migrations;
+mod zones;
 
-use std::sync::Arc;
-
-use arc_swap::ArcSwap;
-use enshwick::abi::Side;
-use enshwick::altars::{RAISED_ALTAR_ZONES, VANILLA_ALTAR_ZONES, VANILLA_ALTARS_PER_FLAME_LEVEL};
-use enshwick::points::OwnedPoint;
+pub use count::AltarLimit;
+use count::{AltarCount, Count, VANILLA_CAP};
 use enshwick::{Load, Mod, Off};
+use zones::{AltarZones, Zones};
 
-/// The most altars with the base limit raised.
-const CAP: u8 = RAISED_ALTAR_ZONES;
-/// The most altars the vanilla grouping takes.
-const VANILLA_CAP: u8 = VANILLA_ALTAR_ZONES;
 /// The labels of the settings on the Mods screen, per language.
 const TEXTS: &str = include_str!("texts.toml");
 
-/// How many Flame Altars a Flame level allows, `flame-altar-count:limit`:
-/// the answer is the altars.
-///
-/// The mod answers from its table and keeps the result between 1 and
-/// `cap`, links' answers too, so a link cannot raise a level past `cap`.
-/// Asked whenever the game checks the limit, on the thread that checks it,
-/// on the server and on every client: a linking mod belongs on both sides
-/// with `join: true`, or the two disagree on the limit.
-#[enshwick::point(name = "flame-altar-count:limit", mode = Override, output = u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AltarLimit {
-    /// The Flame level, from 0.
-    pub flame_level: u32,
-    /// The most altars the game's grouping takes on this build.
-    pub cap: u8,
-}
-
-/// More Altars settings.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+/// Better Altars: how many altars, then how their zones grow.
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize, enshwick::Config)]
+#[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// Altars this Flame level allows, from 1 to 32; the list starts at level
-    /// 0, before the level 1 a new world starts at, and levels past it use
-    /// its last entry. All altars fit in 16 bases: altars whose zones touch
-    /// share a base, and an altar that would start a 17th base is refused.
-    /// Vanilla: [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]
-    /// A joined player runs with the server's table.
-    #[config(sync, range = 1..=CAP, first = 0, text = "config.altars")]
-    altars_per_flame_level: Vec<u16>,
+    /// How many Flame Altars each Flame level allows.
+    #[config(group)]
+    count: Count,
+    /// How the zones of touching altars grow and join.
+    #[config(group)]
+    zones: Zones,
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            altars_per_flame_level: vec![2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32],
-        }
-    }
-}
-
-/// The table of altars per Flame level.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct AltarTable {
-    table: Vec<u8>,
-}
-
-impl AltarTable {
-    /// A table from the settings, already within 1 to [`CAP`]: lowered to
-    /// `cap`, the vanilla table when empty.
-    fn new(levels: &[u16], cap: u8) -> Self {
-        let table = if levels.is_empty() {
-            VANILLA_ALTARS_PER_FLAME_LEVEL.to_vec()
-        } else {
-            levels
-                .iter()
-                .map(|&n| u8::try_from(n.min(u16::from(cap))).unwrap_or(cap))
-                .collect()
-        };
-        Self { table }
-    }
-
-    /// The table from `settings`, warning about values above `cap`.
-    fn from_settings(settings: &Settings, cap: u8) -> Self {
-        if settings
-            .altars_per_flame_level
-            .iter()
-            .any(|&n| n > u16::from(cap))
-        {
-            enshwick::warn!("altars above {cap} lowered to {cap}: {}", cap_reason(cap));
-        }
-        let table = Self::new(&settings.altars_per_flame_level, cap);
-        enshwick::info!("altars per Flame level: {:?}", table.table);
-        table
-    }
-
-    /// Altars allowed at `flame_level`.
-    fn altars(&self, flame_level: u32) -> u8 {
-        let index = usize::try_from(flame_level).unwrap_or(usize::MAX);
-        self.table
-            .get(index)
-            .or(self.table.last())
-            .copied()
-            .unwrap_or(VANILLA_CAP)
-    }
-}
-
-/// Why the table stops at `cap`.
-fn cap_reason(cap: u8) -> &'static str {
-    if cap == CAP {
-        "a base names at most 32 altar zones"
-    } else {
-        "the game groups only 16 altar zones into bases here"
-    }
-}
-
-/// The mod: the running table, swapped whole when the settings or the
-/// server's join values change, under the cap in force.
+/// The mod: the altar count and the zones, each with its own settings group.
 #[derive(Debug)]
-struct AltarCount {
-    table: ArcSwap<AltarTable>,
-    /// [`CAP`] once the base limit is lifted, else [`VANILLA_CAP`].
-    cap: u8,
-    /// The extension point `flame-altar-count:limit`.
-    point: OwnedPoint<AltarLimit>,
+pub struct BetterAltars {
+    count: AltarCount,
+    zones: AltarZones,
 }
 
-impl AltarCount {
-    /// The altars `flame_level` allows: the table's answer, or what other
-    /// mods' links make of it, between 1 and the cap.
-    fn limit(&self, flame_level: u32) -> u8 {
-        let table = self.table.load().altars(flame_level);
-        self.point
-            .decide(
-                &AltarLimit {
-                    flame_level,
-                    cap: self.cap,
-                },
-                table,
-            )
-            .value_or(table)
-            .clamp(1, self.cap)
-    }
-}
-
-impl Mod for AltarCount {
+impl Mod for BetterAltars {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "enshwick.more-altars",
+            id: "enshwick.better-altars",
             side: BOTH,
-            name: "More Altars",
+            name: "Better Altars",
             join: true,
-            was: ["flame-altar-count"],
+            was: [
+                "enshwick.more-altars",
+                "flame-altar-count",
+                "enshwick.flame-altar-zones",
+                "flame-altar-zones",
+            ],
             points: [AltarLimit],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
+        load.migrate(migrations::all())?;
         let settings: Settings = load.config()?;
-        let server = load.host().build().side == Side::SERVER;
-        let cap = if load.raise_base_limit()? {
-            if server {
-                hold::keep(load)?;
-            }
-            CAP
-        } else {
-            // A world held for its altars must not open with the vanilla
-            // grouping: off, the loader stops the server for the hold.
-            if server && let Some(reason) = hold::reason(load)? {
-                return Err(Off::new(format!(
-                    "{reason}, and this build's grouping is not the one the platform knows"
-                )));
-            }
-            enshwick::warn!("the game keeps 16 altar zones in bases");
-            VANILLA_CAP
-        };
-        let table = AltarTable::from_settings(&settings, cap);
-        let point = load.define_point()?;
+        let count = AltarCount::start(load, &settings.count)?;
+        let zones = AltarZones::start(load, &settings.zones)?;
         load.on_altar_limit(|level| {
-            AltarCount::instance().map_or(VANILLA_CAP, |count| count.limit(level))
+            BetterAltars::instance().map_or(VANILLA_CAP, |altars| altars.count.limit(level))
         })?;
         load.on_config_change(|settings: Settings| {
-            if let Some(count) = AltarCount::instance() {
-                count
-                    .table
-                    .store(Arc::new(AltarTable::from_settings(&settings, count.cap)));
+            if let Some(altars) = BetterAltars::instance() {
+                altars.count.apply(&settings.count);
+                altars.zones.apply(&settings.zones);
             }
         })?;
-        Ok(Self {
-            table: ArcSwap::from_pointee(table),
-            cap,
-            point,
-        })
+        Ok(Self { count, zones })
+    }
+
+    fn ready(&'static self, _host: enshwick::Host) {
+        AltarZones::ready();
     }
 }
 
-enshwick::declare_mod!(AltarCount);
+enshwick::declare_mod!(BetterAltars);
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
+    use enshwick::abi::{AltarInfo, Bounds, Side, Status};
     use enshwick::config::Config as _;
-    use enshwick::i18n::Language;
+    use enshwick::events::{AltarsChanged, SettingsReplaced};
 
     use super::*;
+    use crate::count::{AltarTable, CAP};
 
-    #[test]
-    fn the_default_settings_double_vanilla() {
-        let settings: Settings = toml::from_str(&Settings::template()).unwrap();
-        let table = AltarTable::new(&settings.altars_per_flame_level, CAP);
-        assert_eq!(table.altars(0), 2);
-        assert_eq!(table.altars(1), 4);
-        assert_eq!(table.altars(4), 16);
-        let doubled: Vec<u8> = VANILLA_ALTARS_PER_FLAME_LEVEL
+    /// The loader installed on `side` with `settings` and the settings files
+    /// of `others`, each a mod id and its file, and the mod started.
+    fn started(side: Side, settings: &str, others: &[(&str, &str)]) -> enshwick::test::Installed {
+        let host = enshwick::test::FakeHost::new()
+            .side(side)
+            .settings(settings);
+        let loader = others
             .iter()
-            .map(|&n| n * 2)
-            .collect();
-        assert_eq!(table.table, doubled);
-        assert_eq!(table.altars(99), 32);
+            .fold(host, |host, &(id, text)| host.other_settings(id, text))
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        loader
     }
 
-    #[test]
-    fn values_are_capped_and_an_empty_table_is_vanilla() {
-        let table = AltarTable::new(&[1, 3, 32], CAP);
-        assert_eq!(
-            [table.altars(0), table.altars(1), table.altars(2)],
-            [1, 3, 32]
-        );
-        assert_eq!(AltarTable::new(&[], CAP).altars(0), 1);
-        let unlifted = AltarTable::new(&[1, 3, 32], VANILLA_CAP);
-        assert_eq!(unlifted.altars(2), 16);
+    /// An altar at level 1 whose zone is 80 cells wide from `x`.
+    fn altar(entity: u32, x: i64) -> AltarInfo {
+        let zone = Bounds {
+            min: [x, 0, 0],
+            max: [x + 80, 80, 80],
+        };
+        let mut info = AltarInfo::EMPTY;
+        info.entity = entity;
+        info.level = 1;
+        info.level_count = 1;
+        info.zone = zone;
+        info.levels[0] = zone;
+        info
     }
 
-    #[test]
-    fn the_setting_has_its_label_and_description_in_all_languages() {
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
-        assert_eq!(texts.untranslated(), []);
-        for field in Settings::schema().fields {
-            let doc = format!("{}.doc", field.text);
-            let element = format!("{}.element", field.text);
-            for key in [&field.text, &doc, &element] {
-                assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
-            }
+    /// Waits up to ten seconds for the solver to size `count` zones.
+    fn wait_for_sizes(loader: &enshwick::test::Installed, count: usize) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while loader.zone_sizes().len() < count && Instant::now() < deadline {
+            std::thread::yield_now();
         }
     }
 
     #[test]
+    fn the_default_settings_parse_into_both_groups() {
+        let settings: Settings = toml::from_str(&Settings::template()).unwrap();
+        assert_eq!(
+            AltarTable::new(&settings.count.altars_per_flame_level, CAP).altars(1),
+            4
+        );
+        assert!(settings.zones.clusters && settings.zones.building_across_seams);
+    }
+
+    #[test]
+    fn every_setting_and_group_has_its_label_and_description_in_all_languages() {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        let schema = Settings::schema();
+        let lists = schema
+            .fields
+            .iter()
+            .filter(|field| field.kind == Some(enshwick::config::Kind::Array));
+        let keys: Vec<String> = std::iter::once(schema.text.clone())
+            .chain(schema.groups.iter().map(|group| group.text.clone()))
+            .chain(schema.fields.iter().map(|field| field.text.clone()))
+            .flat_map(|key| [format!("{key}.doc"), key])
+            .filter(|key| key != "config.doc")
+            .chain(lists.map(|field| format!("{}.element", field.text)))
+            .collect();
+        let tables: toml::Table = toml::from_str(TEXTS).unwrap();
+        for (language, table) in &tables {
+            let table = table.as_table().unwrap();
+            for key in &keys {
+                assert!(table.contains_key(key), "{language}: {key}");
+            }
+            assert_eq!(table.len(), keys.len(), "{language}: no stale keys");
+        }
+    }
+
+    #[test]
+    fn the_former_ids_are_the_manifest_s_was() {
+        use enshwick::abi::Relation;
+
+        let manifest = BetterAltars::manifest();
+        // SAFETY: `manifest!` points `dependencies` at a static array of
+        // `dependency_count` entries.
+        let all =
+            unsafe { std::slice::from_raw_parts(manifest.dependencies, manifest.dependency_count) };
+        let mut was: Vec<&str> = all
+            .iter()
+            .filter(|dependency| dependency.relation == Relation::WAS)
+            // SAFETY: each id is a static string literal of `manifest!`.
+            .filter_map(|dependency| unsafe { dependency.id.as_str() })
+            .collect();
+        let mut former: Vec<&str> = migrations::FORMER.iter().map(|&(id, _)| id).collect();
+        was.sort_unstable();
+        former.sort_unstable();
+        assert_eq!(was, former);
+    }
+
+    const MORE_ALTARS: &str = "altars_per_flame_level = [3, 5, 7]\n";
+    const ZONES: &str = "clusters = false\nbuilding_across_seams = false\n";
+
+    #[test]
+    fn both_merged_mods_settings_carry_over_into_their_groups() {
+        let loader = started(
+            Side::CLIENT,
+            "",
+            &[
+                ("enshwick.more-altars", MORE_ALTARS),
+                ("enshwick.flame-altar-zones", ZONES),
+            ],
+        );
+        let migrated = loader.migrate_settings("").unwrap();
+        let settings: Settings = toml::from_str(&migrated).unwrap();
+        assert_eq!(settings.count.altars_per_flame_level, [3, 5, 7]);
+        assert!(!settings.zones.clusters);
+        assert!(!settings.zones.building_across_seams);
+    }
+
+    #[test]
+    fn the_file_carried_from_a_former_id_loses_its_flat_keys() {
+        for (id, flat) in [
+            ("enshwick.more-altars", MORE_ALTARS),
+            ("enshwick.flame-altar-zones", ZONES),
+        ] {
+            let loader = started(Side::CLIENT, "", &[(id, flat)]);
+            let migrated = loader.migrate_settings(flat).unwrap();
+            let top: toml::Table = toml::from_str(&migrated).unwrap();
+            assert!(
+                top.values().all(toml::Value::is_table),
+                "{id}: only groups are left: {migrated}"
+            );
+            assert!(
+                toml::from_str::<Settings>(&migrated).is_ok(),
+                "{id}: {migrated}"
+            );
+        }
+    }
+
+    #[test]
+    fn each_mod_s_newer_id_wins_over_its_older_one() {
+        let loader = started(
+            Side::CLIENT,
+            "",
+            &[
+                ("flame-altar-count", "altars_per_flame_level = [9]\n"),
+                ("enshwick.more-altars", MORE_ALTARS),
+                (
+                    "flame-altar-zones",
+                    "clusters = true\nbuilding_across_seams = true\n",
+                ),
+                ("enshwick.flame-altar-zones", ZONES),
+            ],
+        );
+        let settings: Settings = toml::from_str(&loader.migrate_settings("").unwrap()).unwrap();
+        assert_eq!(settings.count.altars_per_flame_level, [3, 5, 7]);
+        assert!(!settings.zones.clusters);
+    }
+
+    #[test]
+    fn a_key_no_former_id_gives_keeps_its_default() {
+        let loader = started(
+            Side::CLIENT,
+            "",
+            &[("flame-altar-zones", "clusters = false\n")],
+        );
+        let settings: Settings = toml::from_str(&loader.migrate_settings("").unwrap()).unwrap();
+        assert!(!settings.zones.clusters);
+        assert!(settings.zones.building_across_seams);
+        assert_eq!(
+            settings.count.altars_per_flame_level,
+            Count::default().altars_per_flame_level
+        );
+    }
+
+    #[test]
     fn a_level_outside_1_to_32_altars_is_held_to_the_range() {
-        let loader = enshwick::test::FakeHost::new()
-            .side(Side::CLIENT)
-            .settings("altars_per_flame_level = [0, 40, 5]\n")
-            .install();
-        // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
-        assert_eq!(status, enshwick::abi::Status::OK, "{:?}", loader.logs());
+        let loader = started(
+            Side::CLIENT,
+            "[count]\naltars_per_flame_level = [0, 40, 5]\n",
+            &[],
+        );
         assert_eq!(loader.altar_limit(0), Some(1));
         assert_eq!(loader.altar_limit(1), Some(32));
         assert_eq!(loader.altar_limit(2), Some(5));
@@ -262,26 +278,29 @@ mod tests {
     }
 
     #[test]
-    fn the_table_is_the_join_value() {
-        let synced = Settings::default().synced().unwrap();
+    fn the_table_and_the_seams_are_the_join_values() {
+        let server = Settings {
+            zones: Zones {
+                building_across_seams: false,
+                ..Zones::default()
+            },
+            ..Settings::default()
+        };
+        let synced = server.synced().unwrap();
+        let mut joined: Settings =
+            toml::from_str("[count]\naltars_per_flame_level = [1]\n").unwrap();
+        joined.merge_synced(&synced).unwrap();
         assert_eq!(
-            synced,
-            "{ altars_per_flame_level = [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32] }"
-        );
-        let mut local: Settings = toml::from_str("altars_per_flame_level = [1]").unwrap();
-        local.merge_synced(&synced).unwrap();
-        assert_eq!(
-            AltarTable::new(&local.altars_per_flame_level, CAP).altars(3),
+            AltarTable::new(&joined.count.altars_per_flame_level, CAP).altars(3),
             12
         );
+        assert!(!joined.zones.building_across_seams);
+        assert!(joined.zones.clusters, "clusters are each world's own");
     }
 
     #[test]
     fn the_table_answers_the_limit_with_the_base_limit_raised() {
-        let loader = enshwick::test::FakeHost::new().side(Side::CLIENT).install();
-        // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
-        assert_eq!(status, enshwick::abi::Status::OK);
+        let loader = started(Side::CLIENT, "", &[]);
         assert!(loader.base_limit_raised());
         assert_eq!(loader.altar_limit(1), Some(4));
         assert_eq!(loader.altar_limit(11), Some(32));
@@ -289,13 +308,10 @@ mod tests {
     }
 
     #[test]
-    fn other_mods_change_the_limit_within_the_cap() {
+    fn other_mods_change_the_limit_within_the_cap_at_its_former_point() {
         use enshwick::points::Verdict;
 
-        let loader = enshwick::test::FakeHost::new().side(Side::CLIENT).install();
-        // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
-        assert_eq!(status, enshwick::abi::Status::OK);
+        let loader = started(Side::CLIENT, "", &[]);
         assert_eq!(loader.defined_points(), ["flame-altar-count:limit"]);
         assert!(loader.extend_point(|limit: &AltarLimit, altars: &u8| {
             assert_eq!(limit.cap, CAP);
@@ -308,6 +324,59 @@ mod tests {
         assert_eq!(loader.altar_limit(0), Some(1), "at least one");
         assert_eq!(loader.altar_limit(1), Some(6));
         assert_eq!(loader.altar_limit(5), Some(32), "at most the cap");
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn it_sizes_the_zones_of_touching_altars_and_accepts_a_box_across_them() {
+        let loader = started(Side::CLIENT, &Settings::template(), &[]);
+        assert_eq!(loader.altars_opened(), (true, true));
+        loader.set_altars(&[altar(1, 0), altar(2, 80)]);
+        assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
+        wait_for_sizes(&loader, 2);
+        let sizes = loader.zone_sizes();
+        assert_eq!(sizes.len(), 2);
+        assert_eq!(sizes[0].grow, sizes[1].grow);
+
+        let zones = [
+            Bounds {
+                min: [0, 0, 0],
+                max: [10, 10, 10],
+            },
+            Bounds {
+                min: [10, 0, 0],
+                max: [20, 10, 10],
+            },
+        ];
+        let across = Bounds {
+            min: [5, 1, 1],
+            max: [15, 9, 9],
+        };
+        assert!(loader.zone_check(&zones, across, 0));
+        assert!(!loader.zone_check(&zones[..1], across, 0));
+        AltarZones::set_seams(false);
+        assert!(!loader.zone_check(&zones, across, 0), "seams off: vanilla");
+        AltarZones::set_seams(true);
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn a_world_s_own_clusters_value_applies_when_it_loads() {
+        let off = "[zones]\nclusters = false\n";
+        let loader = started(Side::CLIENT, off, &[]);
+        loader.set_altars(&[altar(1, 0), altar(2, 80)]);
+        assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
+        assert!(loader.zone_sizes().is_empty(), "clusters off: vanilla");
+        loader.set_settings("[zones]\nclusters = true\n");
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        wait_for_sizes(&loader, 2);
+        assert_eq!(loader.zone_sizes().len(), 2, "the world turned clusters on");
+        loader.set_settings(off);
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        assert!(
+            loader.zone_sizes().is_empty(),
+            "the next world turned them off"
+        );
         assert!(loader.faults().is_empty());
     }
 }

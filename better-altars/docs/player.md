@@ -1,57 +1,63 @@
 ---
-id: enshwick.more-altars
-name: More Altars
-summary: Sets how many Flame Altars a world allows at each Flame level, up to 32 altars in 16 bases. The default doubles the usual count.
+id: enshwick.better-altars
+name: Better Altars
+summary: More Flame Altars at each Flame level, up to 32 in 16 bases, and altar zones that touch grow together so friends can build side by side.
 needs: everyone
 settings:
-  - key: altars_per_flame_level
+  - key: count.altars_per_flame_level
     default: "[2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]"
     range: 1 to 32 for each level
     meaning: How many altars each Flame level allows. The first number is level 0, which comes before the Flame level 1 a new world starts at. Later levels use the last number. An empty list keeps the usual counts.
     applies: at-once
+  - key: zones.clusters
+    default: true
+    meaning: Altars whose zones touch grow together and share their area.
+    applies: world-load
+  - key: zones.building_across_seams
+    default: true
+    meaning: You may place pieces across the seam between two zones of one group.
+    applies: at-once
 ---
 
-- By default, each Flame level allows twice as many Flame Altars as in the base
-  game: 4 at Flame level 1, up to 32 from level 11 on.
-- You choose the count for each Flame level.
-- A world holds at most 16 bases.
+- Each Flame level allows twice as many Flame Altars as in the base game: 4 at
+  Flame level 1, up to 32 from level 11 on. You choose the count.
+- Flame Altar zones that touch form a group. Each altar of the group grows, so
+  the group covers as much ground as its altars would apart. No zone shrinks.
+- You may place a piece across the seam between two zones of a group.
+
+## Who needs it?
+
+Players who want more altars, and friends who build side by side. The server and
+every player need it.
 
 ## What happens past 16 altars?
 
-Altars whose zones touch share one base, as in the base game. The game refuses
-an altar whose zone touches no base once a world has 16 bases.
+Altars whose zones touch share one base. A world holds at most 16 bases, so the
+game refuses an altar whose zone would start a 17th.
 
 ## Install
 
-More Altars comes in enshwick.zip, and the
+Better Altars comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It runs on enshwick. Delete More Altars and Flame altar zones: Better
+Altars takes over their settings.
 
 ## Settings
 
-You change the counts in the game, as the
+The
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
-shows: each Flame level has its own slider from 1 to 32. A value outside 1 to
-32 in the file is set to the nearest limit, with a warning in the log. On the
-first start the mod takes the counts you set under its former name,
-`flame-altar-count`.
-
-## Multiplayer
-
-The server and every player need More Altars in the same version. On a server,
-every player runs with the server's counts. If you host a world with more than
-16 altars, keep the mod on and up to date.
+shows how to change them in the game.
 
 ## Problems
 
-**The game refuses a new altar as "too many altars".** Its zone would start a
-17th base. Place it so its zone touches one of your bases.
+**The game refuses a new altar as "too many altars".** Place it touching one of
+your bases.
 
-**A dedicated server stops before a world with more than 16 altars loads.** The
-mod is missing, off or does not fit the game version, and the game might crash
-without it. Update enshwick and the mod. `logs/enshwick/loader.log` says why the
-server stopped.
+**The zones did not grow after you changed `clusters`.** Load the world again.
 
-**Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-more-altars/issues). Attach
+**A dedicated server stops before a world with more than 16 altars loads.**
+Update enshwick and the mod. `logs/enshwick/loader.log` says why.
+
+**Anything else.** Open an issue in the
+[mod's repository](https://github.com/enshwick/mod-better-altars/issues). Attach
 the files from the `logs/enshwick/` folder in your game folder.

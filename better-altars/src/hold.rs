@@ -16,7 +16,7 @@ use enshwick::state::Hold;
 use enshwick::{Load, Off};
 
 /// The name of the hold's thread, which a crash report shows.
-const THREAD: &str = "more-altars-hold";
+const THREAD: &str = "better-altars-hold";
 /// How often the hold thread looks at the grouping without being woken.
 const EVERY: Duration = Duration::from_secs(5);
 /// How long the loaded world stays at 16 zones or fewer before the hold goes.

@@ -1,16 +1,16 @@
 [package]
-name = "enshwick-more-altars"
+name = "enshwick-better-altars"
 version = "0.1.0"
-description = "How many Flame Altars each Flame level allows, from a table in the settings"
-keywords = ["enshrouded", "mod", "altar"]
+description = "More Flame Altars per Flame level, and altar zones that touch grow together and can be built across"
+keywords = ["enshrouded", "mod", "altar", "building"]
 categories = ["game-development"]
 readme = "README.md"
 authors = ["themaiby"]
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/enshwick/mod-more-altars"
-homepage = "https://github.com/enshwick/mod-more-altars"
+repository = "https://github.com/enshwick/mod-better-altars"
+homepage = "https://github.com/enshwick/mod-better-altars"
 publish = false
 
 [lib]
@@ -18,11 +18,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arc-swap = { version = "1.9.3", default-features = false }
+arrayvec = { version = "0.7.8", default-features = false, features = ["std"] }
 enshwick = "1.0.0-alpha.3"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 enshwick = { version = "1.0.0-alpha.3", features = ["test"] }
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]

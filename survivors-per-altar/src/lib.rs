@@ -8,6 +8,7 @@
 
 mod copies;
 mod cursor;
+pub mod points;
 mod policy;
 mod renew;
 mod staffs;
@@ -17,23 +18,42 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use enshwick::abi::Side;
 use enshwick::loot::Drop;
+use enshwick::state::ModLocal;
 use enshwick::{Load, Mod, Off};
 
-/// Whether copy staffs work and drop, from the settings in force: the
-/// server's on a joined client.
-pub(crate) static COPY_STAFFS: AtomicBool = AtomicBool::new(true);
+/// The settings in force, as the game's hooks read them: the server's on a
+/// joined client.
+#[derive(Debug)]
+pub(crate) struct InForce {
+    /// Whether copy staffs work and drop.
+    pub(crate) copy_staffs: AtomicBool,
+    /// Whether the survivor's own staff places and moves copies.
+    pub(crate) vanilla_places: AtomicBool,
+    /// Whether the world keeps a copy of each survivor per altar; off, every
+    /// answer is vanilla.
+    pub(crate) per_altar: AtomicBool,
+    /// The copy staff drops: the ones the settings ask for while copy staffs
+    /// are on, none while they are off.
+    drops: Mutex<Vec<Drop>>,
+}
 
-/// Whether the survivor's own staff places and moves copies, from the
-/// settings in force.
-pub(crate) static VANILLA_PLACES: AtomicBool = AtomicBool::new(false);
+impl Default for InForce {
+    fn default() -> Self {
+        Self {
+            copy_staffs: AtomicBool::new(true),
+            vanilla_places: AtomicBool::new(false),
+            per_altar: AtomicBool::new(true),
+            drops: Mutex::new(Vec::new()),
+        }
+    }
+}
 
-/// Whether the world in force keeps a copy of each survivor per altar; off,
-/// every answer is vanilla.
-pub(crate) static PER_ALTAR: AtomicBool = AtomicBool::new(true);
+static IN_FORCE: ModLocal<InForce> = ModLocal::new();
 
-/// The copy staff drops in force: the ones the settings ask for while copy
-/// staffs are on, none while they are off.
-static DROPS: Mutex<Vec<Drop>> = Mutex::new(Vec::new());
+/// The settings in force in this mod life.
+pub(crate) fn in_force() -> &'static InForce {
+    IN_FORCE.get_or_init(InForce::default)
+}
 
 const fn yes() -> bool {
     true
@@ -51,7 +71,7 @@ const fn full_charges() -> u16 {
     3
 }
 
-/// Survivors per altar settings, in `mod-configs/survivors-per-altar.toml`.
+/// Survivors per altar settings, in `mod-configs/enshwick.survivors-per-altar.toml`.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 #[config(validate = Settings::check)]
@@ -157,10 +177,12 @@ pub struct SurvivorsPerAltar;
 impl Mod for SurvivorsPerAltar {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "survivors-per-altar",
+            id: "enshwick.survivors-per-altar",
             side: BOTH,
             name: "Survivors per altar",
             join: true,
+            was: ["survivors-per-altar"],
+            points: [points::CopyLimit, points::ChargeCost],
         )
     }
 
@@ -196,7 +218,7 @@ impl Mod for SurvivorsPerAltar {
             // its status into in turn: show the bits every copy has, the
             // worst status, so a copy without a bed shows "no bed".
             load.on_survivor_status(|_, statuses| {
-                (PER_ALTAR.load(Ordering::Relaxed) && statuses.len() >= 2)
+                (in_force().per_altar.load(Ordering::Relaxed) && statuses.len() >= 2)
                     .then(|| statuses.iter().fold(u8::MAX, |all, s| all & s))
             })?;
         }
@@ -236,15 +258,15 @@ impl Loot {
 /// and whether the survivor's own staff places copies.
 fn apply(settings: &Settings, loot: &Loot) {
     let per_altar = settings.per_altar;
-    if PER_ALTAR.swap(per_altar, Ordering::Relaxed) != per_altar {
+    if in_force().per_altar.swap(per_altar, Ordering::Relaxed) != per_altar {
         enshwick::info!("a copy of each survivor per altar: {per_altar}");
     }
     let on = settings.copy_staffs;
-    if COPY_STAFFS.swap(on, Ordering::Relaxed) != on {
+    if in_force().copy_staffs.swap(on, Ordering::Relaxed) != on {
         enshwick::info!("copy staffs {}", if on { "on" } else { "off" });
     }
     let vanilla = settings.vanilla_staff_places_copies;
-    if VANILLA_PLACES.swap(vanilla, Ordering::Relaxed) != vanilla {
+    if in_force().vanilla_places.swap(vanilla, Ordering::Relaxed) != vanilla {
         enshwick::info!("the survivor's own staff places copies: {vanilla}");
     }
     let drops = if on && per_altar {
@@ -252,7 +274,8 @@ fn apply(settings: &Settings, loot: &Loot) {
     } else {
         Vec::new()
     };
-    let mut kept = DROPS
+    let mut kept = in_force()
+        .drops
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if *kept == drops {
@@ -282,7 +305,8 @@ fn copy_staffs(load: &mut Load<'_>, settings: &Settings) -> Result<Loot, Off> {
         items: staffs::copy_ids(),
         full: charges.full,
     };
-    let mut kept = DROPS
+    let mut kept = in_force()
+        .drops
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     for source in [Source::bosses(), Source::locked_chests()] {
@@ -533,7 +557,7 @@ copy_staff_locked_chest_chance = 0.0
 ",
         );
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-        assert!(!PER_ALTAR.load(Ordering::Relaxed));
+        assert!(!in_force().per_altar.load(Ordering::Relaxed));
         assert_eq!(
             loader.survivor_lookup(7, 10, unique, 11, [120, 0, 10], &[]),
             None,
@@ -613,9 +637,9 @@ copy_staff_locked_chest_chance = 0.0
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        let name = staffs::STAFFS
+        let name = staffs::staffs()
             .iter()
-            .find(|s| s.key == "alchemist")
+            .find(|s| s.key() == "alchemist")
             .unwrap()
             .name
             .id();
@@ -694,9 +718,9 @@ copy_staff_locked_chest_chance = 0.0
 
     #[test]
     fn the_survivor_s_own_staff_placing_copies_keeps_the_copy_limit() {
+        use crate::points::CopyLimit;
         use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
         use enshwick::points::Verdict;
-        use enshwick::points::survivors_per_altar::CopyLimit;
         use enshwick::survivors::WORKSHOP_SURVIVORS;
 
         let loader = host()
@@ -761,9 +785,9 @@ vanilla_staff_places_copies = true
 
     #[test]
     fn other_mods_set_the_copy_limit_and_the_charge_cost() {
+        use crate::points::{ChargeCost, CopyLimit};
         use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
         use enshwick::points::Verdict;
-        use enshwick::points::survivors_per_altar::{ChargeCost, CopyLimit};
         use enshwick::survivors::WORKSHOP_SURVIVORS;
 
         let loader = host()
@@ -807,9 +831,9 @@ copy_staff_locked_chest_chance = 0.0
             &[],
         );
         assert_eq!(original, Some(10));
-        let Some(staff) = staffs::STAFFS
+        let Some(staff) = staffs::staffs()
             .iter()
-            .find(|s| s.survivor().is_some_and(|w| w.id() == smith.id()))
+            .find(|s| s.survivor.id() == smith.id())
         else {
             panic!("no copy staff of the first survivor");
         };

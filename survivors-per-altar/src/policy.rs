@@ -11,7 +11,7 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
-use std::sync::{Mutex, OnceLock, PoisonError, RwLock};
+use std::sync::{Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
 use enshwick::abi::Side;
@@ -20,7 +20,7 @@ use enshwick::ecs::Entity;
 use enshwick::events::{AltarsChanged, ShutdownStarted};
 use enshwick::inventory::{Bar, Batch, Fill, Inventories, Op, SlotRef};
 use enshwick::points::OwnedPoint;
-use enshwick::points::survivors_per_altar::{ChargeCost, CopyLimit};
+use enshwick::state::ModLocal;
 use enshwick::survivors::{
     Answer, BedCheck, Lookup, Purpose, Summon, SummonVerdict, WorkshopSurvivor,
 };
@@ -28,6 +28,7 @@ use enshwick::{Load, Off};
 
 use crate::Charges;
 use crate::copies::{Copies, CopyStaff, Verdict, Zone};
+use crate::points::{ChargeCost, CopyLimit};
 
 /// How often the uniqueness pass lets go of copies it no longer sees.
 const SWEEP: Duration = Duration::from_secs(2);
@@ -39,8 +40,8 @@ const FORGET_AFTER: Duration = Duration::from_secs(3);
 const OUTSIDE_GRACE: Duration = Duration::from_secs(10);
 
 /// How the staffs behave, from the settings read as the game starts;
-/// whether copy staffs work at all is [`crate::COPY_STAFFS`], and whether the
-/// survivor's own staff places copies [`crate::VANILLA_PLACES`], which may
+/// whether copy staffs work at all is [`crate::InForce`], and whether the
+/// survivor's own staff places copies [`crate::InForce`] too, which may
 /// change while the game runs.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Staffs {
@@ -96,11 +97,11 @@ impl Shared {
     }
 }
 
-static SHARED: RwLock<Option<Shared>> = RwLock::new(None);
+static SHARED: ModLocal<RwLock<Option<Shared>>> = ModLocal::new();
 
 /// The extension points, once defined.
-static COPY_LIMIT: OnceLock<OwnedPoint<CopyLimit>> = OnceLock::new();
-static CHARGE_COST: OnceLock<OwnedPoint<ChargeCost>> = OnceLock::new();
+static COPY_LIMIT: ModLocal<OwnedPoint<CopyLimit>> = ModLocal::new();
+static CHARGE_COST: ModLocal<OwnedPoint<ChargeCost>> = ModLocal::new();
 
 /// The most entities `survivor` may have with `altars` altars standing and
 /// `copies` entities now: one per altar, or what other mods' links answer.
@@ -140,7 +141,7 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
     forget();
     load.on::<AltarsChanged>(move |()| read_altars(altars))?;
     load.on_survivor_lookup(|lookup| {
-        if !crate::PER_ALTAR.load(Ordering::Relaxed) {
+        if !crate::in_force().per_altar.load(Ordering::Relaxed) {
             return Answer::Vanilla;
         }
         match lookup.purpose {
@@ -150,7 +151,7 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
         .unwrap_or(Answer::Vanilla)
     })?;
     load.on_survivor_bed_check(|check| {
-        !crate::PER_ALTAR.load(Ordering::Relaxed)
+        !crate::in_force().per_altar.load(Ordering::Relaxed)
             || read(|shared| keeps(shared, check)).unwrap_or(true)
     })?;
     load.on_summon(move |summon| {
@@ -195,18 +196,22 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
 
 /// Copy staffs that placed a copy and owe their charge, spent on the game
 /// thread after the step of the use, or at the latest as the game stops.
-static OWED: Mutex<Vec<(Entity, u16)>> = Mutex::new(Vec::new());
+static OWED: ModLocal<Mutex<Vec<(Entity, u16)>>> = ModLocal::new();
+
+fn owed() -> std::sync::MutexGuard<'static, Vec<(Entity, u16)>> {
+    OWED.get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
 
 /// Notes that `staff` owes `cost` charges.
 fn owe(staff: Entity, cost: u16) {
-    OWED.lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .push((staff, cost));
+    owed().push((staff, cost));
 }
 
 /// Spends every charge owed, each once.
 fn settle_spends(mut spend: impl FnMut(Entity, u16)) {
-    let owed = core::mem::take(&mut *OWED.lock().unwrap_or_else(PoisonError::into_inner));
+    let owed = core::mem::take(&mut *owed());
     for (staff, cost) in owed {
         spend(staff, cost);
     }
@@ -220,17 +225,21 @@ pub(crate) fn settle() {
     });
 }
 
+fn shared() -> &'static RwLock<Option<Shared>> {
+    SHARED.get_or_init(RwLock::default)
+}
+
 fn forget() {
-    *SHARED.write().unwrap_or_else(PoisonError::into_inner) = Some(Shared::new());
+    *shared().write().unwrap_or_else(PoisonError::into_inner) = Some(Shared::new());
 }
 
 fn read<R>(f: impl FnOnce(&Shared) -> R) -> Option<R> {
-    let slot = SHARED.read().unwrap_or_else(PoisonError::into_inner);
+    let slot = shared().read().unwrap_or_else(PoisonError::into_inner);
     slot.as_ref().map(f)
 }
 
 fn write<R>(f: impl FnOnce(&mut Shared) -> R) -> Option<R> {
-    let mut slot = SHARED.write().unwrap_or_else(PoisonError::into_inner);
+    let mut slot = shared().write().unwrap_or_else(PoisonError::into_inner);
     slot.as_mut().map(f)
 }
 
@@ -481,15 +490,16 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
         let charges = staffs.charges;
         // The staff's effect spawn carries the same item; only the survivor
         // itself is planned.
-        if staff
-            .survivor()
-            .is_none_or(|s| summon.template != s.template())
-        {
+        if summon.template != staff.survivor.template() {
             return SummonVerdict::Allow;
         }
-        if !crate::COPY_STAFFS.load(Ordering::Relaxed) || !crate::PER_ALTAR.load(Ordering::Relaxed)
+        if !crate::in_force().copy_staffs.load(Ordering::Relaxed)
+            || !crate::in_force().per_altar.load(Ordering::Relaxed)
         {
-            enshwick::info!("copy staff of {}: refused, copy staffs are off", staff.key);
+            enshwick::info!(
+                "copy staff of {}: refused, copy staffs are off",
+                staff.key()
+            );
             return SummonVerdict::Refuse;
         }
         let limit = |altars, copies| copy_limit(survivor, altars, copies);
@@ -501,7 +511,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
                 CopyStaff::Refuse(why) => {
                     enshwick::info!(
                         "copy staff of {} at {:?}: refused, {why:?}",
-                        staff.key,
+                        staff.key(),
                         summon.target
                     );
                     return SummonVerdict::Refuse;
@@ -514,7 +524,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
             let Some(cost) = charge_cost(survivor, copies, summon.meter, charges.full) else {
                 enshwick::info!(
                     "copy staff of {} at {:?}: refused at survivors-per-altar:charge-cost",
-                    staff.key,
+                    staff.key(),
                     summon.target
                 );
                 return SummonVerdict::Refuse;
@@ -534,7 +544,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
         let take = places && last_charge(summon.meter, charges.full, cost);
         enshwick::info!(
             "copy staff of {} at {:?} with {:?} charges: {}",
-            staff.key,
+            staff.key(),
             summon.target,
             summon.meter.map(|m| m.current),
             match (places, take) {
@@ -549,14 +559,14 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
             SummonVerdict::Allow
         };
     }
-    if !crate::PER_ALTAR.load(Ordering::Relaxed) {
+    if !crate::in_force().per_altar.load(Ordering::Relaxed) {
         return SummonVerdict::Allow;
     }
     judge_own_staff(shared, summon, survivor, original)
 }
 
 /// What the survivor's own staff does: it moves the original, or with
-/// [`crate::VANILLA_PLACES`] places and moves copies within the limit.
+/// [`crate::InForce`] too places and moves copies within the limit.
 fn judge_own_staff(
     shared: &Shared,
     summon: &Summon,
@@ -567,7 +577,7 @@ fn judge_own_staff(
     // the target's altar then gives way to it.
     let vanilla =
         WorkshopSurvivor::by_staff(summon.item).is_some_and(|s| summon.template == s.template());
-    if vanilla && !crate::VANILLA_PLACES.load(Ordering::Relaxed) {
+    if vanilla && !crate::in_force().vanilla_places.load(Ordering::Relaxed) {
         // Always the original, however many copies stand in the world.
         let answer = if original == 0 {
             Answer::Vanilla

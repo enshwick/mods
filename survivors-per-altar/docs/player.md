@@ -1,5 +1,5 @@
 ---
-id: survivors-per-altar
+id: enshwick.survivors-per-altar
 name: Survivors per altar
 summary: Every friend's house gets its own Blacksmith, Alchemist and the rest. A survivor may have a copy at every Flame Altar.
 needs: everyone

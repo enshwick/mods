@@ -13,7 +13,8 @@ use enshwick::content::items::{Meter, NewItem, Stat, StatFormat};
 use enshwick::content::{Guid, Id};
 use enshwick::i18n::{Language, Texts};
 use enshwick::migrations::Migrations;
-use enshwick::survivors::WorkshopSurvivor;
+use enshwick::state::ModLocal;
+use enshwick::survivors::{WORKSHOP_SURVIVORS, WorkshopSurvivor};
 use enshwick::{Load, Off};
 
 /// The mod's texts, per language.
@@ -32,11 +33,14 @@ const ICON_TINT: Tint = Tint {
 /// The tag of the tooltip line with a staff's full charges.
 const FULL_CHARGES: Id = Id::new("survivors-per-altar:copy-staff.full-charges");
 
+/// The namespace and folder of every copy staff's ids.
+const STAFF_IDS: &str = "survivors-per-altar:copy-staff/";
+
 /// A workshop survivor and its copy staff.
 #[derive(Debug)]
 pub(crate) struct Staff {
-    /// The survivor's key in the platform's table.
-    pub key: &'static str,
+    /// The survivor the staff copies.
+    pub survivor: &'static WorkshopSurvivor,
     /// The copy staff.
     pub copy: Id,
     /// The tag of the copy staff's name.
@@ -45,74 +49,134 @@ pub(crate) struct Staff {
     pub description: Id,
     /// Its icon: the vanilla staff's, recoloured.
     pub icon: Id,
-    /// The GUID the copy staff had before content ids; saved stacks keep it.
-    pub old: Guid,
+    /// The GUID the copy staff had before content ids, when it had one;
+    /// saved stacks keep it.
+    pub old: Option<Guid>,
 }
 
 impl Staff {
-    /// The survivor the staff copies.
-    pub(crate) fn survivor(&self) -> Option<&'static WorkshopSurvivor> {
-        WorkshopSurvivor::find(self.key)
+    /// The survivor's key in the platform's table.
+    pub(crate) const fn key(&self) -> &'static str {
+        self.survivor.key()
     }
 
-    fn survivor_or_off(&self) -> Result<&'static WorkshopSurvivor, Off> {
-        self.survivor()
-            .ok_or_else(|| Off::new(format!("no workshop survivor {:?}", self.key)))
+    fn of(survivor: &'static WorkshopSurvivor) -> Option<Self> {
+        let id = |suffix: &str| {
+            let name = format!("{STAFF_IDS}{}{suffix}", survivor.key());
+            Id::try_new(Box::leak(name.into_boxed_str()))
+        };
+        Some(Self {
+            survivor,
+            copy: id("")?,
+            name: id(".name")?,
+            description: id(".description")?,
+            icon: id(".icon")?,
+            old: OLD_STAFFS
+                .iter()
+                .find(|(key, _)| *key == survivor.key())
+                .map(|&(_, old)| old),
+        })
     }
 }
 
-macro_rules! staffs {
-    ($($key:literal, $old:literal;)*) => {
-        /// A copy staff for every workshop survivor; the ids are the mod's own.
-        pub(crate) const STAFFS: &[Staff] = &[$(Staff {
-            key: $key,
-            copy: Id::new(concat!("survivors-per-altar:copy-staff/", $key)),
-            name: Id::new(concat!("survivors-per-altar:copy-staff/", $key, ".name")),
-            description: Id::new(concat!("survivors-per-altar:copy-staff/", $key, ".description")),
-            icon: Id::new(concat!("survivors-per-altar:copy-staff/", $key, ".icon")),
-            old: Guid::parse($old),
-        }),*];
-    };
-}
+/// The GUIDs the copy staffs had before content ids, by survivor key: saved
+/// stacks of those days hold them. A survivor the game adds later has none.
+const OLD_STAFFS: &[(&str, Guid)] = &[
+    (
+        "blacksmith",
+        Guid::parse("dac11dad-687c-4397-b528-fdec7cdb6ba1"),
+    ),
+    (
+        "blacksmith_assistant",
+        Guid::parse("10b19c0f-b86a-4bb2-96c6-5dfef7e996d3"),
+    ),
+    (
+        "alchemist",
+        Guid::parse("448e4f2a-d620-41ca-bfc6-f311320779e5"),
+    ),
+    (
+        "alchemist_assistant",
+        Guid::parse("bbecddee-022a-4506-bde1-ffe07d1b6727"),
+    ),
+    (
+        "carpenter",
+        Guid::parse("177d03e4-ac34-439a-b342-fee6973629f6"),
+    ),
+    (
+        "carpenter_assistant",
+        Guid::parse("f54ca128-3ed7-4e30-bb93-6f82d8fc0d29"),
+    ),
+    (
+        "hunter",
+        Guid::parse("8057fdfe-c990-4338-8a8d-a850a12458ab"),
+    ),
+    (
+        "hunter_assistant",
+        Guid::parse("a3bca904-6d54-4c66-a11b-8fc0f52daba5"),
+    ),
+    (
+        "farmer",
+        Guid::parse("42f978ea-d349-4f44-8796-b61bebaa7123"),
+    ),
+    (
+        "farmer_assistant",
+        Guid::parse("d5bf7763-a011-4ad0-af9b-09b67e1f5a91"),
+    ),
+    ("bard", Guid::parse("afbaccbe-d61d-4997-84d8-9e2c69359ee8")),
+    (
+        "bard_assistant",
+        Guid::parse("17dfc67d-1749-4318-88f7-6aa1c48064f2"),
+    ),
+    (
+        "crypt_keeper",
+        Guid::parse("4e56d680-2fe3-497b-ad1c-40a8306b2923"),
+    ),
+    (
+        "crypt_keeper_assistant",
+        Guid::parse("9d99fcc0-7431-41a3-a1e3-9f37cd5ba8a7"),
+    ),
+    (
+        "barber",
+        Guid::parse("de8e029e-5be3-4ad9-ad7d-817538046f9a"),
+    ),
+    (
+        "researcher",
+        Guid::parse("5eaf09fd-a724-4d8e-93f4-3bf9e3395e83"),
+    ),
+    (
+        "trader",
+        Guid::parse("6181d065-0d20-4361-ab4f-2622ceefa542"),
+    ),
+    (
+        "fisher",
+        Guid::parse("b19d25af-3283-416e-8173-9506ddd8f26e"),
+    ),
+];
 
-staffs! {
-    "blacksmith", "dac11dad-687c-4397-b528-fdec7cdb6ba1";
-    "blacksmith_assistant", "10b19c0f-b86a-4bb2-96c6-5dfef7e996d3";
-    "alchemist", "448e4f2a-d620-41ca-bfc6-f311320779e5";
-    "alchemist_assistant", "bbecddee-022a-4506-bde1-ffe07d1b6727";
-    "carpenter", "177d03e4-ac34-439a-b342-fee6973629f6";
-    "carpenter_assistant", "f54ca128-3ed7-4e30-bb93-6f82d8fc0d29";
-    "hunter", "8057fdfe-c990-4338-8a8d-a850a12458ab";
-    "hunter_assistant", "a3bca904-6d54-4c66-a11b-8fc0f52daba5";
-    "farmer", "42f978ea-d349-4f44-8796-b61bebaa7123";
-    "farmer_assistant", "d5bf7763-a011-4ad0-af9b-09b67e1f5a91";
-    "bard", "afbaccbe-d61d-4997-84d8-9e2c69359ee8";
-    "bard_assistant", "17dfc67d-1749-4318-88f7-6aa1c48064f2";
-    "crypt_keeper", "4e56d680-2fe3-497b-ad1c-40a8306b2923";
-    "crypt_keeper_assistant", "9d99fcc0-7431-41a3-a1e3-9f37cd5ba8a7";
-    "barber", "de8e029e-5be3-4ad9-ad7d-817538046f9a";
-    "researcher", "5eaf09fd-a724-4d8e-93f4-3bf9e3395e83";
-    "trader", "6181d065-0d20-4361-ab4f-2622ceefa542";
-    "fisher", "b19d25af-3283-416e-8173-9506ddd8f26e";
+static STAFFS: ModLocal<Vec<Staff>> = ModLocal::new();
+
+/// A copy staff for every workshop survivor; the ids are the mod's own.
+pub(crate) fn staffs() -> &'static [Staff] {
+    STAFFS.get_or_init(|| WORKSHOP_SURVIVORS.iter().filter_map(Staff::of).collect())
 }
 
 /// The copy staff with the game id `item`, its own or the one it had
 /// before.
 pub(crate) fn copy_staff(item: u32) -> Option<&'static Staff> {
     let item = enshwick::migrations::current_id(item);
-    STAFFS.iter().find(|s| s.copy.id() == item)
+    staffs().iter().find(|s| s.copy.id() == item)
 }
 
 /// The game ids of every copy staff.
 pub(crate) fn copy_ids() -> Vec<u32> {
-    STAFFS.iter().map(|s| s.copy.id()).collect()
+    staffs().iter().map(|s| s.copy.id()).collect()
 }
 
 /// The game ids of every copy staff, with the ids saved stacks may hold.
 pub(crate) fn known_ids() -> Vec<u32> {
-    STAFFS
+    staffs()
         .iter()
-        .flat_map(|s| [s.copy.id(), s.old.id()])
+        .flat_map(|s| std::iter::once(s.copy.id()).chain(s.old.map(Guid::id)))
         .collect()
 }
 
@@ -121,8 +185,10 @@ pub(crate) fn known_ids() -> Vec<u32> {
 pub(crate) fn migrations() -> Migrations {
     Migrations::new().add("0.5.0", |mut m| {
         m = m.rename_content(OLD_STAFF_ENTITY, STAFF_ENTITY.guid());
-        for staff in STAFFS {
-            m = m.rename_content(staff.old, staff.copy.guid());
+        for staff in staffs() {
+            if let Some(old) = staff.old {
+                m = m.rename_content(old, staff.copy.guid());
+            }
         }
         m
     })
@@ -137,10 +203,10 @@ fn fill(template: &str, survivor: &str) -> String {
 /// game's texts (on a server), its role from its key, such as "Blacksmith
 /// assistant".
 fn survivor_name(staff: &Staff, language: Language) -> String {
-    if let Some(name) = staff.survivor().and_then(|s| s.name(language)) {
+    if let Some(name) = staff.survivor.name(language) {
         return name.to_owned();
     }
-    let role = staff.key.replace('_', " ");
+    let role = staff.key().replace('_', " ");
     let mut chars = role.chars();
     chars.next().map_or_else(String::new, |first| {
         first.to_uppercase().chain(chars).collect()
@@ -160,8 +226,8 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
         value: i32::from(charges),
         format: StatFormat::Number,
     };
-    for staff in STAFFS {
-        let vanilla = staff.survivor_or_off()?.staff();
+    for staff in staffs() {
+        let vanilla = staff.survivor.staff();
         for (template_key, tag) in [
             ("copy.name", staff.name),
             ("copy.description", staff.description),
@@ -186,7 +252,7 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
                 like: vanilla,
                 pixels: Pixels::Tint(ICON_TINT),
             }),
-            debug_name: format!("SurvivorsPerAltar_CopyStaff_{}", staff.key),
+            debug_name: format!("SurvivorsPerAltar_CopyStaff_{}", staff.key()),
             ..NewItem::new(staff.copy, vanilla)
         })?;
     }
@@ -196,10 +262,12 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
 /// Files every copy staff as a staff of its survivor, beside its vanilla
 /// staff, so the cursor, the unlock check and the placement treat both alike.
 pub(crate) fn file(load: &mut Load<'_>) -> Result<(), Off> {
-    for staff in STAFFS {
-        let survivor = staff.survivor_or_off()?.id();
+    for staff in staffs() {
+        let survivor = staff.survivor.id();
         load.add_summon_item(staff.copy.id(), survivor)?;
-        load.add_summon_item(staff.old.id(), survivor)?;
+        if let Some(old) = staff.old {
+            load.add_summon_item(old.id(), survivor)?;
+        }
     }
     Ok(())
 }
@@ -207,56 +275,69 @@ pub(crate) fn file(load: &mut Load<'_>) -> Result<(), Off> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use enshwick::survivors::WORKSHOP_SURVIVORS;
 
     #[test]
-    fn every_staff_has_its_own_ids() {
+    fn every_workshop_survivor_has_a_staff_with_its_own_ids() {
+        // A mod life of its own, with no migration declared yet.
+        let _loader = enshwick::test::FakeHost::new().install();
         let mut ids = std::collections::BTreeSet::new();
-        for staff in STAFFS {
+        for staff in staffs() {
             for id in [staff.copy, staff.name, staff.description, staff.icon] {
-                assert!(ids.insert(id.id()), "{}", staff.key);
+                assert!(ids.insert(id.id()), "{}", staff.key());
             }
-            assert!(ids.insert(staff.old.id()), "{}", staff.key);
+            if let Some(old) = staff.old {
+                assert!(ids.insert(old.id()), "{}", staff.key());
+                assert!(known_ids().contains(&old.id()), "{}", staff.key());
+                assert_eq!(
+                    copy_staff(old.id()).map(Staff::key),
+                    None,
+                    "only once the migration is declared"
+                );
+            }
+            let vanilla = staff.survivor.staff().id();
+            assert_ne!(staff.copy.id(), vanilla);
             assert_eq!(
-                copy_staff(staff.old.id()).map(|s| s.key),
-                None,
-                "only once the migration is declared"
+                copy_staff(staff.copy.id()).map(Staff::key),
+                Some(staff.key())
             );
-            let survivor = staff.survivor().unwrap();
-            assert_ne!(staff.copy.id(), survivor.staff().id());
-            assert_eq!(copy_staff(staff.copy.id()).map(|s| s.key), Some(staff.key));
-            assert_eq!(copy_staff(survivor.staff().id()).map(|s| s.key), None);
+            assert_eq!(copy_staff(vanilla).map(Staff::key), None);
         }
-        assert_eq!(STAFFS.len(), WORKSHOP_SURVIVORS.len());
+        assert_eq!(staffs().len(), WORKSHOP_SURVIVORS.len());
     }
 
     #[test]
-    fn without_the_game_s_texts_a_survivor_is_named_by_its_role() {
-        let smith = STAFFS
+    fn every_old_staff_guid_belongs_to_a_workshop_survivor() {
+        for (key, _) in OLD_STAFFS {
+            assert!(WorkshopSurvivor::find(key).is_some(), "{key}");
+        }
+    }
+
+    #[test]
+    fn without_the_game_s_texts_a_survivor_is_named_by_its_role() -> Result<(), Off> {
+        let smith = staffs()
             .iter()
-            .find(|s| s.key == "blacksmith_assistant")
-            .unwrap();
+            .find(|s| s.key() == "blacksmith_assistant")
+            .ok_or_else(|| Off::new("no blacksmith assistant"))?;
         assert_eq!(
             survivor_name(smith, Language::UK_UA),
             "Blacksmith assistant"
         );
+        Ok(())
     }
 
     #[test]
-    fn names_fill_in_the_survivor_in_all_languages() {
-        let languages: std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<String, String>,
-        > = toml::from_str(TEXTS).unwrap();
-        for (language, entries) in &languages {
-            for key in languages.values().flat_map(|other| other.keys()) {
-                assert!(entries.contains_key(key), "{key} has no {language}");
-            }
+    fn names_fill_in_the_survivor_in_all_languages() -> Result<(), Off> {
+        let texts = Texts::parse(TEXTS)?;
+        assert_eq!(texts.untranslated(), []);
+        for language in texts.languages() {
             for key in ["copy.name", "copy.description"] {
-                let template = &entries[key];
-                assert!(template.contains("{survivor}"), "{key} {language}");
+                let template = texts
+                    .get(key, language)
+                    .ok_or_else(|| Off::new(format!("{key} has no {}", language.code())))?;
+                assert!(template.contains("{survivor}"), "{key} {}", language.code());
                 assert!(!fill(template, "Balthazar").contains('{'));
             }
         }
+        Ok(())
     }
 }

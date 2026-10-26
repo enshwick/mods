@@ -43,7 +43,7 @@ zone.
 
 ## Settings
 
-`mod-configs/survivors-per-altar.toml`, written on first start; each
+`mod-configs/enshwick.survivors-per-altar.toml`, written on first start; each
 world keeps its own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)):
 
 ```toml
@@ -83,8 +83,11 @@ server's value, so its bed cursor and survivor menu follow the server's
 world.
 
 `copy_staff_charges` is part of the staff item the game builds as it starts:
-it is read from `mod-configs/survivors-per-altar.toml` for every world, and a
-change takes effect when the game starts again.
+it is read from `mod-configs/enshwick.survivors-per-altar.toml` for every
+world, and a change takes effect when the game starts again.
+
+Settings kept under the mod's former id, `survivors-per-altar`, move to the
+new id on the first start.
 
 ## Install
 

@@ -1,10 +1,10 @@
 # Written by copier; `copier update` reads it to merge template changes.
-_commit: 006593e
+_commit: 7751b2e
 _src_path: gh:enshwick/template-mod
 crate_name: enshwick-safes
 description: 'The Safe: a craftable chest only the player who placed it can open'
 enshwick_version: 1.0.0-alpha.2
-mod_id: safes
+mod_id: enshwick.personal-safes
 mod_name: Safes
 repository: enshwick/mod-safes
 side: both

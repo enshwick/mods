@@ -1,5 +1,5 @@
 ---
-id: optimizer
+id: enshwick.optimizer
 name: Optimizer
 summary: A dedicated server uses less CPU, on Windows and under Wine or Proton. Players notice nothing.
 needs: server
@@ -17,7 +17,7 @@ settings:
   - key: server_wait_cap_ms
     default: 1
     range: 1 to 8
-    meaning: The longest the server waits between its passes while players are online, in milliseconds. 1 is the base game.
+    meaning: The longest the server waits between its passes while players are online, in milliseconds. 1 is the base game. Raising it after a start at 1 with measure off waits for the next start.
     applies: at-once
   - key: measure
     default: true

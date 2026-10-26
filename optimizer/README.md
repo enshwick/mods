@@ -69,15 +69,19 @@ not do that: the exact waits only sleep time the game would have spent
 polling, and the simulation keeps its 60 steps a second.
 
 ```text
-info  [optimizer] environment: Wine 11.0 on Linux 7.0.14-linuxkit, Proton variables set; sync: WINEESYNC=1, WINEFSYNC=1, WINENTSYNC=1; governor: unknown; cgroup CPU limit: 4.00 CPUs; logical CPUs: 16
-info  [optimizer] the game started task workers: Default 6, Background 4, Shader 0 (it saw 16 logical CPUs)
-info  [optimizer] measure: Wine server: exact waits on, task workers at most 4, server wait vanilla; CPU: process 7.7%, main thread 1.1%, server loop thread 2.3% (100% = one core); server loop 24/s, steps 24.4/s; exact waits 257/s of 962 µs on average, 81 µs late; Bad Performance 0; threads: GameServer 2.3%, Session 1.8%, Task-Default x4 1.3%, main 1.1%, P2pReceiveThread 0.4%, SteamworksSystem 0.2%
+info  [enshwick.optimizer] environment: Wine 11.0 on Linux 7.0.14-linuxkit, Proton variables set; sync: WINEESYNC=1, WINEFSYNC=1, WINENTSYNC=1; governor: unknown; cgroup CPU limit: 4.00 CPUs; logical CPUs: 16
+info  [enshwick.optimizer] the game started task workers: Default 6, Background 4, Shader 0 (it saw 16 logical CPUs)
+info  [enshwick.optimizer] measure: Wine server: exact waits on, task workers at most 4, server wait vanilla; CPU: process 7.7%, main thread 1.1%, server loop thread 2.3% (100% = one core); server loop 24/s, steps 24.4/s; exact waits 257/s of 962 µs on average, 81 µs late; Bad Performance 0; threads: GameServer 2.3%, Session 1.8%, Task-Default x4 1.3%, main 1.1%, P2pReceiveThread 0.4%, SteamworksSystem 0.2%
 ```
 
 ## Settings
 
-`mod-configs/optimizer.toml`, written on first start; each
-world keeps its own copy of it (see [Settings](../../README.md#settings)):
+`mod-configs/enshwick.optimizer.toml`, written on first start; each
+world keeps its own copy of it (see
+[Settings](https://github.com/enshwick/enshwick#settings)). On the first
+start the mod copies the settings it had under its former ids, `optimizer`
+or `proton-optimizer`. The mod's gear on the Mods screen shows them in
+English or Ukrainian:
 
 ```toml
 exact_waits = "auto"
@@ -91,8 +95,8 @@ measure = true
   turning them on takes effect at the next start if they were off at start.
 - `task_workers`: the most workers each task group of the dedicated server
   starts, 1 to 64. The server starts its workers once, so the value is read
-  from `mod-configs/optimizer.toml` for every world, and a change takes
-  effect when the server starts again. 0 is automatic: the container's CPU limit
+  from `mod-configs/enshwick.optimizer.toml` for every world, and a change
+  takes effect when the server starts again. 0 is automatic: the container's CPU limit
   under Wine, rounded up and at least 2, else as many as the game picks.
 - `server_wait_cap_ms`: 1 to 8. 1 is vanilla. Before keeping more, check in
   game that gliding, joining or respawning and combat feel the same. A change
@@ -171,7 +175,7 @@ the server, never on the server people play on:
    image and tag.
 2. Start it with the change off, let it load, and keep it running a few
    minutes idle, then a few minutes with one player standing still. Note the
-   `measure:` lines in `logs/enshwick/mods/optimizer.log`.
+   `measure:` lines in `logs/enshwick/mods/enshwick.optimizer.log`.
 3. Turn the change on, restart, repeat.
 4. Compare the process and thread CPU and the Bad Performance count. On a
    Linux host, `pidstat -t -p <pid> 5` shows each thread and `ps -o %cpu -C
@@ -195,4 +199,4 @@ forces one on (the task workers stay as the game picks, which only the
 dedicated server lets the mod change), and measure mode and the environment
 line run. Players need nothing, and it does not count in the join check.
 
-Licensed under [MIT](../../LICENSE).
+Licensed under [MIT](LICENSE).

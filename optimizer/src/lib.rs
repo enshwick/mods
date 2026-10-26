@@ -23,10 +23,9 @@
 //! gliding. The exact waits only sleep time the game would have spent
 //! polling.
 
-use std::sync::OnceLock;
-
 use enshwick::abi::Side;
 use enshwick::pacing::TaskWorkers;
+use enshwick::state::ModLocal;
 use enshwick::{Host, Load, Mod, Off, events};
 
 use crate::env::CpuLimit;
@@ -37,6 +36,9 @@ mod measure;
 mod platform;
 mod sys;
 mod waits;
+
+/// The labels and descriptions of the settings, a table per language.
+const TEXTS: &str = include_str!("texts.toml");
 
 /// Whether a change runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -83,7 +85,8 @@ pub struct Settings {
     /// The longest the server's game loop waits between its passes while
     /// players are online, in milliseconds, 1 to 8, never past the next
     /// simulation step. 1 is vanilla. Check gliding, joining and combat
-    /// before keeping more.
+    /// before keeping more. Raising it from 1 takes effect at the next start
+    /// when the game started with it at 1 and measure mode off.
     #[config(runtime, range = 1..=8)]
     pub server_wait_cap_ms: u32,
     /// A line a minute in the log and the status summary: CPU, by thread
@@ -137,7 +140,8 @@ struct Found {
     workers: Option<u8>,
 }
 
-static FOUND: OnceLock<Found> = OnceLock::new();
+/// What init found, once it has.
+static FOUND: ModLocal<Found> = ModLocal::new();
 
 /// The platform and what runs on it, for the measure lines and the status
 /// summary.
@@ -204,21 +208,22 @@ fn status() -> String {
     lines.join("\n")
 }
 
-/// The mod. Its running state is in statics the hooks read.
+/// The mod. Its running state is in mod-life statics the hooks read.
 #[derive(Debug)]
 pub struct Optimizer;
 
 impl Mod for Optimizer {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "optimizer",
+            id: "enshwick.optimizer",
             side: BOTH,
             name: "Optimizer",
-            replaces: ["proton-optimizer"],
+            was: ["optimizer", "proton-optimizer"],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+        let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
         let environment = env::Environment::probe(&measure::game_log_text());
         let wine = environment.is_wine();
@@ -292,6 +297,28 @@ mod tests {
     use enshwick::config::Config as _;
 
     use super::*;
+
+    #[test]
+    fn every_setting_and_choice_has_its_text_in_all_languages() {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        let schema = Settings::schema();
+        let mut keys = vec![schema.text.clone()];
+        for field in &schema.fields {
+            keys.push(field.text.clone());
+            keys.push(format!("{}.doc", field.text));
+            keys.extend(
+                field
+                    .choices
+                    .iter()
+                    .map(|choice| format!("{}.{}", field.text, choice.trim_matches('"'))),
+            );
+        }
+        for key in keys {
+            let found = texts.get(&key, enshwick::i18n::Language::FALLBACK);
+            assert!(found.is_some(), "{key}");
+        }
+    }
 
     #[test]
     fn auto_follows_the_table() {

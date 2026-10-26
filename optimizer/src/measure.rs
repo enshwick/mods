@@ -11,8 +11,10 @@ use std::fmt::Write as _;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
+
+use enshwick::state::ModLocal;
 
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
@@ -26,33 +28,49 @@ const MOST_READ: u64 = 4 << 20;
 /// How many groups of threads a line names.
 const THREAD_GROUPS: usize = 6;
 
-/// Whether the lines are written.
-static ON: AtomicBool = AtomicBool::new(false);
-/// The last line, for the status summary.
-static LAST: Mutex<String> = Mutex::new(String::new());
-/// The platform and what runs on it, ahead of each line.
-static CONTEXT: Mutex<String> = Mutex::new(String::new());
+/// Whether lines are written, what they start with and the last one.
+#[derive(Debug, Default)]
+struct Lines {
+    /// Whether the lines are written.
+    on: AtomicBool,
+    /// The last line, for the status summary.
+    last: Mutex<String>,
+    /// The platform and what runs on it, ahead of each line.
+    context: Mutex<String>,
+}
+
+/// The lines of this mod life.
+static LINES: ModLocal<Lines> = ModLocal::new();
+
+/// The lines of this mod life, off and empty at first.
+fn lines() -> &'static Lines {
+    LINES.get_or_init(Lines::default)
+}
+
+/// `text` locked, whether or not a thread panicked while it held it: a line
+/// is whole or stale, never torn.
+fn relock(text: &Mutex<String>) -> MutexGuard<'_, String> {
+    text.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// Turns measure mode on or off; `context` names the platform and what runs.
 pub(crate) fn set(on: bool, context: String) {
-    ON.store(on, Ordering::Relaxed);
+    let lines = lines();
+    lines.on.store(on, Ordering::Relaxed);
     if !on {
-        LAST.lock().unwrap_or_else(PoisonError::into_inner).clear();
+        relock(&lines.last).clear();
     }
-    *CONTEXT.lock().unwrap_or_else(PoisonError::into_inner) = context;
+    *relock(&lines.context) = context;
 }
 
 /// The platform and what runs on it.
 pub(crate) fn context() -> String {
-    CONTEXT
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clone()
+    relock(&lines().context).clone()
 }
 
 /// The last line written, empty before the first.
 pub(crate) fn last() -> String {
-    LAST.lock().unwrap_or_else(PoisonError::into_inner).clone()
+    relock(&lines().last).clone()
 }
 
 /// The "Bad Performance" warnings in a piece of the game log: how many, and
@@ -460,10 +478,10 @@ pub(crate) fn run(wine: bool) {
                 enshwick::info!("{}", game.started());
             }
         }
-        if ON.load(Ordering::Relaxed) {
+        if lines().on.load(Ordering::Relaxed) {
             let text = format!("{}; {}", context(), line(&minute));
             enshwick::info!("measure: {text}");
-            *LAST.lock().unwrap_or_else(PoisonError::into_inner) = text;
+            *relock(&lines().last) = text;
         }
     }
 }
@@ -492,7 +510,7 @@ mod tests {
 
     #[test]
     fn turning_measure_off_drops_the_last_line() {
-        LAST.lock().unwrap().push_str("old");
+        relock(&lines().last).push_str("old");
         set(false, String::new());
         assert!(last().is_empty());
     }

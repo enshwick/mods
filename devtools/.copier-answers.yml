@@ -1,0 +1,10 @@
+# Written by copier; `copier update` reads it to merge template changes.
+_commit: c9030cf
+_src_path: gh:enshwick/template-mod
+crate_name: enshwick-devtools
+description: Development-only Enshwick mods, never shipped
+enshwick_version: 1.0.0-alpha.2
+mod_id: devtools
+mod_name: Developer mods
+repository: enshwick/devtools-mods
+side: server

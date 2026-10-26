@@ -1,0 +1,12 @@
+# Written by copier; `copier update` reads it to merge template changes.
+_commit: e3066da
+_src_path: gh:enshwick/template-mod
+crate_name: enshwick-optimizer
+description: 'Less server CPU on Windows and under Wine or Proton: exact short waits,
+    task workers within a container''s CPU limit, measurements and an environment
+    report'
+enshwick_version: 1.0.0-alpha.2
+mod_id: optimizer
+mod_name: Optimizer
+repository: enshwick/mod-optimizer
+side: both

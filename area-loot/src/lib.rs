@@ -1,24 +1,48 @@
-//! Empty one enemy corpse and the loot of the others around it comes along.
+//! Area loot: when a player empties an enemy's loot, the loot of the other
+//! enemies around comes along. Corpses and enemy loot bags within the radius
+//! are emptied into the same player, nearest first, until one does not fit;
+//! containers another player has open stay as they are. Items on the ground
+//! keep the game's own pickup.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+mod take;
+mod tracker;
 
 use enshwick::{Load, Mod, Off};
 
-/// Whether the mod does its work now; a settings change updates it.
-static ENABLED: AtomicBool = AtomicBool::new(true);
-
-/// The settings, in `mod-configs/area-loot.toml`.
+/// Area loot settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 struct Settings {
-    /// Whether the mod does its work.
+    /// Metres across the ground from the emptied container.
+    #[config(runtime, range = 0.1..=50.0)]
+    radius: f32,
+    /// Metres above or below the emptied container.
+    #[config(runtime, range = 0.1..=20.0)]
+    height: f32,
+    /// Take the loot around; false leaves looting vanilla.
     #[config(runtime)]
     enabled: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            radius: 12.0,
+            height: 4.0,
+            enabled: true,
+        }
+    }
+}
+
+fn describe(settings: &Settings) {
+    if settings.enabled {
+        enshwick::info!(
+            "area loot within {} m, {} m up or down",
+            settings.radius,
+            settings.height
+        );
+    } else {
+        enshwick::info!("area loot disabled");
     }
 }
 
@@ -37,11 +61,13 @@ impl Mod for AreaLoot {
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let settings: Settings = load.config()?;
-        ENABLED.store(settings.enabled, Ordering::Relaxed);
+        take::apply(&settings);
+        take::link(load)?;
         load.on_config_change(|settings: Settings| {
-            ENABLED.store(settings.enabled, Ordering::Relaxed);
+            take::apply(&settings);
+            describe(&settings);
         })?;
-        enshwick::info!("enabled: {}", settings.enabled);
+        describe(&settings);
         Ok(Self)
     }
 }
@@ -50,18 +76,31 @@ enshwick::declare_mod!(AreaLoot);
 
 #[cfg(test)]
 mod tests {
-    use enshwick::abi::Status;
+    use enshwick::config::Config;
 
     use super::*;
 
     #[test]
-    fn starts_with_the_settings_it_reads() {
-        let loader = enshwick::test::FakeHost::new()
-            .settings("enabled = false\n")
-            .install();
-        // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
-        assert_eq!(status, Status::OK);
-        assert!(!ENABLED.load(Ordering::Relaxed));
+    fn the_default_settings_parse() {
+        let settings: Settings = toml::from_str(&Settings::template()).unwrap();
+        assert!((settings.radius - 12.0).abs() < f32::EPSILON);
+        assert!((settings.height - 4.0).abs() < f32::EPSILON);
+        assert!(settings.enabled);
+        assert!(settings.validate().is_ok());
+    }
+
+    #[test]
+    fn out_of_range_settings_are_refused() {
+        let with = |radius, height| Settings {
+            radius,
+            height,
+            enabled: true,
+        };
+        assert!(with(0.0, 4.0).validate().is_err());
+        assert!(with(51.0, 4.0).validate().is_err());
+        assert!(with(f32::NAN, 4.0).validate().is_err());
+        assert!(with(12.0, 0.0).validate().is_err());
+        assert!(with(12.0, 21.0).validate().is_err());
+        assert!(with(50.0, 20.0).validate().is_ok());
     }
 }

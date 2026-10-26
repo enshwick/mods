@@ -2,7 +2,7 @@
 name = "enshwick-area-loot"
 version = "0.1.0"
 description = "Empty one enemy corpse and the loot of the others around it comes along"
-keywords = ["enshrouded", "mod"]
+keywords = ["enshrouded", "mod", "loot"]
 categories = ["game-development"]
 readme = "README.md"
 authors = ["themaiby"]
@@ -22,6 +22,7 @@ serde = { version = "1.0.229", default-features = false, features = ["std", "der
 
 [dev-dependencies]
 enshwick = { version = "1.0.0-alpha.2", features = ["test"] }
+toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]
 workspace = true

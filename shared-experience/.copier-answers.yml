@@ -1,5 +1,5 @@
 # Written by copier; `copier update` reads it to merge template changes.
-_commit: fe2e23b
+_commit: 56815c7
 _src_path: gh:enshwick/template-mod
 crate_name: enshwick-shared-experience
 description: Every character on a server keeps up with the one furthest ahead in experience

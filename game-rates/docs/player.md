@@ -1,7 +1,7 @@
 ---
 id: enshwick.game-rates
 name: Game Rates
-summary: Building recipes make more for the same cost, and furniture gives more comfort inside a base.
+summary: Building recipes make more, furniture gives more comfort, and experience, workshops, loot and skill points follow their own multipliers.
 needs: everyone
 settings:
   - key: recipes.multiplier
@@ -26,12 +26,49 @@ settings:
     range: 0 to 100
     meaning: How many times more comfort each piece of furniture gives. 1 is the base game, 0 takes all comfort from furniture.
     applies: at-once
+  - key: experience.combat
+    default: 1.0
+    range: 0 to 100
+    meaning: How many times more experience combat gives. 1 is the base game.
+    applies: at-once
+  - key: experience.mining
+    default: 1.0
+    range: 0 to 100
+    meaning: How many times more experience mining gives. 1 is the base game.
+    applies: at-once
+  - key: experience.exploration
+    default: 1.0
+    range: 0 to 100
+    meaning: How many times more experience exploring, lore, quests and item sets give. 1 is the base game.
+    applies: at-once
+  - key: workshops.speed
+    default: 1.0
+    range: 0.1 to 100
+    meaning: How many times faster workshops such as the smelter produce. 2 halves the time.
+    applies: at-once
+  - key: drops.resources
+    default: 1.0
+    range: 0 to 100
+    meaning: How many times more materials each loot stack and resource drop gives, as the game's own Loot Amount does.
+    applies: at-once
+  - key: drops.loot
+    default: 1.0
+    range: 0 to 100
+    meaning: How many times larger each stack of loot in chests, corpses and animals is, up to a full stack.
+    applies: at-once
+  - key: skills.points
+    default: 1.0
+    range: 0 to 100
+    meaning: How many times more skill points each level gives, rounded. Points from knowledge stay.
+    applies: at-once
 ---
 
 - Recipes for building blocks, roofs, overgrowth, decor and furniture make twice
   as much for the same cost.
 - Each piece of furniture gives twice its comfort inside a base.
 - The crafting menu shows the new counts.
+- Experience from combat, mining and quests, workshop speed, loot and skill
+  points per level each have a multiplier. They start as in the base game.
 
 ## What stays as it was?
 

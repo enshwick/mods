@@ -243,27 +243,20 @@ mod tests {
     }
 
     #[test]
-    fn names_fill_in_the_survivor_in_every_language() {
-        let texts = Texts::parse(TEXTS).unwrap();
-        for language in [
-            Language::FALLBACK,
-            Language::UK_UA,
-            Language::DE_DE,
-            Language::FR_FR,
-            Language::ES_ES,
-            Language::PL_PL,
-        ] {
+    fn names_fill_in_the_survivor_in_all_languages() {
+        let languages: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<String, String>,
+        > = toml::from_str(TEXTS).unwrap();
+        for (language, entries) in &languages {
+            for key in languages.values().flat_map(|other| other.keys()) {
+                assert!(entries.contains_key(key), "{key} has no {language}");
+            }
             for key in ["copy.name", "copy.description"] {
-                let template = texts.get(key, language).unwrap();
-                assert!(template.contains("{survivor}"), "{key} {language:?}");
+                let template = &entries[key];
+                assert!(template.contains("{survivor}"), "{key} {language}");
                 assert!(!fill(template, "Balthazar").contains('{'));
             }
-            assert!(
-                texts
-                    .translations("copy.full_charges")
-                    .any(|(l, _)| l == language),
-                "{language:?}"
-            );
         }
     }
 }

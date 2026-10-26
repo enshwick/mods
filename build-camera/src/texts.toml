@@ -1,0 +1,9 @@
+[en]
+"config" = "Build camera"
+"config.enabled" = "Fly mode without the skill"
+"config.enabled.doc" = "Every player may use the building fly mode near a base without the Airborne Architect skill. Players on a server use the server's value."
+
+[uk]
+"config" = "Будівельна камера"
+"config.enabled" = "Режим польоту без навички"
+"config.enabled.doc" = "Кожен гравець може літати в режимі будівництва біля оплоту без навички «Повітряний архітектор». Гравці на сервері отримують значення сервера."

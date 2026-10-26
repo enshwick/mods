@@ -9,9 +9,20 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use enshwick::progress::{AIRBORNE_ARCHITECT, SkillGate};
+use enshwick::state::ModLocal;
 use enshwick::{Load, Mod, Off};
 
-static ENABLED: AtomicBool = AtomicBool::new(false);
+/// The labels and descriptions of the settings, a table per language.
+const TEXTS: &str = include_str!("texts.toml");
+
+/// Whether fly mode is open without the skill, for this mod life.
+static ENABLED: ModLocal<AtomicBool> = ModLocal::new();
+
+/// Whether fly mode is open without the skill; off until the settings are
+/// read.
+fn enabled() -> &'static AtomicBool {
+    ENABLED.get_or_init(|| AtomicBool::new(false))
+}
 
 /// Build camera settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
@@ -52,7 +63,7 @@ pub fn lifts(gate: SkillGate, enabled: bool) -> Option<bool> {
 pub struct BuildCamera;
 
 fn apply(settings: &Settings) {
-    let was = ENABLED.swap(settings.enabled, Ordering::Relaxed);
+    let was = enabled().swap(settings.enabled, Ordering::Relaxed);
     if was != settings.enabled {
         enshwick::info!(
             "fly mode without the skill: {}",
@@ -64,17 +75,19 @@ fn apply(settings: &Settings) {
 impl Mod for BuildCamera {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "build-camera",
+            id: "enshwick.build-camera",
             side: BOTH,
             name: "Build camera",
             join: true,
+            was: ["build-camera"],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+        let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
         load.on_skill(AIRBORNE_ARCHITECT, |check| {
-            lifts(check.gate, ENABLED.load(Ordering::Relaxed))
+            lifts(check.gate, enabled().load(Ordering::Relaxed))
         })?;
         load.on_config_change(|settings: Settings| apply(&settings))?;
         apply(&settings);
@@ -101,6 +114,23 @@ mod tests {
         let mut local: Settings = toml::from_str("enabled = true").unwrap();
         local.merge_synced("{ enabled = false }").unwrap();
         assert!(!local.enabled);
+    }
+
+    #[test]
+    fn every_setting_has_its_label_and_description_in_all_languages() {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        let schema = Settings::schema();
+        let keys = std::iter::once(schema.text).chain(
+            schema
+                .fields
+                .into_iter()
+                .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+        );
+        for key in keys {
+            let found = texts.get(&key, enshwick::i18n::Language::FALLBACK);
+            assert!(found.is_some(), "{key}");
+        }
     }
 
     #[test]

@@ -1,5 +1,5 @@
 ---
-id: build-camera
+id: enshwick.build-camera
 name: Build camera
 summary: Every player may use the building fly mode of the Airborne Architect skill near a base, with no skill points spent.
 needs: everyone
@@ -38,7 +38,8 @@ put it. It runs on enshwick.
 
 You change this value in the game, as the
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
-shows.
+shows. On the first start the mod keeps the value you set under its former
+name, `build-camera`.
 
 ## Multiplayer
 

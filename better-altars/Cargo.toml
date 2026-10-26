@@ -1,5 +1,5 @@
 [package]
-name = "enshwick-flame-altar-count"
+name = "enshwick-more-altars"
 version = "0.1.0"
 description = "How many Flame Altars each Flame level allows, from a table in the settings"
 keywords = ["enshrouded", "mod", "altar"]
@@ -9,8 +9,8 @@ authors = ["themaiby"]
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/enshwick/mod-flame-altar-count"
-homepage = "https://github.com/enshwick/mod-flame-altar-count"
+repository = "https://github.com/enshwick/mod-more-altars"
+homepage = "https://github.com/enshwick/mod-more-altars"
 publish = false
 
 [lib]

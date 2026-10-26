@@ -1,4 +1,4 @@
-# Flame altar count
+# More Altars
 
 Sets how many Flame Altars a world allows at each Flame level, up to 32 altars
 in 16 bases. The default doubles the vanilla count. An Enshrouded mod for the
@@ -12,7 +12,9 @@ in 16 bases. The default doubles the vanilla count. An Enshrouded mod for the
 ## Settings
 
 `mod-configs/flame-altar-count.toml`, written on first start; each
-world keeps its own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)):
+world keeps its own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)).
+The file keeps the name of the mod's id, `flame-altar-count`, from before the
+mod was called More Altars, so settings from that time still apply:
 
 ```toml
 altars_per_flame_level = [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]
@@ -57,13 +59,17 @@ at your own risk, delete `mod-data/flame-altar-count/hold.txt`.
 
 ## Install
 
-Download [`enshwick-flame-altar-count.zip`](https://github.com/enshwick/mod-flame-altar-count/releases/download/dev/enshwick-flame-altar-count.zip)
+Download [`enshwick-more-altars.zip`](https://github.com/enshwick/mod-more-altars/releases/download/dev/enshwick-more-altars.zip)
 and extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. It needs Enshwick Loader:
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)
 alone, or [`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
 with every mod. These are development builds of the newest commit: until
 the first release, 1.0.0, there are no others.
+
+Before you extract it over an older install, delete
+`mods/enshwick-flame-altar-count.dll`: it is this mod under its old name, and
+while it is there Enshwick runs it and skips the new file.
 
 ## Who needs it
 

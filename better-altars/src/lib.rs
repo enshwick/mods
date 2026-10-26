@@ -40,7 +40,7 @@ fn limit(flame_level: u32, table: u8) -> u8 {
         .clamp(1, cap)
 }
 
-/// Flame Altar count settings.
+/// More Altars settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 struct Settings {
@@ -134,7 +134,7 @@ impl Mod for AltarCount {
         enshwick::manifest!(
             id: "flame-altar-count",
             side: BOTH,
-            name: "Flame altar count",
+            name: "More Altars",
             join: true,
         )
     }

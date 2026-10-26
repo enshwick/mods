@@ -98,16 +98,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enshwick-flame-altar-count"
-version = "0.1.0"
-dependencies = [
- "arc-swap",
- "enshwick",
- "serde",
- "toml",
-]
-
-[[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -116,6 +106,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "enshwick-more-altars"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "enshwick",
+ "serde",
+ "toml",
 ]
 
 [[package]]

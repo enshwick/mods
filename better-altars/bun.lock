@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "enshwick-flame-altar-count-repository-tools",
+      "name": "enshwick-more-altars-repository-tools",
       "devDependencies": {
         "lefthook": "2.2.2",
         "markdownlint-cli2": "0.24.0",

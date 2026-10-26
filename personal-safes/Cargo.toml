@@ -1,8 +1,8 @@
 [package]
 name = "enshwick-safes"
-version = "0.1.0"
+version = "0.0.0-dev"
 description = "The Safe: a craftable chest only the player who placed it can open"
-keywords = ["enshrouded", "mod"]
+keywords = ["enshrouded", "mod", "chest", "safe"]
 categories = ["game-development"]
 readme = "README.md"
 authors = ["themaiby"]
@@ -17,11 +17,13 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+arc-swap = { version = "1.9.3", default-features = false }
 enshwick = "1.0.0-alpha.2"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
 enshwick = { version = "1.0.0-alpha.2", features = ["test"] }
+toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]
 workspace = true

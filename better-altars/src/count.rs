@@ -10,16 +10,23 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use enshwick::abi::Side;
-use enshwick::altars::{RAISED_ALTAR_ZONES, VANILLA_ALTAR_ZONES, VANILLA_ALTARS_PER_FLAME_LEVEL};
+use enshwick::altars::base_limit;
 use enshwick::points::OwnedPoint;
 use enshwick::{Load, Off};
 
 use crate::hold;
 
-/// The most altars with the base limit raised.
-pub(crate) const CAP: u8 = RAISED_ALTAR_ZONES;
-/// The most altars the vanilla grouping takes.
-pub(crate) const VANILLA_CAP: u8 = VANILLA_ALTAR_ZONES;
+/// The most altars the settings take: a base names at most 32 altar zones.
+/// The loader keeps every answer within what the game groups.
+pub(crate) const CAP: u8 = 32;
+
+/// The most altars the game's own grouping takes, from the loader; the
+/// settings' cap when the loader does not say.
+fn vanilla_cap() -> u8 {
+    base_limit()
+        .and_then(|limit| u8::try_from(limit.vanilla_zones).ok())
+        .unwrap_or(CAP)
+}
 
 /// How many Flame Altars a Flame level allows, `flame-altar-count:limit`:
 /// the answer is the altars.
@@ -68,16 +75,12 @@ pub(crate) struct AltarTable {
 
 impl AltarTable {
     /// A table from the settings, already within 1 to [`CAP`]: lowered to
-    /// `cap`, the vanilla table when empty.
+    /// `cap`; empty, the game's own counts apply.
     pub(crate) fn new(levels: &[u16], cap: u8) -> Self {
-        let table = if levels.is_empty() {
-            VANILLA_ALTARS_PER_FLAME_LEVEL.to_vec()
-        } else {
-            levels
-                .iter()
-                .map(|&n| u8::try_from(n.min(u16::from(cap))).unwrap_or(cap))
-                .collect()
-        };
+        let table = levels
+            .iter()
+            .map(|&n| u8::try_from(n.min(u16::from(cap))).unwrap_or(cap))
+            .collect();
         Self { table }
     }
 
@@ -95,14 +98,14 @@ impl AltarTable {
         table
     }
 
-    /// Altars allowed at `flame_level`.
-    pub(crate) fn altars(&self, flame_level: u32) -> u8 {
+    /// Altars allowed at `flame_level`, where the game allows `vanilla`.
+    pub(crate) fn altars(&self, flame_level: u32, vanilla: u8) -> u8 {
         let index = usize::try_from(flame_level).unwrap_or(usize::MAX);
         self.table
             .get(index)
             .or(self.table.last())
             .copied()
-            .unwrap_or(VANILLA_CAP)
+            .unwrap_or(vanilla)
     }
 }
 
@@ -120,7 +123,7 @@ fn cap_reason(cap: u8) -> &'static str {
 #[derive(Debug)]
 pub(crate) struct AltarCount {
     table: ArcSwap<AltarTable>,
-    /// [`CAP`] once the base limit is lifted, else [`VANILLA_CAP`].
+    /// [`CAP`] once the base limit is lifted, else the game's own grouping.
     cap: u8,
     /// The extension point `flame-altar-count:limit`.
     point: OwnedPoint<AltarLimit>,
@@ -144,8 +147,9 @@ impl AltarCount {
                     "{reason}, and this build's grouping is not the one the platform knows"
                 )));
             }
-            enshwick::warn!("the game keeps 16 altar zones in bases");
-            VANILLA_CAP
+            let cap = vanilla_cap();
+            enshwick::warn!("the game keeps {cap} altar zones in bases");
+            cap
         };
         let table = AltarTable::from_settings(count, cap);
         let point = load.define_point()?;
@@ -156,10 +160,11 @@ impl AltarCount {
         })
     }
 
-    /// The altars `flame_level` allows: the table's answer, or what other
-    /// mods' links make of it, between 1 and the cap.
-    pub(crate) fn limit(&self, flame_level: u32) -> u8 {
-        let table = self.table.load().altars(flame_level);
+    /// The altars `flame_level` allows, where the game allows `vanilla`:
+    /// the table's answer, or what other mods' links make of it, between 1
+    /// and the cap.
+    pub(crate) fn limit(&self, flame_level: u32, vanilla: u8) -> u8 {
+        let table = self.table.load().altars(flame_level, vanilla);
         self.point
             .decide(
                 &AltarLimit {
@@ -185,27 +190,26 @@ mod tests {
 
     #[test]
     fn the_default_settings_double_vanilla() {
+        // The game's own counts on 1.0.
+        let vanilla: [u8; 12] = [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16];
         let table = AltarTable::new(&Count::default().altars_per_flame_level, CAP);
-        assert_eq!(table.altars(0), 2);
-        assert_eq!(table.altars(1), 4);
-        assert_eq!(table.altars(4), 16);
-        let doubled: Vec<u8> = VANILLA_ALTARS_PER_FLAME_LEVEL
-            .iter()
-            .map(|&n| n * 2)
-            .collect();
+        assert_eq!(table.altars(0, 1), 2);
+        assert_eq!(table.altars(1, 2), 4);
+        assert_eq!(table.altars(4, 8), 16);
+        let doubled: Vec<u8> = vanilla.iter().map(|&n| n * 2).collect();
         assert_eq!(table.table, doubled);
-        assert_eq!(table.altars(99), 32);
+        assert_eq!(table.altars(99, 16), 32);
     }
 
     #[test]
-    fn values_are_capped_and_an_empty_table_is_vanilla() {
+    fn values_are_capped_and_an_empty_table_answers_the_game_s_count() {
         let table = AltarTable::new(&[1, 3, 32], CAP);
         assert_eq!(
-            [table.altars(0), table.altars(1), table.altars(2)],
+            [table.altars(0, 1), table.altars(1, 2), table.altars(2, 4)],
             [1, 3, 32]
         );
-        assert_eq!(AltarTable::new(&[], CAP).altars(0), 1);
-        let unlifted = AltarTable::new(&[1, 3, 32], VANILLA_CAP);
-        assert_eq!(unlifted.altars(2), 16);
+        assert_eq!(AltarTable::new(&[], CAP).altars(0, 1), 1);
+        let unlifted = AltarTable::new(&[1, 3, 32], 16);
+        assert_eq!(unlifted.altars(2, 4), 16);
     }
 }

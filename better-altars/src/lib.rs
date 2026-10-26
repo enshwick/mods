@@ -13,7 +13,7 @@ mod migrations;
 mod zones;
 
 pub use count::AltarLimit;
-use count::{AltarCount, Count, VANILLA_CAP};
+use count::{AltarCount, Count};
 use enshwick::{Load, Mod, Off};
 use zones::{AltarZones, Zones};
 
@@ -62,8 +62,10 @@ impl Mod for BetterAltars {
         let settings: Settings = load.config()?;
         let count = AltarCount::start(load, &settings.count)?;
         let zones = AltarZones::start(load, &settings.zones)?;
-        load.on_altar_limit(|level| {
-            BetterAltars::instance().map_or(VANILLA_CAP, |altars| altars.count.limit(level))
+        load.on_altar_limit(|limit| {
+            if let Some(altars) = BetterAltars::instance() {
+                limit.allowed = altars.count.limit(limit.flame_level, limit.vanilla);
+            }
         })?;
         load.on_config_change(|settings: Settings| {
             if let Some(altars) = BetterAltars::instance() {
@@ -139,7 +141,7 @@ mod tests {
     fn the_default_settings_parse_into_both_groups() {
         let settings: Settings = toml::from_str(&Settings::template()).unwrap();
         assert_eq!(
-            AltarTable::new(&settings.count.altars_per_flame_level, CAP).altars(1),
+            AltarTable::new(&settings.count.altars_per_flame_level, CAP).altars(1, 2),
             4
         );
         assert!(settings.zones.clusters && settings.zones.building_across_seams);
@@ -275,9 +277,9 @@ mod tests {
             "[count]\naltars_per_flame_level = [0, 40, 5]\n",
             &[],
         );
-        assert_eq!(loader.altar_limit(0), Some(1));
-        assert_eq!(loader.altar_limit(1), Some(32));
-        assert_eq!(loader.altar_limit(2), Some(5));
+        assert_eq!(loader.altar_limit(0, 1), 1);
+        assert_eq!(loader.altar_limit(1, 2), 32);
+        assert_eq!(loader.altar_limit(2, 4), 5);
         assert!(loader.faults().is_empty());
     }
 
@@ -295,7 +297,7 @@ mod tests {
             toml::from_str("[count]\naltars_per_flame_level = [1]\n").unwrap();
         joined.merge_synced(&synced).unwrap();
         assert_eq!(
-            AltarTable::new(&joined.count.altars_per_flame_level, CAP).altars(3),
+            AltarTable::new(&joined.count.altars_per_flame_level, CAP).altars(3, 6),
             12
         );
         assert!(!joined.zones.building_across_seams);
@@ -306,8 +308,8 @@ mod tests {
     fn the_table_answers_the_limit_with_the_base_limit_raised() {
         let loader = started(Side::CLIENT, "", &[]);
         assert!(loader.base_limit_raised());
-        assert_eq!(loader.altar_limit(1), Some(4));
-        assert_eq!(loader.altar_limit(11), Some(32));
+        assert_eq!(loader.altar_limit(1, 2), 4);
+        assert_eq!(loader.altar_limit(11, 16), 32);
         assert!(loader.faults().is_empty());
     }
 
@@ -325,9 +327,9 @@ mod tests {
                 _ => Verdict::Set(200),
             }
         }));
-        assert_eq!(loader.altar_limit(0), Some(1), "at least one");
-        assert_eq!(loader.altar_limit(1), Some(6));
-        assert_eq!(loader.altar_limit(5), Some(32), "at most the cap");
+        assert_eq!(loader.altar_limit(0, 1), 1, "at least one");
+        assert_eq!(loader.altar_limit(1, 2), 6);
+        assert_eq!(loader.altar_limit(5, 10), 32, "at most the cap");
         assert!(loader.faults().is_empty());
     }
 

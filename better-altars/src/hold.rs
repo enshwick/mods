@@ -10,7 +10,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use enshwick::altars::VANILLA_ALTAR_ZONES;
 use enshwick::events::{AltarsChanged, ShutdownStarted, WorldLoaded};
 use enshwick::state::Hold;
 use enshwick::{Load, Off};
@@ -106,12 +105,15 @@ fn run(hold: &Hold, loaded: &AtomicBool) {
         let Some(grouping) = enshwick::altars::grouping() else {
             continue;
         };
+        let Some(vanilla) = enshwick::altars::base_limit().map(|limit| limit.vanilla_zones) else {
+            continue;
+        };
         let zones = grouping.zones;
-        let past = zones > u32::from(VANILLA_ALTAR_ZONES);
+        let past = zones > vanilla;
         let done = match watch.step(past, loaded.load(Ordering::Acquire), Instant::now()) {
             Step::Wait => continue,
             Step::Set => hold.set(&format!(
-                "the world has {zones} altar zones; the vanilla game groups only {VANILLA_ALTAR_ZONES}"
+                "the world has {zones} altar zones; the vanilla game groups only {vanilla}"
             )),
             Step::Release => hold.clear(),
         };

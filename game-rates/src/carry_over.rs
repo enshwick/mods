@@ -41,6 +41,10 @@ pub(crate) const REPLACED: [Replaced; 3] = [
     },
 ];
 
+/// The folder of the mods' settings files, beside the game.
+const CONFIGS: &str = "mod-configs";
+/// The folder of a mod's world copies, in its data folder.
+const WORLDS: &str = "worlds";
 /// The file name of a world's copy of a mod's settings.
 const WORLD_SETTINGS: &str = "settings.toml";
 
@@ -89,13 +93,13 @@ pub(crate) fn carried_over(
 /// # Errors
 ///
 /// When the loader does not name the mod's data folder.
-pub(crate) fn carry_over(load: &Load<'_>, id: &str, template: &str) -> Result<(), Off> {
+pub(crate) fn run(load: &Load<'_>, id: &str, template: &str) -> Result<(), Off> {
     // `<game>/mod-data/<id>` beside `<game>/mod-configs/`.
     let data = load.data_dir()?;
     let Some((mod_data, game)) = data.parent().and_then(|d| Some((d, d.parent()?))) else {
         return Ok(());
     };
-    let configs = game.join("mod-configs");
+    let configs = game.join(CONFIGS);
     let settings = configs.join(format!("{id}.toml"));
     carry_into(&settings, template, &toml::Table::new(), |replaced| {
         configs.join(format!("{}.toml", replaced.id))
@@ -104,7 +108,7 @@ pub(crate) fn carry_over(load: &Load<'_>, id: &str, template: &str) -> Result<()
         .ok()
         .and_then(|text| toml::from_str(&text).ok())
         .unwrap_or_default();
-    let worlds = |id: &str| mod_data.join(id).join("worlds");
+    let worlds = |id: &str| mod_data.join(id).join(WORLDS);
     let keys: BTreeSet<OsString> = std::iter::once(id)
         .chain(REPLACED.iter().map(|replaced| replaced.id))
         .filter_map(|id| std::fs::read_dir(worlds(id)).ok())
@@ -114,7 +118,7 @@ pub(crate) fn carry_over(load: &Load<'_>, id: &str, template: &str) -> Result<()
         .map(|entry| entry.file_name())
         .collect();
     for key in keys {
-        let own = data.join("worlds").join(&key).join(WORLD_SETTINGS);
+        let own = data.join(WORLDS).join(&key).join(WORLD_SETTINGS);
         carry_into(&own, template, &fallback, |replaced| {
             worlds(replaced.id).join(&key).join(WORLD_SETTINGS)
         });

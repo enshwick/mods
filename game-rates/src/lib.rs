@@ -2,36 +2,19 @@
 //! decor and furniture make more for the same cost, and furniture gives more
 //! comfort. Functional props (stations, chests, altars, water devices) stay
 //! as they are.
-//!
-//! Each tick every comfort provider in a base registers its comfort for its
-//! category, and the base keeps the best per category; a player's comfort is
-//! the sum. The mod scales what each provider registers, on the server, which
-//! decides comfort.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-
-use enshwick::content::recipes::RecipeEdit;
+use enshwick::config::Config;
 use enshwick::{Load, Mod, Off};
 
 mod carry_over;
+mod comfort;
+mod recipes;
 
 /// The mod's id, as in its manifest; it names the settings file.
 const ID: &str = "game-rates";
 
-/// The largest comfort factor: the game sums the comfort of every category
-/// into one number, which a larger factor could overflow.
-const MAX_COMFORT: f32 = 100.0;
-
-/// The comfort factor in force, as `f32` bits, read on every registration.
-static COMFORT: AtomicU32 = AtomicU32::new(0x3f80_0000);
-/// The output multiplier in force.
-static MULTIPLIER: AtomicU32 = AtomicU32::new(1);
-/// Whether each [`Category`] is scaled, in its order.
-static SCALED: [AtomicBool; 3] = [
-    AtomicBool::new(false),
-    AtomicBool::new(false),
-    AtomicBool::new(false),
-];
+/// The labels and descriptions of the settings, in English and Ukrainian.
+const TEXTS: &str = include_str!("texts.toml");
 
 /// Game rates: building recipes, then furniture comfort.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
@@ -53,7 +36,7 @@ struct Settings {
     /// Comfort each piece of furniture gives inside a base, times this, from
     /// 0 to 100: 1 is vanilla, 0 takes all comfort from furniture. The
     /// server's value decides.
-    #[config(runtime, range = 0.0..=MAX_COMFORT)]
+    #[config(runtime, range = 0.0..=comfort::MAX_FACTOR)]
     comfort_multiplier: f32,
 }
 
@@ -72,19 +55,18 @@ impl Default for Settings {
 impl Settings {
     /// Puts these settings in force; whether the recipe values changed.
     fn apply(&self) -> bool {
-        let multiplier = self.recipe_multiplier;
-        let mut changed = MULTIPLIER.swap(multiplier, Ordering::Relaxed) != multiplier;
-        for (scaled, on) in SCALED.iter().zip([
-            self.recipe_blocks,
-            self.recipe_overgrowth,
-            self.recipe_decor,
-        ]) {
-            changed |= scaled.swap(on, Ordering::Relaxed) != on;
-        }
-        COMFORT.store(self.comfort_multiplier.to_bits(), Ordering::Relaxed);
+        let changed = recipes::RATES.set(
+            self.recipe_multiplier,
+            [
+                self.recipe_blocks,
+                self.recipe_overgrowth,
+                self.recipe_decor,
+            ],
+        );
+        comfort::RATE.set(self.comfort_multiplier);
         enshwick::info!(
             "recipe output x{}: blocks {}, overgrowth {}, decor {}; furniture comfort x{}",
-            multiplier,
+            self.recipe_multiplier,
             self.recipe_blocks,
             self.recipe_overgrowth,
             self.recipe_decor,
@@ -92,55 +74,6 @@ impl Settings {
         );
         changed
     }
-}
-
-/// What a recipe makes, by its debug name.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Category {
-    /// Building blocks and roofs.
-    Blocks,
-    /// Overgrowth materials.
-    Overgrowth,
-    /// Decor and furniture.
-    Decor,
-}
-
-/// The category of the recipe named `name`, `None` for everything else.
-#[must_use]
-pub fn category(name: &str) -> Option<Category> {
-    if name.starts_with("Block_") {
-        Some(Category::Blocks)
-    } else if name.starts_with("Material_") && name.contains("_Overgrowth_") {
-        Some(Category::Overgrowth)
-    } else if name.starts_with("Prop_Decoration_")
-        // Decoration with a function: it holds water or items.
-        && !["Water", "Storage", "Chest"].iter().any(|word| name.contains(word))
-    {
-        Some(Category::Decor)
-    } else {
-        None
-    }
-}
-
-/// Scales the output of `recipe` when its category is in force.
-fn scale(recipe: &mut RecipeEdit<'_>) {
-    let Some(category) = category(&recipe.view().debug_name()) else {
-        return;
-    };
-    if SCALED[category as usize].load(Ordering::Relaxed) {
-        recipe.scale_output(MULTIPLIER.load(Ordering::Relaxed));
-    }
-}
-
-/// `comfort` scaled by `factor`, rounded and kept in range.
-#[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "clamped to the i32 range first"
-)]
-pub fn scaled_comfort(comfort: i32, factor: f32) -> i32 {
-    let value = (f64::from(comfort) * f64::from(factor)).round();
-    value.clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
 /// The mod's state.
@@ -159,11 +92,8 @@ impl Mod for GameRates {
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        carry_over::carry_over(
-            load,
-            ID,
-            &<Settings as enshwick::config::Config>::template(),
-        )?;
+        load.texts(TEXTS)?;
+        carry_over::run(load, ID, &Settings::template())?;
         let settings: Settings = load.config()?;
         settings.apply();
         // Values that arrive later, an edited file or a joined server's
@@ -180,13 +110,8 @@ impl Mod for GameRates {
                 ),
             }
         })?;
-        load.modify_recipes(scale)?;
-        if let Err(off) = load.on_comfort(|comfort| {
-            scaled_comfort(
-                comfort.value,
-                f32::from_bits(COMFORT.load(Ordering::Relaxed)),
-            )
-        }) {
+        load.modify_recipes(|recipe| recipes::RATES.scale(recipe))?;
+        if let Err(off) = load.on_comfort(|provider| comfort::RATE.scale(provider.value)) {
             enshwick::warn!("furniture comfort stays vanilla: {off}");
         }
         Ok(Self)
@@ -198,36 +123,6 @@ enshwick::declare_mod!(GameRates);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use enshwick::config::Config;
-
-    #[test]
-    fn recipes_fall_in_their_categories() {
-        assert_eq!(
-            category("Block_T2_Metal_Copper_CRAFTING"),
-            Some(Category::Blocks)
-        );
-        assert_eq!(category("Block_Roof_T6_Palmleaves"), Some(Category::Blocks));
-        assert_eq!(
-            category("Material_T1_Overgrowth_Ivy"),
-            Some(Category::Overgrowth)
-        );
-        assert_eq!(
-            category("Prop_Decoration_Comfort1_T0_Bench"),
-            Some(Category::Decor)
-        );
-        assert_eq!(category("Prop_Decoration_T2_Barrel_Water"), None);
-        assert_eq!(category("Prop_Decoration_T1_Storage_Shelf"), None);
-        assert_eq!(category("Prop_Storage_32_T2_Chest_Wood"), None);
-        assert_eq!(category("Recipe_Overgrowth_Tool"), None);
-        assert_eq!(category("Craft_Weapon_T7_1H_Lore_Axe_Ministory_10"), None);
-    }
-
-    #[test]
-    fn the_categories_index_their_switches() {
-        assert_eq!(Category::Blocks as usize, 0);
-        assert_eq!(Category::Overgrowth as usize, 1);
-        assert_eq!(Category::Decor as usize, 2);
-    }
 
     /// A host with the recipe layout the recipe patch reads.
     fn recipe_host() -> enshwick::test::FakeHost {
@@ -298,11 +193,11 @@ mod tests {
         assert_eq!(allowed, 1, "the registry may be rebuilt");
         loader.set_server_synced(Some("{ recipe_multiplier = 5 }"));
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(MULTIPLIER.load(Ordering::Relaxed), 5);
+        assert_eq!(recipes::RATES.multiplier(), 5);
         assert_eq!(loader.rebuilds().len(), allowed + 1, "joined: rebuilt");
         loader.set_server_synced(None);
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(MULTIPLIER.load(Ordering::Relaxed), 2);
+        assert_eq!(recipes::RATES.multiplier(), 2);
         assert_eq!(loader.rebuilds().len(), allowed + 2, "left: rebuilt");
         assert!(loader.faults().is_empty());
     }
@@ -333,11 +228,24 @@ mod tests {
     }
 
     #[test]
-    fn comfort_scales_rounds_and_stays_in_range() {
-        assert_eq!(scaled_comfort(7, 2.0), 14);
-        assert_eq!(scaled_comfort(3, 1.5), 5);
-        assert_eq!(scaled_comfort(i32::MAX, 2.0), i32::MAX);
-        assert_eq!(scaled_comfort(5, 0.0), 0);
+    fn every_setting_has_its_label_and_description_in_each_language() {
+        let texts: toml::Table = toml::from_str(TEXTS).unwrap();
+        let schema = Settings::schema();
+        let keys: Vec<String> = std::iter::once(schema.text.clone())
+            .chain(
+                schema
+                    .fields
+                    .iter()
+                    .flat_map(|field| [field.text.clone(), format!("{}.doc", field.text)]),
+            )
+            .collect();
+        for language in ["en", "uk"] {
+            let table = texts[language].as_table().unwrap();
+            for key in &keys {
+                assert!(table.contains_key(key), "{language}: {key}");
+            }
+            assert_eq!(table.len(), keys.len(), "{language}: no stale keys");
+        }
     }
 
     #[test]

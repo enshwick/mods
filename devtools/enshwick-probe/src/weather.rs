@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use enshwick::events::{ChunkLoaded, ChunkUnloaded};
 use enshwick::schedule::Scheduler;
-use enshwick::weather::{Forecast, FrontKind, Weather};
+use enshwick::weather::{Forecast, Weather, WeatherPhenomenonEffect};
 use enshwick::world::World;
 use enshwick::{Load, Off};
 
@@ -59,7 +59,10 @@ impl WeatherChecks {
         }
         self.scheduler.after(SETTLE, move || {
             let fronts = self.weather.fronts();
-            if fronts.iter().any(|f| f.kind == FrontKind::Rain) {
+            if fronts
+                .iter()
+                .any(|f| f.kind == WeatherPhenomenonEffect::Rain)
+            {
                 enshwick::info!("PASS rain started: {fronts:?}");
             } else {
                 enshwick::warn!("FAIL rain started, fronts: {fronts:?}");
@@ -70,7 +73,10 @@ impl WeatherChecks {
             }
             self.scheduler.after(SETTLE, move || {
                 let fronts = self.weather.fronts();
-                if fronts.iter().all(|f| f.kind == FrontKind::Clouds) {
+                if fronts
+                    .iter()
+                    .all(|f| f.kind == WeatherPhenomenonEffect::None)
+                {
                     enshwick::info!("PASS clear skies: {fronts:?}");
                 } else {
                     enshwick::warn!("FAIL clear skies, fronts: {fronts:?}");

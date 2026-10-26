@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use enshwick::ecs::Entity;
 use enshwick::events::{KnowledgeChanged, PlayerDied, QuestCompleted};
-use enshwick::knowledge::{Grant, Knowledge, KnowledgeKind, Revoke};
+use enshwick::knowledge::{Grant, Knowledge, KnowledgeType, Revoke};
 use enshwick::schedule::Scheduler;
 use enshwick::{Load, Off};
 
@@ -163,14 +163,14 @@ pub(crate) fn command(
     let Some(known) = knowledge.get(me, id) else {
         return format!("knowledge {id} does not read: unknown id, or no world");
     };
-    let grant = match known.kind {
-        KnowledgeKind::Bool => Grant::Set,
-        KnowledgeKind::Counter => Grant::Add(bit),
+    let grant = match known.r#type {
+        KnowledgeType::Bool => Grant::Set,
+        KnowledgeType::Counter => Grant::Add(bit),
         _ => Grant::Flag(bit),
     };
-    let revoke = match known.kind {
-        KnowledgeKind::Bool => Revoke::Clear,
-        KnowledgeKind::Counter => Revoke::Sub(bit),
+    let revoke = match known.r#type {
+        KnowledgeType::Bool => Revoke::Clear,
+        KnowledgeType::Counter => Revoke::Sub(bit),
         _ => Revoke::Unflag(bit),
     };
     let done = match word {
@@ -178,7 +178,10 @@ pub(crate) fn command(
         "unlearn" => knowledge.revoke(me, id, revoke),
         _ => return format!("knowledge {id}: {known:?}"),
     };
-    let line = format!("{word} {id} ({:?}): {done:?}; before {known:?}", known.kind);
+    let line = format!(
+        "{word} {id} ({:?}): {done:?}; before {known:?}",
+        known.r#type
+    );
     enshwick::info!("{line}");
     line
 }

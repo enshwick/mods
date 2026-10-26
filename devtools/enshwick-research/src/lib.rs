@@ -228,7 +228,7 @@ impl Mod for Research {
             }
         }
         if settings.respawn {
-            match load.world().and_then(|world| respawn::link(load, world)) {
+            match load.world().and_then(|world| respawn::link(load, &world)) {
                 Ok(()) => enshwick::info!("R20 spawn targets read every 5 s"),
                 Err(off) => enshwick::warn!("R20 off: {off}"),
             }
@@ -280,7 +280,7 @@ fn entities_link(load: &mut Load<'_>, client: bool) {
             return;
         }
     };
-    match entities::link_server(load, world) {
+    match entities::link_server(load, &world) {
         Ok(()) => enshwick::info!("R11 server sweeps every 5 s while players are in"),
         Err(off) => enshwick::warn!("R11 server side off: {off}"),
     }

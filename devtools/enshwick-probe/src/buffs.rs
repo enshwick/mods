@@ -3,9 +3,9 @@
 
 use std::time::Duration;
 
-use enshwick::buffs::{Apply, BuffKind, Buffs};
+use enshwick::buffs::{Apply, BuffSlotType, Buffs};
 use enshwick::schedule::Scheduler;
-use enshwick::world::{ComponentType, World};
+use enshwick::world::World;
 use enshwick::{Load, Off};
 
 /// How long the probe's buff lasts.
@@ -18,7 +18,6 @@ const SETTLE: Duration = Duration::from_secs(1);
 pub(crate) struct BuffChecks {
     buffs: Buffs,
     world: World,
-    container: ComponentType,
     scheduler: Scheduler,
 }
 
@@ -27,7 +26,6 @@ impl BuffChecks {
         let world = load.world()?;
         Ok(Self {
             buffs: load.buffs(),
-            container: world.component_type(load, "keen::ecs::BuffContainer")?,
             world,
             scheduler,
         })
@@ -39,20 +37,18 @@ impl BuffChecks {
             enshwick::warn!("FAIL buff types: none");
             return;
         }
-        let saved = types.iter().filter(|ty| ty.saved).count();
+        let saved = types.iter().filter(|ty| ty.is_saved).count();
         enshwick::info!("PASS buff types: {} ({saved} saved)", types.len());
-        let Some(holder) = self
-            .world
-            .entities(self.container)
-            .first()
-            .map(|p| p.entity)
+        let Some(holder) = crate::living(&self.world)
+            .into_iter()
+            .find(|&entity| self.buffs.of(entity).is_ok())
         else {
             enshwick::info!("SKIP buffs: no entity in the world holds buffs");
             return;
         };
         let Some(ty) = types
             .iter()
-            .find(|ty| ty.kind == BuffKind::Buff && !ty.hidden)
+            .find(|ty| ty.slot == BuffSlotType::Buff && !ty.hide_in_ui)
         else {
             enshwick::warn!("FAIL buffs: no shown buff type");
             return;
@@ -63,25 +59,28 @@ impl BuffChecks {
         }
         if let Err(why) = self
             .buffs
-            .apply(holder, ty.id, Apply::new().lasting(LASTING))
+            .apply(holder, ty.buff_type_id, Apply::new().lasting(LASTING))
         {
-            enshwick::warn!("FAIL buff {:?} on {holder:?}: {why}", ty.id);
+            enshwick::warn!("FAIL buff {:?} on {holder:?}: {why}", ty.buff_type_id);
             return;
         }
         match self.buffs.of(holder) {
-            Ok(on) if on.iter().any(|b| b.id == ty.id) => {
-                enshwick::info!("PASS buff {:?} given to {holder:?}: {on:?}", ty.id);
+            Ok(on) if on.iter().any(|b| b.type_id == ty.buff_type_id) => {
+                enshwick::info!(
+                    "PASS buff {:?} given to {holder:?}: {on:?}",
+                    ty.buff_type_id
+                );
             }
-            other => enshwick::warn!("FAIL buff {:?} given reads {other:?}", ty.id),
+            other => enshwick::warn!("FAIL buff {:?} given reads {other:?}", ty.buff_type_id),
         }
-        match self.buffs.remove(holder, ty.id) {
+        match self.buffs.remove(holder, ty.buff_type_id) {
             Ok(true) => {}
             other => {
-                enshwick::warn!("FAIL buff {:?} removal: {other:?}", ty.id);
+                enshwick::warn!("FAIL buff {:?} removal: {other:?}", ty.buff_type_id);
                 return;
             }
         }
-        let id = ty.id;
+        let id = ty.buff_type_id;
         self.scheduler.after(SETTLE, move || {
             if self.buffs.has(holder, id) {
                 enshwick::warn!("FAIL buff {id:?} still on {holder:?} after removal");

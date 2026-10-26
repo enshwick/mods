@@ -3,12 +3,12 @@
 //! and its old stats put back; and the `stat`, `stat-off`, `stats` and
 //! `affix` actions an administrator tries them with in game.
 
-use enshwick::affixes::{AffixDef, Affixes, Categories, Range, Rarity, RollRules};
-use enshwick::inventory::{Category, Inventories};
+use enshwick::affixes::{AffixDef, Affixes, ItemCategoryMask, ItemRarity, Range, RollRules};
+use enshwick::inventory::{Inventories, InventoryCategory};
 use enshwick::item_data::ItemInstance;
 use enshwick::stats::{Lasting, Modifier, Op, Stat, StatDef, Stats, builtin};
 use enshwick::world::Player;
-use enshwick::world::{ComponentType, World};
+use enshwick::world::{ContainerKinds, World};
 use enshwick::{Load, Off};
 
 /// The probe's key for the modifiers its commands set.
@@ -28,7 +28,6 @@ pub(crate) struct AffixChecks {
     stats: Stats,
     inventories: Inventories,
     world: World,
-    setup: ComponentType,
     /// Every stat the actions may set, by id.
     kinds: Vec<(String, Stat)>,
 }
@@ -52,7 +51,7 @@ impl AffixChecks {
             STURDY,
             &AffixDef::new(
                 "probe.affix.sturdy",
-                Categories::EQUIPMENT | Categories::WEAPONS,
+                ItemCategoryMask::EQUIPMENT | ItemCategoryMask::WEAPONS,
             )
             .with(Range::new(health, Op::Add, 10.0, 30.0).step(1.0)),
         )?;
@@ -60,17 +59,16 @@ impl AffixChecks {
             FORTUNATE,
             &AffixDef::new(
                 "probe.affix.fortunate",
-                Categories::EQUIPMENT | Categories::WEAPONS,
+                ItemCategoryMask::EQUIPMENT | ItemCategoryMask::WEAPONS,
             )
             .with(Range::new(lucky, Op::Add, 1.0, 5.0).step(1.0))
-            .rarity(Rarity::Rare)
+            .rarity(ItemRarity::Rare)
             .weight(30),
         )?;
         Ok(Self {
             affixes: load.affixes(),
             stats: load.stats()?,
             inventories: load.inventories()?,
-            setup: world.component_type(load, "keen::ecs::InventorySetup")?,
             world,
             kinds,
         })
@@ -99,13 +97,14 @@ impl AffixChecks {
         let reader = self.inventories.read();
         let found = self
             .world
-            .entities(self.setup)
+            .containers(ContainerKinds::ALL)
             .iter()
             .flat_map(|placed| reader.slots(placed.entity))
             .filter_map(|slot| ItemInstance::of(&slot))
             .find(|item| {
                 self.inventories.item_info(item.item).is_some_and(|info| {
-                    Categories(Categories::EQUIPMENT.0 | Categories::WEAPONS.0).holds(info.category)
+                    ItemCategoryMask(ItemCategoryMask::EQUIPMENT.0 | ItemCategoryMask::WEAPONS.0)
+                        .holds(info.category)
                 })
             });
         let Some(item) = found else {
@@ -207,7 +206,7 @@ impl AffixChecks {
         let worn: Vec<ItemInstance> = reader
             .slots(player.entity)
             .iter()
-            .filter(|slot| slot.category == Category::EQUIPMENT)
+            .filter(|slot| slot.category == InventoryCategory::EQUIPMENT)
             .filter_map(ItemInstance::of)
             .collect();
         let rolled: Vec<String> = worn

@@ -41,8 +41,8 @@ Ten seconds after the world has loaded, and again on the `check` action:
   boss health. Whatever the probe still keeps when the server stops in order
   is forgotten then, unless kept across the restart on purpose; a killed
   server keeps it until the next run;
-- buffs: the types of the running game; on the first entity that holds
-  buffs, its buffs, a shown buff given for 30 seconds that reads back, and
+- buffs: the types of the running game; on the first character, survivor
+  or animal that holds buffs, its buffs, a shown buff given for 30 seconds that reads back, and
   its removal, gone a second later (skipped without such an entity);
 - knowledge: the quests of the running game, a world counter that reads,
   a grant of the wrong kind and one of an unknown id refused, and the
@@ -51,8 +51,8 @@ Ten seconds after the world has loaded, and again on the `check` action:
 - weather: a reading at the first placed entity and the fronts; rain for two
   minutes that shows in the fronts, then clear skies, then the game's own
   choice again; chunk loads and unloads are logged as they come;
-- stats: a built-in kind's definition; on the first living entity with
-  health, the probe's own kind and 100 extra maximum health set as
+- stats: a built-in kind's definition; on the first character, survivor or
+  animal with health, the probe's own kind and 100 extra maximum health set as
   modifiers, both read back a second later (the maximum through the
   entity's vitals), then removed, the maximum back where it was; stat
   changes are logged as they come;
@@ -65,7 +65,7 @@ Ten seconds after the world has loaded, and again on the `check` action:
 - a save on demand, followed by `WorldSaved`.
 
 While enabled, from start it counts the damage its damage filter sees by cause,
-and every game event by type, and logs the counts every minute. It logs each
+and every game event by type, named as the game's reflection names it, and logs the counts every minute. It logs each
 typed game event it receives, each fall and shroud damage, and the first 200
 hits a player takes or deals, with the amount before and after the filter; a
 typed event whose fields this game build lacks shows as `FAIL typed <type>`.

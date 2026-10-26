@@ -239,7 +239,8 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: &World) -> Result<(), Off>
 /// # Errors
 ///
 /// [`Off`] when the scheduler is not offered.
-pub(crate) fn link_server(load: &mut Load<'_>, world: World) -> Result<(), Off> {
+pub(crate) fn link_server(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
+    let world = *world;
     let references: Vec<(&'static str, ComponentType, usize)> = REFERENCES
         .iter()
         .filter_map(|&(ty, name, offset)| {

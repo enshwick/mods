@@ -10,7 +10,7 @@ use enshwick::entity_data::{EntityData, Replication};
 use enshwick::game_events::{EventType, RawGameEvent};
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
-use enshwick::world::{ComponentType, World, WorldError};
+use enshwick::world::{ComponentType, ContainerKinds, World, WorldError};
 use enshwick::{Load, Off};
 
 /// Entities whose stats a check compares.
@@ -47,11 +47,9 @@ const ID_SAMPLE: usize = 500;
 pub(crate) struct Checks {
     world: World,
     network_health: ComponentType,
-    health: ComponentType,
     /// `Teleport`, `TeleportCount` and `LastTransform`, which the game's
     /// teleport reads and writes.
     teleport_parts: [ComponentType; 3],
-    experience: ComponentType,
     store: WorldStore<Visits>,
     save_asked: AtomicBool,
     scheduler: Scheduler,
@@ -61,6 +59,8 @@ pub(crate) struct Checks {
     died: EventType,
     /// Set from the ping the probe raised until the game hands it back.
     ping_sent: AtomicBool,
+    /// Where a ping event holds its position.
+    ping_position: usize,
     /// The check each sampled entity was marked at.
     marks: EntityData<u32>,
 }
@@ -78,13 +78,11 @@ impl Checks {
         let world = load.world()?;
         Ok(Self {
             network_health: world.component_type(load, "keen::ecs::NetworkHealth")?,
-            health: world.component_type(load, "keen::ecs::Health")?,
             teleport_parts: [
                 world.component_type(load, "keen::ecs::Teleport")?,
                 world.component_type(load, "keen::ecs::TeleportCount")?,
                 world.component_type(load, "keen::ecs::LastTransform")?,
             ],
-            experience: world.component_type(load, "keen::ecs::Experience")?,
             store: load.world_store("visits")?,
             world,
             save_asked: AtomicBool::new(false),
@@ -93,8 +91,10 @@ impl Checks {
                 .writable_type(load, "keen::ecs::NetworkHealth")
                 .is_err(),
             effects: load.effects(),
-            died: load.event_type("keen::ecs::EntityDiedEvent")?,
+            died: load.event_type("entity_died_event")?,
             ping_sent: AtomicBool::new(false),
+            ping_position: usize::try_from(load.constant("ui_ping_event.position")?)
+                .map_err(|_| Off::new("ui_ping_event.position: out of range"))?,
             marks: load.entity_data("mark", Replication::Server)?,
         })
     }
@@ -184,13 +184,13 @@ impl Checks {
         for placed in actors.iter().take(SAMPLE) {
             self.compare(placed.entity);
         }
-        match self.world.entities(self.experience).first() {
-            Some(placed) => match self.world.progress(placed.entity) {
+        match self.world.players().first() {
+            Some(player) => match self.world.progress(player.entity) {
                 Some(progress) => pass(&format!(
                     "progress of entity {}: {progress:?}",
-                    placed.entity.0
+                    player.entity.0
                 )),
-                None => fail(&format!("progress of entity {}: none", placed.entity.0)),
+                None => fail(&format!("progress of entity {}: none", player.entity.0)),
             },
             None => enshwick::info!("SKIP progress: no character in the world"),
         }
@@ -216,7 +216,7 @@ impl Checks {
             });
         match actor {
             Some(entity) => {
-                Self::write_health(self.world, self.scheduler, self.network_health, entity);
+                Self::write_health(&self.world, self.scheduler, self.network_health, entity);
             }
             None => enshwick::info!(
                 "SKIP writes: no living actor with replicated health; the spawn check tries its own"
@@ -227,11 +227,12 @@ impl Checks {
     /// Writes `entity`'s health one below what it has, checks the read back
     /// and the replicated copy a moment later, then puts it back.
     fn write_health(
-        world: World,
+        world: &World,
         scheduler: Scheduler,
         network_health: ComponentType,
         entity: Entity,
     ) {
+        let world = *world;
         let Some(before) = world.vitals(entity).map(|v| v.health) else {
             return;
         };
@@ -304,12 +305,12 @@ impl Checks {
     }
 
     /// Spawns a copy of an entity in the world three metres above it,
-    /// preferring one with health, then checks it arrived, writes its
+    /// preferring a survivor or an animal, then checks it arrived, writes its
     /// health, teleports it and destroys it.
     fn spawns(&self) {
         let source = self
             .world
-            .entities(self.health)
+            .containers(ContainerKinds::NPCS | ContainerKinds::ANIMALS)
             .into_iter()
             .chain(self.world.entities(self.world.transform_type()))
             .find_map(|placed| Some((self.world.template(placed.entity)?, placed.position)));
@@ -359,7 +360,7 @@ impl Checks {
             let vitals = world.vitals(entity);
             enshwick::info!("spawned entity {} has vitals {vitals:?}", entity.0);
             if vitals.is_some_and(|v| v.health.current > 1) {
-                Self::write_health(world, scheduler, network_health, entity);
+                Self::write_health(&world, scheduler, network_health, entity);
             }
             let to = [at[0] + 5.0, at[1], at[2]];
             let movable = world.component(entity, teleport_parts[1]).is_some();
@@ -370,7 +371,7 @@ impl Checks {
                         "teleport of entity {} refused: the game's teleport does not move it",
                         entity.0
                     ));
-                    destroy_marked(world, scheduler, marks, entity);
+                    destroy_marked(&world, scheduler, marks, entity);
                     return;
                 }
                 other => {
@@ -397,7 +398,7 @@ impl Checks {
                         entity.0
                     )),
                 }
-                destroy_marked(world, scheduler, marks, entity);
+                destroy_marked(&world, scheduler, marks, entity);
             });
         });
         format!("entity {}", entity.0)
@@ -405,7 +406,7 @@ impl Checks {
 
     /// Notes a ping the game raised, and whether it is the probe's.
     pub(crate) fn pinged(&self, event: &RawGameEvent<'_>) {
-        let x = event.read::<i64>(16);
+        let x = event.read::<i64>(self.ping_position);
         if x == Some(enshwick::ecs::fixed(PING_AT)[0])
             && self.ping_sent.swap(false, Ordering::AcqRel)
         {
@@ -640,7 +641,7 @@ fn ids_across_loads(before: &[(u32, u64)], now: &[(u32, u64)]) {
 /// Marks a spawned entity with entity data, destroys it and checks the
 /// mark is gone a moment later, as the loader drops a destroyed entity's
 /// data.
-fn destroy_marked(world: World, scheduler: Scheduler, marks: EntityData<u32>, entity: Entity) {
+fn destroy_marked(world: &World, scheduler: Scheduler, marks: EntityData<u32>, entity: Entity) {
     let marked = marks.set(entity, &7).is_ok();
     let destroyed = world.destroy(entity);
     enshwick::info!("spawned entity {} destroyed: {destroyed:?}", entity.0);

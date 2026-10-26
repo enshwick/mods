@@ -25,7 +25,7 @@ impl TerrainChecks {
 
     pub(crate) fn run(self) {
         let materials = self.terrain.materials();
-        let Some(material) = materials.first().map(|m| m.id) else {
+        let Some(material) = materials.first().map(|m| m.terrain_material) else {
             enshwick::warn!("FAIL terrain materials: none");
             return;
         };

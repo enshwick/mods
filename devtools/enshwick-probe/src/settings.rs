@@ -59,13 +59,13 @@ impl SettingsChecks {
             return;
         };
         enshwick::info!("PASS game settings read, preset {preset:?}: {before:?}");
-        let wanted = before.perk_cost + 0.5;
-        match self.settings.change(|s| s.perk_cost = wanted) {
+        let wanted = before.perk_cost_factor + 0.5;
+        match self.settings.change(|s| s.perk_cost_factor = wanted) {
             Ok(_) => match self.settings.read() {
-                Some((now, preset)) if (now.perk_cost - wanted).abs() < 1e-6 => {
+                Some((now, preset)) if (now.perk_cost_factor - wanted).abs() < 1e-6 => {
                     enshwick::info!(
                         "PASS game settings change reads back perk cost {}, preset {preset:?}",
-                        now.perk_cost
+                        now.perk_cost_factor
                     );
                 }
                 other => enshwick::warn!("FAIL game settings change reads {other:?}"),
@@ -74,7 +74,7 @@ impl SettingsChecks {
         }
         match self
             .settings
-            .change(|s| s.night_length = core::time::Duration::ZERO)
+            .change(|s| s.night_time_duration = core::time::Duration::ZERO)
         {
             Err(why) => enshwick::info!("PASS a night of zero is refused: {why}"),
             Ok(_) => enshwick::warn!("FAIL a night of zero was taken"),
@@ -83,7 +83,7 @@ impl SettingsChecks {
             Ok(_) => enshwick::info!("PASS game settings put back"),
             Err(why) => enshwick::warn!("FAIL game settings put back: {why}"),
         }
-        self.kept(before.boss_health);
+        self.kept(before.boss_health_factor);
     }
 
     /// Keeps the bosses' health at [`KEPT`], reads it back and forgets it,
@@ -98,10 +98,10 @@ impl SettingsChecks {
             enshwick::info!("PASS a kept field came back with the world: boss health {now}");
             match self.settings.forget_kept() {
                 Ok(()) => match self.settings.read() {
-                    Some((after, _)) if (after.boss_health - KEPT).abs() > 1e-6 => {
+                    Some((after, _)) if (after.boss_health_factor - KEPT).abs() > 1e-6 => {
                         enshwick::info!(
                             "PASS forgetting puts back boss health {}",
-                            after.boss_health
+                            after.boss_health_factor
                         );
                     }
                     other => enshwick::warn!("FAIL forgetting reads {other:?}"),
@@ -110,7 +110,7 @@ impl SettingsChecks {
             }
             return;
         }
-        match self.settings.keep(|s| s.boss_health = KEPT) {
+        match self.settings.keep(|s| s.boss_health_factor = KEPT) {
             Ok(_) => {
                 enshwick::info!(
                     "PASS boss health {KEPT} kept; the next start should bring it back"
@@ -123,13 +123,13 @@ impl SettingsChecks {
     /// Keeps the bosses' health at [`KEPT`], reads it back, forgets it and
     /// sees `before` return.
     fn kept_in_one_run(self, before: f32) {
-        if let Err(why) = self.settings.keep(|s| s.boss_health = KEPT) {
+        if let Err(why) = self.settings.keep(|s| s.boss_health_factor = KEPT) {
             enshwick::warn!("FAIL keeping a game setting: {why}");
             return;
         }
         keeping().store(true, Ordering::Release);
         match self.settings.read() {
-            Some((now, _)) if (now.boss_health - KEPT).abs() < 1e-6 => {
+            Some((now, _)) if (now.boss_health_factor - KEPT).abs() < 1e-6 => {
                 enshwick::info!("PASS boss health {KEPT} kept and read back");
             }
             other => enshwick::warn!("FAIL a kept field reads {other:?}"),
@@ -138,10 +138,10 @@ impl SettingsChecks {
             Ok(()) => {
                 keeping().store(false, Ordering::Release);
                 match self.settings.read() {
-                    Some((after, _)) if (after.boss_health - before).abs() < 1e-6 => {
+                    Some((after, _)) if (after.boss_health_factor - before).abs() < 1e-6 => {
                         enshwick::info!(
                             "PASS forgetting puts back boss health {}",
-                            after.boss_health
+                            after.boss_health_factor
                         );
                     }
                     other => enshwick::warn!("FAIL forgetting reads {other:?}"),

@@ -33,8 +33,10 @@ use enshwick::actions::{Action, Actions, Arg, Outcome, Value};
 use enshwick::ecs::Entity;
 use enshwick::events::{WorldLoaded, WorldSaved};
 use enshwick::game_events::{
-    AltarUsed, Built, CraftRequested, Crafted, Died, EquipmentChanged, ExperienceGained, Hit,
-    Interacted, Kind, LevelGained, LootOpened, PickedUp, Revived, TornDown,
+    AcceptOfferedInteractionEvent, BuildingPickUpEvent, BuildingPlaceEvent, BuildingTearDownEvent,
+    CraftRecipeEvent, CraftRecipeSuccessEvent, EntityDiedEvent, FlameAltarEvent,
+    HandleEquipmentSlotChangedEvent, HitEvent, Kind, LevelUpEvent, LootInteractionEvent,
+    RevivedPlayerEvent, XpGainedEvent,
 };
 use enshwick::i18n::Texts;
 use enshwick::schedule::Scheduler;
@@ -118,11 +120,24 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
 #[derive(Debug)]
 pub struct Probe;
 
+/// The characters, survivors and animals in the world: what holds health
+/// and buffs.
+fn living(world: &enshwick::world::World) -> Vec<Entity> {
+    use enshwick::world::ContainerKinds;
+
+    world
+        .containers(ContainerKinds::CHARACTERS | ContainerKinds::NPCS | ContainerKinds::ANIMALS)
+        .into_iter()
+        .map(|placed| placed.entity)
+        .collect()
+}
+
 /// Logs every event of kind `E`, or that its fields are missing.
 fn log_typed<E: Kind + core::fmt::Debug>(load: &mut Load<'_>) {
+    let name = core::any::type_name::<E>();
     match load.on_game::<E>(|event| enshwick::info!("event: {event:?}")) {
-        Ok(()) => enshwick::info!("PASS typed {} resolves", E::TYPE_NAME),
-        Err(off) => enshwick::warn!("FAIL typed {}: {off}", E::TYPE_NAME),
+        Ok(()) => enshwick::info!("PASS typed {name} resolves"),
+        Err(off) => enshwick::warn!("FAIL typed {name}: {off}"),
     }
 }
 
@@ -313,20 +328,20 @@ impl Mod for Probe {
         let census = Arc::new(Census::new(load));
         let counted = Arc::clone(&census);
         load.on_every_raw_game_event(move |event| counted.count(event))?;
-        log_typed::<Hit>(load);
-        log_typed::<Died>(load);
-        log_typed::<LevelGained>(load);
-        log_typed::<ExperienceGained>(load);
-        log_typed::<CraftRequested>(load);
-        log_typed::<Crafted>(load);
-        log_typed::<Interacted>(load);
-        log_typed::<Built>(load);
-        log_typed::<TornDown>(load);
-        log_typed::<PickedUp>(load);
-        log_typed::<AltarUsed>(load);
-        log_typed::<LootOpened>(load);
-        log_typed::<EquipmentChanged>(load);
-        log_typed::<Revived>(load);
+        log_typed::<HitEvent>(load);
+        log_typed::<EntityDiedEvent>(load);
+        log_typed::<LevelUpEvent>(load);
+        log_typed::<XpGainedEvent>(load);
+        log_typed::<CraftRecipeEvent>(load);
+        log_typed::<CraftRecipeSuccessEvent>(load);
+        log_typed::<AcceptOfferedInteractionEvent>(load);
+        log_typed::<BuildingPlaceEvent>(load);
+        log_typed::<BuildingTearDownEvent>(load);
+        log_typed::<BuildingPickUpEvent>(load);
+        log_typed::<FlameAltarEvent>(load);
+        log_typed::<LootInteractionEvent>(load);
+        log_typed::<HandleEquipmentSlotChangedEvent>(load);
+        log_typed::<RevivedPlayerEvent>(load);
 
         vetoes(load, &settings);
         // The probe is no join mod, so the loader refuses it a channel.
@@ -339,7 +354,7 @@ impl Mod for Probe {
             }
         }
         let checks = Arc::new(Checks::new(load)?);
-        let ping = load.event_type("keen::ecs::UiPingEvent")?;
+        let ping = load.event_type("ui_ping_event")?;
         let pinged = Arc::clone(&checks);
         load.on_raw_game_event(ping, move |event| pinged.pinged(event))?;
         let scheduler = load.scheduler()?;

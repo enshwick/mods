@@ -7,7 +7,7 @@ use std::time::Duration;
 use enshwick::ecs::Entity;
 use enshwick::schedule::Scheduler;
 use enshwick::stats::{Lasting, Modifier, Op, Stat, StatDef, Stats, builtin};
-use enshwick::world::{ComponentType, World};
+use enshwick::world::World;
 use enshwick::{Load, Off};
 
 /// How long the probe waits for the values to follow.
@@ -24,7 +24,6 @@ const KEY: &str = "probe";
 pub(crate) struct StatChecks {
     stats: Stats,
     world: World,
-    health: ComponentType,
     scheduler: Scheduler,
     luck: Stat,
     health_max: Stat,
@@ -46,7 +45,6 @@ impl StatChecks {
         })?;
         Ok(Self {
             stats: load.stats()?,
-            health: world.component_type(load, "keen::ecs::Health")?,
             world,
             scheduler,
             luck,
@@ -62,11 +60,8 @@ impl StatChecks {
             }
             other => enshwick::warn!("FAIL stats: built-in kind reads {other:?}"),
         }
-        let Some(target) = self
-            .world
-            .entities(self.health)
-            .iter()
-            .map(|p| p.entity)
+        let Some(target) = crate::living(&self.world)
+            .into_iter()
             .find(|&e| self.world.vitals(e).is_some_and(|v| v.health.current > 1))
         else {
             enshwick::info!("SKIP stats: no living entity with health");

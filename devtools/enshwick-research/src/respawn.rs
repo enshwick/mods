@@ -33,7 +33,8 @@ type Seen = ([i64; 3], u32);
 static LAST: Mutex<Option<FxHashMap<u64, Seen>>> = Mutex::new(None);
 
 /// Starts the reads on the server's game thread.
-pub(crate) fn link(load: &mut Load<'_>, world: World) -> Result<(), Off> {
+pub(crate) fn link(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
+    let world = *world;
     let offset = |ty: &str, field: &str| {
         load.field_offset(ty, field).and_then(|o| {
             usize::try_from(o).map_err(|_| Off::new(format!("{ty}.{field}: out of range")))

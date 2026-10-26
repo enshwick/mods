@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
 use enshwick::Load;
-use enshwick::game_events::{EVENT_TYPE_NAMES, RawGameEvent};
+use enshwick::game_events::RawGameEvent;
 
 /// Counts of game events by type hash, with the names the census knows.
 #[derive(Debug)]
@@ -14,12 +14,16 @@ pub(crate) struct Census {
 }
 
 impl Census {
-    /// A census naming the types this build reflects.
+    /// A census naming the types this build reflects, or only hashes when
+    /// the loader cannot list them.
     pub(crate) fn new(load: &Load<'_>) -> Self {
-        let names = EVENT_TYPE_NAMES
-            .iter()
-            .filter_map(|&name| Some((load.event_type(name).ok()?.hash(), name)))
-            .collect();
+        let names = match load.event_types() {
+            Ok(types) => types.iter().map(|ty| (ty.hash(), ty.name())).collect(),
+            Err(off) => {
+                enshwick::warn!("FAIL event types: {off}");
+                BTreeMap::new()
+            }
+        };
         Self {
             names,
             seen: Mutex::new(BTreeMap::new()),

@@ -37,14 +37,14 @@ impl DamageSeen {
             if soften {
                 damage.scale(0.5);
             }
-            counted.note(world, damage, before);
+            counted.note(&world, damage, before);
         })?;
         Ok(seen)
     }
 
     /// Logs one damage: every one but a hit, and a hit when a player takes
     /// or deals it, up to [`MOST_HIT_LINES`].
-    fn note(&self, world: World, damage: &Damage<'_>, before: f32) {
+    fn note(&self, world: &World, damage: &Damage<'_>, before: f32) {
         let who = |entity: Entity| match world.player(entity) {
             Some(player) => format!("entity {} (player {})", entity.0, player.name),
             None => format!("entity {}", entity.0),

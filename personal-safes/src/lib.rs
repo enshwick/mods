@@ -34,7 +34,7 @@ use enshwick::events::{
 use enshwick::i18n::Language;
 use enshwick::state::{ModLocal, Store, WorldStore};
 use enshwick::world::Rename;
-use enshwick::world::{ComponentType, World};
+use enshwick::world::{ContainerKinds, World};
 use enshwick::{Load, Mod, Off};
 
 use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
@@ -350,10 +350,10 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
 
     let _first = access::POINT.set(load.define_point()?);
     load.on_interaction(access::filter)?;
-    track_players(load, world)?;
+    track_players(load, &world)?;
     load.on::<BuildingPlaced>(move |placed| {
         if content::is_safe(placed.item) {
-            placed_safe(world, phrases, placed);
+            placed_safe(&world, phrases, placed);
             save(store);
         }
     })?;
@@ -380,14 +380,14 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         phrases.set_language(settings.language().unwrap_or(Language::FALLBACK));
         set_cost(settings.cost_multiplier);
     })?;
-    label_seen(load, world, phrases, store)?;
-    load.on_rename(move |rename| may_rename(world, rename))?;
-    actions::declare(load, world, phrases.texts.clone(), move || save(store))?;
+    label_seen(load, &world, phrases, store)?;
+    load.on_rename(move |rename| may_rename(&world, rename))?;
+    actions::declare(load, &world, phrases.texts.clone(), move || save(store))?;
     Ok(())
 }
 
 /// Records a Safe just placed, with its owner, and names the owner on it.
-fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
+fn placed_safe(world: &World, phrases: &Phrases, placed: &BuildingData) {
     let entity = Entity(placed.player);
     let player = world.player(entity);
     let key = player.as_ref().map(|p| p.key).or_else(|| {
@@ -419,7 +419,7 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
 /// Whether the player behind `rename` may rename its entity: anyone for
 /// what is not a Safe; the owner, or an administrator when allowed, for a
 /// Safe.
-fn may_rename(world: World, rename: &Rename) -> bool {
+fn may_rename(world: &World, rename: &Rename) -> bool {
     let known = snapshots().safes.load().get(&rename.entity.0).copied();
     let found = known.or_else(|| {
         if !content::is_safe(world.used_item(rename.entity)?) {
@@ -455,9 +455,9 @@ fn may_rename(world: World, rename: &Rename) -> bool {
 /// Learns every Safe the world holds that this session has not seen yet:
 /// base stock asks without the chest's item or position, so a Safe nobody
 /// looked at would otherwise lend its stock to anyone crafting nearby.
-fn learn_safes(world: World, containers: ComponentType) {
+fn learn_safes(world: &World) {
     let known = snapshots().safes.load();
-    for placed in world.entities(containers) {
+    for placed in world.containers(ContainerKinds::default()) {
         if known.contains_key(&placed.entity.0)
             || !world.used_item(placed.entity).is_some_and(content::is_safe)
         {
@@ -472,20 +472,14 @@ fn learn_safes(world: World, containers: ComponentType) {
 /// owner when they are online. Learns the world's Safes first.
 fn label_seen(
     load: &mut Load<'_>,
-    world: World,
+    world: &World,
     phrases: &'static Phrases,
     store: &'static WorldStore<Owners>,
 ) -> Result<(), Off> {
+    let world = *world;
     let mut done: FxHashSet<u32> = FxHashSet::default();
-    let containers = world.component_type(load, "keen::ecs::InventorySetup");
-    if let Err(off) = &containers {
-        enshwick::warn!("Safes nobody looked at this session lend their stock to crafting: {off}");
-    }
-    let containers = containers.ok();
     load.scheduler()?.every(Duration::from_secs(2), move || {
-        if let Some(containers) = containers {
-            learn_safes(world, containers);
-        }
+        learn_safes(&world);
         let safes = snapshots().safes.load();
         let mut learned = false;
         for (&entity, &(owner, at)) in safes.iter() {
@@ -539,7 +533,7 @@ fn seen(player: &enshwick::world::Player) -> Seen {
 }
 
 /// Retakes the players snapshot from the world, on the game thread.
-fn snapshot_players(world: World) {
+fn snapshot_players(world: &World) {
     let players: FxHashMap<u32, Seen> = world
         .players()
         .iter()
@@ -551,7 +545,8 @@ fn snapshot_players(world: World) {
 /// Keeps the connected players' keys and administrator flags current: on
 /// joining and leaving, every 10 s for permissions, and within a few steps
 /// of a check that met a character the snapshot lacks.
-fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
+fn track_players(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
+    let world = *world;
     load.on::<PlayerJoined>(move |joined| {
         let entity = Entity(joined.entity);
         let player = world.player(entity).map_or(
@@ -583,11 +578,11 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
         }
         snapshots().unregistered.store(false, Ordering::Relaxed);
         caught_up.store(tick.step, Ordering::Relaxed);
-        snapshot_players(world);
+        snapshot_players(&world);
     })?;
     // Permissions can change while a player is online.
     load.scheduler()?.every(Duration::from_secs(10), move || {
-        snapshot_players(world);
+        snapshot_players(&world);
         std::ops::ControlFlow::Continue(())
     });
     Ok(())
@@ -625,51 +620,54 @@ mod tests {
         use enshwick::events::SettingsReplaced;
 
         let mut host = enshwick::test::FakeHost::new()
-            .field_offset("keen::RecipeRegistryResource", "recipes", 8)
-            .type_size("keen::RecipeInfo", 0xa8)
-            .type_size("keen::RecipeInputResource", 48)
-            .type_size("keen::RecipeItemStackResource", 24)
-            .field_offset("keen::RecipeItemStackResource", "item", 0x10)
-            .field_offset("keen::RecipeItemStackResource", "count", 0x14);
-        for (field, at) in [
-            ("recipeGuid", 0),
-            ("recipeId", 0x10),
-            ("workshopGuid", 0x14),
-            ("workshopId", 0x24),
-            ("input", 0x28),
-            ("output", 0x30),
-            ("requiredProps", 0x40),
-            ("completionRequirementQuery", 0x5c),
-            ("debugName", 0x78),
+            .type_hash("current_transform", 1)
+            .type_hash("used_item", 2);
+        for (ty, hash) in [
+            (enshwick::content::types::ITEM_INFO, 10),
+            (enshwick::content::types::ITEM_REGISTRY_RESOURCE, 11),
+            (enshwick::content::types::RECIPE_REGISTRY_RESOURCE, 12),
         ] {
-            host = host.field_offset("keen::RecipeInfo", field, at);
+            host = host.type_hash(ty.id(), hash);
         }
-        for (field, at) in [
-            ("itemId", 0),
-            ("objectId", 4),
-            ("name", 0x48),
-            ("iconImage", 0x58),
-            ("description", 0x68),
-            ("flags", 0x78),
-            ("pidEntity", 0x80),
-            ("uiValues", 0x90),
+        for (id, size) in [
+            ("item_stat", 0x28),
+            ("recipe", 0xa8),
+            ("recipe_ingredient", 48),
+            ("recipe_stack", 24),
         ] {
-            host = host.field_offset("keen::ItemInfo", field, at);
+            host = host.type_size(id, size);
         }
-        for (field, at) in [
-            ("locaId", 0),
-            ("valueFormat", 4),
-            ("value", 8),
-            ("isSigned", 0x24),
+        for (id, at) in [
+            ("recipe_registry.recipes", 8),
+            ("recipe.guid", 0),
+            ("recipe.id", 0x10),
+            ("recipe.workshop_guid", 0x14),
+            ("recipe.workshop", 0x24),
+            ("recipe.input", 0x28),
+            ("recipe.output", 0x30),
+            ("recipe.required_props", 0x40),
+            ("recipe.completion", 0x5c),
+            ("recipe.debug_name", 0x78),
+            ("recipe_stack.item", 0x10),
+            ("recipe_stack.count", 0x14),
+            ("item_info.id", 0),
+            ("item_info.object", 4),
+            ("item_info.name", 0x48),
+            ("item_info.icon_image", 0x58),
+            ("item_info.description", 0x68),
+            ("item_info.flags", 0x78),
+            ("item_info.pid_entity", 0x80),
+            ("item_info.ui_values", 0x90),
+            ("item_stat.label", 0),
+            ("item_stat.format", 4),
+            ("item_stat.value", 8),
+            ("item_stat.signed", 0x24),
+            ("item_registry.refs", 0),
+            ("item_registry.names", 0x38),
         ] {
-            host = host.field_offset("keen::ImpactUiValue", field, at);
+            host = host.constant(id, at);
         }
         let loader = host
-            .type_size("keen::ImpactUiValue", 0x28)
-            .type_hash("keen::ecs::CurrentTransform", 1)
-            .type_hash("keen::ecs::UsedItem", 2)
-            .field_offset("keen::ItemRegistryResource", "itemRefs", 0)
-            .field_offset("keen::ItemRegistryResource", "dbgNames", 0x38)
             .settings(
                 "cost_multiplier = 2
 label_language = \"en\"

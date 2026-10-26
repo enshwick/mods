@@ -11,50 +11,70 @@ mod tests {
     /// A loader that knows the item and recipe layouts the Safe needs.
     fn host() -> FakeHost {
         let mut host = FakeHost::new()
-            .type_size("keen::ImpactUiValue", 0x28)
-            .type_size("keen::RecipeInfo", 0xa8)
-            .type_size("keen::RecipeInputResource", 0x18)
-            .type_size("keen::RecipeItemStackResource", 0x18)
-            .type_hash("keen::ecs::CurrentTransform", 1)
-            .type_hash("keen::ecs::UsedItem", 2);
-        for (field, at) in [
-            ("itemId", 0),
-            ("objectId", 4),
-            ("name", 0x48),
-            ("iconImage", 0x58),
-            ("description", 0x68),
-            ("flags", 0x78),
-            ("pidEntity", 0x80),
-            ("uiValues", 0x90),
+            .type_hash("current_transform", 1)
+            .type_hash("used_item", 2);
+        for (ty, hash) in [
+            (enshwick::content::types::ITEM_INFO, 10),
+            (enshwick::content::types::ITEM_REGISTRY_RESOURCE, 11),
+            (enshwick::content::types::RECIPE_REGISTRY_RESOURCE, 12),
         ] {
-            host = host.field_offset("keen::ItemInfo", field, at);
+            host = host.type_hash(ty.id(), hash);
         }
-        for (field, at) in [
-            ("locaId", 0),
-            ("valueFormat", 4),
-            ("value", 8),
-            ("isSigned", 0x24),
+        for (id, size) in [
+            ("item_stat", 0x28),
+            ("recipe", 0xa8),
+            ("recipe_ingredient", 0x18),
+            ("recipe_stack", 0x18),
         ] {
-            host = host.field_offset("keen::ImpactUiValue", field, at);
+            host = host.type_size(id, size);
         }
-        for (field, at) in [
-            ("recipeGuid", 0),
-            ("recipeId", 0x10),
-            ("workshopGuid", 0x14),
-            ("workshopId", 0x24),
-            ("input", 0x28),
-            ("output", 0x30),
-            ("completionRequirementQuery", 0x5c),
-            ("requiredProps", 0x38),
-            ("debugName", 0x40),
+        for (id, at) in [
+            ("item_info.id", 0),
+            ("item_info.object", 4),
+            ("item_info.name", 0x48),
+            ("item_info.icon_image", 0x58),
+            ("item_info.description", 0x68),
+            ("item_info.flags", 0x78),
+            ("item_info.pid_entity", 0x80),
+            ("item_info.ui_values", 0x90),
+            ("item_stat.label", 0),
+            ("item_stat.format", 4),
+            ("item_stat.value", 8),
+            ("item_stat.signed", 0x24),
+            ("recipe.guid", 0),
+            ("recipe.id", 0x10),
+            ("recipe.workshop_guid", 0x14),
+            ("recipe.workshop", 0x24),
+            ("recipe.input", 0x28),
+            ("recipe.output", 0x30),
+            ("recipe.completion", 0x5c),
+            ("recipe.required_props", 0x38),
+            ("recipe.debug_name", 0x40),
+            ("recipe_registry.recipes", 0),
+            ("recipe_stack.item", 0x10),
+            ("recipe_stack.count", 0x14),
+            ("item_registry.refs", 0),
+            ("item_registry.names", 0x38),
         ] {
-            host = host.field_offset("keen::RecipeInfo", field, at);
+            host = host.constant(id, at);
         }
-        host.field_offset("keen::RecipeRegistryResource", "recipes", 0)
-            .field_offset("keen::RecipeItemStackResource", "item", 0x10)
-            .field_offset("keen::RecipeItemStackResource", "count", 0x14)
-            .field_offset("keen::ItemRegistryResource", "itemRefs", 0)
-            .field_offset("keen::ItemRegistryResource", "dbgNames", 0x38)
+        host
+    }
+
+    /// The component every container has, with each kind's marker, so a
+    /// Safe with its item counts as placed.
+    fn containers(host: FakeHost) -> FakeHost {
+        [
+            ("inventory_setup", 3),
+            ("player_input", 4),
+            ("npc", 5),
+            ("animal", 6),
+            ("destroy_on_loot", 7),
+            ("loot_fill", 8),
+            ("resource_node", 9),
+        ]
+        .into_iter()
+        .fold(host, |host, (id, hash)| host.type_hash(id, hash))
     }
 
     #[test]
@@ -197,8 +217,7 @@ mod tests {
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let item = enshwick_personal_safes::content::SAFE.id().to_le_bytes();
-        let loader = host()
-            .type_hash("keen::ecs::InventorySetup", 3)
+        let loader = containers(host())
             .placed(3, 700, [20.0, 1.0, 20.0])
             .component(700, 2, &item)
             .settings(

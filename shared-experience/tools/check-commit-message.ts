@@ -45,8 +45,7 @@ const problems = (message: string): string[] => {
 
 const messages = async (args: string[]): Promise<Array<{ name: string; text: string }>> => {
   if (args[0] === '--range' && args[1]) {
-    // A repository's first push has no remote branch to start from: every
-    // commit no remote has yet is checked.
+    // A new repository has no remote main yet: every unpushed commit counts.
     const [from, to] = args[1].split('..');
     const known = from && Bun.spawnSync(['git', 'rev-parse', '--verify', '--quiet', from]).exitCode === 0;
     const range = known || !to ? [args[1]] : [to, '--not', '--remotes'];

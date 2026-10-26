@@ -13,7 +13,7 @@ mod recipes;
 /// The mod's id, as in its manifest; it names the settings file.
 const ID: &str = "game-rates";
 
-/// The labels and descriptions of the settings, in English and Ukrainian.
+/// The labels and descriptions of the settings, a table per language.
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Game rates: building recipes, then furniture comfort.
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn every_setting_has_its_label_and_description_in_each_language() {
+    fn every_setting_has_its_label_and_description_in_all_languages() {
         let texts: toml::Table = toml::from_str(TEXTS).unwrap();
         let schema = Settings::schema();
         let keys: Vec<String> = std::iter::once(schema.text.clone())
@@ -239,8 +239,8 @@ mod tests {
                     .flat_map(|field| [field.text.clone(), format!("{}.doc", field.text)]),
             )
             .collect();
-        for language in ["en", "uk"] {
-            let table = texts[language].as_table().unwrap();
+        for (language, table) in &texts {
+            let table = table.as_table().unwrap();
             for key in &keys {
                 assert!(table.contains_key(key), "{language}: {key}");
             }

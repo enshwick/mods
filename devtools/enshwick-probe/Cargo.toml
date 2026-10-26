@@ -1,0 +1,27 @@
+[package]
+name = "enshwick-probe"
+version = "0.1.0"
+description = "Development only, never shipped: exercises the platform API on a test server and logs what it sees"
+keywords = ["enshrouded", "mod", "server", "testing"]
+categories = ["game-development"]
+readme = "README.md"
+authors = ["themaiby"]
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/enshwick/devtools-mods"
+homepage = "https://github.com/enshwick/devtools-mods/tree/main/enshwick-probe"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+enshwick = "1.0.0-alpha.2"
+serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+
+[lints]
+workspace = true
+
+[package.metadata.enshwick]
+release = false

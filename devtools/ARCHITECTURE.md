@@ -1,11 +1,11 @@
 # Architecture
 
-One crate, a Windows DLL the Enshwick loader loads from the game's `mods/`
-folder. The mod holds only its own logic: what the game needs from it goes
-through the `enshwick` API, and what another mod could use belongs in the
-API, not here.
+A Cargo workspace of development-only mods, each a Windows DLL the Enshwick
+loader loads from the game's `mods/` folder. They hold only their own
+logic and build on the `enshwick` API; neither depends on the other.
 
 | Path | What |
 | --- | --- |
-| `src/` | the mod |
-| `tools/xtask/` | `cargo xtask check`, the checks before a merge |
+| `enshwick-probe/` | the API probe for test servers |
+| `enshwick-research/` | the client research mod; builds only for Windows |
+| `tools/xtask/` | `cargo xtask check`, the checks before a merge, and `cargo xtask dist` |

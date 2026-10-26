@@ -1,8 +1,13 @@
 # Developer mods
 
-Development-only Enshwick mods, never shipped. An Enshrouded mod for the
-[Enshwick](https://github.com/enshwick/enshwick) loader.
+Development-only mods for the [Enshwick](https://github.com/enshwick/enshwick)
+loader, never shipped to players:
 
-Its settings are `mod-configs/devtools.toml`, written on first start; its
-log is `logs/enshwick/mods/devtools.log`. Development builds are on the
-[`dev` prerelease](https://github.com/enshwick/devtools-mods/releases/tag/dev).
+- [`enshwick-probe`](enshwick-probe/README.md) exercises the platform API on
+  a test server and logs what it sees;
+- [`enshwick-research`](enshwick-research/README.md) logs what a running
+  client does where the platform still needs engine facts.
+
+Development builds are on the
+[`dev` prerelease](https://github.com/enshwick/devtools-mods/releases/tag/dev),
+one archive per mod.

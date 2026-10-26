@@ -1,15 +1,16 @@
 //! A background thread solves the clusters whenever the altars' vanilla
-//! zones change; the game thread never waits for it. What was solved
-//! belongs to one game: the loader drops the sizes when a hosted game stops,
-//! so the next game, the same world again included, is solved afresh. A
-//! world whose settings turn clusters off gets the vanilla zones back.
+//! zones change; the game thread never waits for it, and the zone filter
+//! only reads the last answers. What was solved belongs to one game: the
+//! answers are dropped when a hosted game stops, so the next game, the same
+//! world again included, is solved afresh. A world whose settings turn
+//! clusters off gets the vanilla zones back.
 
 use std::collections::BTreeMap;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
-use enshwick::altars::{ZoneControl, ZoneSize};
-use enshwick::ecs::Entity;
+use arc_swap::ArcSwap;
+use enshwick::altars::{AltarZone, ZoneSizes};
 use enshwick::state::ModLocal;
 
 use crate::geometry::{Altar, Box3, clusters};
@@ -74,7 +75,50 @@ impl State {
     }
 }
 
+/// What the mod grows one altar's zone by while it stays at one level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Size {
+    pub(crate) altar: u32,
+    pub(crate) level: u8,
+    /// Cells added on every horizontal side.
+    pub(crate) grow: i64,
+    /// The cluster's height in cells.
+    pub(crate) height: i64,
+}
+
 static STATE: ModLocal<Mutex<State>> = ModLocal::new();
+
+/// The last answers, sorted by altar, for the zone filter on the game thread.
+static ANSWERS: ModLocal<ArcSwap<Vec<Size>>> = ModLocal::new();
+
+fn answers() -> &'static ArcSwap<Vec<Size>> {
+    ANSWERS.get_or_init(|| ArcSwap::from_pointee(Vec::new()))
+}
+
+/// The zone filter: grows an altar the last solve sized at its current
+/// level, on top of what mods before this one gave it, and never lowers it.
+pub(crate) fn resize(zone: &mut AltarZone) {
+    let answers = answers().load();
+    let Some(size) = answers
+        .binary_search_by_key(&zone.altar.0, |size| size.altar)
+        .ok()
+        .and_then(|i| answers.get(i))
+    else {
+        return;
+    };
+    if size.level == zone.level {
+        zone.grow += size.grow;
+        zone.height = zone.height.max(size.height);
+    }
+}
+
+/// Hands the filter `sizes` and has the loader size the zones again.
+fn publish(zones: ZoneSizes, sizes: Vec<Size>) {
+    answers().store(Arc::new(sizes));
+    if let Err(error) = zones.changed() {
+        enshwick::warn!("{error}");
+    }
+}
 
 fn locked() -> MutexGuard<'static, State> {
     STATE
@@ -83,33 +127,34 @@ fn locked() -> MutexGuard<'static, State> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-pub(crate) fn request(control: ZoneControl) {
+pub(crate) fn request(zones: ZoneSizes) {
     let mut state = locked();
-    maybe_solve(&mut state, control);
+    maybe_solve(&mut state, zones);
 }
 
 /// Turns clusters on, solving the altars there are, or off, giving every
 /// altar its vanilla zone back.
-pub(crate) fn switch(control: ZoneControl, on: bool) {
+pub(crate) fn switch(zones: ZoneSizes, on: bool) {
     let mut state = locked();
     if !state.switch(on) {
         return;
     }
     enshwick::info!("clusters {on}");
     if on {
-        maybe_solve(&mut state, control);
-    } else if let Err(error) = control.set(&[]) {
-        enshwick::warn!("{error}");
+        maybe_solve(&mut state, zones);
+    } else {
+        publish(zones, Vec::new());
     }
 }
 
 /// Forgets the game that stopped: the next one solves its zones again.
 pub(crate) fn forget() {
     locked().forget();
+    answers().store(Arc::new(Vec::new()));
 }
 
-fn input(control: ZoneControl) -> Input {
-    control
+fn input(zones: ZoneSizes) -> Input {
+    zones
         .altars()
         .list()
         .into_iter()
@@ -133,11 +178,11 @@ fn input(control: ZoneControl) -> Input {
         .collect()
 }
 
-fn maybe_solve(state: &mut State, control: ZoneControl) {
+fn maybe_solve(state: &mut State, zones: ZoneSizes) {
     if state.solving || !state.on {
         return;
     }
-    let input = input(control);
+    let input = input(zones);
     if !state.wants(&input) {
         return;
     }
@@ -155,13 +200,11 @@ fn maybe_solve(state: &mut State, control: ZoneControl) {
                 enshwick::warn!("the solver panicked; vanilla zones stay");
                 return;
             };
-            if state.finish(game, input)
-                && let Err(error) = control.set(&sizes)
-            {
-                enshwick::warn!("{error}");
+            if state.finish(game, input) {
+                publish(zones, sizes);
             }
             // The altars may have moved on while this ran.
-            maybe_solve(&mut state, control);
+            maybe_solve(&mut state, zones);
         });
     if spawned.is_err() {
         state.solving = false;
@@ -169,7 +212,7 @@ fn maybe_solve(state: &mut State, control: ZoneControl) {
 }
 
 #[must_use]
-pub(crate) fn sizes(input: &Input) -> Vec<ZoneSize> {
+pub(crate) fn sizes(input: &Input) -> Vec<Size> {
     let started = Instant::now();
     let altars: Vec<Altar> = input
         .iter()
@@ -199,13 +242,14 @@ pub(crate) fn sizes(input: &Input) -> Vec<ZoneSize> {
             placement.cluster,
             placement.growth
         );
-        sizes.push(ZoneSize {
-            altar: Entity(id),
+        sizes.push(Size {
+            altar: id,
             level,
             grow: placement.growth,
             height,
         });
     }
+    sizes.sort_unstable_by_key(|size| size.altar);
     enshwick::info!(
         "solved {} altars in {:?}",
         placements.len(),

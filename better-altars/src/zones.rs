@@ -6,14 +6,14 @@
 //! The zones are solved on the server, which the game trusts for them, and by
 //! a client's built-in server while it hosts a game; the seam check runs on
 //! both sides, since the client predicts placement. The platform follows the
-//! altars and writes the sizes; this mod only decides them.
+//! altars and writes the sizes; this mod's filter only answers them.
 
 mod seam;
 mod solver;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use enshwick::altars::ZoneControl;
+use enshwick::altars::ZoneSizes;
 use enshwick::events::{AltarsChanged, ShutdownStarted};
 use enshwick::state::ModLocal;
 use enshwick::{Load, Off};
@@ -49,10 +49,10 @@ impl Default for Zones {
     }
 }
 
-/// The altars' zones under the mod's control.
+/// The mod's place among the altar zone filters.
 #[derive(Debug)]
 pub(crate) struct AltarZones {
-    control: ZoneControl,
+    sizes: ZoneSizes,
 }
 
 impl AltarZones {
@@ -63,15 +63,14 @@ impl AltarZones {
         // Always linked: the server's value may turn seams on for a joined
         // client, and a change applies while the game runs.
         load.on_zone_check(|check| seams().load(Ordering::Relaxed) && seam::accepts(check))?;
-        // Taken whatever the settings say: each world's own value turns
+        // Linked whatever the settings say: each world's own value turns
         // clusters on or off as it loads.
-        let control = load.control_altar_zones()?;
-        solver::switch(control, zones.clusters);
-        load.on::<AltarsChanged>(move |()| solver::request(control))?;
-        // The loader drops the sizes with a hosted game; the next game,
-        // the same world again included, is solved afresh.
+        let sizes = load.on_altar_zone(solver::resize)?;
+        solver::switch(sizes, zones.clusters);
+        load.on::<AltarsChanged>(move |()| solver::request(sizes))?;
+        // The next game, the same world again included, is solved afresh.
         load.on::<ShutdownStarted>(|()| solver::forget())?;
-        Ok(Self { control })
+        Ok(Self { sizes })
     }
 
     /// Takes `zones`, the settings now in force.
@@ -80,7 +79,7 @@ impl AltarZones {
         if seams().swap(on, Ordering::Relaxed) != on {
             enshwick::info!("building across seams {on}");
         }
-        solver::switch(self.control, zones.clusters);
+        solver::switch(self.sizes, zones.clusters);
     }
 
     /// Logs the seam setting in force once the game runs.

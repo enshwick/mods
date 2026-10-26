@@ -1,11 +1,11 @@
 # Written by copier; `copier update` reads it to merge template changes.
 _commit: b224adf
 _src_path: gh:enshwick/template-mod
-crate_name: enshwick-building-materials
-description: 'Building blocks, roofs, overgrowth, decor and furniture: twice the output
-    of the vanilla recipes for the same cost'
+crate_name: enshwick-game-rates
+description: 'Game rates: more output from the vanilla building recipes for the same
+    cost, and more comfort from furniture'
 enshwick_version: 1.0.0-alpha.2
-mod_id: building-materials
-mod_name: Building materials
-repository: enshwick/mod-building-materials
+mod_id: game-rates
+mod_name: Game Rates
+repository: enshwick/mod-game-rates
 side: both

@@ -13,6 +13,11 @@ use enshwick::{Load, Off};
 
 /// The probe's key for the modifiers its commands set.
 const KEY: &str = "probe-command";
+/// The stat the probe defines, under the namespace saved worlds know it by.
+const LUCKY: &str = "probe:lucky";
+/// The affixes the probe defines.
+const STURDY: &str = "probe:sturdy";
+const FORTUNATE: &str = "probe:fortunate";
 /// The seed of the probe's check roll.
 const SEED: u64 = 0x5eed;
 
@@ -40,12 +45,11 @@ impl AffixChecks {
         for (id, _) in builtin::ALL {
             kinds.push((id.to_owned(), load.open_stat(id)?));
         }
-        let lucky =
-            load.define_stat("lucky", &StatDef::additive("probe.lucky").range(0.0, 100.0))?;
-        kinds.push(("probe:lucky".to_owned(), lucky));
+        let lucky = load.define_stat(LUCKY, &StatDef::additive("probe.lucky").range(0.0, 100.0))?;
+        kinds.push((LUCKY.to_owned(), lucky));
         let health = load.open_stat(builtin::HEALTH_MAX)?;
         load.define_affix(
-            "sturdy",
+            STURDY,
             &AffixDef::new(
                 "probe.affix.sturdy",
                 Categories::EQUIPMENT | Categories::WEAPONS,
@@ -53,7 +57,7 @@ impl AffixChecks {
             .with(Range::new(health, Op::Add, 10.0, 30.0).step(1.0)),
         )?;
         load.define_affix(
-            "fortunate",
+            FORTUNATE,
             &AffixDef::new(
                 "probe.affix.fortunate",
                 Categories::EQUIPMENT | Categories::WEAPONS,

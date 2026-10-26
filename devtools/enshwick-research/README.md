@@ -1,8 +1,8 @@
 # Research
 
 A development mod, never released: it logs what a running client does where
-the platform still needs engine facts, to `logs/enshwick/mods/research.log`.
-It only reads; the first bytes of each function it hooks or calls are
+the platform still needs engine facts, to
+`logs/enshwick/mods/enshwick.research.log`. It only reads; the first bytes of each function it hooks or calls are
 checked against the client build its address was found on (1269579), and
 what depends on a function that differs stays off. Keep it off games people
 play.
@@ -59,7 +59,7 @@ server or while the client hosts a game:
 
 ## Settings
 
-`mod-configs/research.toml`, read at start:
+`mod-configs/enshwick.research.toml`, read at start:
 
 ```toml
 enabled = false

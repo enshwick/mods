@@ -13,22 +13,11 @@ use enshwick::{Load, Off};
 /// The most hits on or by a player logged one by one.
 const MOST_HIT_LINES: u32 = 200;
 
-/// The causes counted, in the order of [`DamageSeen::counts`].
-const CAUSES: [DamageCause; 8] = [
-    DamageCause::Hit,
-    DamageCause::Fall,
-    DamageCause::Shroud,
-    DamageCause::ShroudDeath,
-    DamageCause::Drowning,
-    DamageCause::DrowningDeath,
-    DamageCause::Freezing,
-    DamageCause::AdminKill,
-];
-
 /// What the damage filter saw, by cause.
 #[derive(Debug, Default)]
 pub(crate) struct DamageSeen {
-    counts: [AtomicU64; CAUSES.len()],
+    /// In the order of [`DamageCause::NAMED`].
+    counts: [AtomicU64; DamageCause::NAMED.len()],
     hit_lines: AtomicU32,
 }
 
@@ -41,7 +30,7 @@ impl DamageSeen {
         let counted = Arc::clone(&seen);
         load.on_damage(move |damage| {
             let cause = damage.cause();
-            if let Some(index) = CAUSES.iter().position(|&c| c == cause) {
+            if let Some(index) = DamageCause::NAMED.iter().position(|&c| c == cause) {
                 counted.counts[index].fetch_add(1, Ordering::Relaxed);
             }
             let before = damage.total();
@@ -82,7 +71,7 @@ impl DamageSeen {
 
     /// The counts, for the log.
     pub(crate) fn line(&self) -> String {
-        let counts: Vec<String> = CAUSES
+        let counts: Vec<String> = DamageCause::NAMED
             .iter()
             .zip(&self.counts)
             .map(|(cause, count)| format!("{cause:?} {}", count.load(Ordering::Relaxed)))

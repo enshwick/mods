@@ -1,10 +1,11 @@
 //! Development only, never shipped: exercises the platform API on a test
 //! server without a player and logs what it sees to
-//! `logs/enshwick/mods/probe.log`, each check as a `PASS`, `FAIL` or `SKIP` line.
+//! `logs/enshwick/mods/enshwick.probe.log`, each check as a `PASS`, `FAIL`
+//! or `SKIP` line.
 //!
-//! Off until `enabled = true` in `mod-configs/probe.toml`; read at start.
-//! While on, it counts every game event by type and logs the counts every
-//! minute, logs each typed game event it receives, and runs its checks
+//! Off until `enabled = true` in `mod-configs/enshwick.probe.toml`; read at
+//! start. While on, it counts every game event by type and logs the counts
+//! every minute, logs each typed game event it receives, and runs its checks
 //! once the world has loaded: world key, entity queries, stats, component
 //! writes, actions, spawns, a per-world store and a save on demand. Its
 //! actions, for administrators on the Mods screen or from the admin tools'
@@ -301,7 +302,7 @@ fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> 
 
 impl Mod for Probe {
     fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(id: "probe", side: SERVER, name: "Probe")
+        enshwick::manifest!(id: "enshwick.probe", side: SERVER, name: "Probe", was: ["probe"])
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {

@@ -2,8 +2,8 @@
 
 A development mod, never released: it exercises the platform API on a test
 server without a player and logs what it sees to
-`logs/enshwick/mods/probe.log`, each check as a `PASS`, `FAIL` or `SKIP`
-line. Keep it off servers people play on.
+`logs/enshwick/mods/enshwick.probe.log`, each check as a `PASS`, `FAIL` or
+`SKIP` line. Keep it off servers people play on.
 
 ## What it checks
 
@@ -73,10 +73,10 @@ typed event whose fields this game build lacks shows as `FAIL typed <type>`.
 ## Actions
 
 On the mod's page of the Mods screen, for administrators, or through the
-admin tools' command file (`mod-data/admin-tools/commands.txt`) as
-`probe <action> <values>`, such as `probe vitals 4096`. The console has no
-character, so the actions on your own character work from the Mods screen
-only.
+admin tools' command file (`mod-data/enshwick.admin-tools/commands.txt`) as
+`enshwick.probe <action> <values>`, such as `enshwick.probe vitals 4096`. The
+console has no character, so the actions on your own character work from the
+Mods screen only.
 
 | Action      | What it does                                                                                                |
 | ----------- | ----------------------------------------------------------------------------------------------------------- |
@@ -99,8 +99,8 @@ only.
 
 ## Settings
 
-`mod-configs/probe.toml`, read as the game starts, for every world; a change
-takes effect when the game starts again:
+`mod-configs/enshwick.probe.toml`, read as the game starts, for every world;
+a change takes effect when the game starts again:
 
 ```toml
 enabled = false

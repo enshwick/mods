@@ -17,11 +17,11 @@
 //! it follows is read through reads that cannot fault first.
 
 use std::ops::ControlFlow;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use enshwick::ecs::{Entity, metres};
+use enshwick::state::ModLocal;
 use enshwick::world::{ComponentType, Placed, World};
 use enshwick::{Load, Next, Off};
 
@@ -117,11 +117,26 @@ struct Engine {
     start: Instant,
 }
 
-static ENGINE: OnceLock<Engine> = OnceLock::new();
-/// Milliseconds after start of the last client sweep, plus one; 0 before.
-static LAST_SWEEP: AtomicU64 = AtomicU64::new(0);
-static FIRST_CALL: AtomicBool = AtomicBool::new(true);
-static SERVER_EMPTY_SWEPT: AtomicBool = AtomicBool::new(false);
+static ENGINE: ModLocal<Engine> = ModLocal::new();
+
+/// When the sweeps ran in this mod life.
+#[derive(Debug)]
+struct Sweeps {
+    /// Milliseconds after start of the last client sweep, plus one; 0 before.
+    last: AtomicU64,
+    first_call: AtomicBool,
+    server_empty: AtomicBool,
+}
+
+static SWEEPS: ModLocal<Sweeps> = ModLocal::new();
+
+fn sweeps() -> &'static Sweeps {
+    SWEEPS.get_or_init(|| Sweeps {
+        last: AtomicU64::new(0),
+        first_call: AtomicBool::new(true),
+        server_empty: AtomicBool::new(false),
+    })
+}
 
 enshwick::detour! {
     static CLIENT_CURSOR: unsafe extern "system" fn(ctx: *mut u64) = client_cursor;
@@ -248,7 +263,7 @@ fn server_sweep(world: &World, references: &[(&'static str, ComponentType, usize
     if players.is_empty() {
         // Once, so a server without players shows the sweep works.
         if let Some(first) = all.first()
-            && !SERVER_EMPTY_SWEPT.swap(true, Ordering::Relaxed)
+            && !sweeps().server_empty.swap(true, Ordering::Relaxed)
         {
             let who = format!("no players; around entity {}", id(first.entity.0));
             server_around(world, references, &all, &who, first.position);
@@ -315,12 +330,13 @@ fn client_cursor(next: Next<System>, ctx: *mut u64) {
         return;
     };
     let now = u64::try_from(engine.start.elapsed().as_millis()).unwrap_or(u64::MAX) + 1;
-    let last = LAST_SWEEP.load(Ordering::Relaxed);
+    let last = sweeps().last.load(Ordering::Relaxed);
     let period = u64::try_from(PERIOD.as_millis()).unwrap_or(u64::MAX);
     if last != 0 && now.saturating_sub(last) < period {
         return;
     }
-    if LAST_SWEEP
+    if sweeps()
+        .last
         .compare_exchange(last, now, Ordering::AcqRel, Ordering::Relaxed)
         .is_err()
     {
@@ -330,7 +346,7 @@ fn client_cursor(next: Next<System>, ctx: *mut u64) {
         enshwick::warn!("R11 client: the cursor system's context leads to no world");
         return;
     };
-    if FIRST_CALL.swap(false, Ordering::Relaxed) {
+    if sweeps().first_call.swap(false, Ordering::Relaxed) {
         enshwick::info!("R11 client world at {world:#x}, from the cursor system");
     }
     client_sweep(engine, world);

@@ -14,6 +14,8 @@ use enshwick::{Load, Off};
 const SETTLE: Duration = Duration::from_secs(1);
 /// The extra maximum health the probe gives.
 const EXTRA: i16 = 100;
+/// The stat the probe defines, under the namespace saved worlds know it by.
+const LUCK: &str = "probe:luck";
 /// The probe's key for its modifiers.
 const KEY: &str = "probe";
 
@@ -32,7 +34,7 @@ pub(crate) struct StatChecks {
 impl StatChecks {
     pub(crate) fn new(load: &mut Load<'_>, scheduler: Scheduler) -> Result<Self, Off> {
         let world = load.world()?;
-        let luck = load.define_stat("luck", &StatDef::additive("probe.luck").range(0.0, 1.0))?;
+        let luck = load.define_stat(LUCK, &StatDef::additive("probe.luck").range(0.0, 1.0))?;
         load.on_stats_changed(|change| {
             enshwick::info!(
                 "stats: {:?} stat {} {} -> {}",

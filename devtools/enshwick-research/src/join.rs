@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use enshwick::events::JoinRefused;
+use enshwick::state::ModLocal;
 use enshwick::{Load, Next, Off};
 
 use crate::memory;
@@ -30,10 +31,20 @@ const WATCH: Duration = Duration::from_secs(30);
 /// How often the watch logs.
 const WATCH_STEP: Duration = Duration::from_secs(1);
 
-static MAIN_ENTRIES: AtomicU64 = AtomicU64::new(0);
-static PAUSE_ENTRIES: AtomicU64 = AtomicU64::new(0);
-static JOINS: AtomicU64 = AtomicU64::new(0);
-static WATCHING: AtomicBool = AtomicBool::new(false);
+/// What the join watch counts in this mod life.
+#[derive(Debug, Default)]
+struct Watch {
+    main_entries: AtomicU64,
+    pause_entries: AtomicU64,
+    joins: AtomicU64,
+    watching: AtomicBool,
+}
+
+static WATCH_STATE: ModLocal<Watch> = ModLocal::new();
+
+fn counts() -> &'static Watch {
+    WATCH_STATE.get_or_init(Watch::default)
+}
 
 enshwick::detour! {
     // Ahead of the loader's join check, so the link sees refused joins too.
@@ -95,7 +106,7 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
 }
 
 fn join_game(next: Next<JoinGame>, provider: *mut u8, target: *mut u8) -> u8 {
-    let number = JOINS.fetch_add(1, Ordering::Relaxed) + 1;
+    let number = counts().joins.fetch_add(1, Ordering::Relaxed) + 1;
     enshwick::info!("R8 join {number} asked: {}; {}", described(target), menus());
     let start = Instant::now();
     // SAFETY: forwarded unchanged to the rest of the chain.
@@ -130,13 +141,13 @@ fn field<const N: usize>(bytes: &[u8; TARGET_BYTES], at: usize) -> [u8; N] {
 }
 
 fn main_entry(next: Next<MainEntry>, menu: usize, entry: *const u8) -> u8 {
-    MAIN_ENTRIES.fetch_add(1, Ordering::Relaxed);
+    counts().main_entries.fetch_add(1, Ordering::Relaxed);
     // SAFETY: forwarded unchanged to the rest of the chain.
     unsafe { next.get()(menu, entry) }
 }
 
 fn pause_entry(next: Next<PauseEntry>, text: *const u8, enabled: u8, attention: u8) -> u8 {
-    PAUSE_ENTRIES.fetch_add(1, Ordering::Relaxed);
+    counts().pause_entries.fetch_add(1, Ordering::Relaxed);
     // SAFETY: forwarded unchanged to the rest of the chain.
     unsafe { next.get()(text, enabled, attention) }
 }
@@ -145,41 +156,41 @@ fn pause_entry(next: Next<PauseEntry>, text: *const u8, enabled: u8, attention: 
 fn menus() -> String {
     format!(
         "main-menu entries drawn so far {}, pause-menu entries {}",
-        MAIN_ENTRIES.load(Ordering::Relaxed),
-        PAUSE_ENTRIES.load(Ordering::Relaxed)
+        counts().main_entries.load(Ordering::Relaxed),
+        counts().pause_entries.load(Ordering::Relaxed)
     )
 }
 
 /// Logs, once a second for the watch, how many menu entries were drawn in
 /// that second; one watch at a time.
 fn watch() {
-    if WATCHING.swap(true, Ordering::AcqRel) {
+    if counts().watching.swap(true, Ordering::AcqRel) {
         return;
     }
     let spawned = std::thread::Builder::new()
         .name("enshwick-research-join".into())
         .spawn(|| {
             let start = Instant::now();
-            let mut main = MAIN_ENTRIES.load(Ordering::Relaxed);
-            let mut pause = PAUSE_ENTRIES.load(Ordering::Relaxed);
+            let mut main = counts().main_entries.load(Ordering::Relaxed);
+            let mut pause = counts().pause_entries.load(Ordering::Relaxed);
             while start.elapsed() < WATCH {
                 std::thread::sleep(WATCH_STEP);
                 let (main_now, pause_now) = (
-                    MAIN_ENTRIES.load(Ordering::Relaxed),
-                    PAUSE_ENTRIES.load(Ordering::Relaxed),
+                    counts().main_entries.load(Ordering::Relaxed),
+                    counts().pause_entries.load(Ordering::Relaxed),
                 );
                 enshwick::info!(
                     "R8 +{} s: main-menu entries {}/s, pause-menu entries {}/s, joins {}",
                     start.elapsed().as_secs(),
                     main_now - main,
                     pause_now - pause,
-                    JOINS.load(Ordering::Relaxed)
+                    counts().joins.load(Ordering::Relaxed)
                 );
                 (main, pause) = (main_now, pause_now);
             }
-            WATCHING.store(false, Ordering::Release);
+            counts().watching.store(false, Ordering::Release);
         });
     if spawned.is_err() {
-        WATCHING.store(false, Ordering::Release);
+        counts().watching.store(false, Ordering::Release);
     }
 }

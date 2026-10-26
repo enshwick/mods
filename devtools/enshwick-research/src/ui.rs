@@ -273,9 +273,11 @@ mod tests {
         let Ok(bytes) = std::fs::read(path) else {
             return;
         };
-        let Ok(image) =
-            enshwick_reflect::Image::parse(&bytes, enshwick_reflect::Layout::File, None)
-        else {
+        let Ok(image) = enshwick_gamedata::reflect::Image::parse(
+            &bytes,
+            enshwick_gamedata::reflect::Layout::File,
+            None,
+        ) else {
             unreachable!("the client parses");
         };
         let rows = crate::tooltip::tests::pinned_in(&image);

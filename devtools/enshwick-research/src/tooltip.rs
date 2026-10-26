@@ -558,11 +558,13 @@ pub(crate) mod tests {
     }
 
     /// The client rows the manifest pins for the build of `image`, by symbol.
-    pub(crate) fn pinned_in(image: &enshwick_reflect::Image<'_>) -> Vec<(String, u64)> {
+    pub(crate) fn pinned_in(image: &enshwick_gamedata::reflect::Image<'_>) -> Vec<(String, u64)> {
         let build = image.fingerprint();
         pinned()
             .into_iter()
-            .filter(|(_, _, f)| build == Some(enshwick_reflect::Fingerprint::new(f.guid, f.age)))
+            .filter(|(_, _, f)| {
+                build == Some(enshwick_gamedata::reflect::Fingerprint::new(f.guid, f.age))
+            })
             .map(|(name, rva, _)| (name, rva))
             .collect()
     }
@@ -596,7 +598,11 @@ pub(crate) mod tests {
         let Ok(bytes) = std::fs::read(path) else {
             return;
         };
-        let image = enshwick_reflect::Image::parse(&bytes, enshwick_reflect::Layout::File, None);
+        let image = enshwick_gamedata::reflect::Image::parse(
+            &bytes,
+            enshwick_gamedata::reflect::Layout::File,
+            None,
+        );
         let Ok(image) = image else {
             unreachable!("the client parses");
         };

@@ -8,13 +8,18 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use enshwick::game_settings::GameSettings;
+use enshwick::state::ModLocal;
 use enshwick::{Load, Off};
 
 /// The bosses' health a run keeps.
 const KEPT: f32 = 1.25;
 
+static KEEPING: ModLocal<AtomicBool> = ModLocal::new();
+
 /// Whether this run keeps a field it has not forgotten yet.
-static KEEPING: AtomicBool = AtomicBool::new(false);
+fn keeping() -> &'static AtomicBool {
+    KEEPING.get_or_init(AtomicBool::default)
+}
 
 /// The game settings checks.
 #[derive(Debug, Clone, Copy)]
@@ -37,7 +42,7 @@ impl SettingsChecks {
     /// Forgets the field this run still keeps, so the world goes back to
     /// what it loaded with.
     fn shut_down(self) {
-        if self.across_restart || !KEEPING.swap(false, Ordering::AcqRel) {
+        if self.across_restart || !keeping().swap(false, Ordering::AcqRel) {
             return;
         }
         match self.settings.forget_kept() {
@@ -122,7 +127,7 @@ impl SettingsChecks {
             enshwick::warn!("FAIL keeping a game setting: {why}");
             return;
         }
-        KEEPING.store(true, Ordering::Release);
+        keeping().store(true, Ordering::Release);
         match self.settings.read() {
             Some((now, _)) if (now.boss_health - KEPT).abs() < 1e-6 => {
                 enshwick::info!("PASS boss health {KEPT} kept and read back");
@@ -131,7 +136,7 @@ impl SettingsChecks {
         }
         match self.settings.forget_kept() {
             Ok(()) => {
-                KEEPING.store(false, Ordering::Release);
+                keeping().store(false, Ordering::Release);
                 match self.settings.read() {
                     Some((after, _)) if (after.boss_health - before).abs() < 1e-6 => {
                         enshwick::info!(

@@ -6,6 +6,7 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use enshwick::state::ModLocal;
 use enshwick::{Load, Next, Off};
 
 use crate::memory;
@@ -22,8 +23,18 @@ const PIN_TYPES: [(u32, &str); 4] = [
 /// The most health writes logged in a run.
 const MOST: u32 = 300;
 
-static SEEN: AtomicU32 = AtomicU32::new(0);
-static OTHER: AtomicU32 = AtomicU32::new(0);
+/// The health writes seen in this mod life: the bosses' and the others'.
+#[derive(Debug, Default)]
+struct Writes {
+    seen: AtomicU32,
+    other: AtomicU32,
+}
+
+static WRITES: ModLocal<Writes> = ModLocal::new();
+
+fn writes() -> &'static Writes {
+    WRITES.get_or_init(Writes::default)
+}
 
 type Writer = unsafe extern "system" fn(
     out: *mut u8,
@@ -52,7 +63,10 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
 
 /// How many health writes and other attribute writes were seen.
 pub(crate) fn counts() -> (u32, u32) {
-    (SEEN.load(Ordering::Relaxed), OTHER.load(Ordering::Relaxed))
+    (
+        writes().seen.load(Ordering::Relaxed),
+        writes().other.load(Ordering::Relaxed),
+    )
 }
 
 fn writer(
@@ -64,12 +78,12 @@ fn writer(
     program: *const u8,
 ) -> *mut u8 {
     if attribute == HEALTH {
-        let seen = SEEN.fetch_add(1, Ordering::Relaxed);
+        let seen = writes().seen.fetch_add(1, Ordering::Relaxed);
         if seen < MOST {
             log(seen + 1, entity, value.addr(), program.addr());
         }
     } else {
-        OTHER.fetch_add(1, Ordering::Relaxed);
+        writes().other.fetch_add(1, Ordering::Relaxed);
     }
     // SAFETY: the game's own arguments, forwarded unchanged.
     unsafe { next.get()(out, attribute, entity, value, program) }

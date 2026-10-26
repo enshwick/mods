@@ -1,8 +1,9 @@
 //! Development only, never shipped: logs what a running client does where
-//! the platform still needs engine facts, to `logs/enshwick/mods/research.log`.
+//! the platform still needs engine facts, to
+//! `logs/enshwick/mods/enshwick.research.log`.
 //!
-//! Off until `enabled = true` in `mod-configs/research.toml`; read at start.
-//! On a client it looks at the item tooltip (which argument names the
+//! Off until `enabled = true` in `mod-configs/enshwick.research.toml`; read
+//! at start. On a client it looks at the item tooltip (which argument names the
 //! hovered item), at the interface (scroll areas, tab bars, text input) and
 //! at join attempts (what a refused join leaves behind). On both sides it
 //! logs the entities near each player, so a client's and a server's log can
@@ -125,9 +126,10 @@ pub struct Research {
 impl Mod for Research {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "research",
+            id: "enshwick.research",
             side: BOTH,
             name: "Research",
+            was: ["research"],
             builds: [{
                 side: CLIENT,
                 guid: "69f0e9573b32c24a8838d3fff550824c",

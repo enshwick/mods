@@ -12,24 +12,29 @@ Game Rates changes how much some parts of the game give:
 
 ## Settings
 
-`mod-configs/game-rates.toml`, written on first start; each world keeps its
-own copy of it (see [Settings](https://github.com/enshwick/enshwick#settings)):
+`mod-configs/enshwick.game-rates.toml`, written on first start; each world
+keeps its own copy of it (see
+[Settings](https://github.com/enshwick/enshwick#settings)). The Mods screen
+shows the two groups under the mod's gear:
 
 ```toml
-recipe_multiplier = 2
-recipe_blocks = true
-recipe_overgrowth = true
-recipe_decor = true
-comfort_multiplier = 2.0
+[recipes]
+multiplier = 2
+blocks = true
+overgrowth = true
+decor = true
+
+[comfort]
+multiplier = 2.0
 ```
 
 | Key | Default | Range | Meaning |
 | --- | --- | --- | --- |
-| `recipe_multiplier` | 2 | 2 to 100 | the output of each building recipe for the same cost |
-| `recipe_blocks` | true | | building blocks and roofs make more |
-| `recipe_overgrowth` | true | | overgrowth materials make more |
-| `recipe_decor` | true | | decor and furniture make more |
-| `comfort_multiplier` | 2.0 | 0 to 100 | comfort of each piece of furniture; 1 is vanilla, 0 takes all comfort from furniture |
+| `recipes.multiplier` | 2 | 2 to 100 | the output of each building recipe for the same cost |
+| `recipes.blocks` | true | | building blocks and roofs make more |
+| `recipes.overgrowth` | true | | overgrowth materials make more |
+| `recipes.decor` | true | | decor and furniture make more |
+| `comfort.multiplier` | 2.0 | 0 to 100 | comfort of each piece of furniture; 1 is vanilla, 0 takes all comfort from furniture |
 
 Each piece's comfort is rounded to a whole number. The server's recipe values
 are the ones in force: a player who joins sees the server's counts in the
@@ -37,22 +42,24 @@ crafting menu, and the file's own again after leaving. A change applies while
 the game runs; when the game cannot rebuild its recipes, the log says so and
 the new counts wait for the next start.
 
-## Coming from older mods
+## Coming from older versions and mods
 
-Game Rates replaces Building materials, Building yield and Furniture comfort.
-The loader never starts their old files in `mods/` beside it and logs that
-they can be deleted. On the first start their settings move into Game Rates,
-in `mod-configs/` and in each world's copy:
+Game Rates had the id `game-rates` and replaces Building materials, Building
+yield and Furniture comfort. The loader never starts their old files in
+`mods/` beside it and logs that they can be deleted. On the first start their
+settings move into Game Rates, in `mod-configs/` and in each world's copy:
 
 | Old setting | New key |
 | --- | --- |
-| `multiplier`, `blocks`, `overgrowth`, `decor` of `building-materials.toml` or `building-yield.toml` | `recipe_multiplier`, `recipe_blocks`, `recipe_overgrowth`, `recipe_decor` |
-| `multiplier` of `furniture-comfort.toml` | `comfort_multiplier` |
+| `recipe_multiplier`, `recipe_blocks`, `recipe_overgrowth`, `recipe_decor` of `game-rates.toml` | `recipes.multiplier`, `recipes.blocks`, `recipes.overgrowth`, `recipes.decor` |
+| `comfort_multiplier` of `game-rates.toml` | `comfort.multiplier` |
+| `multiplier`, `blocks`, `overgrowth`, `decor` of `building-materials.toml` or `building-yield.toml` | `recipes.multiplier`, `recipes.blocks`, `recipes.overgrowth`, `recipes.decor` |
+| `multiplier` of `furniture-comfort.toml` | `comfort.multiplier` |
 
-A key that `game-rates.toml` already sets is never overwritten. Building
-materials wins over Building yield when both are there. The `own_workbench`
-key of Building yield is dropped: placed Bulk Workbenches load as plain
-workbenches, and Bulk Workbench items in inventories are lost.
+A value from `game-rates.toml` wins over the older mods' values, and Building
+materials wins over Building yield. The `own_workbench` key of Building yield
+is dropped: placed Bulk Workbenches load as plain workbenches, and Bulk
+Workbench items in inventories are lost.
 
 ## Install
 

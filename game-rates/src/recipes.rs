@@ -3,6 +3,7 @@
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use enshwick::content::recipes::RecipeEdit;
+use enshwick::state::ModLocal;
 
 /// The recipe rates in force, read while the game builds its recipes.
 #[derive(Debug)]
@@ -13,15 +14,16 @@ pub(crate) struct RecipeRates {
     scaled: [AtomicBool; 3],
 }
 
-/// The one set of recipe rates.
-pub(crate) static RATES: RecipeRates = RecipeRates {
-    multiplier: AtomicU32::new(1),
-    scaled: [
-        AtomicBool::new(false),
-        AtomicBool::new(false),
-        AtomicBool::new(false),
-    ],
-};
+/// The recipe rates of this mod life.
+static RATES: ModLocal<RecipeRates> = ModLocal::new();
+
+/// The recipe rates in force, none scaled until the settings are read.
+pub(crate) fn rates() -> &'static RecipeRates {
+    RATES.get_or_init(|| RecipeRates {
+        multiplier: AtomicU32::new(1),
+        scaled: [const { AtomicBool::new(false) }; 3],
+    })
+}
 
 impl RecipeRates {
     /// Puts `multiplier` and the switches of each [`Category`], in its

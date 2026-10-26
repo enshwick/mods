@@ -1,27 +1,27 @@
 ---
-id: game-rates
+id: enshwick.game-rates
 name: Game Rates
 summary: Building recipes make more for the same cost, and furniture gives more comfort inside a base.
 needs: everyone
 settings:
-  - key: recipe_multiplier
+  - key: recipes.multiplier
     default: 2
     range: 2 to 100
     meaning: How many times more each building recipe makes for the same cost.
     applies: at-once
-  - key: recipe_blocks
+  - key: recipes.blocks
     default: true
     meaning: Building blocks and roofs make more.
     applies: at-once
-  - key: recipe_overgrowth
+  - key: recipes.overgrowth
     default: true
     meaning: Overgrowth materials make more.
     applies: at-once
-  - key: recipe_decor
+  - key: recipes.decor
     default: true
     meaning: Decor and furniture make more.
     applies: at-once
-  - key: comfort_multiplier
+  - key: comfort.multiplier
     default: 2.0
     range: 0 to 100
     meaning: How many times more comfort each piece of furniture gives. 1 is the base game, 0 takes all comfort from furniture.
@@ -43,8 +43,9 @@ uses the new ones.
 ## Did you use an older building or comfort mod?
 
 Game Rates takes the place of Building materials, Building yield and Furniture
-comfort. Their old files no longer load, and you can delete them. Their settings
-move into Game Rates on the first start.
+comfort. Their old files no longer load, and you can delete them. Their settings,
+and those Game Rates kept under its former id `game-rates`, move into Game Rates
+on the first start.
 
 Placed Bulk Workbenches turn into plain workbenches. You lose the Bulk Workbench
 items in inventories.

@@ -7,6 +7,8 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
+use enshwick::state::ModLocal;
+
 /// The largest comfort factor: the game sums the comfort of every category
 /// into one number, which a larger factor could overflow.
 pub(crate) const MAX_FACTOR: f32 = 100.0;
@@ -18,10 +20,15 @@ pub(crate) struct ComfortRate {
     factor: AtomicU32,
 }
 
-/// The one comfort rate.
-pub(crate) static RATE: ComfortRate = ComfortRate {
-    factor: AtomicU32::new(0x3f80_0000),
-};
+/// The comfort rate of this mod life.
+static RATE: ModLocal<ComfortRate> = ModLocal::new();
+
+/// The comfort rate in force, vanilla until the settings are read.
+pub(crate) fn rate() -> &'static ComfortRate {
+    RATE.get_or_init(|| ComfortRate {
+        factor: AtomicU32::new(1.0_f32.to_bits()),
+    })
+}
 
 impl ComfortRate {
     /// Puts `factor` in force.

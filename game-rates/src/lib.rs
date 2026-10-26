@@ -3,74 +3,88 @@
 //! comfort. Functional props (stations, chests, altars, water devices) stay
 //! as they are.
 
-use enshwick::config::Config;
 use enshwick::{Load, Mod, Off};
 
-mod carry_over;
 mod comfort;
+mod migrations;
 mod recipes;
-
-/// The mod's id, as in its manifest; it names the settings file.
-const ID: &str = "game-rates";
 
 /// The labels and descriptions of the settings, a table per language.
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Game rates: building recipes, then furniture comfort.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
+    /// The vanilla building recipes: how much more they make, and of what.
+    #[config(group)]
+    recipes: Recipes,
+    /// Comfort furniture gives inside a base.
+    #[config(group)]
+    comfort: Comfort,
+}
+
+/// How much more the vanilla building recipes make, and of what.
+#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
+#[serde(default, deny_unknown_fields)]
+struct Recipes {
     /// The vanilla building recipes make their output times this, for the
     /// same cost. A joined player runs with the server's value.
     #[config(sync, range = 2..=100)]
-    recipe_multiplier: u32,
+    multiplier: u32,
     /// Building blocks and roofs make more.
     #[config(sync)]
-    recipe_blocks: bool,
+    blocks: bool,
     /// Overgrowth materials make more.
     #[config(sync)]
-    recipe_overgrowth: bool,
+    overgrowth: bool,
     /// Decor and furniture make more.
     #[config(sync)]
-    recipe_decor: bool,
+    decor: bool,
+}
+
+impl Default for Recipes {
+    fn default() -> Self {
+        Self {
+            multiplier: 2,
+            blocks: true,
+            overgrowth: true,
+            decor: true,
+        }
+    }
+}
+
+/// How much comfort furniture gives.
+#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
+#[serde(default, deny_unknown_fields)]
+struct Comfort {
     /// Comfort each piece of furniture gives inside a base, times this, from
     /// 0 to 100: 1 is vanilla, 0 takes all comfort from furniture. The
     /// server's value decides.
     #[config(runtime, range = 0.0..=comfort::MAX_FACTOR)]
-    comfort_multiplier: f32,
+    multiplier: f32,
 }
 
-impl Default for Settings {
+impl Default for Comfort {
     fn default() -> Self {
-        Self {
-            recipe_multiplier: 2,
-            recipe_blocks: true,
-            recipe_overgrowth: true,
-            recipe_decor: true,
-            comfort_multiplier: 2.0,
-        }
+        Self { multiplier: 2.0 }
     }
 }
 
 impl Settings {
     /// Puts these settings in force; whether the recipe values changed.
     fn apply(&self) -> bool {
-        let changed = recipes::RATES.set(
-            self.recipe_multiplier,
-            [
-                self.recipe_blocks,
-                self.recipe_overgrowth,
-                self.recipe_decor,
-            ],
-        );
-        comfort::RATE.set(self.comfort_multiplier);
+        let Recipes {
+            multiplier,
+            blocks,
+            overgrowth,
+            decor,
+        } = self.recipes;
+        let changed = recipes::rates().set(multiplier, [blocks, overgrowth, decor]);
+        comfort::rate().set(self.comfort.multiplier);
         enshwick::info!(
-            "recipe output x{}: blocks {}, overgrowth {}, decor {}; furniture comfort x{}",
-            self.recipe_multiplier,
-            self.recipe_blocks,
-            self.recipe_overgrowth,
-            self.recipe_decor,
-            self.comfort_multiplier
+            "recipe output x{multiplier}: blocks {blocks}, overgrowth {overgrowth}, decor {decor}; furniture comfort x{}",
+            self.comfort.multiplier
         );
         changed
     }
@@ -83,17 +97,18 @@ pub struct GameRates;
 impl Mod for GameRates {
     fn manifest() -> &'static enshwick::abi::Manifest {
         enshwick::manifest!(
-            id: "game-rates",
+            id: "enshwick.game-rates",
             side: BOTH,
             name: "Game Rates",
             join: true,
             replaces: ["building-materials", "building-yield", "furniture-comfort"],
+            was: ["game-rates"],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         load.texts(TEXTS)?;
-        carry_over::run(load, ID, &Settings::template())?;
+        load.migrate(migrations::all())?;
         let settings: Settings = load.config()?;
         settings.apply();
         // Values that arrive later, an edited file or a joined server's
@@ -110,8 +125,8 @@ impl Mod for GameRates {
                 ),
             }
         })?;
-        load.modify_recipes(|recipe| recipes::RATES.scale(recipe))?;
-        if let Err(off) = load.on_comfort(|provider| comfort::RATE.scale(provider.value)) {
+        load.modify_recipes(|recipe| recipes::rates().scale(recipe))?;
+        if let Err(off) = load.on_comfort(|provider| comfort::rate().scale(provider.value)) {
             enshwick::warn!("furniture comfort stays vanilla: {off}");
         }
         Ok(Self)
@@ -122,6 +137,8 @@ enshwick::declare_mod!(GameRates);
 
 #[cfg(test)]
 mod tests {
+    use enshwick::config::Config as _;
+
     use super::*;
 
     /// A host with the recipe layout the recipe patch reads.
@@ -161,17 +178,12 @@ mod tests {
     #[test]
     fn the_default_settings_parse_and_only_the_recipe_rates_sync() {
         let settings: Settings = toml::from_str(&Settings::template()).unwrap();
-        assert_eq!(settings.recipe_multiplier, 2);
-        assert!(settings.recipe_blocks && settings.recipe_overgrowth && settings.recipe_decor);
-        assert!((settings.comfort_multiplier - 2.0).abs() < f32::EPSILON);
+        assert_eq!(settings.recipes.multiplier, 2);
+        assert!(settings.recipes.blocks && settings.recipes.overgrowth && settings.recipes.decor);
+        assert!((settings.comfort.multiplier - 2.0).abs() < f32::EPSILON);
         assert!(settings.validate().is_ok());
         let synced = settings.synced().unwrap();
-        for key in [
-            "recipe_multiplier",
-            "recipe_blocks",
-            "recipe_overgrowth",
-            "recipe_decor",
-        ] {
+        for key in ["multiplier", "blocks", "overgrowth", "decor"] {
             assert!(synced.contains(key), "{key} in {synced}");
         }
         assert!(!synced.contains("comfort"), "{synced}");
@@ -184,20 +196,20 @@ mod tests {
 
         let loader = recipe_host()
             .side(enshwick::abi::Side::CLIENT)
-            .settings("recipe_multiplier = 2\nrecipe_blocks = true\nrecipe_overgrowth = true\nrecipe_decor = true\n")
+            .settings("[recipes]\nmultiplier = 2\nblocks = true\novergrowth = true\ndecor = true\n")
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         let allowed = loader.rebuilds().len();
         assert_eq!(allowed, 1, "the registry may be rebuilt");
-        loader.set_server_synced(Some("{ recipe_multiplier = 5 }"));
+        loader.set_server_synced(Some("{ recipes = { multiplier = 5 } }"));
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(recipes::RATES.multiplier(), 5);
+        assert_eq!(recipes::rates().multiplier(), 5);
         assert_eq!(loader.rebuilds().len(), allowed + 1, "joined: rebuilt");
         loader.set_server_synced(None);
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(recipes::RATES.multiplier(), 2);
+        assert_eq!(recipes::rates().multiplier(), 2);
         assert_eq!(loader.rebuilds().len(), allowed + 2, "left: rebuilt");
         assert!(loader.faults().is_empty());
     }
@@ -213,7 +225,7 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.comfort(&comfort(3)), 6, "twice by default");
         let rebuilds = loader.rebuilds().len();
-        loader.set_settings("comfort_multiplier = 1.5\n");
+        loader.set_settings("[comfort]\nmultiplier = 1.5\n");
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
         assert_eq!(loader.comfort(&comfort(3)), 5);
         assert_eq!(loader.rebuilds().len(), rebuilds, "no recipe changed");
@@ -221,25 +233,42 @@ mod tests {
     }
 
     #[test]
-    fn the_id_is_the_manifest_s() {
-        // SAFETY: the manifest's strings are static literals.
-        let id = unsafe { GameRates::manifest().id.as_str() };
-        assert_eq!(id, Some(ID));
+    fn the_migrated_ids_are_the_manifest_s_former_and_replaced_ids() {
+        use enshwick::abi::Relation;
+
+        let manifest = GameRates::manifest();
+        // SAFETY: `manifest!` points `dependencies` at a static array of
+        // `dependency_count` entries.
+        let all =
+            unsafe { std::slice::from_raw_parts(manifest.dependencies, manifest.dependency_count) };
+        let ids = |relation| -> Vec<&str> {
+            all.iter()
+                .filter(|dependency| dependency.relation == relation)
+                // SAFETY: each id is a static string literal of `manifest!`.
+                .filter_map(|dependency| unsafe { dependency.id.as_str() })
+                .collect()
+        };
+        assert_eq!(ids(Relation::WAS), [migrations::FORMER_ID]);
+        let mut folded: Vec<&str> = migrations::FOLDED.iter().map(|&(id, _)| id).collect();
+        let mut replaced = ids(Relation::REPLACES);
+        folded.sort_unstable();
+        replaced.sort_unstable();
+        assert_eq!(folded, replaced);
     }
 
     #[test]
     fn every_setting_has_its_label_and_description_in_all_languages() {
-        let texts: toml::Table = toml::from_str(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
         let schema = Settings::schema();
         let keys: Vec<String> = std::iter::once(schema.text.clone())
-            .chain(
-                schema
-                    .fields
-                    .iter()
-                    .flat_map(|field| [field.text.clone(), format!("{}.doc", field.text)]),
-            )
+            .chain(schema.groups.iter().map(|group| group.text.clone()))
+            .chain(schema.fields.iter().map(|field| field.text.clone()))
+            .flat_map(|key| [format!("{key}.doc"), key])
+            .filter(|key| key != "config.doc")
             .collect();
-        for (language, table) in &texts {
+        let tables: toml::Table = toml::from_str(TEXTS).unwrap();
+        for (language, table) in &tables {
             let table = table.as_table().unwrap();
             for key in &keys {
                 assert!(table.contains_key(key), "{language}: {key}");
@@ -252,76 +281,104 @@ mod tests {
     fn rates_out_of_range_are_refused() {
         for recipe_multiplier in [0, 1, 101] {
             let settings = Settings {
-                recipe_multiplier,
+                recipes: Recipes {
+                    multiplier: recipe_multiplier,
+                    ..Recipes::default()
+                },
                 ..Settings::default()
             };
             assert!(settings.validate().is_err(), "{recipe_multiplier}");
         }
         for comfort_multiplier in [-1.0, 100.5, 1e9, f32::INFINITY, f32::NAN] {
             let settings = Settings {
-                comfort_multiplier,
+                comfort: Comfort {
+                    multiplier: comfort_multiplier,
+                },
                 ..Settings::default()
             };
             assert!(settings.validate().is_err(), "{comfort_multiplier}");
         }
         for comfort_multiplier in [0.0, 100.0] {
             let settings = Settings {
-                comfort_multiplier,
+                comfort: Comfort {
+                    multiplier: comfort_multiplier,
+                },
                 ..Settings::default()
             };
             assert!(settings.validate().is_ok(), "{comfort_multiplier}");
         }
     }
 
-    #[test]
-    fn the_replaced_mods_files_carry_over_on_the_first_start() {
-        use std::fs::{create_dir_all, read_to_string, write};
-
-        let game = std::env::temp_dir().join(format!("game-rates-carry-{}", std::process::id()));
-        let configs = game.join("mod-configs");
-        let worlds = |id: &str, key: &str| game.join("mod-data").join(id).join("worlds").join(key);
-        for dir in [
-            configs.clone(),
-            worlds("building-materials", "w1"),
-            worlds("furniture-comfort", "w2"),
-        ] {
-            create_dir_all(dir).unwrap();
-        }
-        write(
-            configs.join("building-materials.toml"),
-            "multiplier = 4\nblocks = true\novergrowth = false\ndecor = true\n",
-        )
-        .unwrap();
-        write(configs.join("furniture-comfort.toml"), "multiplier = 3.0\n").unwrap();
-        write(
-            worlds("building-materials", "w1").join("settings.toml"),
-            "multiplier = 6\nblocks = true\novergrowth = true\ndecor = true\n",
-        )
-        .unwrap();
-        write(
-            worlds("furniture-comfort", "w2").join("settings.toml"),
-            "multiplier = 0.5\n",
-        )
-        .unwrap();
-        let data = game.join("mod-data").join(ID);
-        let loader = recipe_host().data_dir(data.to_str().unwrap()).install();
+    /// The loader installed with `others`, each a mod id and its settings
+    /// file, and the mod started.
+    fn started_with(others: &[(&str, &str)]) -> enshwick::test::Installed {
+        let host = others.iter().fold(recipe_host(), |host, &(id, text)| {
+            host.other_settings(id, text)
+        });
+        let loader = host.install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK, "{:?}", loader.logs());
-        let read = |path: std::path::PathBuf| -> Settings {
-            toml::from_str(&read_to_string(path).unwrap()).unwrap()
-        };
-        let file = read(configs.join("game-rates.toml"));
-        assert_eq!(file.recipe_multiplier, 4);
-        assert!(!file.recipe_overgrowth);
-        assert!((file.comfort_multiplier - 3.0).abs() < f32::EPSILON);
-        let w1 = read(worlds(ID, "w1").join("settings.toml"));
-        assert_eq!(w1.recipe_multiplier, 6);
-        assert!(w1.recipe_overgrowth);
-        assert!((w1.comfort_multiplier - 3.0).abs() < f32::EPSILON);
-        let w2 = read(worlds(ID, "w2").join("settings.toml"));
-        assert_eq!(w2.recipe_multiplier, 4);
-        assert!((w2.comfort_multiplier - 0.5).abs() < f32::EPSILON);
-        std::fs::remove_dir_all(game).unwrap();
+        loader
+    }
+
+    const FLAT: &str = "recipe_multiplier = 4\nrecipe_blocks = true\nrecipe_overgrowth = false\nrecipe_decor = true\ncomfort_multiplier = 3.0\n";
+
+    #[test]
+    fn the_former_id_s_flat_settings_move_into_their_groups() {
+        let loader = started_with(&[(migrations::FORMER_ID, FLAT)]);
+        let migrated = loader.migrate_settings(FLAT).unwrap();
+        let settings: Settings = toml::from_str(&migrated).unwrap();
+        assert_eq!(settings.recipes.multiplier, 4);
+        assert!(!settings.recipes.overgrowth);
+        assert!((settings.comfort.multiplier - 3.0).abs() < f32::EPSILON);
+        assert!(!migrated.contains("recipe_"), "{migrated}");
+    }
+
+    #[test]
+    fn the_folded_mods_settings_move_into_their_groups() {
+        let loader = started_with(&[
+            (
+                "building-yield",
+                "multiplier = 3\ndecor = false\nown_workbench = true\n",
+            ),
+            ("furniture-comfort", "multiplier = 4.5\n"),
+        ]);
+        let migrated = loader.migrate_settings("").unwrap();
+        let settings: Settings = toml::from_str(&migrated).unwrap();
+        assert_eq!(settings.recipes.multiplier, 3);
+        assert!(!settings.recipes.decor);
+        assert!(
+            settings.recipes.blocks,
+            "a key no mod gives keeps its default"
+        );
+        assert!((settings.comfort.multiplier - 4.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn building_materials_wins_over_building_yield() {
+        let loader = started_with(&[
+            ("building-materials", "multiplier = 5\nblocks = false\n"),
+            (
+                "building-yield",
+                "multiplier = 3\nblocks = true\novergrowth = false\n",
+            ),
+        ]);
+        let migrated = loader.migrate_settings("").unwrap();
+        let settings: Settings = toml::from_str(&migrated).unwrap();
+        assert_eq!(settings.recipes.multiplier, 5);
+        assert!(!settings.recipes.blocks);
+        assert!(!settings.recipes.overgrowth);
+    }
+
+    #[test]
+    fn the_former_id_s_values_win_over_the_folded_mods() {
+        let own = "recipe_multiplier = 7\n";
+        let loader = started_with(&[
+            ("building-materials", "multiplier = 5\n"),
+            (migrations::FORMER_ID, own),
+        ]);
+        let settings: Settings = toml::from_str(&loader.migrate_settings(own).unwrap()).unwrap();
+        assert_eq!(settings.recipes.multiplier, 7);
     }
 }

@@ -8,7 +8,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use enshwick::progress::{AIRBORNE_ARCHITECT, SkillGate};
+use enshwick::progress::{Skill, SkillGate};
 use enshwick::state::ModLocal;
 use enshwick::{Load, Mod, Off};
 
@@ -86,7 +86,8 @@ impl Mod for BuildCamera {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
-        load.on_skill(AIRBORNE_ARCHITECT, |check| {
+        let node = load.skill_node(Skill::AirborneArchitect)?;
+        load.on_skill(node, |check| {
             lifts(check.gate, enabled().load(Ordering::Relaxed))
         })?;
         load.on_config_change(|settings: Settings| apply(&settings))?;
@@ -104,6 +105,9 @@ mod tests {
     use enshwick::events;
 
     use super::*;
+
+    /// The node the fake host names for Airborne Architect.
+    const NODE: u32 = 0x51;
 
     #[test]
     fn enabled_is_the_join_value_and_on_by_default() {
@@ -137,6 +141,7 @@ mod tests {
     fn the_gate_follows_the_settings_and_the_servers_join_value() {
         let loader = enshwick::test::FakeHost::new()
             .settings("enabled = true\n")
+            .constant("skill.airborne_architect", NODE.into())
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
@@ -151,17 +156,14 @@ mod tests {
             })
         };
 
+        assert_eq!(ask(NODE, RawCheck::FLY_MODE), RawCheck::UNLOCKED);
         assert_eq!(
-            ask(AIRBORNE_ARCHITECT, RawCheck::FLY_MODE),
-            RawCheck::UNLOCKED
-        );
-        assert_eq!(
-            ask(AIRBORNE_ARCHITECT, RawCheck::OTHER),
+            ask(NODE, RawCheck::OTHER),
             RawCheck::VANILLA,
             "another caller stays vanilla"
         );
         assert_eq!(
-            ask(0xa667_75b7, RawCheck::FLY_MODE),
+            ask(NODE + 1, RawCheck::FLY_MODE),
             RawCheck::VANILLA,
             "another node stays vanilla"
         );
@@ -169,7 +171,7 @@ mod tests {
         loader.set_server_synced(Some("{ enabled = false }"));
         assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);
         assert_eq!(
-            ask(AIRBORNE_ARCHITECT, RawCheck::FLY_MODE),
+            ask(NODE, RawCheck::FLY_MODE),
             RawCheck::VANILLA,
             "the server turned it off"
         );
@@ -177,7 +179,7 @@ mod tests {
         loader.set_server_synced(None);
         assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);
         assert_eq!(
-            ask(AIRBORNE_ARCHITECT, RawCheck::FLY_MODE),
+            ask(NODE, RawCheck::FLY_MODE),
             RawCheck::UNLOCKED,
             "the file's value again"
         );

@@ -7,8 +7,7 @@
 
 mod hold;
 
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use enshwick::abi::Side;
@@ -21,24 +20,8 @@ use enshwick::{Load, Mod, Off};
 const CAP: u8 = RAISED_ALTAR_ZONES;
 /// The most altars the vanilla grouping takes.
 const VANILLA_CAP: u8 = VANILLA_ALTAR_ZONES;
-/// The cap in force: [`CAP`] once the base limit is lifted.
-static IN_FORCE: AtomicU8 = AtomicU8::new(VANILLA_CAP);
-
-/// The extension point `flame-altar-count:limit`, once defined.
-static LIMIT: OnceLock<OwnedPoint<AltarLimit>> = OnceLock::new();
-
-/// The altars `flame_level` allows: `table`'s answer, or what other mods'
-/// links make of it, between 1 and the cap in force.
-fn limit(flame_level: u32, table: u8) -> u8 {
-    let cap = IN_FORCE.load(Ordering::Relaxed);
-    let Some(point) = LIMIT.get() else {
-        return table;
-    };
-    point
-        .decide(&AltarLimit { flame_level, cap }, table)
-        .value_or(table)
-        .clamp(1, cap)
-}
+/// The labels of the settings on the Mods screen, per language.
+const TEXTS: &str = include_str!("texts.toml");
 
 /// More Altars settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
@@ -63,15 +46,14 @@ impl Default for Settings {
 
 /// The table of altars per Flame level.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AltarTable {
+struct AltarTable {
     table: Vec<u8>,
 }
 
 impl AltarTable {
     /// A table from the settings: capped at `cap`, at least 1, the vanilla
     /// table when empty.
-    #[must_use]
-    pub fn new(levels: &[u16], cap: u8) -> Self {
+    fn new(levels: &[u16], cap: u8) -> Self {
         let table = if levels.is_empty() {
             VANILLA_ALTARS_PER_FLAME_LEVEL.to_vec()
         } else {
@@ -83,9 +65,8 @@ impl AltarTable {
         Self { table }
     }
 
-    /// The table from `settings`, warning about values above the cap in force.
-    fn from_settings(settings: &Settings) -> Self {
-        let cap = IN_FORCE.load(Ordering::Relaxed);
+    /// The table from `settings`, warning about values above `cap`.
+    fn from_settings(settings: &Settings, cap: u8) -> Self {
         if settings
             .altars_per_flame_level
             .iter()
@@ -102,8 +83,7 @@ impl AltarTable {
     }
 
     /// Altars allowed at `flame_level`.
-    #[must_use]
-    pub fn altars(&self, flame_level: u32) -> u8 {
+    fn altars(&self, flame_level: u32) -> u8 {
         let index = usize::try_from(flame_level).unwrap_or(usize::MAX);
         self.table
             .get(index)
@@ -123,10 +103,32 @@ fn cap_reason(cap: u8) -> &'static str {
 }
 
 /// The mod: the running table, swapped whole when the settings or the
-/// server's join values change.
+/// server's join values change, under the cap in force.
 #[derive(Debug)]
-pub struct AltarCount {
+struct AltarCount {
     table: ArcSwap<AltarTable>,
+    /// [`CAP`] once the base limit is lifted, else [`VANILLA_CAP`].
+    cap: u8,
+    /// The extension point `flame-altar-count:limit`.
+    point: OwnedPoint<AltarLimit>,
+}
+
+impl AltarCount {
+    /// The altars `flame_level` allows: the table's answer, or what other
+    /// mods' links make of it, between 1 and the cap.
+    fn limit(&self, flame_level: u32) -> u8 {
+        let table = self.table.load().altars(flame_level);
+        self.point
+            .decide(
+                &AltarLimit {
+                    flame_level,
+                    cap: self.cap,
+                },
+                table,
+            )
+            .value_or(table)
+            .clamp(1, self.cap)
+    }
 }
 
 impl Mod for AltarCount {
@@ -140,13 +142,14 @@ impl Mod for AltarCount {
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+        let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
         let server = load.host().build().side == Side::SERVER;
-        if load.raise_base_limit()? {
-            IN_FORCE.store(CAP, Ordering::Relaxed);
+        let cap = if load.raise_base_limit()? {
             if server {
                 hold::keep(load)?;
             }
+            CAP
         } else {
             // A world held for its altars must not open with the vanilla
             // grouping: off, the loader stops the server for the hold.
@@ -156,23 +159,24 @@ impl Mod for AltarCount {
                 )));
             }
             enshwick::warn!("the game keeps 16 altar zones in bases");
-        }
-        let table = AltarTable::from_settings(&settings);
-        let _first = LIMIT.set(load.define_point()?);
+            VANILLA_CAP
+        };
+        let table = AltarTable::from_settings(&settings, cap);
+        let point = load.define_point()?;
         load.on_altar_limit(|level| {
-            let table = AltarCount::instance()
-                .map_or(VANILLA_CAP, |count| count.table.load().altars(level));
-            limit(level, table)
+            AltarCount::instance().map_or(VANILLA_CAP, |count| count.limit(level))
         })?;
         load.on_config_change(|settings: Settings| {
             if let Some(count) = AltarCount::instance() {
                 count
                     .table
-                    .store(Arc::new(AltarTable::from_settings(&settings)));
+                    .store(Arc::new(AltarTable::from_settings(&settings, count.cap)));
             }
         })?;
         Ok(Self {
             table: ArcSwap::from_pointee(table),
+            cap,
+            point,
         })
     }
 }
@@ -182,6 +186,7 @@ enshwick::declare_mod!(AltarCount);
 #[cfg(test)]
 mod tests {
     use enshwick::config::Config as _;
+    use enshwick::i18n::{Language, Texts};
 
     use super::*;
 
@@ -210,6 +215,15 @@ mod tests {
         assert_eq!(AltarTable::new(&[], CAP).altars(0), 1);
         let unlifted = AltarTable::new(&[0, 3, 40], VANILLA_CAP);
         assert_eq!(unlifted.altars(2), 16);
+    }
+
+    #[test]
+    fn the_settings_are_labelled_in_english_and_ukrainian() {
+        let texts = Texts::parse(TEXTS).unwrap();
+        for key in ["config.altars", "config.altars.doc"] {
+            assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
+            assert!(texts.get(key, Language::UK_UA).is_some(), "{key}");
+        }
     }
 
     #[test]

@@ -15,6 +15,9 @@ use enshwick::events::{AltarsChanged, ShutdownStarted, WorldLoaded};
 use enshwick::state::Hold;
 use enshwick::{Load, Off};
 
+/// The name of the hold's thread, which a crash report shows.
+const THREAD: &str = "flame-altar-count-hold";
+/// How often the hold thread looks at the grouping without being woken.
 const EVERY: Duration = Duration::from_secs(5);
 /// How long the loaded world stays at 16 zones or fewer before the hold goes.
 const RELEASE_AFTER: Duration = Duration::from_secs(60);
@@ -27,7 +30,7 @@ pub(crate) fn keep(load: &mut Load<'_>) -> Result<(), Off> {
     let loaded = Arc::new(AtomicBool::new(false));
     let running = Arc::clone(&loaded);
     let handle = std::thread::Builder::new()
-        .name("flame-altar-count-hold".into())
+        .name(THREAD.into())
         .spawn(move || run(&hold, &running))
         .map_err(|e| Off::new(format!("hold thread: {e}")))?;
     let thread = handle.thread().clone();
@@ -95,6 +98,7 @@ impl Watch {
     }
 }
 
+/// Sets and releases the hold as the grouping and the loaded world say.
 fn run(hold: &Hold, loaded: &AtomicBool) {
     let mut watch = Watch::new(hold.reason().is_some());
     loop {

@@ -1,0 +1,7 @@
+[en]
+"config.altars" = "Altars per Flame level"
+"config.altars.doc" = "Altars allowed at each Flame level, from level 0; later levels use the last entry. At most 32, in at most 16 bases. Vanilla: 1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16. Players on a server use the server's table."
+
+[uk]
+"config.altars" = "Вівтарі на рівень Полум'я"
+"config.altars.doc" = "Скільки вівтарів дозволено на кожному рівні Полум'я, від рівня 0; вищі рівні беруть останнє число. Не більше 32, щонайбільше в 16 базах. Без мода: 1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16. Гравці на сервері грають із таблицею сервера."

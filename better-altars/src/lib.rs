@@ -186,7 +186,6 @@ enshwick::declare_mod!(AltarCount);
 #[cfg(test)]
 mod tests {
     use enshwick::config::Config as _;
-    use enshwick::i18n::{Language, Texts};
 
     use super::*;
 
@@ -218,11 +217,12 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_are_labelled_in_english_and_ukrainian() {
-        let texts = Texts::parse(TEXTS).unwrap();
-        for key in ["config.altars", "config.altars.doc"] {
-            assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
-            assert!(texts.get(key, Language::UK_UA).is_some(), "{key}");
+    fn the_settings_are_labelled_in_all_languages() {
+        let texts: toml::Table = toml::from_str(TEXTS).unwrap();
+        for (language, table) in &texts {
+            for key in ["config.altars", "config.altars.doc"] {
+                assert!(table.get(key).is_some(), "{key} has no {language}");
+            }
         }
     }
 

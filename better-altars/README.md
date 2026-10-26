@@ -25,7 +25,8 @@ vanilla table. Values above 32 become 32, and 0 becomes 1; the log warns about
 each. While the mod keeps the game's limit of 16, values above 16 become 16.
 A change applies while the game runs.
 
-The mod's gear on the Mods screen shows the table, in English or Ukrainian.
+The mod's gear on the Mods screen shows the table, in the player's language
+where [texts.toml](src/texts.toml) has it, else in English.
 
 ## What happens past 16 altars?
 

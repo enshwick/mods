@@ -2,7 +2,7 @@
 name = "enshwick-optimizer"
 version = "0.1.0"
 description = "Less server CPU on Windows and under Wine or Proton: exact short waits, task workers within a container's CPU limit, measurements and an environment report"
-keywords = ["enshrouded", "mod"]
+keywords = ["enshrouded", "mod", "wine", "proton", "performance"]
 categories = ["game-development"]
 readme = "README.md"
 authors = ["themaiby"]
@@ -19,9 +19,21 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 enshwick = "1.0.0-alpha.2"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+windows-sys = { version = "0.61.2", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 enshwick = { version = "1.0.0-alpha.2", features = ["test"] }
+toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
+
+[package.metadata.enshwick]
+windows-only = true
 
 [lints]
 workspace = true

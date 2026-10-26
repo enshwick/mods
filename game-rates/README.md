@@ -2,10 +2,14 @@
 
 Game Rates changes how much some parts of the game give:
 
-- The vanilla recipes for building blocks, roofs, overgrowth, decor and
-  furniture make twice as much for the same cost by default. Functional props
-  (stations, chests, storage shelves, altars, water devices) stay as they are.
-  The crafting menu shows the new counts.
+- The recipes for building blocks, roofs, overgrowth, decor and furniture
+  make twice as much for the same cost by default. Blocks, roofs and
+  overgrowth count by what the game's item data says a recipe makes, so
+  other mods' recipes of these kinds make more too, and another mod's
+  multiplier for them multiplies with this one. Decor and furniture count by
+  the vanilla recipe's name. Functional props (stations, chests, storage
+  shelves, altars, water devices) stay as they are. The crafting menu shows
+  the new counts.
 - Every piece of furniture gives twice its comfort inside a base by default,
   so a modest house reaches a long rested bonus. Only the best piece of each
   comfort category counts, as in vanilla.

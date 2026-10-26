@@ -1,14 +1,17 @@
-//! Game rates: the vanilla recipes for building blocks, roofs, overgrowth,
+//! Game rates: the recipes for building blocks, roofs, overgrowth,
 //! decor and furniture make more for the same cost, furniture gives more
 //! comfort, and experience, workshop speed, drops, loot and skill points
 //! follow their own multipliers. Functional props (stations, chests,
 //! altars, water devices) keep their recipes.
 
+use enshwick::content::recipes::RecipeKind;
 use enshwick::rates::{ExperienceGroup, MAX_FACTOR, Rate, RateHandle};
 use enshwick::{Load, Mod, Off};
 
 mod migrations;
 mod recipes;
+
+use crate::recipes::Category;
 
 /// The labels and descriptions of the settings, a table per language.
 const TEXTS: &str = include_str!("texts.toml");
@@ -17,7 +20,7 @@ const TEXTS: &str = include_str!("texts.toml");
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// The vanilla building recipes: how much more they make, and of what.
+    /// The building recipes: how much more they make, and of what.
     #[config(group)]
     recipes: Recipes,
     /// Comfort furniture gives inside a base.
@@ -37,11 +40,11 @@ struct Settings {
     skills: Skills,
 }
 
-/// How much more the vanilla building recipes make, and of what.
+/// How much more the building recipes make, and of what.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(default, deny_unknown_fields)]
 struct Recipes {
-    /// The vanilla building recipes make their output times this, for the
+    /// The building recipes make their output times this, for the
     /// same cost. A joined player runs with the server's value.
     #[config(sync, range = 2..=100)]
     multiplier: u32,
@@ -165,7 +168,7 @@ impl Default for Skills {
 }
 
 /// The rates this mod declared; one the game build lacks stays `None`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Rates {
     comfort: Option<RateHandle>,
     combat: Option<RateHandle>,
@@ -175,6 +178,8 @@ struct Rates {
     resources: Option<RateHandle>,
     loot: Option<RateHandle>,
     skill_points: Option<RateHandle>,
+    /// The recipe output rate of each kind a setting scales.
+    recipes: Vec<(Category, RateHandle)>,
 }
 
 impl Rates {
@@ -196,11 +201,27 @@ impl Rates {
             resources: rate(Rate::ResourceDrops),
             loot: rate(Rate::Loot),
             skill_points: rate(Rate::SkillPoints),
+            recipes: RecipeKind::ALL
+                .iter()
+                .filter_map(|&kind| {
+                    let category = recipes::category(kind)?;
+                    Some((category, rate(Rate::RecipeOutput(kind))?))
+                })
+                .collect(),
         }
     }
 
     /// Each declared rate with its factor from `settings`.
-    fn factors(&self, settings: &Settings) -> [(Option<RateHandle>, f32); 8] {
+    fn factors(&self, settings: &Settings) -> impl Iterator<Item = (RateHandle, f32)> {
+        let recipes = &settings.recipes;
+        let multiplier = u16::try_from(recipes.multiplier).map_or(MAX_FACTOR, f32::from);
+        let recipe_factors = self.recipes.iter().map(move |&(category, handle)| {
+            let on = match category {
+                Category::Blocks => recipes.blocks,
+                Category::Overgrowth => recipes.overgrowth,
+            };
+            (handle, if on { multiplier } else { 1.0 })
+        });
         [
             (self.comfort, settings.comfort.multiplier),
             (self.combat, settings.experience.combat),
@@ -211,14 +232,15 @@ impl Rates {
             (self.loot, settings.drops.loot),
             (self.skill_points, settings.skills.points),
         ]
+        .into_iter()
+        .filter_map(|(handle, factor)| Some((handle?, factor)))
+        .chain(recipe_factors)
     }
 
     /// Puts the factors of `settings` in force.
     fn apply(&self, settings: &Settings) {
         for (handle, factor) in self.factors(settings) {
-            if let Some(handle) = handle
-                && let Err(why) = handle.set(factor)
-            {
+            if let Err(why) = handle.set(factor) {
                 enshwick::warn!("{:?} unchanged: {why}", handle.rate());
             }
         }
@@ -226,7 +248,7 @@ impl Rates {
 }
 
 impl Settings {
-    /// Puts these settings in force; whether the recipe values changed.
+    /// Puts these settings in force; whether the decor recipes changed.
     fn apply(&self, rates: &Rates) -> bool {
         let Recipes {
             multiplier,
@@ -234,7 +256,7 @@ impl Settings {
             overgrowth,
             decor,
         } = self.recipes;
-        let changed = recipes::rates().set(multiplier, [blocks, overgrowth, decor]);
+        let changed = recipes::set_decor(if decor { multiplier } else { 1 });
         rates.apply(self);
         enshwick::info!(
             "recipe output x{multiplier}: blocks {blocks}, overgrowth {overgrowth}, decor {decor}; {:?}",
@@ -274,7 +296,8 @@ impl Mod for GameRates {
         settings.apply(&rates);
         // Values that arrive later, an edited file or a joined server's
         // values and the file's again on leaving, rebuild the registry the
-        // game already holds when they change a recipe.
+        // game already holds when they change decor; the loader rebuilds
+        // it for the recipe output rates.
         load.on_config_change(move |settings: Settings| {
             if !settings.apply(&rates) {
                 return;
@@ -286,7 +309,7 @@ impl Mod for GameRates {
                 ),
             }
         })?;
-        load.modify_recipes(|recipe| recipes::rates().scale(recipe))?;
+        load.modify_recipes(recipes::scale_decor)?;
         // A dedicated server builds its recipes before it loads the items
         // that tell their kinds, so the kinds apply in a rebuild.
         load.on::<enshwick::events::WorldLoaded>(|()| {
@@ -308,8 +331,10 @@ mod tests {
 
     /// A host with the recipe layout the recipe patch reads.
     fn recipe_host() -> enshwick::test::FakeHost {
-        let mut host = enshwick::test::FakeHost::new()
-            .type_hash(enshwick::content::types::RECIPE_REGISTRY.id(), 0x5e1f_0001);
+        let mut host = enshwick::test::FakeHost::new().type_hash(
+            enshwick::content::types::RECIPE_REGISTRY_RESOURCE.id(),
+            0x5e1f_0001,
+        );
         for (id, size) in [
             ("recipe", 0xa8),
             ("recipe_ingredient", 48),
@@ -409,6 +434,32 @@ mod tests {
     }
 
     #[test]
+    fn each_recipe_kind_takes_the_multiplier_its_switch_allows() {
+        use enshwick::abi::Status;
+        use enshwick::rates::Rate;
+
+        let loader = recipe_host()
+            .side(enshwick::abi::Side::SERVER)
+            .settings(
+                "[recipes]\nmultiplier = 4\nblocks = true\novergrowth = false\ndecor = false\n",
+            )
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        for &kind in RecipeKind::ALL {
+            let expected = match recipes::category(kind) {
+                Some(Category::Blocks) => Some(4.0),
+                Some(Category::Overgrowth) => Some(1.0),
+                None => None,
+            };
+            assert_eq!(loader.rate(Rate::RecipeOutput(kind)), expected, "{kind:?}");
+        }
+        assert_eq!(recipes::decor_multiplier(), 1, "decor stays vanilla");
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
     fn a_rate_the_build_lacks_leaves_the_rest_running() {
         use enshwick::abi::Status;
         use enshwick::rates::Rate;
@@ -425,6 +476,9 @@ mod tests {
     fn a_joined_server_s_values_and_leaving_rebuild_the_recipes() {
         use enshwick::abi::Status;
         use enshwick::events::SettingsChanged;
+        use enshwick::rates::Rate;
+
+        const BLOCKS: Rate = Rate::RecipeOutput(RecipeKind::BuildingBlock);
 
         let loader = recipe_host()
             .side(enshwick::abi::Side::CLIENT)
@@ -437,11 +491,13 @@ mod tests {
         assert_eq!(allowed, 1, "the registry may be rebuilt");
         loader.set_server_synced(Some("{ recipes = { multiplier = 5 } }"));
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(recipes::rates().multiplier(), 5);
+        assert_eq!(recipes::decor_multiplier(), 5);
+        assert_eq!(loader.rate(BLOCKS), Some(5.0));
         assert_eq!(loader.rebuilds().len(), allowed + 1, "joined: rebuilt");
         loader.set_server_synced(None);
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(recipes::rates().multiplier(), 2);
+        assert_eq!(recipes::decor_multiplier(), 2);
+        assert_eq!(loader.rate(BLOCKS), Some(2.0));
         assert_eq!(loader.rebuilds().len(), allowed + 2, "left: rebuilt");
         assert!(loader.faults().is_empty());
     }

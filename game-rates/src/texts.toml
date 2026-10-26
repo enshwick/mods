@@ -1,9 +1,9 @@
 [en]
 "config" = "Game Rates"
 "config.recipes" = "Building recipes"
-"config.recipes.doc" = "How much more the vanilla building recipes make, and of what."
+"config.recipes.doc" = "How much more the building recipes make, and of what."
 "config.recipes.multiplier" = "Output"
-"config.recipes.multiplier.doc" = "How many times the vanilla building recipes make for the same cost, from 2 to 100. A joined player runs with the server's value."
+"config.recipes.multiplier.doc" = "How many times the building recipes make for the same cost, from 2 to 100. A joined player runs with the server's value."
 "config.recipes.blocks" = "Blocks and roofs"
 "config.recipes.blocks.doc" = "Building blocks and roofs make more."
 "config.recipes.overgrowth" = "Overgrowth"
@@ -40,9 +40,9 @@
 [uk]
 "config" = "Ігрові множники"
 "config.recipes" = "Будівельні рецепти"
-"config.recipes.doc" = "Наскільки більше дають ванільні будівельні рецепти і що саме."
+"config.recipes.doc" = "Наскільки більше дають будівельні рецепти і що саме."
 "config.recipes.multiplier" = "Вихід"
-"config.recipes.multiplier.doc" = "У скільки разів більше дають ванільні будівельні рецепти за ту саму ціну, від 2 до 100. Гравець на сервері отримує значення сервера."
+"config.recipes.multiplier.doc" = "У скільки разів більше дають будівельні рецепти за ту саму ціну, від 2 до 100. Гравець на сервері отримує значення сервера."
 "config.recipes.blocks" = "Блоки й покрівельні блоки"
 "config.recipes.blocks.doc" = "Будівельні й покрівельні блоки дають більше."
 "config.recipes.overgrowth" = "Зарості"

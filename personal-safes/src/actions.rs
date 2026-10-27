@@ -268,4 +268,21 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn every_language_of_the_file_holds_the_keys_the_mod_says_and_no_others() {
+        let tables: toml::Table = toml::from_str(crate::content::TEXTS).unwrap();
+        let mut said: Vec<&str> = keys::ALL.to_vec();
+        said.sort_unstable();
+        for (language, table) in &tables {
+            let mut held: Vec<&str> = table
+                .as_table()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect();
+            held.sort_unstable();
+            assert_eq!(held, said, "{language}");
+        }
+    }
 }

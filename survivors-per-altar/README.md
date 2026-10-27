@@ -108,9 +108,9 @@ follows their grown zones when that mod runs.
 ## For mod authors
 
 Other mods change how many copies of a survivor the altars hold at the
-extension point `survivors-per-altar:copy-limit`, and how many charges a new
-copy costs at `survivors-per-altar:charge-cost`, where they may also refuse
-the staff's use. See
+extension point `enshwick.survivors-per-altar:copy-limit`, and how many
+charges a new copy costs at `enshwick.survivors-per-altar:charge-cost`, where
+they may also refuse the staff's use. See
 [Extending other mods](https://github.com/enshwick/enshwick/blob/main/book/src/extending.md).
 
 Licensed under [MIT](LICENSE).

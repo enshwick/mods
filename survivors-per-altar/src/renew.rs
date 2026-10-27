@@ -7,17 +7,16 @@
 use std::ops::ControlFlow;
 use std::time::Duration;
 
-use enshwick::ecs::Entity;
 use enshwick::events::{PlayerJoined, WorldLoaded};
 use enshwick::inventory::{Fill, Inventories};
 use enshwick::world::{ContainerKinds, World};
-use enshwick::{Load, Off};
+use enshwick::{Entity, ItemId, Load, Off};
 
 /// How often containers are looked through for old staffs.
 const SWEEP: Duration = Duration::from_secs(60);
 
 /// Renews the old copy staffs in `root`; logs what it asked for.
-fn renew(inventories: &Inventories, root: Entity, staffs: &[u32]) {
+fn renew(inventories: &Inventories, root: Entity, staffs: &[ItemId]) {
     let asked = inventories.renew(root, staffs, Fill::FULL, move |outcome| {
         enshwick::info!(
             "old copy staffs in {} renewed with full charges: {:?}",
@@ -32,7 +31,7 @@ fn renew(inventories: &Inventories, root: Entity, staffs: &[u32]) {
 
 /// Every player of the world, and every container players build or the
 /// world fills with loot.
-fn holders(world: &World) -> Vec<Entity> {
+fn holders(world: World) -> Vec<Entity> {
     let mut roots: Vec<Entity> = world.players().iter().map(|p| p.entity).collect();
     let containers = world.containers(ContainerKinds::PLACED | ContainerKinds::LOOT);
     roots.extend(containers.iter().map(|placed| placed.entity));
@@ -49,7 +48,7 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
     let sweep = {
         let staffs = staffs.clone();
         move || {
-            for root in holders(&world) {
+            for root in holders(world) {
                 renew(&inventories, root, &staffs);
             }
         }
@@ -61,7 +60,7 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
         ControlFlow::Continue(())
     });
     load.on::<PlayerJoined>(move |joined| {
-        renew(&inventories, Entity(joined.entity), &staffs);
+        renew(&inventories, joined.entity, &staffs);
     })?;
     Ok(())
 }

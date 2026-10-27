@@ -6,7 +6,8 @@
 //! lock: only the uniqueness pass, which files copies, writes. Altar zones
 //! are read when the altars change, never in a lookup. Other mods change the
 //! copy limit and the charges a new copy costs at the extension points
-//! `survivors-per-altar:copy-limit` and `survivors-per-altar:charge-cost`.
+//! `enshwick.survivors-per-altar:copy-limit` and
+//! `enshwick.survivors-per-altar:charge-cost`.
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -16,7 +17,6 @@ use std::time::{Duration, Instant};
 
 use enshwick::abi::Side;
 use enshwick::altars::Altars;
-use enshwick::ecs::Entity;
 use enshwick::events::{AltarsChanged, ShutdownStarted};
 use enshwick::inventory::{Bar, Batch, Fill, Inventories, Op, SlotRef};
 use enshwick::points::OwnedPoint;
@@ -24,7 +24,7 @@ use enshwick::state::ModLocal;
 use enshwick::survivors::{
     Answer, BedCheck, Lookup, Purpose, Summon, SummonVerdict, WorkshopSurvivor,
 };
-use enshwick::{Load, Off};
+use enshwick::{Entity, ItemId, Load, Off};
 
 use crate::Charges;
 use crate::copies::{Copies, CopyStaff, Verdict, Zone};
@@ -173,8 +173,7 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
         if summon.meter.is_some() {
             if let Some(staff) = staff {
                 owe(staff, cost);
-                scheduler
-                    .next_tick(move || settle_spends(|staff, cost| spend(&world, staff, cost)));
+                scheduler.next_tick(move || settle_spends(|staff, cost| spend(world, staff, cost)));
             }
         } else if let Some(inventories) = inventories {
             // A staff from before charges: the cost spent of a full one.
@@ -185,7 +184,7 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
     load.on::<ShutdownStarted>(move |()| {
         // The final save runs after this: a charge owed since the last
         // step is spent before it.
-        settle_spends(|staff, cost| spend(&world, staff, cost));
+        settle_spends(|staff, cost| spend(world, staff, cost));
         if client {
             // Entities belong to one hosted game; the next starts clean.
             forget();
@@ -441,7 +440,7 @@ fn keeps(shared: &Shared, check: &BedCheck) -> bool {
 }
 
 /// Spends `cost` charges of the copy staff `staff`, on the game thread.
-fn spend(world: &enshwick::world::World, staff: Entity, cost: u16) {
+fn spend(world: enshwick::world::World, staff: Entity, cost: u16) {
     match world.change_item_meter(staff, |c| (c - i32::from(cost)).max(0)) {
         Ok(left) => enshwick::info!(
             "copy staff {}: {} of {} charges left",
@@ -455,7 +454,13 @@ fn spend(world: &enshwick::world::World, staff: Entity, cost: u16) {
 
 /// Gives a staff from before charges, which just placed a copy, its meter:
 /// a full staff's charges less the `cost` spent.
-fn renew_spent(inventories: &Inventories, slot: SlotRef, item: u32, charges: Charges, cost: u16) {
+fn renew_spent(
+    inventories: &Inventories,
+    slot: SlotRef,
+    item: ItemId,
+    charges: Charges,
+    cost: u16,
+) {
     let Some(root) = inventories.read().root(slot) else {
         return;
     };
@@ -481,7 +486,7 @@ pub(crate) fn last_charge(meter: Option<Bar>, full: u16, cost: u16) -> bool {
 /// What a staff's use does, and the plan the spawn lookup and the handler
 /// after the use follow.
 fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
-    if summon.ammo != 0 {
+    if summon.ammo.is_some() {
         return SummonVerdict::Allow;
     }
     let survivor = summon.template.id();
@@ -523,7 +528,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
             let copies = shared.copies.entity_count(survivor, original);
             let Some(cost) = charge_cost(survivor, copies, summon.meter, charges.full) else {
                 enshwick::info!(
-                    "copy staff of {} at {:?}: refused at survivors-per-altar:charge-cost",
+                    "copy staff of {} at {:?}: refused at enshwick.survivors-per-altar:charge-cost",
                     staff.key(),
                     summon.target
                 );

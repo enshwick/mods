@@ -15,7 +15,7 @@ use enshwick::i18n::{Language, Texts};
 use enshwick::migrations::Migrations;
 use enshwick::state::ModLocal;
 use enshwick::survivors::{WORKSHOP_SURVIVORS, WorkshopSurvivor};
-use enshwick::{Load, Off};
+use enshwick::{ItemId, Load, Off};
 
 /// The mod's texts, per language.
 pub(crate) const TEXTS: &str = include_str!("texts.toml");
@@ -162,21 +162,22 @@ pub(crate) fn staffs() -> &'static [Staff] {
 
 /// The copy staff with the game id `item`, its own or the one it had
 /// before.
-pub(crate) fn copy_staff(item: u32) -> Option<&'static Staff> {
-    let item = enshwick::migrations::current_id(item);
+pub(crate) fn copy_staff(item: ItemId) -> Option<&'static Staff> {
+    let item = enshwick::migrations::current_id(item.get());
     staffs().iter().find(|s| s.copy.id() == item)
 }
 
 /// The game ids of every copy staff.
-pub(crate) fn copy_ids() -> Vec<u32> {
-    staffs().iter().map(|s| s.copy.id()).collect()
+pub(crate) fn copy_ids() -> Vec<ItemId> {
+    staffs().iter().map(|s| ItemId::new(s.copy.id())).collect()
 }
 
 /// The game ids of every copy staff, with the ids saved stacks may hold.
-pub(crate) fn known_ids() -> Vec<u32> {
+pub(crate) fn known_ids() -> Vec<ItemId> {
     staffs()
         .iter()
         .flat_map(|s| std::iter::once(s.copy.id()).chain(s.old.map(Guid::id)))
+        .map(ItemId::new)
         .collect()
 }
 
@@ -264,9 +265,9 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
 pub(crate) fn file(load: &mut Load<'_>) -> Result<(), Off> {
     for staff in staffs() {
         let survivor = staff.survivor.id();
-        load.add_summon_item(staff.copy.id(), survivor)?;
+        load.add_summon_item(ItemId::new(staff.copy.id()), survivor)?;
         if let Some(old) = staff.old {
-            load.add_summon_item(old.id(), survivor)?;
+            load.add_summon_item(ItemId::new(old.id()), survivor)?;
         }
     }
     Ok(())
@@ -287,9 +288,13 @@ mod tests {
             }
             if let Some(old) = staff.old {
                 assert!(ids.insert(old.id()), "{}", staff.key());
-                assert!(known_ids().contains(&old.id()), "{}", staff.key());
+                assert!(
+                    known_ids().contains(&ItemId::new(old.id())),
+                    "{}",
+                    staff.key()
+                );
                 assert_eq!(
-                    copy_staff(old.id()).map(Staff::key),
+                    copy_staff(ItemId::new(old.id())).map(Staff::key),
                     None,
                     "only once the migration is declared"
                 );
@@ -297,10 +302,10 @@ mod tests {
             let vanilla = staff.survivor.staff().id();
             assert_ne!(staff.copy.id(), vanilla);
             assert_eq!(
-                copy_staff(staff.copy.id()).map(Staff::key),
+                copy_staff(ItemId::new(staff.copy.id())).map(Staff::key),
                 Some(staff.key())
             );
-            assert_eq!(copy_staff(vanilla).map(Staff::key), None);
+            assert_eq!(copy_staff(ItemId::new(vanilla)).map(Staff::key), None);
         }
         assert_eq!(staffs().len(), WORKSHOP_SURVIVORS.len());
     }

@@ -18,8 +18,8 @@ Everything else stays vanilla:
 `mod-configs/enshwick.build-camera.toml`, written on first start; each
 world keeps its own copy of it (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
-the Mods screen shows the setting in English or Ukrainian. On the first start
-the mod copies its settings from its former id, `build-camera`:
+the Mods screen shows the setting in the language the game is set to. On the
+first start the mod copies its settings from its former id, `build-camera`:
 
 ```toml
 enabled = true

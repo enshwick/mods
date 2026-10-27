@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use enshwick::ecs::Entity;
+use enshwick::Entity;
 use enshwick::loot::Container;
 use enshwick::world::near;
 

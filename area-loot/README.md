@@ -53,7 +53,7 @@ the loot and see the corpses dissolve. It does not count in the join check.
 ## For mod authors
 
 Other mods may leave out a container around the emptied one that would
-come along, at the extension point `area-loot:eligible`; they never add
+come along, at the extension point `enshwick.area-loot:eligible`; they never add
 one the mod passed over, such as a container another player is at. See
 [Extending other mods](https://github.com/enshwick/enshwick/blob/main/book/src/extending.md).
 

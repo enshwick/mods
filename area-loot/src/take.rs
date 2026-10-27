@@ -2,14 +2,14 @@
 //! emptied and queues the full ones around it; each is then emptied into that
 //! player, nearest first, through the game's own inventory transactions,
 //! once it is checked again that nobody else opened it meanwhile. Other mods
-//! leave containers out at the extension point `area-loot:eligible`.
+//! leave containers out at the extension point `enshwick.area-loot:eligible`.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use enshwick::ecs::Entity;
+use enshwick::Entity;
 use enshwick::inventory::{Batch, Inventories, Op, Outcome};
 use enshwick::loot::{Container, LootPass};
 use enshwick::points::OwnedPoint;
@@ -64,7 +64,7 @@ static TRACKER: ModLocal<Mutex<Option<Tracker>>> = ModLocal::new();
 static LAST_PRUNE: ModLocal<Mutex<Option<Duration>>> = ModLocal::new();
 /// The time the holds and the busy window count in: the server's steps.
 static CLOCK: ModLocal<&'static StepClock> = ModLocal::new();
-/// The extension point `area-loot:eligible`, once defined.
+/// The extension point `enshwick.area-loot:eligible`, once defined.
 static ELIGIBLE: ModLocal<OwnedPoint<Eligible>> = ModLocal::new();
 
 fn switches() -> &'static Switches {
@@ -369,7 +369,7 @@ mod tests {
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe { loader.start(crate::enshwick_mod_init, crate::enshwick_mod_ready) };
         assert_ne!(status, Status::OK);
-        assert_eq!(loader.defined_points(), ["area-loot:eligible"]);
+        assert_eq!(loader.defined_points(), ["enshwick.area-loot:eligible"]);
         assert!(eligible(Entity(1), Entity(2), Entity(3), 4.0));
         assert!(
             loader.extend_point(|loot: &Eligible, _: &bool| { Verdict::Set(loot.distance <= 5.0) })

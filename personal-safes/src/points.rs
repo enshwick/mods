@@ -18,7 +18,7 @@ impl SafeAction {
     pub const MANAGE: Self = Self(2);
 }
 
-/// Who may open, use, remove or manage a Safe, `enshwick.personal-safes:access`: the answer
+/// Who may open, use, remove or manage a Safe, `safes:access`: the answer
 /// is whether the player may, and a refusal is final.
 ///
 /// The mod answers first: the owner may do all, the players they allowed
@@ -26,7 +26,7 @@ impl SafeAction {
 /// server has not registered yet is refused before the point is asked.
 /// Asked on the server's worker threads, inside the game's systems: a link
 /// reads lock-free state only.
-#[enshwick::point(name = "enshwick.personal-safes:access", mode = Override, output = bool, refusable)]
+#[enshwick::point(name = "safes:access", mode = Override, output = bool, refusable)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Access {
     /// The player's account key.

@@ -7,7 +7,7 @@
 //! systems on worker threads, so it reads only lock-free snapshots. A Safe
 //! whose owner is unknown behaves as an ordinary chest: nothing is ever
 //! locked away for good. Other mods change the rule at the extension point
-//! `enshwick.personal-safes:access`.
+//! `safes:access`.
 
 use std::collections::HashMap;
 
@@ -210,12 +210,12 @@ impl Action {
     }
 }
 
-/// The extension point `enshwick.personal-safes:access`, once defined.
+/// The extension point `safes:access`, once defined.
 pub static POINT: ModLocal<OwnedPoint<AccessPoint>> = ModLocal::new();
 
 /// Whether `player`, with the character `character`, may do `action` with
 /// `safe`, the chest `chest`: [`permits`] first, then the links of other
-/// mods at `enshwick.personal-safes:access`. A player not registered yet is refused before
+/// mods at `safes:access`. A player not registered yet is refused before
 /// any link is asked.
 #[must_use]
 pub fn decide(

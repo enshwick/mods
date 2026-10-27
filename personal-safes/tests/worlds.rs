@@ -6,6 +6,7 @@ mod tests {
     use enshwick::abi::Status;
     use enshwick::events::{ShutdownStarted, WorldLoaded};
     use enshwick::test::FakeHost;
+    use enshwick::{Entity, ItemId, PlayerKey};
     use enshwick_personal_safes::access::snapshots;
 
     /// A loader that knows the item and recipe layouts the Safe needs.
@@ -106,7 +107,10 @@ mod tests {
         assert!(snapshots().owners.load().is_empty(), "no world yet");
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         let owners = snapshots().owners.load();
-        assert_eq!(owners.get(&(1, 2, 3)).map(|safe| safe.owner), Some(0xff));
+        assert_eq!(
+            owners.get(&(1, 2, 3)).map(|safe| safe.owner),
+            Some(PlayerKey::new(0xff))
+        );
         assert!(dir.join("worlds/world0-aa/owners.toml").exists());
         assert!(!dir.join("owners.toml").exists());
         assert!(dir.join("owners.toml.moved").exists());
@@ -149,12 +153,15 @@ mod tests {
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        assert_eq!(snapshots().seen(900, (4, 0, 4)), Some((0xff, (4, 0, 4))));
+        assert_eq!(
+            snapshots().seen(Entity(900), (4, 0, 4)),
+            Some((PlayerKey::new(0xff), (4, 0, 4)))
+        );
         let removed = BuildingData {
             header: Header::of::<BuildingData>(),
-            entity: 900,
-            player: 10,
-            item: 0,
+            entity: Entity(900),
+            player: Entity(10),
+            item: ItemId::new(0),
             kind: BuildingData::PICKED_UP,
             replay: 0,
             template: [0; 16],
@@ -171,8 +178,8 @@ mod tests {
         // Placed again elsewhere, as when a Safe moves: written at once.
         let placed = BuildingData {
             kind: BuildingData::PLACED,
-            entity: 901,
-            item: enshwick_personal_safes::content::SAFE.id(),
+            entity: Entity(901),
+            item: ItemId::new(enshwick_personal_safes::content::SAFE.id()),
             position: [10.0, 0.0, 10.0],
             ..removed
         };
@@ -205,7 +212,6 @@ mod tests {
     #[test]
     fn a_safe_nobody_looked_at_lends_its_stock_to_no_stranger() {
         use enshwick::abi::TickData;
-        use enshwick::ecs::Entity;
         use enshwick::events::Ticked;
         use enshwick::interactions::{Interaction, Kind};
         use enshwick_personal_safes::access::{Safe, Seen};
@@ -218,8 +224,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let item = enshwick_personal_safes::content::SAFE.id().to_le_bytes();
         let loader = containers(host())
-            .placed(3, 700, [20.0, 1.0, 20.0])
-            .component(700, 2, &item)
+            .placed(3, Entity(700), [20.0, 1.0, 20.0])
+            .component(Entity(700), 2, &item)
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -240,16 +246,17 @@ label_language = \"en\"
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         snapshots().load_owners(rustc_hash::FxHashMap::from_iter([(
             (40, 2, 40),
-            Safe::new(1, "Ann"),
+            Safe::new(PlayerKey::new(1), "Ann"),
         )]));
         let stranger = Seen {
-            key: 3,
+            key: PlayerKey::new(3),
             admin: false,
         };
         snapshots()
             .players
             .store(std::sync::Arc::new(rustc_hash::FxHashMap::from_iter([(
-                10, stranger,
+                Entity(10),
+                stranger,
             )])));
         let stock = Interaction {
             kind: Kind::Stock,
@@ -281,7 +288,6 @@ label_language = \"en\"
         use rustc_hash::FxHashMap;
         use std::sync::Arc;
 
-        use enshwick::ecs::Entity;
         use enshwick::points::Verdict;
         use enshwick_personal_safes::access::{Action, Seen};
         use enshwick_personal_safes::points::{Access, SafeAction};
@@ -310,34 +316,37 @@ label_language = \"en\"
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        assert_eq!(loader.defined_points(), ["safes:access"]);
+        assert_eq!(loader.defined_points(), ["enshwick.personal-safes:access"]);
         let (owner, stranger) = (
             Seen {
-                key: 1,
+                key: PlayerKey::new(1),
                 admin: false,
             },
             Seen {
-                key: 3,
+                key: PlayerKey::new(3),
                 admin: false,
             },
         );
         snapshots().players.store(Arc::new(FxHashMap::from_iter([
-            (10, owner),
-            (12, stranger),
+            (Entity(10), owner),
+            (Entity(12), stranger),
         ])));
-        snapshots().placed(700, (40, 2, 40), owner.key, "Ann");
-        assert!(snapshots().refused_seen(700, Entity(12)), "vanilla Safes");
+        snapshots().placed(Entity(700), (40, 2, 40), owner.key, "Ann");
+        assert!(
+            snapshots().refused_seen(Entity(700), Entity(12)),
+            "vanilla Safes"
+        );
         assert!(snapshots().may_manage((40, 2, 40), owner, Entity(10)));
         assert!(!snapshots().may_manage((40, 2, 40), stranger, Entity(12)));
         assert!(loader.extend_point(|access: &Access, may: &bool| {
             match access.action {
-                SafeAction::USE if access.player == 3 => Verdict::Set(true),
+                SafeAction::USE if access.player == PlayerKey::new(3) => Verdict::Set(true),
                 SafeAction::REMOVE | SafeAction::MANAGE => Verdict::Refuse,
                 _ => Verdict::Set(*may),
             }
         }));
         assert!(
-            !snapshots().refused_seen(700, Entity(12)),
+            !snapshots().refused_seen(Entity(700), Entity(12)),
             "the link lets them in"
         );
         assert!(
@@ -356,10 +365,10 @@ label_language = \"en\"
             "the access action hears the refusal too"
         );
         assert!(
-            snapshots().refused_seen(700, Entity(14)),
+            snapshots().refused_seen(Entity(700), Entity(14)),
             "a player not registered yet stays refused"
         );
-        assert!(snapshots().removed(700).is_some());
+        assert!(snapshots().removed(Entity(700)).is_some());
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }
@@ -371,8 +380,8 @@ label_language = \"en\"
         PlayerInfo {
             header: Header::of::<PlayerInfo>(),
             slot: entity,
-            entity,
-            key,
+            entity: Entity(entity),
+            key: PlayerKey::new(key),
             permissions: PlayerInfo::CAN_ACCESS_INVENTORIES,
             name_len: u8::try_from(name.len()).unwrap(),
             name: bytes,
@@ -406,9 +415,9 @@ label_language = \"en\"
             .player(ann)
             .player(bob)
             .player(cat)
-            .component(10, 1, &at(0.0))
-            .component(11, 1, &at(100.0))
-            .component(12, 1, &at(20.0))
+            .component(Entity(10), 1, &at(0.0))
+            .component(Entity(11), 1, &at(100.0))
+            .component(Entity(12), 1, &at(20.0))
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -427,8 +436,8 @@ label_language = \"en\"
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        snapshots().placed(700, (2, 0, 0), 1, "Ann");
-        snapshots().placed(701, (42, 0, 0), 2, "Bob");
+        snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(Entity(701), (42, 0, 0), PlayerKey::new(2), "Bob");
         let run = |who, id, args: &str| {
             let reply = loader
                 .ask_actions(ActionCall::RUN, who, 0, id, args)
@@ -450,8 +459,8 @@ label_language = \"en\"
         );
         assert!(loader.extend_point(|access: &Access, may: &bool| {
             match (access.action, access.player) {
-                (SafeAction::MANAGE, 3) => Verdict::Set(true),
-                (SafeAction::MANAGE, 1) => Verdict::Refuse,
+                (SafeAction::MANAGE, PlayerKey(3)) => Verdict::Set(true),
+                (SafeAction::MANAGE, PlayerKey(1)) => Verdict::Refuse,
                 _ => Verdict::Set(*may),
             }
         }));
@@ -469,7 +478,7 @@ label_language = \"en\"
         );
         let owners = snapshots().owners.load();
         assert_eq!(owners[&(2, 0, 0)].allowed.len(), 1, "Cat stays allowed");
-        assert_eq!(owners[&(42, 0, 0)].allowed[0].key, 1);
+        assert_eq!(owners[&(42, 0, 0)].allowed[0].key, PlayerKey::new(1));
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }
@@ -499,9 +508,9 @@ label_language = \"en\"
             .player(root)
             .player(bob)
             .player(cat)
-            .component(10, 1, &at(0.0))
-            .component(11, 1, &at(100.0))
-            .component(12, 1, &at(200.0))
+            .component(Entity(10), 1, &at(0.0))
+            .component(Entity(11), 1, &at(100.0))
+            .component(Entity(12), 1, &at(200.0))
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -521,8 +530,8 @@ label_language = \"en\"
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         // Bob's Safe is nearer, the administrator's own a little farther.
-        snapshots().placed(700, (1, 0, 0), 2, "Bob");
-        snapshots().placed(701, (6, 0, 0), 1, "Root");
+        snapshots().placed(Entity(700), (1, 0, 0), PlayerKey::new(2), "Bob");
+        snapshots().placed(Entity(701), (6, 0, 0), PlayerKey::new(1), "Root");
 
         let sheet = decode(
             &loader
@@ -543,7 +552,10 @@ label_language = \"en\"
             ran,
             "1Cat may now open your Safe at (3, 0, 0), the nearest you manage within 4 m."
         );
-        assert_eq!(snapshots().owners.load()[&(6, 0, 0)].allowed[0].key, 3);
+        assert_eq!(
+            snapshots().owners.load()[&(6, 0, 0)].allowed[0].key,
+            PlayerKey::new(3)
+        );
         assert!(snapshots().owners.load()[&(1, 0, 0)].allowed.is_empty());
 
         // Off again, and Cat may be switched off while away.

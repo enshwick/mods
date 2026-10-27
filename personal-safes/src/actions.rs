@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use enshwick::actions::{Action, Ask, Outcome, Request, Subject, Value};
 use enshwick::i18n::{Language, Texts};
 use enshwick::world::World;
-use enshwick::{Load, Off};
+use enshwick::{Load, Off, PlayerKey};
 
 use crate::access::{AllowOutcome, Cell, Safe, Seen, centre, nearest_own, snapshots};
 use crate::keys;
@@ -88,7 +88,7 @@ fn unpack(id: u64) -> Cell {
 type Say<'a> = dyn Fn(&str, &[(&str, &str)]) -> String + 'a;
 
 /// Whose Safe `safe` is, as `key` reads it in `say`'s language.
-fn whose(say: &Say<'_>, safe: &Safe, key: u64) -> String {
+fn whose(say: &Say<'_>, safe: &Safe, key: PlayerKey) -> String {
     if safe.owner == key {
         say(keys::YOURS, &[])
     } else if safe.owner_name.is_empty() {

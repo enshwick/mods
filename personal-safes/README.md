@@ -90,7 +90,7 @@ side, and the mod counts in the join check.
 
 Other mods change who may open, use, remove or rename a Safe, and who may
 manage the list of players at it, at the extension point
-`safes:access`, and may refuse outright. See
+`enshwick.personal-safes:access`, and may refuse outright. See
 [Extending other mods](https://github.com/enshwick/enshwick/blob/main/book/src/extending.md).
 
 Licensed under [MIT](LICENSE).

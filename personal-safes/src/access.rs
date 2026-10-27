@@ -7,7 +7,7 @@
 //! systems on worker threads, so it reads only lock-free snapshots. A Safe
 //! whose owner is unknown behaves as an ordinary chest: nothing is ever
 //! locked away for good. Other mods change the rule at the extension point
-//! `safes:access`.
+//! `enshwick.personal-safes:access`.
 
 use std::collections::HashMap;
 
@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use arc_swap::ArcSwap;
-use enshwick::ecs::Entity;
 use enshwick::interactions::{Interaction, Kind};
 use enshwick::points::OwnedPoint;
 use enshwick::state::ModLocal;
+use enshwick::{Entity, ItemId, PlayerKey};
 
 use crate::points::{Access as AccessPoint, SafeAction};
 
@@ -71,7 +71,7 @@ pub fn owner_near<V, S: std::hash::BuildHasher>(
 #[must_use]
 pub fn nearest_own<S: std::hash::BuildHasher>(
     owners: &HashMap<Cell, Safe, S>,
-    key: u64,
+    key: PlayerKey,
     position: [f64; 3],
     max: f64,
 ) -> Option<Cell> {
@@ -92,7 +92,7 @@ pub fn nearest_own<S: std::hash::BuildHasher>(
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Allowed {
     /// Their account key.
-    pub key: u64,
+    pub key: PlayerKey,
     /// Their name when they were allowed.
     pub name: String,
 }
@@ -101,7 +101,7 @@ pub struct Allowed {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Safe {
     /// The owner's account key.
-    pub owner: u64,
+    pub owner: PlayerKey,
     /// The owner's name, as last seen; empty when unknown.
     pub owner_name: String,
     /// Players who may use the Safe as the owner does, but never remove it
@@ -123,7 +123,7 @@ pub enum AllowOutcome {
 impl Safe {
     /// A Safe of `owner`, named `owner_name`, no one else allowed.
     #[must_use]
-    pub fn new(owner: u64, owner_name: &str) -> Self {
+    pub fn new(owner: PlayerKey, owner_name: &str) -> Self {
         Self {
             owner,
             owner_name: owner_name.to_owned(),
@@ -132,7 +132,7 @@ impl Safe {
     }
 
     /// Lets the player with `key`, named `name`, use the Safe.
-    pub fn allow(&mut self, key: u64, name: &str) -> AllowOutcome {
+    pub fn allow(&mut self, key: PlayerKey, name: &str) -> AllowOutcome {
         if key == self.owner {
             return AllowOutcome::Owner;
         }
@@ -159,7 +159,7 @@ impl Safe {
 
     /// Takes back the use of the Safe from the player with `key`; who that
     /// was, or `None` when they were not allowed.
-    pub fn deny_key(&mut self, key: u64) -> Option<Allowed> {
+    pub fn deny_key(&mut self, key: PlayerKey) -> Option<Allowed> {
         let index = self.allowed.iter().position(|a| a.key == key)?;
         Some(self.allowed.remove(index))
     }
@@ -180,7 +180,7 @@ pub enum Action {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Seen {
     /// The account key.
-    pub key: u64,
+    pub key: PlayerKey,
     /// Whether the server makes them an administrator.
     pub admin: bool,
 }
@@ -210,12 +210,12 @@ impl Action {
     }
 }
 
-/// The extension point `safes:access`, once defined.
+/// The extension point `enshwick.personal-safes:access`, once defined.
 pub static POINT: ModLocal<OwnedPoint<AccessPoint>> = ModLocal::new();
 
 /// Whether `player`, with the character `character`, may do `action` with
 /// `safe`, the chest `chest`: [`permits`] first, then the links of other
-/// mods at `safes:access`. A player not registered yet is refused before
+/// mods at `enshwick.personal-safes:access`. A player not registered yet is refused before
 /// any link is asked.
 #[must_use]
 pub fn decide(
@@ -251,9 +251,9 @@ pub struct Access {
     /// Safes by cell; the persistent truth.
     pub owners: ArcSwap<FxHashMap<Cell, Safe>>,
     /// Safes seen this session: entity to owner and cell.
-    pub safes: ArcSwap<FxHashMap<u32, (u64, Cell)>>,
+    pub safes: ArcSwap<FxHashMap<Entity, (PlayerKey, Cell)>>,
     /// Connected players by character entity.
-    pub players: ArcSwap<FxHashMap<u32, Seen>>,
+    pub players: ArcSwap<FxHashMap<Entity, Seen>>,
     /// Administrators may use, remove and rename every Safe.
     pub admins_open: AtomicBool,
     /// A character the players snapshot lacks asked about a Safe: the
@@ -286,8 +286,15 @@ impl Access {
     /// kept at `at`. A character the snapshot lacks is a player who joined
     /// since it was taken: refused, and the snapshot is asked to catch up.
     #[must_use]
-    pub fn may(&self, owner: u64, at: Cell, chest: Entity, player: Entity, action: Action) -> bool {
-        let seen = self.players.load().get(&player.0).copied();
+    pub fn may(
+        &self,
+        owner: PlayerKey,
+        at: Cell,
+        chest: Entity,
+        player: Entity,
+        action: Action,
+    ) -> bool {
+        let seen = self.players.load().get(&player).copied();
         if seen.is_none() {
             self.unregistered.store(true, Ordering::Relaxed);
         }
@@ -311,7 +318,7 @@ impl Access {
             .safes
             .load()
             .iter()
-            .find_map(|(&entity, &(_, kept))| (kept == at).then_some(Entity(entity)))
+            .find_map(|(&entity, &(_, kept))| (kept == at).then_some(entity))
             .unwrap_or_default();
         let admins_open = self.admins_open.load(Ordering::Relaxed);
         decide(
@@ -364,16 +371,16 @@ impl Access {
     pub fn owner(
         &self,
         chest: Entity,
-        item: Option<u32>,
+        item: Option<ItemId>,
         position: Option<[f64; 3]>,
-    ) -> Option<(u64, Cell)> {
-        if let Some(&known) = self.safes.load().get(&chest.0) {
+    ) -> Option<(PlayerKey, Cell)> {
+        if let Some(&known) = self.safes.load().get(&chest) {
             return Some(known);
         }
         if !crate::content::is_safe(item?) {
             return None;
         }
-        let found = self.seen(chest.0, cell(position?));
+        let found = self.seen(chest, cell(position?));
         if found.is_none() {
             enshwick::warn_every!(
                 std::time::Duration::from_secs(60),
@@ -385,7 +392,7 @@ impl Access {
 
     /// The owner recorded near `at` for the Safe `entity`, remembered for
     /// the session.
-    pub fn seen(&self, entity: u32, at: Cell) -> Option<(u64, Cell)> {
+    pub fn seen(&self, entity: Entity, at: Cell) -> Option<(PlayerKey, Cell)> {
         let found = owner_near(&self.owners.load(), at).map(|(at, safe)| (safe.owner, at))?;
         self.safes.rcu(|safes| {
             let mut safes = FxHashMap::clone(safes);
@@ -410,11 +417,11 @@ impl Access {
     /// Whether `chest` is a Safe `player` may not use, from what this
     /// session has seen; for checks without a system context.
     #[must_use]
-    pub fn refused_seen(&self, chest: u32, player: Entity) -> bool {
+    pub fn refused_seen(&self, chest: Entity, player: Entity) -> bool {
         self.safes
             .load()
             .get(&chest)
-            .is_some_and(|&(owner, at)| !self.may(owner, at, Entity(chest), player, Action::Use))
+            .is_some_and(|&(owner, at)| !self.may(owner, at, chest, player, Action::Use))
     }
 
     /// Forgets the Safes and players of a game that stopped or the world
@@ -425,7 +432,7 @@ impl Access {
     }
 
     /// Records a Safe just placed by the player with `key`, named `name`.
-    pub fn placed(&self, entity: u32, at: Cell, key: u64, name: &str) {
+    pub fn placed(&self, entity: Entity, at: Cell, key: PlayerKey, name: &str) {
         self.owners.rcu(|owners| {
             let mut owners = FxHashMap::clone(owners);
             owners.insert(at, Safe::new(key, name));
@@ -440,7 +447,7 @@ impl Access {
 
     /// Forgets a Safe picked up or torn down; its cell and record, or
     /// `None` when `entity` was none.
-    pub fn removed(&self, entity: u32) -> Option<(Cell, Safe)> {
+    pub fn removed(&self, entity: Entity) -> Option<(Cell, Safe)> {
         let &(owner, at) = self.safes.load().get(&entity)?;
         self.safes.rcu(|safes| {
             let mut safes = FxHashMap::clone(safes);
@@ -481,7 +488,7 @@ impl Access {
 #[must_use]
 pub fn filter(interaction: &Interaction) -> bool {
     match interaction.kind {
-        Kind::Stock => !snapshots().refused_seen(interaction.target.0, interaction.player),
+        Kind::Stock => !snapshots().refused_seen(interaction.target, interaction.player),
         Kind::Upgrade => snapshots()
             .owner(interaction.target, interaction.item, interaction.position)
             .is_none(),
@@ -501,19 +508,19 @@ mod tests {
     use super::*;
 
     const OWNER: Seen = Seen {
-        key: 1,
+        key: PlayerKey::new(1),
         admin: false,
     };
     const FRIEND: Seen = Seen {
-        key: 2,
+        key: PlayerKey::new(2),
         admin: false,
     };
     const STRANGER: Seen = Seen {
-        key: 3,
+        key: PlayerKey::new(3),
         admin: false,
     };
     const ADMIN: Seen = Seen {
-        key: 4,
+        key: PlayerKey::new(4),
         admin: true,
     };
 
@@ -556,37 +563,43 @@ mod tests {
     #[test]
     fn the_nearest_own_safe_is_found_within_reach() {
         let owners = FxHashMap::from_iter([
-            ((0, 0, 0), Safe::new(1, "Ann")),
-            ((4, 0, 0), Safe::new(1, "Ann")),
-            ((2, 0, 0), Safe::new(2, "Bob")),
-            ((40, 0, 0), Safe::new(1, "Ann")),
+            ((0, 0, 0), Safe::new(PlayerKey::new(1), "Ann")),
+            ((4, 0, 0), Safe::new(PlayerKey::new(1), "Ann")),
+            ((2, 0, 0), Safe::new(PlayerKey::new(2), "Bob")),
+            ((40, 0, 0), Safe::new(PlayerKey::new(1), "Ann")),
         ]);
         assert_eq!(
-            nearest_own(&owners, 1, [1.6, 0.0, 0.0], 4.0),
+            nearest_own(&owners, PlayerKey::new(1), [1.6, 0.0, 0.0], 4.0),
             Some((4, 0, 0))
         );
-        assert_eq!(nearest_own(&owners, 1, [10.0, 0.0, 0.0], 4.0), None);
-        assert_eq!(nearest_own(&owners, 3, [0.0, 0.0, 0.0], 4.0), None);
+        assert_eq!(
+            nearest_own(&owners, PlayerKey::new(1), [10.0, 0.0, 0.0], 4.0),
+            None
+        );
+        assert_eq!(
+            nearest_own(&owners, PlayerKey::new(3), [0.0, 0.0, 0.0], 4.0),
+            None
+        );
     }
 
     #[test]
     fn owners_friends_and_admins_through_the_snapshots() {
         let access = Access::new();
         access.players.store(Arc::new(FxHashMap::from_iter([
-            (10, OWNER),
-            (11, FRIEND),
-            (12, STRANGER),
-            (13, ADMIN),
+            (Entity(10), OWNER),
+            (Entity(11), FRIEND),
+            (Entity(12), STRANGER),
+            (Entity(13), ADMIN),
         ])));
-        access.placed(500, (0, 0, 0), OWNER.key, "Ann");
+        access.placed(Entity(500), (0, 0, 0), OWNER.key, "Ann");
         assert_eq!(
             access.change((0, 0, 0), |safe| safe.allow(FRIEND.key, "Bob")),
             Some(AllowOutcome::Allowed)
         );
-        assert!(!access.refused_seen(500, Entity(10)));
-        assert!(!access.refused_seen(500, Entity(11)));
-        assert!(access.refused_seen(500, Entity(12)));
-        assert!(!access.refused_seen(500, Entity(13)));
+        assert!(!access.refused_seen(Entity(500), Entity(10)));
+        assert!(!access.refused_seen(Entity(500), Entity(11)));
+        assert!(access.refused_seen(Entity(500), Entity(12)));
+        assert!(!access.refused_seen(Entity(500), Entity(13)));
         assert!(!access.may(
             OWNER.key,
             (0, 0, 0),
@@ -595,9 +608,9 @@ mod tests {
             Action::Remove
         ));
         access.admins_open.store(false, Ordering::Relaxed);
-        assert!(access.refused_seen(500, Entity(13)));
-        assert!(access.removed(500).is_some());
-        assert!(!access.refused_seen(500, Entity(12)));
+        assert!(access.refused_seen(Entity(500), Entity(13)));
+        assert!(access.removed(Entity(500)).is_some());
+        assert!(!access.refused_seen(Entity(500), Entity(12)));
         assert!(access.owners.load().is_empty());
         assert_eq!(access.change((0, 0, 0), |_| ()), None);
     }
@@ -607,29 +620,32 @@ mod tests {
         let access = Access::new();
         access
             .players
-            .store(Arc::new(FxHashMap::from_iter([(10, OWNER)])));
-        access.placed(500, (0, 0, 0), OWNER.key, "Ann");
+            .store(Arc::new(FxHashMap::from_iter([(Entity(10), OWNER)])));
+        access.placed(Entity(500), (0, 0, 0), OWNER.key, "Ann");
         assert!(!access.unregistered.load(Ordering::Relaxed));
-        assert!(access.refused_seen(500, Entity(14)), "unknown character");
+        assert!(
+            access.refused_seen(Entity(500), Entity(14)),
+            "unknown character"
+        );
         assert!(access.unregistered.swap(false, Ordering::Relaxed));
-        assert!(!access.refused_seen(500, Entity(10)));
+        assert!(!access.refused_seen(Entity(500), Entity(10)));
         assert!(!access.unregistered.load(Ordering::Relaxed));
         access.players.rcu(|players| {
             let mut players = FxHashMap::clone(players);
-            players.insert(14, OWNER);
+            players.insert(Entity(14), OWNER);
             players
         });
-        assert!(!access.refused_seen(500, Entity(14)));
+        assert!(!access.refused_seen(Entity(500), Entity(14)));
     }
 
     #[test]
     fn interactions_follow_the_rules_of_a_safe() {
         snapshots().players.store(Arc::new(FxHashMap::from_iter([
-            (10, OWNER),
-            (12, STRANGER),
+            (Entity(10), OWNER),
+            (Entity(12), STRANGER),
         ])));
         let at = centre((40, 2, 40));
-        let ask = |kind, player, item: Option<u32>| {
+        let ask = |kind, player, item: Option<ItemId>| {
             filter(&Interaction {
                 kind,
                 player: Entity(player),
@@ -638,17 +654,20 @@ mod tests {
                 position: item.map(|_| at),
             })
         };
-        let safe = Some(crate::content::SAFE.id());
+        let safe = Some(ItemId::new(crate::content::SAFE.id()));
         // Unknown and not seen yet: open to all.
         assert!(ask(Kind::Open, 12, None));
-        snapshots().placed(700, (40, 2, 40), OWNER.key, "Ann");
+        snapshots().placed(Entity(700), (40, 2, 40), OWNER.key, "Ann");
         assert!(ask(Kind::Open, 10, safe));
         assert!(!ask(Kind::Open, 12, safe));
         assert!(!ask(Kind::Move, 12, None), "known from the session");
         assert!(!ask(Kind::Stock, 12, None));
         assert!(ask(Kind::Dismantle, 10, safe));
         assert!(!ask(Kind::Upgrade, 10, safe), "nobody upgrades a Safe");
-        assert!(snapshots().removed(700).is_some());
-        assert!(ask(Kind::Upgrade, 10, Some(1)), "another piece upgrades");
+        assert!(snapshots().removed(Entity(700)).is_some());
+        assert!(
+            ask(Kind::Upgrade, 10, Some(ItemId::new(1))),
+            "another piece upgrades"
+        );
     }
 }

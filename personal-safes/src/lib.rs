@@ -26,7 +26,6 @@ use std::time::Duration;
 
 use enshwick::abi::BuildingData;
 use enshwick::abi::Side;
-use enshwick::ecs::Entity;
 use enshwick::events::{
     BuildingPlaced, BuildingRemoved, PlayerJoined, PlayerLeft, ShutdownStarted, Ticked,
     WorldLoaded, WorldSaved,
@@ -35,7 +34,7 @@ use enshwick::i18n::Language;
 use enshwick::state::{ModLocal, Store, WorldStore};
 use enshwick::world::Rename;
 use enshwick::world::{ContainerKinds, World};
-use enshwick::{Load, Mod, Off};
+use enshwick::{Entity, ItemId, Load, Mod, Off, PlayerKey};
 
 use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
 use crate::actions::Phrases;
@@ -138,7 +137,7 @@ struct AllowedRecord {
     name: String,
 }
 
-fn hex(key: u64) -> String {
+fn hex(key: PlayerKey) -> String {
     format!("{key:016x}")
 }
 
@@ -169,14 +168,14 @@ impl Owners {
             .iter()
             .filter_map(|r| {
                 let safe = Safe {
-                    owner: u64::from_str_radix(&r.owner, 16).ok()?,
+                    owner: PlayerKey::new(u64::from_str_radix(&r.owner, 16).ok()?),
                     owner_name: r.name.clone(),
                     allowed: r
                         .allowed
                         .iter()
                         .filter_map(|a| {
                             Some(Allowed {
-                                key: u64::from_str_radix(&a.key, 16).ok()?,
+                                key: PlayerKey::new(u64::from_str_radix(&a.key, 16).ok()?),
                                 name: a.name.clone(),
                             })
                         })
@@ -359,7 +358,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     })?;
     load.on::<BuildingRemoved>(move |removed| {
         if let Some(gone) = snapshots().removed(removed.entity) {
-            enshwick::info!("Safe {} removed", removed.entity);
+            enshwick::info!("Safe {} removed", removed.entity.0);
             self::removed().push(gone);
             let _open = hand_over(store);
         }
@@ -388,15 +387,12 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
 
 /// Records a Safe just placed, with its owner, and names the owner on it.
 fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
-    let entity = Entity(placed.player);
+    let entity = placed.player;
     let player = world.player(entity);
-    let key = player.as_ref().map(|p| p.key).or_else(|| {
-        snapshots()
-            .players
-            .load()
-            .get(&entity.0)
-            .map(|seen| seen.key)
-    });
+    let key = player
+        .as_ref()
+        .map(|p| p.key)
+        .or_else(|| snapshots().players.load().get(&entity).map(|seen| seen.key));
     let Some(key) = key else {
         enshwick::warn!("a Safe was placed by no known player and stays open to all");
         return;
@@ -406,13 +402,13 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
     snapshots().placed(placed.entity, access::cell(position), key, &name);
     if !name.is_empty() {
         let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
-        if !world.set_label(Entity(placed.entity), &label) {
-            enshwick::warn!("Safe {} not labelled", placed.entity);
+        if !world.set_label(placed.entity, &label) {
+            enshwick::warn!("Safe {} not labelled", placed.entity.0);
         }
     }
     enshwick::info!(
         "Safe {} placed at {position:?} by {key:016x}",
-        placed.entity
+        placed.entity.0
     );
 }
 
@@ -420,15 +416,12 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
 /// what is not a Safe; the owner, or an administrator when allowed, for a
 /// Safe.
 fn may_rename(world: World, rename: &Rename) -> bool {
-    let known = snapshots().safes.load().get(&rename.entity.0).copied();
+    let known = snapshots().safes.load().get(&rename.entity).copied();
     let found = known.or_else(|| {
-        if !content::is_safe(world.used_item(rename.entity)?) {
+        if !content::is_safe(ItemId::new(world.used_item(rename.entity)?)) {
             return None;
         }
-        snapshots().seen(
-            rename.entity.0,
-            access::cell(world.position(rename.entity)?),
-        )
+        snapshots().seen(rename.entity, access::cell(world.position(rename.entity)?))
     });
     let Some((owner, at)) = found else {
         return true;
@@ -458,12 +451,14 @@ fn may_rename(world: World, rename: &Rename) -> bool {
 fn learn_safes(world: World) {
     let known = snapshots().safes.load();
     for placed in world.containers(ContainerKinds::default()) {
-        if known.contains_key(&placed.entity.0)
-            || !world.used_item(placed.entity).is_some_and(content::is_safe)
+        if known.contains_key(&placed.entity)
+            || !world
+                .used_item(placed.entity)
+                .is_some_and(|item| content::is_safe(ItemId::new(item)))
         {
             continue;
         }
-        let _owner = snapshots().seen(placed.entity.0, access::cell(placed.position));
+        let _owner = snapshots().seen(placed.entity, access::cell(placed.position));
     }
 }
 
@@ -476,7 +471,7 @@ fn label_seen(
     phrases: &'static Phrases,
     store: &'static WorldStore<Owners>,
 ) -> Result<(), Off> {
-    let mut done: FxHashSet<u32> = FxHashSet::default();
+    let mut done: FxHashSet<Entity> = FxHashSet::default();
     load.scheduler()?.every(Duration::from_secs(2), move || {
         learn_safes(world);
         let safes = snapshots().safes.load();
@@ -485,7 +480,7 @@ fn label_seen(
             if done.contains(&entity) {
                 continue;
             }
-            let named = world.has_label(Entity(entity)) == Some(true);
+            let named = world.has_label(entity) == Some(true);
             if named {
                 done.insert(entity);
                 continue;
@@ -507,7 +502,7 @@ fn label_seen(
                 continue;
             }
             let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
-            if world.set_label(Entity(entity), &label) {
+            if world.set_label(entity, &label) {
                 done.insert(entity);
             }
         }
@@ -533,10 +528,10 @@ fn seen(player: &enshwick::world::Player) -> Seen {
 
 /// Retakes the players snapshot from the world, on the game thread.
 fn snapshot_players(world: World) {
-    let players: FxHashMap<u32, Seen> = world
+    let players: FxHashMap<Entity, Seen> = world
         .players()
         .iter()
-        .map(|p| (p.entity.0, seen(p)))
+        .map(|p| (p.entity, seen(p)))
         .collect();
     snapshots().players.store(std::sync::Arc::new(players));
 }
@@ -546,7 +541,7 @@ fn snapshot_players(world: World) {
 /// of a check that met a character the snapshot lacks.
 fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     load.on::<PlayerJoined>(move |joined| {
-        let entity = Entity(joined.entity);
+        let entity = joined.entity;
         let player = world.player(entity).map_or(
             Seen {
                 key: joined.key,
@@ -556,7 +551,7 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
         );
         snapshots().players.rcu(|players| {
             let mut players = FxHashMap::clone(players);
-            players.insert(entity.0, player);
+            players.insert(entity, player);
             players
         });
     })?;
@@ -715,10 +710,12 @@ label_language = \"uk\"
 
     #[test]
     fn owners_survive_the_file_with_keys_past_i64() {
-        let mut friendly = Safe::new(5, "Ann");
-        friendly.allow(u64::MAX - 1, "Bob Lee");
-        let owners =
-            FxHashMap::from_iter([((1, -2, 3), Safe::new(u64::MAX, "")), ((0, 0, 0), friendly)]);
+        let mut friendly = Safe::new(PlayerKey::new(5), "Ann");
+        friendly.allow(PlayerKey::new(u64::MAX - 1), "Bob Lee");
+        let owners = FxHashMap::from_iter([
+            ((1, -2, 3), Safe::new(PlayerKey::new(u64::MAX), "")),
+            ((0, 0, 0), friendly),
+        ]);
         let text = toml::to_string(&Owners::from_map(&owners)).unwrap();
         let back: Owners = toml::from_str(&text).unwrap();
         assert_eq!(back.to_map(), owners);
@@ -730,7 +727,7 @@ label_language = \"uk\"
         let back: Owners = toml::from_str(old).unwrap();
         assert_eq!(
             back.to_map(),
-            FxHashMap::from_iter([((1, 2, 3), Safe::new(0xff, ""))])
+            FxHashMap::from_iter([((1, 2, 3), Safe::new(PlayerKey::new(0xff), ""))])
         );
     }
 }

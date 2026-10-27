@@ -1,7 +1,7 @@
 //! The extension points the mod defines; other mods write their definitions
 //! of them with `cargo enshwick point`.
 
-use enshwick::ecs::Entity;
+use enshwick::{Entity, PlayerKey};
 
 /// What a player tries to do with a Safe.
 #[repr(transparent)]
@@ -18,21 +18,27 @@ impl SafeAction {
     pub const MANAGE: Self = Self(2);
 }
 
-/// Who may open, use, remove or manage a Safe, `safes:access`: the answer
-/// is whether the player may, and a refusal is final.
+/// Who may open, use, remove or manage a Safe,
+/// `enshwick.personal-safes:access`: the answer is whether the player may,
+/// and a refusal is final.
 ///
 /// The mod answers first: the owner may do all, the players they allowed
 /// only use it, administrators all when its settings allow. A player the
 /// server has not registered yet is refused before the point is asked.
 /// Asked on the server's worker threads, inside the game's systems: a link
 /// reads lock-free state only.
-#[enshwick::point(name = "safes:access", mode = Override, output = bool, refusable)]
+#[enshwick::point(
+    name = "enshwick.personal-safes:access",
+    mode = Override,
+    output = bool,
+    refusable
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Access {
     /// The player's account key.
-    pub player: u64,
+    pub player: PlayerKey,
     /// The owner's account key.
-    pub owner: u64,
+    pub owner: PlayerKey,
     /// The player's character.
     pub character: Entity,
     /// The Safe; [`Entity`] of the chest itself.

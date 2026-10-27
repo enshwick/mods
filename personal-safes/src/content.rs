@@ -1,6 +1,7 @@
 //! The Safe as game content: an item cloned from the wooden chest that places
 //! the same vanilla chest, and a recipe beside the chest's.
 
+use enshwick::ItemId;
 use enshwick::content::items::NewItem;
 use enshwick::content::recipes::NewRecipe;
 use enshwick::content::{Guid, Id};
@@ -27,8 +28,8 @@ pub fn migrations() -> Migrations {
 
 /// Whether `item` is a Safe, under its id or one it had before.
 #[must_use]
-pub fn is_safe(item: u32) -> bool {
-    enshwick::migrations::current_id(item) == SAFE.id()
+pub fn is_safe(item: ItemId) -> bool {
+    enshwick::migrations::current_id(item.get()) == SAFE.id()
 }
 
 /// The mod's texts, per language.

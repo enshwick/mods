@@ -299,11 +299,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_setting_and_choice_has_its_text_in_all_languages() {
+    fn every_text_exists_in_all_languages() {
+        use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
+
         let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
         assert_eq!(texts.untranslated(), []);
         let schema = Settings::schema();
-        let mut keys = vec![schema.text.clone()];
+        let mut keys = vec![
+            MOD_NAME.to_owned(),
+            MOD_DESCRIPTION.to_owned(),
+            schema.text.clone(),
+        ];
         for field in &schema.fields {
             keys.push(field.text.clone());
             keys.push(format!("{}.doc", field.text));

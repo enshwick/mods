@@ -80,8 +80,8 @@ info  [enshwick.optimizer] measure: Wine server: exact waits on, task workers at
 world keeps its own copy of it (see
 [Settings](https://github.com/enshwick/enshwick#settings)). On the first
 start the mod copies the settings it had under its former ids, `optimizer`
-or `proton-optimizer`. The mod's gear on the Mods screen shows them in
-English or Ukrainian:
+or `proton-optimizer`. The mod's gear on the Mods screen shows them in the
+player's game language:
 
 ```toml
 exact_waits = "auto"

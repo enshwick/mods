@@ -310,7 +310,7 @@ label_language = \"en\"
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        assert_eq!(loader.defined_points(), ["safes:access"]);
+        assert_eq!(loader.defined_points(), ["enshwick.personal-safes:access"]);
         let (owner, stranger) = (
             Seen {
                 key: 1,

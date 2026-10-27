@@ -100,7 +100,7 @@ fn whose(say: &Say<'_>, safe: &Safe, key: u64) -> String {
 
 /// The Safe at hand for the player who asks: within reach, one they may
 /// manage, their own first; or why there is none.
-fn at_hand(world: &World, ask: &Ask<'_>) -> Result<Subject, String> {
+fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, String> {
     let me = ask.player;
     let position = world
         .position(me.entity)
@@ -214,11 +214,10 @@ fn list(request: &Request<'_>) -> Outcome {
 /// [`Off`] when the loader refuses the actions.
 pub fn declare(
     load: &mut Load<'_>,
-    world: &World,
+    world: World,
     texts: Texts,
     save: impl Fn() + Send + Sync + 'static,
 ) -> Result<(), Off> {
-    let world = *world;
     let actions = load.actions(texts)?;
     actions.add(
         Action::per_player(ACCESS_ACTION, keys::ACCESS, |_ask, subject| {
@@ -237,12 +236,12 @@ pub fn declare(
                 })
         })
         .help(keys::ACCESS_HELP)
-        .at(move |ask| at_hand(&world, ask))
+        .at(move |ask| at_hand(world, ask))
         .hint(),
         move |request| access(request, &save),
     )?;
     actions.add(
-        Action::new(LIST_ACTION, keys::LIST).at(move |ask| at_hand(&world, ask)),
+        Action::new(LIST_ACTION, keys::LIST).at(move |ask| at_hand(world, ask)),
         list,
     )
 }

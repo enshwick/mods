@@ -350,10 +350,10 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
 
     let _first = access::POINT.set(load.define_point()?);
     load.on_interaction(access::filter)?;
-    track_players(load, &world)?;
+    track_players(load, world)?;
     load.on::<BuildingPlaced>(move |placed| {
         if content::is_safe(placed.item) {
-            placed_safe(&world, phrases, placed);
+            placed_safe(world, phrases, placed);
             save(store);
         }
     })?;
@@ -380,14 +380,14 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         phrases.set_language(settings.language().unwrap_or(Language::FALLBACK));
         set_cost(settings.cost_multiplier);
     })?;
-    label_seen(load, &world, phrases, store)?;
-    load.on_rename(move |rename| may_rename(&world, rename))?;
-    actions::declare(load, &world, phrases.texts.clone(), move || save(store))?;
+    label_seen(load, world, phrases, store)?;
+    load.on_rename(move |rename| may_rename(world, rename))?;
+    actions::declare(load, world, phrases.texts.clone(), move || save(store))?;
     Ok(())
 }
 
 /// Records a Safe just placed, with its owner, and names the owner on it.
-fn placed_safe(world: &World, phrases: &Phrases, placed: &BuildingData) {
+fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
     let entity = Entity(placed.player);
     let player = world.player(entity);
     let key = player.as_ref().map(|p| p.key).or_else(|| {
@@ -419,7 +419,7 @@ fn placed_safe(world: &World, phrases: &Phrases, placed: &BuildingData) {
 /// Whether the player behind `rename` may rename its entity: anyone for
 /// what is not a Safe; the owner, or an administrator when allowed, for a
 /// Safe.
-fn may_rename(world: &World, rename: &Rename) -> bool {
+fn may_rename(world: World, rename: &Rename) -> bool {
     let known = snapshots().safes.load().get(&rename.entity.0).copied();
     let found = known.or_else(|| {
         if !content::is_safe(world.used_item(rename.entity)?) {
@@ -455,7 +455,7 @@ fn may_rename(world: &World, rename: &Rename) -> bool {
 /// Learns every Safe the world holds that this session has not seen yet:
 /// base stock asks without the chest's item or position, so a Safe nobody
 /// looked at would otherwise lend its stock to anyone crafting nearby.
-fn learn_safes(world: &World) {
+fn learn_safes(world: World) {
     let known = snapshots().safes.load();
     for placed in world.containers(ContainerKinds::default()) {
         if known.contains_key(&placed.entity.0)
@@ -472,14 +472,13 @@ fn learn_safes(world: &World) {
 /// owner when they are online. Learns the world's Safes first.
 fn label_seen(
     load: &mut Load<'_>,
-    world: &World,
+    world: World,
     phrases: &'static Phrases,
     store: &'static WorldStore<Owners>,
 ) -> Result<(), Off> {
-    let world = *world;
     let mut done: FxHashSet<u32> = FxHashSet::default();
     load.scheduler()?.every(Duration::from_secs(2), move || {
-        learn_safes(&world);
+        learn_safes(world);
         let safes = snapshots().safes.load();
         let mut learned = false;
         for (&entity, &(owner, at)) in safes.iter() {
@@ -533,7 +532,7 @@ fn seen(player: &enshwick::world::Player) -> Seen {
 }
 
 /// Retakes the players snapshot from the world, on the game thread.
-fn snapshot_players(world: &World) {
+fn snapshot_players(world: World) {
     let players: FxHashMap<u32, Seen> = world
         .players()
         .iter()
@@ -545,8 +544,7 @@ fn snapshot_players(world: &World) {
 /// Keeps the connected players' keys and administrator flags current: on
 /// joining and leaving, every 10 s for permissions, and within a few steps
 /// of a check that met a character the snapshot lacks.
-fn track_players(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
-    let world = *world;
+fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     load.on::<PlayerJoined>(move |joined| {
         let entity = Entity(joined.entity);
         let player = world.player(entity).map_or(
@@ -578,11 +576,11 @@ fn track_players(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
         }
         snapshots().unregistered.store(false, Ordering::Relaxed);
         caught_up.store(tick.step, Ordering::Relaxed);
-        snapshot_players(&world);
+        snapshot_players(world);
     })?;
     // Permissions can change while a player is online.
     load.scheduler()?.every(Duration::from_secs(10), move || {
-        snapshot_players(&world);
+        snapshot_players(world);
         std::ops::ControlFlow::Continue(())
     });
     Ok(())

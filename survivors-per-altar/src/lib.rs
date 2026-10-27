@@ -429,6 +429,52 @@ copy_staff_boss_chance = 0.0
     }
 
     #[test]
+    fn every_text_exists_in_all_languages() {
+        use enshwick::config::Config as _;
+        use enshwick::i18n::{Language, MOD_DESCRIPTION, MOD_NAME, Texts};
+
+        let texts = Texts::parse(staffs::TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        let schema = Settings::schema();
+        let keys = [MOD_NAME.to_owned(), MOD_DESCRIPTION.to_owned(), schema.text]
+            .into_iter()
+            .chain(
+                schema
+                    .fields
+                    .into_iter()
+                    .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+            );
+        for key in keys {
+            assert!(texts.get(&key, Language::FALLBACK).is_some(), "{key}");
+        }
+    }
+
+    #[test]
+    fn every_language_keeps_the_placeholders_of_each_text() {
+        let tables: toml::Table = toml::from_str(staffs::TEXTS).unwrap();
+        let placeholders = |text: &str| {
+            let mut names: Vec<String> = text
+                .split('{')
+                .skip(1)
+                .filter_map(|rest| rest.split_once('}').map(|(name, _)| name.to_owned()))
+                .collect();
+            names.sort_unstable();
+            names
+        };
+        let fallback = tables["en"].as_table().unwrap();
+        for (language, table) in &tables {
+            for (key, text) in table.as_table().unwrap() {
+                let english = fallback[key].as_str().unwrap();
+                assert_eq!(
+                    placeholders(text.as_str().unwrap()),
+                    placeholders(english),
+                    "{language} {key}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_world_s_chances_and_fewest_charges_make_its_drops() {
         let loot = Loot {
             items: vec![ItemId::new(7), ItemId::new(8)],

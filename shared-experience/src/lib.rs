@@ -250,16 +250,20 @@ mod tests {
     }
 
     #[test]
-    fn every_setting_has_its_label_and_description_in_all_languages() {
+    fn every_text_exists_in_all_languages() {
+        use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
+
         let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
         assert_eq!(texts.untranslated(), []);
         let schema = Settings::schema();
-        let keys = std::iter::once(schema.text).chain(
-            schema
-                .fields
-                .into_iter()
-                .flat_map(|field| [format!("{}.doc", field.text), field.text]),
-        );
+        let keys = [MOD_NAME.to_owned(), MOD_DESCRIPTION.to_owned(), schema.text]
+            .into_iter()
+            .chain(
+                schema
+                    .fields
+                    .into_iter()
+                    .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+            );
         for key in keys {
             let found = texts.get(&key, enshwick::i18n::Language::FALLBACK);
             assert!(found.is_some(), "{key}");

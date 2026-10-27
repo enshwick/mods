@@ -25,8 +25,9 @@ worlds.
 `mod-configs/enshwick.shared-experience.toml`, written on first start; each
 world keeps its own copy of it (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
-the Mods screen shows the setting in English or Ukrainian. On the first start
-the mod copies its settings and marks from its former id, `shared-experience`:
+the Mods screen shows the setting in the player's game language. On the first
+start the mod copies its settings and marks from its former id,
+`shared-experience`:
 
 ```toml
 enabled = true

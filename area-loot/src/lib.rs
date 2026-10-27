@@ -10,6 +10,10 @@ mod tracker;
 
 use enshwick::{Load, Mod, Off};
 
+/// The labels and descriptions of the settings and the mod, a table per
+/// language.
+const TEXTS: &str = include_str!("texts.toml");
+
 /// Area loot settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
@@ -63,6 +67,7 @@ impl Mod for AreaLoot {
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+        let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
         take::apply(&settings);
         take::link(load)?;
@@ -90,6 +95,31 @@ mod tests {
         assert!((settings.height - 4.0).abs() < f32::EPSILON);
         assert!(settings.enabled);
         assert!(settings.validate().is_ok());
+    }
+
+    #[test]
+    fn every_text_exists_in_all_languages() {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+    }
+
+    #[test]
+    fn the_mod_and_every_setting_have_their_texts_in_each_table() {
+        let schema = Settings::schema();
+        let keys: Vec<String> = std::iter::once(schema.text.clone())
+            .chain(schema.fields.iter().map(|field| field.text.clone()))
+            .flat_map(|key| [format!("{key}.doc"), key])
+            .filter(|key| key != "config.doc")
+            .chain([enshwick::i18n::MOD_NAME, enshwick::i18n::MOD_DESCRIPTION].map(str::to_owned))
+            .collect();
+        let tables: toml::Table = toml::from_str(TEXTS).unwrap();
+        for (language, table) in &tables {
+            let table = table.as_table().unwrap();
+            for key in &keys {
+                assert!(table.contains_key(key), "{language}: {key}");
+            }
+            assert_eq!(table.len(), keys.len(), "{language}: no stale keys");
+        }
     }
 
     #[test]

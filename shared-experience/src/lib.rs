@@ -321,14 +321,14 @@ mod tests {
         assert!(dir.join("experience.toml.moved").exists());
         let mut rows = [
             Experience {
-                entity: enshwick::ecs::Entity(1),
+                entity: enshwick::Entity(1),
                 level: 1,
                 progress: 0,
                 need: 100,
                 gained: 40,
             },
             Experience {
-                entity: enshwick::ecs::Entity(2),
+                entity: enshwick::Entity(2),
                 level: 1,
                 progress: 0,
                 need: 100,
@@ -418,7 +418,7 @@ mod tests {
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK);
         let row = |entity, progress, gained| Experience {
-            entity: enshwick::ecs::Entity(entity),
+            entity: enshwick::Entity(entity),
             level: 1,
             progress,
             need: 1000,

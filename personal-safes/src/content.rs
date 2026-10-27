@@ -66,10 +66,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_text_exists_in_all_languages_with_name_and_description() -> Result<(), Off> {
+    fn every_text_exists_in_all_languages() -> Result<(), Off> {
+        use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
+
         let texts = Texts::parse(TEXTS)?;
         assert_eq!(texts.untranslated(), []);
-        for key in [crate::keys::SAFE_NAME, crate::keys::SAFE_DESCRIPTION] {
+        for key in [
+            MOD_NAME,
+            MOD_DESCRIPTION,
+            crate::keys::SAFE_NAME,
+            crate::keys::SAFE_DESCRIPTION,
+        ] {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }
         Ok(())

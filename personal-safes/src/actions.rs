@@ -259,6 +259,31 @@ mod tests {
     }
 
     #[test]
+    fn every_language_keeps_the_placeholders_of_each_text() {
+        let tables: toml::Table = toml::from_str(crate::content::TEXTS).unwrap();
+        let placeholders = |text: &str| {
+            let mut names: Vec<String> = text
+                .split('{')
+                .skip(1)
+                .filter_map(|rest| rest.split_once('}').map(|(name, _)| name.to_owned()))
+                .collect();
+            names.sort_unstable();
+            names
+        };
+        let fallback = tables["en"].as_table().unwrap();
+        for (language, table) in &tables {
+            for (key, text) in table.as_table().unwrap() {
+                let english = fallback[key].as_str().unwrap();
+                assert_eq!(
+                    placeholders(text.as_str().unwrap()),
+                    placeholders(english),
+                    "{language} {key}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn every_text_the_mod_says_exists_in_all_languages() -> Result<(), Off> {
         let texts = Texts::parse(crate::content::TEXTS)?;
         assert_eq!(texts.untranslated(), []);
@@ -270,8 +295,22 @@ mod tests {
 
     #[test]
     fn every_language_of_the_file_holds_the_keys_the_mod_says_and_no_others() {
+        use enshwick::config::Config as _;
+        use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
+
         let tables: toml::Table = toml::from_str(crate::content::TEXTS).unwrap();
+        let schema = crate::Settings::schema();
+        let settings: Vec<String> = std::iter::once(schema.text)
+            .chain(
+                schema
+                    .fields
+                    .into_iter()
+                    .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+            )
+            .collect();
         let mut said: Vec<&str> = keys::ALL.to_vec();
+        said.extend([MOD_NAME, MOD_DESCRIPTION]);
+        said.extend(settings.iter().map(String::as_str));
         said.sort_unstable();
         for (language, table) in &tables {
             let mut held: Vec<&str> = table

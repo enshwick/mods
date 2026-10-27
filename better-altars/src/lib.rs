@@ -12,7 +12,6 @@ mod hold;
 mod migrations;
 mod zones;
 
-pub use count::AltarLimit;
 use count::{AltarCount, Count};
 use enshwick::{Load, Mod, Off};
 use zones::{AltarZones, Zones};
@@ -52,7 +51,6 @@ impl Mod for BetterAltars {
                 "enshwick.flame-altar-zones",
                 "flame-altar-zones",
             ],
-            points: [AltarLimit],
         )
     }
 
@@ -310,26 +308,6 @@ mod tests {
         assert!(loader.base_limit_raised());
         assert_eq!(loader.altar_limit(1, 2), 4);
         assert_eq!(loader.altar_limit(11, 16), 32);
-        assert!(loader.faults().is_empty());
-    }
-
-    #[test]
-    fn other_mods_change_the_limit_within_the_cap_at_its_former_point() {
-        use enshwick::points::Verdict;
-
-        let loader = started(Side::CLIENT, "", &[]);
-        assert_eq!(loader.defined_points(), ["flame-altar-count:limit"]);
-        assert!(loader.extend_point(|limit: &AltarLimit, altars: &u8| {
-            assert_eq!(limit.cap, CAP);
-            match limit.flame_level {
-                0 => Verdict::Set(0),
-                1 => Verdict::Set(altars + 2),
-                _ => Verdict::Set(200),
-            }
-        }));
-        assert_eq!(loader.altar_limit(0, 1), 1, "at least one");
-        assert_eq!(loader.altar_limit(1, 2), 6);
-        assert_eq!(loader.altar_limit(5, 10), 32, "at most the cap");
         assert!(loader.faults().is_empty());
     }
 

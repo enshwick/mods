@@ -133,10 +133,11 @@ whatever their own file says.
 
 ## How do other mods change the limit?
 
-Other mods change how many altars a Flame level allows at the extension point
-`flame-altar-count:limit`. The answer stays between 1 and the cap.
-`cargo enshwick point flame-altar-count:limit` writes the point's definition for
-another mod from this mod's DLL. See
-[Extending other mods](https://github.com/enshwick/enshwick/blob/main/book/src/extending.md).
+Other mods change how many altars a Flame level allows with the platform's
+altar-limit chain: `load.on_altar_limit` adds a filter that sees the Flame
+level, the game's own count and the count so far. A filter of a mod loaded
+after Better Altars sees this mod's table. The loader keeps the answer within
+the zones the game groups. See
+[Altars per level and bases past 16](https://github.com/enshwick/enshwick/blob/main/book/src/altars.md#altars-per-level-and-bases-past-16).
 
 Licensed under [MIT](LICENSE).

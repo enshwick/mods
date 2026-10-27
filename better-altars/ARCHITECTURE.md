@@ -8,7 +8,7 @@ API, not here.
 | Path | What |
 | --- | --- |
 | `src/lib.rs` | the manifest, the settings groups and start-up |
-| `src/count.rs`, `src/hold.rs` | altars per Flame level, the extension point, the server's hold on a world past 16 altar zones |
+| `src/count.rs`, `src/hold.rs` | altars per Flame level, the server's hold on a world past 16 altar zones |
 | `src/zones.rs`, `src/zones/` | the zones of touching altars: the solver thread and the seam check |
 | `src/geometry.rs`, `src/geometry/` | the pure geometry of clusters and their growth |
 | `src/migrations.rs` | the former mods' settings carried into the groups |

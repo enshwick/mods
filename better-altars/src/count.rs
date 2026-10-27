@@ -3,15 +3,13 @@
 //! The table is a join value: a client joined to a server runs with the
 //! server's. The platform raises the game's grouping to 32 altar zones in its
 //! 16 bases; where it cannot, the table stays capped at 16. Other mods change
-//! the limit at the extension point `flame-altar-count:limit`, the name it had
-//! before the mods merged.
+//! the limit by joining the loader's altar-limit chain with `on_altar_limit`.
 
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use enshwick::abi::Side;
 use enshwick::altars::base_limit;
-use enshwick::points::OwnedPoint;
 use enshwick::{Load, Off};
 
 use crate::hold;
@@ -26,23 +24,6 @@ fn vanilla_cap() -> u8 {
     base_limit()
         .and_then(|limit| u8::try_from(limit.vanilla_zones).ok())
         .unwrap_or(CAP)
-}
-
-/// How many Flame Altars a Flame level allows, `flame-altar-count:limit`:
-/// the answer is the altars.
-///
-/// The mod answers from its table and keeps the result between 1 and
-/// `cap`, links' answers too, so a link cannot raise a level past `cap`.
-/// Asked whenever the game checks the limit, on the thread that checks it,
-/// on the server and on every client: a linking mod belongs on both sides
-/// with `join: true`, or the two disagree on the limit.
-#[enshwick::point(name = "flame-altar-count:limit", mode = Override, output = u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AltarLimit {
-    /// The Flame level, from 0.
-    pub flame_level: u32,
-    /// The most altars the game's grouping takes on this build.
-    pub cap: u8,
 }
 
 /// How many altars each Flame level allows.
@@ -125,13 +106,11 @@ pub(crate) struct AltarCount {
     table: ArcSwap<AltarTable>,
     /// [`CAP`] once the base limit is lifted, else the game's own grouping.
     cap: u8,
-    /// The extension point `flame-altar-count:limit`.
-    point: OwnedPoint<AltarLimit>,
 }
 
 impl AltarCount {
-    /// Raises the base limit, keeps the hold on a server and defines the
-    /// extension point; the game's limit is linked by the mod.
+    /// Raises the base limit, keeps the hold on a server; the game's limit is
+    /// linked by the mod.
     pub(crate) fn start(load: &mut Load<'_>, count: &Count) -> Result<Self, Off> {
         let server = load.host().build().side == Side::SERVER;
         let cap = if load.raise_base_limit()? {
@@ -152,28 +131,19 @@ impl AltarCount {
             cap
         };
         let table = AltarTable::from_settings(count, cap);
-        let point = load.define_point()?;
         Ok(Self {
             table: ArcSwap::from_pointee(table),
             cap,
-            point,
         })
     }
 
     /// The altars `flame_level` allows, where the game allows `vanilla`:
-    /// the table's answer, or what other mods' links make of it, between 1
-    /// and the cap.
+    /// the table's answer, between 1 and the cap. Other mods' filters in the
+    /// loader's chain change it after.
     pub(crate) fn limit(&self, flame_level: u32, vanilla: u8) -> u8 {
-        let table = self.table.load().altars(flame_level, vanilla);
-        self.point
-            .decide(
-                &AltarLimit {
-                    flame_level,
-                    cap: self.cap,
-                },
-                table,
-            )
-            .value_or(table)
+        self.table
+            .load()
+            .altars(flame_level, vanilla)
             .clamp(1, self.cap)
     }
 

@@ -85,6 +85,7 @@ enshwick::declare_mod!(BetterAltars);
 mod tests {
     use std::time::{Duration, Instant};
 
+    use enshwick::Entity;
     use enshwick::abi::{AltarInfo, Bounds, Side, Status};
     use enshwick::config::Config as _;
     use enshwick::events::{AltarsChanged, SettingsReplaced};
@@ -109,7 +110,7 @@ mod tests {
     }
 
     /// An altar at level 1 whose zone is 80 cells wide from `x`.
-    fn altar(entity: u32, x: i64) -> AltarInfo {
+    fn altar(entity: Entity, x: i64) -> AltarInfo {
         let zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -126,7 +127,7 @@ mod tests {
     /// Waits up to ten seconds for the solver to grow `altar`'s zone at
     /// level 1, 80 cells tall, and to have the zones sized again `resizes`
     /// times in all.
-    fn wait_for_growth(loader: &enshwick::test::Installed, altar: u32, resizes: usize) {
+    fn wait_for_growth(loader: &enshwick::test::Installed, altar: Entity, resizes: usize) {
         let deadline = Instant::now() + Duration::from_secs(10);
         while (loader.altar_zone(altar, 1, 80).0 == 0 || loader.zone_resizes() < resizes)
             && Instant::now() < deadline
@@ -315,20 +316,20 @@ mod tests {
     fn it_sizes_the_zones_of_touching_altars_and_accepts_a_box_across_them() {
         let loader = started(Side::CLIENT, &Settings::template(), &[]);
         assert_eq!(loader.altars_opened(), (true, true));
-        loader.set_altars(&[altar(1, 0), altar(2, 40)]);
+        loader.set_altars(&[altar(Entity(1), 0), altar(Entity(2), 40)]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
-        wait_for_growth(&loader, 1, 1);
-        let (grow, height) = loader.altar_zone(1, 1, 80);
+        wait_for_growth(&loader, Entity(1), 1);
+        let (grow, height) = loader.altar_zone(Entity(1), 1, 80);
         assert!(grow > 0, "touching altars grow");
         assert_eq!(height, 80);
-        assert_eq!(loader.altar_zone(2, 1, 80), (grow, height));
+        assert_eq!(loader.altar_zone(Entity(2), 1, 80), (grow, height));
         assert_eq!(
-            loader.altar_zone(2, 2, 80),
+            loader.altar_zone(Entity(2), 2, 80),
             (0, 80),
             "another level: vanilla"
         );
         assert_eq!(
-            loader.altar_zone(3, 1, 80),
+            loader.altar_zone(Entity(3), 1, 80),
             (0, 80),
             "unknown altar: vanilla"
         );
@@ -359,27 +360,27 @@ mod tests {
     fn a_world_s_own_clusters_value_applies_when_it_loads() {
         let off = "[zones]\nclusters = false\n";
         let loader = started(Side::CLIENT, off, &[]);
-        loader.set_altars(&[altar(1, 0), altar(2, 40)]);
+        loader.set_altars(&[altar(Entity(1), 0), altar(Entity(2), 40)]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
         assert_eq!(loader.zone_resizes(), 0);
         assert_eq!(
-            loader.altar_zone(1, 1, 80),
+            loader.altar_zone(Entity(1), 1, 80),
             (0, 80),
             "clusters off: vanilla"
         );
         loader.set_settings("[zones]\nclusters = true\n");
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-        wait_for_growth(&loader, 1, 1);
+        wait_for_growth(&loader, Entity(1), 1);
         assert_eq!(loader.zone_resizes(), 1);
         assert!(
-            loader.altar_zone(1, 1, 80).0 > 0,
+            loader.altar_zone(Entity(1), 1, 80).0 > 0,
             "the world turned clusters on"
         );
         loader.set_settings(off);
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
         assert_eq!(loader.zone_resizes(), 2);
         assert_eq!(
-            loader.altar_zone(1, 1, 80),
+            loader.altar_zone(Entity(1), 1, 80),
             (0, 80),
             "the next world turned them off"
         );

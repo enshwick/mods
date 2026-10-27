@@ -17,7 +17,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-enshwick = "1.0.0-alpha.6"
+enshwick = "1.0.0-alpha.7"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 windows-sys = { version = "0.61.2", default-features = false, features = [
     "Win32_Foundation",
@@ -29,7 +29,7 @@ windows-sys = { version = "0.61.2", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-enshwick = { version = "1.0.0-alpha.6", features = ["test"] }
+enshwick = { version = "1.0.0-alpha.7", features = ["test"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [package.metadata.enshwick]

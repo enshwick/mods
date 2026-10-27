@@ -111,9 +111,9 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "enshwick"
-version = "1.0.0-alpha.6"
+version = "1.0.0-alpha.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87250e34e9cb9a40007ab3b214754dc41d5f352b8c47149865354368f23d1029"
+checksum = "3edf53bba40d52ccf817a95bf84b153b5ffeb110a1e39001ce4b4f8c0a306d06"
 dependencies = [
  "bcdec_rs",
  "bytemuck",
@@ -134,9 +134,9 @@ dependencies = [
 
 [[package]]
 name = "enshwick-macros"
-version = "1.0.0-alpha.6"
+version = "1.0.0-alpha.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8803842d89e5e6cad616e088b47fce11545eb3682820a1c7e1e4a9b9f96608aa"
+checksum = "6fbd6ef5e91cb82d877079652202b5cc4a0b491cf0a4f5a906f76b7affa1f84b"
 dependencies = [
  "proc-macro2",
  "quote",

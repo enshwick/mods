@@ -17,7 +17,7 @@ impl Census {
     /// A census naming the types this build reflects, or only hashes when
     /// the loader cannot list them.
     pub(crate) fn new(load: &Load<'_>) -> Self {
-        let names = match load.event_types() {
+        let names = match load.game_event_types() {
             Ok(types) => types.iter().map(|ty| (ty.hash(), ty.name())).collect(),
             Err(off) => {
                 enshwick::warn!("FAIL event types: {off}");

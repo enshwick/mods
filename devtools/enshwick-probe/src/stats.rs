@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use enshwick::ecs::Entity;
+use enshwick::Entity;
 use enshwick::schedule::Scheduler;
 use enshwick::stats::{Lasting, Modifier, Op, Stat, StatDef, Stats, builtin};
 use enshwick::world::World;
@@ -60,7 +60,7 @@ impl StatChecks {
             }
             other => enshwick::warn!("FAIL stats: built-in kind reads {other:?}"),
         }
-        let Some(target) = crate::living(&self.world)
+        let Some(target) = crate::living(self.world)
             .into_iter()
             .find(|&e| self.world.vitals(e).is_some_and(|v| v.health.current > 1))
         else {

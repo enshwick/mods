@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use enshwick::ecs::Entity;
+use enshwick::Entity;
 use enshwick::effects::{Effects, Spawn, Teleport};
 use enshwick::entity_data::{EntityData, Replication};
 use enshwick::game_events::{EventType, RawGameEvent};
@@ -91,7 +91,7 @@ impl Checks {
                 .writable_type(load, "keen::ecs::NetworkHealth")
                 .is_err(),
             effects: load.effects(),
-            died: load.event_type("entity_died_event")?,
+            died: load.game_event_type("entity_died_event")?,
             ping_sent: AtomicBool::new(false),
             ping_position: usize::try_from(load.constant("ui_ping_event.position")?)
                 .map_err(|_| Off::new("ui_ping_event.position: out of range"))?,
@@ -371,7 +371,7 @@ impl Checks {
                         "teleport of entity {} refused: the game's teleport does not move it",
                         entity.0
                     ));
-                    destroy_marked(&world, scheduler, marks, entity);
+                    destroy_marked(world, scheduler, marks, entity);
                     return;
                 }
                 other => {
@@ -398,7 +398,7 @@ impl Checks {
                         entity.0
                     )),
                 }
-                destroy_marked(&world, scheduler, marks, entity);
+                destroy_marked(world, scheduler, marks, entity);
             });
         });
         format!("entity {}", entity.0)
@@ -641,7 +641,7 @@ fn ids_across_loads(before: &[(u32, u64)], now: &[(u32, u64)]) {
 /// Marks a spawned entity with entity data, destroys it and checks the
 /// mark is gone a moment later, as the loader drops a destroyed entity's
 /// data.
-fn destroy_marked(world: &World, scheduler: Scheduler, marks: EntityData<u32>, entity: Entity) {
+fn destroy_marked(world: World, scheduler: Scheduler, marks: EntityData<u32>, entity: Entity) {
     let marked = marks.set(entity, &7).is_ok();
     let destroyed = world.destroy(entity);
     enshwick::info!("spawned entity {} destroyed: {destroyed:?}", entity.0);

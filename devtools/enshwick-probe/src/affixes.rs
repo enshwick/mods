@@ -3,7 +3,8 @@
 //! and its old stats put back; and the `stat`, `stat-off`, `stats` and
 //! `affix` actions an administrator tries them with in game.
 
-use enshwick::affixes::{AffixDef, Affixes, ItemCategoryMask, ItemRarity, Range, RollRules};
+use enshwick::affixes::{AffixDef, Affixes, ItemRarity, Range, RollRules};
+use enshwick::content::categories::ItemCategoryMask;
 use enshwick::inventory::{Inventories, InventoryCategory};
 use enshwick::item_data::ItemInstance;
 use enshwick::stats::{Lasting, Modifier, Op, Stat, StatDef, Stats, builtin};

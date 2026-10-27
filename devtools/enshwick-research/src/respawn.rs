@@ -30,11 +30,10 @@ struct Slot {
 type Seen = ([i64; 3], u32);
 
 /// The last slot seen per account.
-static LAST: Mutex<Option<FxHashMap<u64, Seen>>> = Mutex::new(None);
+static LAST: Mutex<Option<FxHashMap<enshwick::PlayerKey, Seen>>> = Mutex::new(None);
 
 /// Starts the reads on the server's game thread.
-pub(crate) fn link(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
-    let world = *world;
+pub(crate) fn link(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     let offset = |ty: &str, field: &str| {
         load.field_offset(ty, field).and_then(|o| {
             usize::try_from(o).map_err(|_| Off::new(format!("{ty}.{field}: out of range")))

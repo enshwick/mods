@@ -4,7 +4,7 @@
 
 use core::fmt::Write as _;
 
-use enshwick::ecs::Entity;
+use enshwick::Entity;
 use enshwick::world::{ComponentType, World};
 use enshwick::{Load, Off};
 

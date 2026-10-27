@@ -4,16 +4,16 @@
 
 use std::time::Duration;
 
-use enshwick::ecs::Entity;
+use enshwick::Entity;
 use enshwick::events::{KnowledgeChanged, PlayerDied, QuestCompleted};
 use enshwick::knowledge::{Grant, Knowledge, KnowledgeType, Revoke};
 use enshwick::schedule::Scheduler;
-use enshwick::{Load, Off};
+use enshwick::{Load, Off, PlayerKey};
 
 /// A world counter of the 1.0 game, one of its three.
 const WORLD_COUNTER: u32 = 3_229_540_729;
 /// An account no player has, for a change that waits.
-const NOBODY: u64 = 0x0e45_4157_0000_0001;
+const NOBODY: PlayerKey = PlayerKey::new(0x0e45_4157_0000_0001);
 /// How long after a grant the probe reads it back.
 const SETTLE: Duration = Duration::from_secs(1);
 
@@ -30,18 +30,18 @@ impl KnowledgeChecks {
             enshwick::info!(
                 "event: knowledge {} of {} is {}",
                 changed.id,
-                changed.entity,
+                changed.entity.0,
                 changed.value
             );
         })?;
         match load.on::<PlayerDied>(|death| {
             enshwick::info!(
                 "event: player {} died, cause {}, at {:?}, killer {:02x?} entity {}, deadly shroud {}, drowned {}",
-                death.entity,
+                death.entity.0,
                 death.cause,
                 death.position,
                 death.killer,
-                death.killer_entity,
+                death.killer_entity.0,
                 death.deadly_shroud,
                 death.drowned
             );
@@ -50,7 +50,7 @@ impl KnowledgeChecks {
             Err(off) => enshwick::warn!("FAIL player deaths: {off}"),
         }
         load.on::<QuestCompleted>(|done| {
-            enshwick::info!("event: quest {} completed by {}", done.quest, done.entity);
+            enshwick::info!("event: quest {} completed by {}", done.quest, done.entity.0);
         })?;
         match load.on_knowledge_input(|request| {
             enshwick::info!(

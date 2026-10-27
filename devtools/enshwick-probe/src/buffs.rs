@@ -39,7 +39,7 @@ impl BuffChecks {
         }
         let saved = types.iter().filter(|ty| ty.is_saved).count();
         enshwick::info!("PASS buff types: {} ({saved} saved)", types.len());
-        let Some(holder) = crate::living(&self.world)
+        let Some(holder) = crate::living(self.world)
             .into_iter()
             .find(|&entity| self.buffs.of(entity).is_ok())
         else {

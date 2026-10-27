@@ -20,7 +20,8 @@ use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use enshwick::ecs::{Entity, metres};
+use enshwick::Entity;
+use enshwick::ecs::metres;
 use enshwick::state::ModLocal;
 use enshwick::world::{ComponentType, Placed, World};
 use enshwick::{Load, Next, Off};
@@ -196,7 +197,7 @@ fn checked(load: &Load<'_>, code: &[u8], site: &Site) -> Result<usize, Off> {
 ///
 /// [`Off`] when a site's bytes differ from build 1269579, a type is not
 /// reflected or the hook is refused.
-pub(crate) fn link_client(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
+pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     let code = load.code()?;
     let cursor = checked(load, code, &CURSOR_SITE)?;
     let [entities_with, entity_slot, type_index, read_component] =
@@ -239,8 +240,7 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: &World) -> Result<(), Off>
 /// # Errors
 ///
 /// [`Off`] when the scheduler is not offered.
-pub(crate) fn link_server(load: &mut Load<'_>, world: &World) -> Result<(), Off> {
-    let world = *world;
+pub(crate) fn link_server(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     let references: Vec<(&'static str, ComponentType, usize)> = REFERENCES
         .iter()
         .filter_map(|&(ty, name, offset)| {
@@ -252,13 +252,13 @@ pub(crate) fn link_server(load: &mut Load<'_>, world: &World) -> Result<(), Off>
         .collect();
     let scheduler = load.scheduler()?;
     scheduler.every(PERIOD, move || {
-        server_sweep(&world, &references);
+        server_sweep(world, &references);
         ControlFlow::Continue(())
     });
     Ok(())
 }
 
-fn server_sweep(world: &World, references: &[(&'static str, ComponentType, usize)]) {
+fn server_sweep(world: World, references: &[(&'static str, ComponentType, usize)]) {
     let players = world.players();
     let all = world.entities(world.transform_type());
     if players.is_empty() {
@@ -281,7 +281,7 @@ fn server_sweep(world: &World, references: &[(&'static str, ComponentType, usize
 
 /// Logs the entities of `all` within the radius of `at`, nearest first.
 fn server_around(
-    world: &World,
+    world: World,
     references: &[(&'static str, ComponentType, usize)],
     all: &[Placed],
     who: &str,

@@ -29,13 +29,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use enshwick::Entity;
 use enshwick::actions::{Action, Actions, Arg, Outcome, Value};
-use enshwick::ecs::Entity;
-use enshwick::events::{WorldLoaded, WorldSaved};
+use enshwick::events::{Kind, WorldLoaded, WorldSaved};
 use enshwick::game_events::{
     AcceptOfferedInteractionEvent, BuildingPickUpEvent, BuildingPlaceEvent, BuildingTearDownEvent,
     CraftRecipeEvent, CraftRecipeSuccessEvent, EntityDiedEvent, FlameAltarEvent,
-    HandleEquipmentSlotChangedEvent, HitEvent, Kind, LevelUpEvent, LootInteractionEvent,
+    HandleEquipmentSlotChangedEvent, HitEvent, LevelUpEvent, LootInteractionEvent,
     RevivedPlayerEvent, XpGainedEvent,
 };
 use enshwick::i18n::Texts;
@@ -122,7 +122,7 @@ pub struct Probe;
 
 /// The characters, survivors and animals in the world: what holds health
 /// and buffs.
-fn living(world: &enshwick::world::World) -> Vec<Entity> {
+fn living(world: enshwick::world::World) -> Vec<Entity> {
     use enshwick::world::ContainerKinds;
 
     world
@@ -133,9 +133,9 @@ fn living(world: &enshwick::world::World) -> Vec<Entity> {
 }
 
 /// Logs every event of kind `E`, or that its fields are missing.
-fn log_typed<E: Kind + core::fmt::Debug>(load: &mut Load<'_>) {
+fn log_typed<E: Kind<Data: core::fmt::Debug>>(load: &mut Load<'_>) {
     let name = core::any::type_name::<E>();
-    match load.on_game::<E>(|event| enshwick::info!("event: {event:?}")) {
+    match load.on::<E>(|event| enshwick::info!("event: {event:?}")) {
         Ok(()) => enshwick::info!("PASS typed {name} resolves"),
         Err(off) => enshwick::warn!("FAIL typed {name}: {off}"),
     }
@@ -354,7 +354,7 @@ impl Mod for Probe {
             }
         }
         let checks = Arc::new(Checks::new(load)?);
-        let ping = load.event_type("ui_ping_event")?;
+        let ping = load.game_event_type("ui_ping_event")?;
         let pinged = Arc::clone(&checks);
         load.on_raw_game_event(ping, move |event| pinged.pinged(event))?;
         let scheduler = load.scheduler()?;

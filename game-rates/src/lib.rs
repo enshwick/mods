@@ -545,15 +545,20 @@ mod tests {
     }
 
     #[test]
-    fn every_setting_has_its_label_and_description_in_all_languages() {
+    fn every_text_exists_in_all_languages() {
         let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
         assert_eq!(texts.untranslated(), []);
+    }
+
+    #[test]
+    fn the_mod_and_every_setting_have_their_texts_in_each_table() {
         let schema = Settings::schema();
         let keys: Vec<String> = std::iter::once(schema.text.clone())
             .chain(schema.groups.iter().map(|group| group.text.clone()))
             .chain(schema.fields.iter().map(|field| field.text.clone()))
             .flat_map(|key| [format!("{key}.doc"), key])
             .filter(|key| key != "config.doc")
+            .chain([enshwick::i18n::MOD_NAME, enshwick::i18n::MOD_DESCRIPTION].map(str::to_owned))
             .collect();
         let tables: toml::Table = toml::from_str(TEXTS).unwrap();
         for (language, table) in &tables {

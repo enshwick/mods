@@ -86,8 +86,7 @@ impl Mod for BuildCamera {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;
-        let node = load.skill_node(Skill::AirborneArchitect)?;
-        load.on_skill(node, |check| {
+        load.on_skill(Skill::AirborneArchitect, |check| {
             lifts(check.gate, enabled().load(Ordering::Relaxed))
         })?;
         load.on_config_change(|settings: Settings| apply(&settings))?;

@@ -20,12 +20,13 @@ pub mod points;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use enshwick::abi::BuildingData;
 use enshwick::abi::Side;
+use enshwick::config::ConfigError;
 use enshwick::events::{
     BuildingPlaced, BuildingRemoved, PlayerJoined, PlayerLeft, ShutdownStarted, Ticked,
     WorldLoaded, WorldSaved,
@@ -34,7 +35,7 @@ use enshwick::i18n::Language;
 use enshwick::state::{ModLocal, Store, WorldStore};
 use enshwick::world::Rename;
 use enshwick::world::{ContainerKinds, World};
-use enshwick::{Entity, ItemId, Load, Mod, Off, PlayerKey};
+use enshwick::{Entity, Load, Mod, Off, PlayerKey};
 
 use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
 use crate::actions::Phrases;
@@ -67,11 +68,11 @@ impl Default for Settings {
 }
 
 impl Settings {
-    fn check(&self) -> Result<(), String> {
+    fn check(&self) -> Result<(), ConfigError> {
         self.language().map(|_| ()).ok_or_else(|| {
-            format!(
-                "label_language {:?} is no language code",
-                self.label_language
+            ConfigError::text(
+                keys::UNKNOWN_LANGUAGE,
+                &[(keys::value::CODE, &self.label_language)],
             )
         })
     }
@@ -358,7 +359,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     })?;
     load.on::<BuildingRemoved>(move |removed| {
         if let Some(gone) = snapshots().removed(removed.entity) {
-            enshwick::info!("Safe {} removed", removed.entity.0);
+            enshwick::info!("Safe {} removed", removed.entity);
             self::removed().push(gone);
             let _open = hand_over(store);
         }
@@ -403,12 +404,12 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
     if !name.is_empty() {
         let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
         if !world.set_label(placed.entity, &label) {
-            enshwick::warn!("Safe {} not labelled", placed.entity.0);
+            enshwick::warn!("Safe {} not labelled", placed.entity);
         }
     }
     enshwick::info!(
         "Safe {} placed at {position:?} by {key:016x}",
-        placed.entity.0
+        placed.entity
     );
 }
 
@@ -418,7 +419,7 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
 fn may_rename(world: World, rename: &Rename) -> bool {
     let known = snapshots().safes.load().get(&rename.entity).copied();
     let found = known.or_else(|| {
-        if !content::is_safe(ItemId::new(world.used_item(rename.entity)?)) {
+        if !content::is_safe(world.used_item(rename.entity)?) {
             return None;
         }
         snapshots().seen(rename.entity, access::cell(world.position(rename.entity)?))
@@ -440,7 +441,7 @@ fn may_rename(world: World, rename: &Rename) -> bool {
     let entities = (player.entity, rename.entity);
     let allowed = access::decide(safe, Some(seen), admins_open, Action::Manage, entities);
     if !allowed {
-        enshwick::info!("{} may not rename Safe {}", player.name, rename.entity.0);
+        enshwick::info!("{} may not rename Safe {}", player.name, rename.entity);
     }
     allowed
 }
@@ -452,9 +453,7 @@ fn learn_safes(world: World) {
     let known = snapshots().safes.load();
     for placed in world.containers(ContainerKinds::default()) {
         if known.contains_key(&placed.entity)
-            || !world
-                .used_item(placed.entity)
-                .is_some_and(|item| content::is_safe(ItemId::new(item)))
+            || !world.used_item(placed.entity).is_some_and(content::is_safe)
         {
             continue;
         }
@@ -515,10 +514,6 @@ fn label_seen(
     Ok(())
 }
 
-/// How many server steps apart the players snapshot is retaken for a
-/// character it lacks.
-const CATCH_UP_STEPS: u64 = 4;
-
 fn seen(player: &enshwick::world::Player) -> Seen {
     Seen {
         key: player.key,
@@ -537,8 +532,8 @@ fn snapshot_players(world: World) {
 }
 
 /// Keeps the connected players' keys and administrator flags current: on
-/// joining and leaving, every 10 s for permissions, and within a few steps
-/// of a check that met a character the snapshot lacks.
+/// joining and leaving, every 10 s for permissions, and at the next tick
+/// after a check that met a character the snapshot lacks.
 fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     load.on::<PlayerJoined>(move |joined| {
         let entity = joined.entity;
@@ -562,16 +557,10 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
             players
         });
     })?;
-    let caught_up = AtomicU64::new(0);
-    load.on::<Ticked>(move |tick| {
-        if !snapshots().unregistered.load(Ordering::Relaxed)
-            || tick.step.wrapping_sub(caught_up.load(Ordering::Relaxed)) < CATCH_UP_STEPS
-        {
-            return;
+    load.on::<Ticked>(move |_| {
+        if snapshots().unregistered.swap(false, Ordering::Relaxed) {
+            snapshot_players(world);
         }
-        snapshots().unregistered.store(false, Ordering::Relaxed);
-        caught_up.store(tick.step, Ordering::Relaxed);
-        snapshot_players(world);
     })?;
     // Permissions can change while a player is online.
     load.scheduler()?.every(Duration::from_secs(10), move || {
@@ -604,6 +593,11 @@ mod tests {
             label_language: "xx".into(),
             ..Settings::default()
         };
+        assert_eq!(
+            unknown.check().map_err(|refused| refused.to_string()),
+            Err(format!("{} (code = xx)", keys::UNKNOWN_LANGUAGE)),
+            "refused with a text of the mod's own"
+        );
         assert!(unknown.validate().is_err());
     }
 

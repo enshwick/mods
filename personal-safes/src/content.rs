@@ -29,7 +29,7 @@ pub fn migrations() -> Migrations {
 /// Whether `item` is a Safe, under its id or one it had before.
 #[must_use]
 pub fn is_safe(item: ItemId) -> bool {
-    enshwick::migrations::current_id(item.get()) == SAFE.id()
+    enshwick::migrations::current_id(item) == ItemId::from_guid(SAFE.guid())
 }
 
 /// The mod's texts, per language.
@@ -71,6 +71,7 @@ mod tests {
 
         let texts = Texts::parse(TEXTS)?;
         assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(Language::OFFERED), []);
         for key in [
             MOD_NAME,
             MOD_DESCRIPTION,
@@ -84,7 +85,7 @@ mod tests {
 
     #[test]
     fn the_safe_is_a_chest_with_its_own_identity() {
-        assert_ne!(SAFE.id(), CHEST.id());
+        assert_ne!(SAFE.guid(), CHEST);
         assert_eq!(item().like, CHEST);
         assert_eq!(recipe(3).cost, 3);
         assert_eq!(recipe(3).output, SAFE.guid());

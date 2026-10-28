@@ -41,6 +41,8 @@ pub(crate) const NAMES: &str = "command.list";
 pub(crate) const NAMES_EMPTY: &str = "command.list_empty";
 /// Another mod keeps the owner from managing their Safe.
 pub(crate) const REFUSED: &str = "command.refused";
+/// A label language that is no language code.
+pub(crate) const UNKNOWN_LANGUAGE: &str = "config.label_language.unknown";
 
 /// Every key the mod says.
 #[cfg(test)]
@@ -65,6 +67,7 @@ pub(crate) const ALL: &[&str] = &[
     NAMES,
     NAMES_EMPTY,
     REFUSED,
+    UNKNOWN_LANGUAGE,
 ];
 
 /// The names of the values the texts fill in.
@@ -79,4 +82,6 @@ pub(crate) mod value {
     pub(crate) const SAFE: &str = "safe";
     /// Where the Safe stands.
     pub(crate) const AT: &str = "at";
+    /// A language code as given.
+    pub(crate) const CODE: &str = "code";
 }

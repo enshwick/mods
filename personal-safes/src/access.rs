@@ -654,7 +654,7 @@ mod tests {
                 position: item.map(|_| at),
             })
         };
-        let safe = Some(ItemId::new(crate::content::SAFE.id()));
+        let safe = Some(ItemId::from_guid(crate::content::SAFE.guid()));
         // Unknown and not seen yet: open to all.
         assert!(ask(Kind::Open, 12, None));
         snapshots().placed(Entity(700), (40, 2, 40), OWNER.key, "Ann");

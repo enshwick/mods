@@ -59,7 +59,8 @@ world with another value, applies at once, with no restart of the game.
 `admins_can_open` lets administrators open, remove and rename every Safe, and
 applies while the game runs. `label_language` is the language of the owner's
 name on a Safe, a language code such as
-`en`, `uk` or `de`; anything else is refused. A change applies while the
+`en`, `uk` or `de`; anything else is refused, and the Mods screen says why
+in the player's language. A change applies while the
 game runs, to Safes named from then on. The window and the hint speak each
 player's own language.
 

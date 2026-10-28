@@ -179,7 +179,7 @@ mod tests {
         let placed = BuildingData {
             kind: BuildingData::PLACED,
             entity: Entity(901),
-            item: ItemId::new(enshwick_personal_safes::content::SAFE.id()),
+            item: ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid()),
             position: [10.0, 0.0, 10.0],
             ..removed
         };
@@ -211,8 +211,8 @@ mod tests {
 
     #[test]
     fn a_safe_nobody_looked_at_lends_its_stock_to_no_stranger() {
-        use enshwick::abi::TickData;
-        use enshwick::events::Ticked;
+        use std::time::Duration;
+
         use enshwick::interactions::{Interaction, Kind};
         use enshwick_personal_safes::access::{Safe, Seen};
 
@@ -222,7 +222,9 @@ mod tests {
         ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let item = enshwick_personal_safes::content::SAFE.id().to_le_bytes();
+        let item = ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid())
+            .get()
+            .to_le_bytes();
         let loader = containers(host())
             .placed(3, Entity(700), [20.0, 1.0, 20.0])
             .component(Entity(700), 2, &item)
@@ -269,11 +271,9 @@ label_language = \"en\"
             enshwick_personal_safes::access::filter(&stock),
             "not seen yet"
         );
-        std::thread::sleep(std::time::Duration::from_millis(2100));
-        let _ticked = loader.raise::<Ticked>(&TickData {
-            header: enshwick::abi::Header::of::<TickData>(),
-            step: 1,
-        });
+        // The sweep runs every 2 s of wall time, on the next tick after.
+        std::thread::sleep(Duration::from_millis(2100));
+        let _ran = loader.tick(Duration::from_millis(100));
         assert!(
             !enshwick_personal_safes::access::filter(&stock),
             "the sweep found the Safe: {:?}",
@@ -281,6 +281,31 @@ label_language = \"en\"
         );
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_character_the_players_snapshot_lacks_is_caught_up_at_the_next_tick() {
+        use std::sync::atomic::Ordering;
+        use std::time::Duration;
+
+        let loader = host()
+            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        snapshots().unregistered.store(true, Ordering::Relaxed);
+        assert!(loader.tick(Duration::from_millis(100)) >= 1);
+        assert!(
+            !snapshots().unregistered.load(Ordering::Relaxed),
+            "the snapshot was retaken"
+        );
+        assert!(loader.faults().is_empty());
     }
 
     #[test]

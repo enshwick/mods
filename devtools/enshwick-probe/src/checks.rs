@@ -155,11 +155,11 @@ impl Checks {
         match self.world.position(first.entity) {
             Some(at) if first.distance(at) < 0.01 => pass(&format!(
                 "entity {} placed at {at:?}, as its transform says",
-                first.entity.0
+                first.entity
             )),
             other => fail(&format!(
                 "entity {} placed at {:?}, its transform says {other:?}",
-                first.entity.0, first.position
+                first.entity, first.position
             )),
         }
         let near = self
@@ -169,7 +169,7 @@ impl Checks {
             pass(&format!(
                 "near: {} within 5 m of entity {}, itself first",
                 near.len(),
-                first.entity.0
+                first.entity
             ));
         } else {
             fail("near: the entity is not first near itself");
@@ -188,9 +188,9 @@ impl Checks {
             Some(player) => match self.world.progress(player.entity) {
                 Some(progress) => pass(&format!(
                     "progress of entity {}: {progress:?}",
-                    player.entity.0
+                    player.entity
                 )),
-                None => fail(&format!("progress of entity {}: none", player.entity.0)),
+                None => fail(&format!("progress of entity {}: none", player.entity)),
             },
             None => enshwick::info!("SKIP progress: no character in the world"),
         }
@@ -239,13 +239,11 @@ impl Checks {
         let target = before.current - 1;
         match world.set_health(entity, target) {
             Ok(written) if written.current == target => pass(&format!(
-                "set_health of entity {} to {target}: {written:?}",
-                entity.0
+                "set_health of entity {entity} to {target}: {written:?}"
             )),
             other => {
                 fail(&format!(
-                    "set_health of entity {} to {target}: {other:?}",
-                    entity.0
+                    "set_health of entity {entity} to {target}: {other:?}"
                 ));
                 return;
             }
@@ -265,17 +263,15 @@ impl Checks {
             });
             match replicated {
                 Some([health, _]) if health == target.cast_unsigned() => pass(&format!(
-                    "the replicated health of entity {} follows the write: {health}",
-                    entity.0
+                    "the replicated health of entity {entity} follows the write: {health}"
                 )),
                 other => fail(&format!(
-                    "the replicated health of entity {} after the write: {other:?}, expected {target}",
-                    entity.0
+                    "the replicated health of entity {entity} after the write: {other:?}, expected {target}"
                 )),
             }
             match world.set_health(entity, before.current) {
-                Ok(_) => pass(&format!("health of entity {} put back", entity.0)),
-                Err(why) => fail(&format!("health of entity {} not put back: {why}", entity.0)),
+                Ok(_) => pass(&format!("health of entity {entity} put back")),
+                Err(why) => fail(&format!("health of entity {entity} not put back: {why}")),
             }
         });
     }
@@ -332,8 +328,7 @@ impl Checks {
             }
         };
         pass(&format!(
-            "spawn of {template:02x?} at {at:?} handed out entity {}",
-            entity.0
+            "spawn of {template:02x?} at {at:?} handed out entity {entity}"
         ));
         let world = self.world;
         let effects = self.effects;
@@ -343,46 +338,44 @@ impl Checks {
         let marks = self.marks;
         self.scheduler.after(DESTROY_WAIT, move || {
             if world.template(entity) == Some(template) {
-                pass(&format!("spawned entity {} is in the world", entity.0));
+                pass(&format!("spawned entity {entity} is in the world"));
             } else {
-                fail(&format!("spawned entity {} is not in the world", entity.0));
+                fail(&format!("spawned entity {entity} is not in the world"));
                 return;
             }
             match world.position(entity) {
                 Some(p) if (0..3).all(|i| (p[i] - at[i]).abs() < 0.5) => {
-                    pass(&format!("spawned entity {} stands at {p:?}", entity.0));
+                    pass(&format!("spawned entity {entity} stands at {p:?}"));
                 }
                 other => fail(&format!(
-                    "spawned entity {} stands at {other:?}, asked {at:?}",
-                    entity.0
+                    "spawned entity {entity} stands at {other:?}, asked {at:?}"
                 )),
             }
             let vitals = world.vitals(entity);
-            enshwick::info!("spawned entity {} has vitals {vitals:?}", entity.0);
+            enshwick::info!("spawned entity {} has vitals {vitals:?}", entity);
             if vitals.is_some_and(|v| v.health.current > 1) {
                 Self::write_health(&world, scheduler, network_health, entity);
             }
             let to = [at[0] + 5.0, at[1], at[2]];
             let movable = world.component(entity, teleport_parts[1]).is_some();
             match effects.teleport(entity, to, Teleport::new()) {
-                Ok(()) if movable => pass(&format!("teleport of entity {} asked", entity.0)),
+                Ok(()) if movable => pass(&format!("teleport of entity {entity} asked")),
                 Err(WorldError::Refused) if !movable => {
                     pass(&format!(
-                        "teleport of entity {} refused: the game's teleport does not move it",
-                        entity.0
+                        "teleport of entity {entity} refused: the game's teleport does not move it"
                     ));
                     destroy_marked(world, scheduler, marks, entity);
                     return;
                 }
                 other => {
-                    fail(&format!("teleport of entity {} (movable {movable}): {other:?}", entity.0));
+                    fail(&format!("teleport of entity {entity} (movable {movable}): {other:?}"));
                     return;
                 }
             }
             scheduler.after(TELEPORT_PEEK, move || {
                 enshwick::info!(
                     "entity {} a moment after its teleport: Teleport {}, TeleportCount {}, LastTransform {}",
-                    entity.0,
+                    entity,
                     world.component(entity, teleport_parts[0]).is_some(),
                     world.component(entity, teleport_parts[1]).is_some(),
                     world.component(entity, teleport_parts[2]).is_some(),
@@ -391,17 +384,16 @@ impl Checks {
             scheduler.after(DESTROY_WAIT, move || {
                 match world.position(entity) {
                     Some(p) if (p[0] - to[0]).abs() < 0.5 => {
-                        pass(&format!("teleported entity {} stands at {p:?}", entity.0));
+                        pass(&format!("teleported entity {entity} stands at {p:?}"));
                     }
                     other => fail(&format!(
-                        "teleported entity {} stands at {other:?}, asked {to:?}",
-                        entity.0
+                        "teleported entity {entity} stands at {other:?}, asked {to:?}"
                     )),
                 }
                 destroy_marked(world, scheduler, marks, entity);
             });
         });
-        format!("entity {}", entity.0)
+        format!("entity {entity}")
     }
 
     /// Notes a ping the game raised, and whether it is the probe's.
@@ -419,7 +411,7 @@ impl Checks {
     fn compare(&self, entity: Entity) {
         enshwick::info!(
             "shroud of entity {}: {:?}, in it {:?}; skills {:?}",
-            entity.0,
+            entity,
             self.world.shroud_time(entity),
             self.world.in_shroud(entity),
             self.world.skills(entity)
@@ -438,18 +430,13 @@ impl Checks {
                 if v.health.current.cast_unsigned() == health
                     && v.health.max.cast_unsigned() == max =>
             {
-                pass(&format!(
-                    "vitals of entity {}: {v:?}, as replicated",
-                    entity.0
-                ));
+                pass(&format!("vitals of entity {entity}: {v:?}, as replicated"));
             }
             (Some(v), None) => pass(&format!(
-                "vitals of entity {}: {v:?}, none replicated",
-                entity.0
+                "vitals of entity {entity}: {v:?}, none replicated"
             )),
             (v, r) => fail(&format!(
-                "vitals of entity {}: {v:?}, replicated {r:?}",
-                entity.0
+                "vitals of entity {entity}: {v:?}, replicated {r:?}"
             )),
         }
     }
@@ -486,7 +473,7 @@ impl Checks {
     pub(crate) fn spawn_copy(&self, entity: Entity) -> String {
         match (self.world.template(entity), self.world.position(entity)) {
             (Some(template), Some([x, y, z])) => self.spawn(template, [x, y + 3.0, z]),
-            _ => format!("entity {} has no template or place", entity.0),
+            _ => format!("entity {entity} has no template or place"),
         }
     }
 
@@ -502,19 +489,16 @@ impl Checks {
     /// seconds: whether it stays or snaps back.
     pub(crate) fn teleport_self(&self, entity: Entity, by: [f64; 3]) -> String {
         let Some(from) = self.world.position(entity) else {
-            return format!("entity {} has no place", entity.0);
+            return format!("entity {entity} has no place");
         };
         let to = [from[0] + by[0], from[1] + by[1], from[2] + by[2]];
         if let Err(why) = self.effects.teleport(entity, to, Teleport::new()) {
-            fail(&format!(
-                "R7 teleport of entity {} to {to:?}: {why}",
-                entity.0
-            ));
+            fail(&format!("R7 teleport of entity {entity} to {to:?}: {why}"));
             return format!("{why}");
         }
         enshwick::info!(
             "R7 teleport of entity {} asked from {from:?} to {to:?}",
-            entity.0
+            entity
         );
         let world = self.world;
         let parts = self.teleport_parts;
@@ -537,7 +521,7 @@ impl Checks {
                 enshwick::info!(
                     "R7 +{} ms: entity {} at {place}; Teleport {}, TeleportCount {}, LastTransform {}",
                     (SELF_TELEPORT_STEP * step).as_millis(),
-                    entity.0,
+                    entity,
                     world.component(entity, parts[0]).is_some(),
                     world.component(entity, parts[1]).is_some(),
                     world.component(entity, parts[2]).is_some(),
@@ -549,7 +533,7 @@ impl Checks {
                         Some(_) => "is elsewhere (it may have walked)",
                         None => "has no place",
                     };
-                    enshwick::info!("R7 after 5 s entity {} {verdict}", entity.0);
+                    enshwick::info!("R7 after 5 s entity {} {verdict}", entity);
                 }
             });
         }
@@ -562,18 +546,15 @@ impl Checks {
         let outcome = self.world.destroy(entity);
         enshwick::info!(
             "destroy of entity {} (template {template:02x?}): {outcome:?}",
-            entity.0
+            entity
         );
         if outcome.is_ok() {
             let world = self.world;
             self.scheduler.after(DESTROY_WAIT, move || {
                 if world.template(entity).is_none() {
-                    pass(&format!("entity {} gone after its destroy", entity.0));
+                    pass(&format!("entity {entity} gone after its destroy"));
                 } else {
-                    fail(&format!(
-                        "entity {} still there after its destroy",
-                        entity.0
-                    ));
+                    fail(&format!("entity {entity} still there after its destroy"));
                 }
             });
         }
@@ -644,18 +625,16 @@ fn ids_across_loads(before: &[(u32, u64)], now: &[(u32, u64)]) {
 fn destroy_marked(world: World, scheduler: Scheduler, marks: EntityData<u32>, entity: Entity) {
     let marked = marks.set(entity, &7).is_ok();
     let destroyed = world.destroy(entity);
-    enshwick::info!("spawned entity {} destroyed: {destroyed:?}", entity.0);
+    enshwick::info!("spawned entity {} destroyed: {destroyed:?}", entity);
     if !marked || destroyed.is_err() {
         return;
     }
     scheduler.after(DESTROY_WAIT, move || match marks.get(entity) {
         None => pass(&format!(
-            "entity data: destroyed entity {} lost its mark",
-            entity.0
+            "entity data: destroyed entity {entity} lost its mark"
         )),
         Some(mark) => fail(&format!(
-            "entity data: destroyed entity {} keeps its mark {mark}",
-            entity.0
+            "entity data: destroyed entity {entity} keeps its mark {mark}"
         )),
     });
 }

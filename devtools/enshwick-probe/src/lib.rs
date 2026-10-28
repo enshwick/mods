@@ -22,6 +22,7 @@ mod raw_stats;
 mod settings;
 mod stats;
 mod terrain;
+mod ticks;
 mod weather;
 
 use std::ops::ControlFlow;
@@ -39,6 +40,7 @@ use enshwick::game_events::{
     RevivedPlayerEvent, XpGainedEvent,
 };
 use enshwick::i18n::Texts;
+use enshwick::knowledge::KnowledgeId;
 use enshwick::schedule::Scheduler;
 use enshwick::{Load, Mod, Off};
 
@@ -108,6 +110,10 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
     match stats::StatChecks::new(load, scheduler) {
         Ok(stats) => extras.push(Box::new(move || stats.run())),
         Err(off) => enshwick::warn!("FAIL stats: {off}"),
+    }
+    match ticks::TickChecks::new(load, scheduler) {
+        Ok(ticks) => extras.push(Box::new(move || ticks.run())),
+        Err(off) => enshwick::warn!("FAIL ticks: {off}"),
     }
     match terrain::TerrainChecks::new(load) {
         Ok(terrain) => extras.push(Box::new(move || terrain.run())),
@@ -264,8 +270,10 @@ fn actions(
         let action = if with_bit { action.arg(bit()) } else { action };
         actions.add(action, move |request| {
             let (known, bit) = match request.args {
-                [Value::Number(known)] => (id(*known), None),
-                [Value::Number(known), Value::Number(bit)] => (id(*known), Some(id(*bit))),
+                [Value::Number(known)] => (KnowledgeId::new(id(*known)), None),
+                [Value::Number(known), Value::Number(bit)] => {
+                    (KnowledgeId::new(id(*known)), Some(id(*bit)))
+                }
                 _ => return Outcome::refused(""),
             };
             let me = request.player.entity;

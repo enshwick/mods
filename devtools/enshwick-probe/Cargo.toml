@@ -17,7 +17,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-enshwick = "=1.0.0-alpha.9"
+enshwick = "=1.0.0-alpha.10"
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
 [lints]

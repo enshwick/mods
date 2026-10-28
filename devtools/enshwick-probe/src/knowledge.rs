@@ -6,12 +6,12 @@ use std::time::Duration;
 
 use enshwick::Entity;
 use enshwick::events::{KnowledgeChanged, PlayerDied, QuestCompleted};
-use enshwick::knowledge::{Grant, Knowledge, KnowledgeType, Revoke};
+use enshwick::knowledge::{Grant, Knowledge, KnowledgeId, KnowledgeType, Revoke};
 use enshwick::schedule::Scheduler;
 use enshwick::{Load, Off, PlayerKey};
 
 /// A world counter of the 1.0 game, one of its three.
-const WORLD_COUNTER: u32 = 3_229_540_729;
+const WORLD_COUNTER: KnowledgeId = KnowledgeId::new(3_229_540_729);
 /// An account no player has, for a change that waits.
 const NOBODY: PlayerKey = PlayerKey::new(0x0e45_4157_0000_0001);
 /// How long after a grant the probe reads it back.
@@ -30,18 +30,18 @@ impl KnowledgeChecks {
             enshwick::info!(
                 "event: knowledge {} of {} is {}",
                 changed.id,
-                changed.entity.0,
+                changed.entity,
                 changed.value
             );
         })?;
         match load.on::<PlayerDied>(|death| {
             enshwick::info!(
                 "event: player {} died, cause {}, at {:?}, killer {:02x?} entity {}, deadly shroud {}, drowned {}",
-                death.entity.0,
+                death.entity,
                 death.cause,
                 death.position,
                 death.killer,
-                death.killer_entity.0,
+                death.killer_entity,
                 death.deadly_shroud,
                 death.drowned
             );
@@ -50,7 +50,7 @@ impl KnowledgeChecks {
             Err(off) => enshwick::warn!("FAIL player deaths: {off}"),
         }
         load.on::<QuestCompleted>(|done| {
-            enshwick::info!("event: quest {} completed by {}", done.quest, done.entity.0);
+            enshwick::info!("event: quest {} completed by {}", done.quest, done.entity);
         })?;
         match load.on_knowledge_input(|request| {
             enshwick::info!(
@@ -58,7 +58,7 @@ impl KnowledgeChecks {
                 request.id,
                 request.kind,
                 request.value,
-                request.player.0,
+                request.player,
                 request.refusal,
                 request.allowed
             );
@@ -91,7 +91,7 @@ impl KnowledgeChecks {
             }
             Ok(()) => enshwick::warn!("FAIL a bool grant of a counter was taken"),
         }
-        match self.knowledge.grant_world(1, Grant::Set) {
+        match self.knowledge.grant_world(KnowledgeId::new(1), Grant::Set) {
             Err(why) => enshwick::info!("PASS an unknown id is refused: {why}"),
             Ok(()) => enshwick::warn!("FAIL an unknown id was taken"),
         }
@@ -156,7 +156,7 @@ pub(crate) fn command(
     knowledge: Knowledge,
     me: Entity,
     word: &str,
-    id: u32,
+    id: KnowledgeId,
     bit: Option<u32>,
 ) -> String {
     let bit = bit.unwrap_or(1);

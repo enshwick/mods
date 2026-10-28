@@ -32,6 +32,10 @@ Ten seconds after the world has loaded, and again on the `check` action:
   that reads back (the turn's event follows), the time put back, a factor of 10 on the speed that the clock's speed shows, and the
   factor put back; the turns of day and night are logged as they come; these
   run once the weather checks are done, since moving the clock ends the fronts;
+- ticks: over five seconds, an every-step handler that sees one step per
+  call, `Ticked` about every 100 ms and no more often than the steps, and a
+  handler of its own about every second; then its period set to 250 ms
+  while the game runs, counted again, and put back;
 - game settings: a typed read, the perk cost raised by a half that reads
   back with the preset custom, a night of zero refused, and the settings put
   back; then the bosses' health kept at 1.25, read back and forgotten, the

@@ -46,8 +46,8 @@ impl DamageSeen {
     /// or deals it, up to [`MOST_HIT_LINES`].
     fn note(&self, world: World, damage: &Damage<'_>, before: f32) {
         let who = |entity: Entity| match world.player(entity) {
-            Some(player) => format!("entity {} (player {})", entity.0, player.name),
-            None => format!("entity {}", entity.0),
+            Some(player) => format!("entity {} (player {})", entity, player.name),
+            None => format!("entity {entity}"),
         };
         let target = damage.target();
         let source = damage.source();

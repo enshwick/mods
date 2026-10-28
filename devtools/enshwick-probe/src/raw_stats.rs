@@ -73,7 +73,7 @@ impl RawStats {
     pub(crate) fn dump(&self, entity: Entity, shown: &[&str]) -> String {
         let mut text = format!(
             "R6 raw stats of entity {}, the game shows {}:",
-            entity.0,
+            entity,
             if shown.is_empty() {
                 "(nothing given)".to_owned()
             } else {

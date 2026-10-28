@@ -19,7 +19,7 @@ settings:
     applies: at-once
   - key: recipes.decor
     default: true
-    meaning: Decor and furniture of the crafting menu's Decorative group make more.
+    meaning: Decor and furniture of the crafting menu's Decorative and Comfort Furniture groups make more.
     applies: at-once
   - key: comfort.multiplier
     default: 2.0
@@ -73,9 +73,8 @@ settings:
 ## What stays as it was?
 
 Crafting stations, chests, storage shelves, altars and water devices keep their
-usual recipes. So does comfort furniture: only the crafting menu's Decorative
-group makes more. Only the best piece of each comfort category counts, as in the
-base game. Item tooltips show the usual comfort numbers, but your rested time
+usual recipes. Comfort furniture makes more, like other decor and furniture.
+Only the best piece of each comfort category counts, as in the base game. Item tooltips show the usual comfort numbers, but your rested time
 uses the new ones.
 
 ## Did you use an older building or comfort mod?

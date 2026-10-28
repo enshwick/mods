@@ -196,9 +196,9 @@ impl Rates {
             comfort: rate(Rate::Comfort),
             combat: rate(Rate::Experience(ExperienceGroup::Combat)),
             mining: rate(Rate::Experience(ExperienceGroup::Mining)),
-            exploration: rate(Rate::Experience(ExperienceGroup::Exploration)),
-            workshops: rate(Rate::WorkshopSpeed),
-            resources: rate(Rate::ResourceDrops),
+            exploration: rate(Rate::Experience(ExperienceGroup::ExplorationQuests)),
+            workshops: rate(Rate::FactoryProductionSpeed),
+            resources: rate(Rate::ResourceDropStackAmount),
             loot: rate(Rate::Loot),
             skill_points: rate(Rate::SkillPoints),
             recipes: RecipeKind::ALL
@@ -370,7 +370,7 @@ mod tests {
         );
         assert_eq!(loader.rate(Rate::Loot), Some(2.0));
         assert_eq!(loader.rate(Rate::SkillPoints), Some(1.5));
-        assert_eq!(loader.rate(Rate::WorkshopSpeed), Some(1.0));
+        assert_eq!(loader.rate(Rate::FactoryProductionSpeed), Some(1.0));
         assert_eq!(loader.rate(Rate::Comfort), Some(2.0));
         loader.set_settings("[experience]\ncombat = 0.5\n");
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);

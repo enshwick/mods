@@ -7,9 +7,10 @@ Game Rates changes how much some parts of the game give:
   game's item data says a recipe makes, so other mods' recipes of these
   kinds make more too, and another mod's multiplier for them multiplies
   with this one. Decor and furniture are the props the game files under its
-  Decorative crafting group; comfort furniture and functional props
-  (stations, chests, storage shelves, altars, water devices) stay as they
-  are. The crafting menu shows the new counts.
+  Decorative and Comfort Furniture crafting groups, so comfort furniture
+  makes more too. Functional props (stations, chests, storage shelves,
+  altars, water devices) stay as they are. The crafting menu shows the new
+  counts.
 - Every piece of furniture gives twice its comfort inside a base by default,
   so a modest house reaches a long rested bonus. Only the best piece of each
   comfort category counts, as in vanilla.
@@ -37,7 +38,7 @@ multiplier = 2.0
 | `recipes.multiplier` | 2 | 2 to 100 | the output of each building recipe for the same cost |
 | `recipes.blocks` | true | | building blocks and roofs make more |
 | `recipes.overgrowth` | true | | overgrowth materials make more |
-| `recipes.decor` | true | | decor and furniture of the crafting menu's Decorative group make more |
+| `recipes.decor` | true | | decor and furniture of the crafting menu's Decorative and Comfort Furniture groups make more |
 | `comfort.multiplier` | 2.0 | 0 to 100 | comfort of each piece of furniture; 1 is vanilla, 0 takes all comfort from furniture |
 
 Each piece's comfort is rounded to a whole number. The server's recipe values

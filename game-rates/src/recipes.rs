@@ -10,7 +10,8 @@ pub(crate) enum Category {
     Blocks,
     /// Overgrowth materials.
     Overgrowth,
-    /// Decorations and furniture of the game's Decorative group.
+    /// Decorations and furniture of the game's Decorative and Comfort
+    /// Furniture groups.
     Decor,
 }
 
@@ -20,7 +21,7 @@ pub(crate) const fn category(kind: RecipeKind) -> Option<Category> {
     match kind {
         RecipeKind::BuildingBlock | RecipeKind::Roof => Some(Category::Blocks),
         RecipeKind::Overgrowth => Some(Category::Overgrowth),
-        RecipeKind::Decorative => Some(Category::Decor),
+        RecipeKind::Decorative | RecipeKind::ComfortFurniture => Some(Category::Decor),
         _ => None,
     }
 }
@@ -35,6 +36,10 @@ mod tests {
         assert_eq!(category(RecipeKind::Roof), Some(Category::Blocks));
         assert_eq!(category(RecipeKind::Overgrowth), Some(Category::Overgrowth));
         assert_eq!(category(RecipeKind::Decorative), Some(Category::Decor));
+        assert_eq!(
+            category(RecipeKind::ComfortFurniture),
+            Some(Category::Decor)
+        );
         assert_eq!(category(RecipeKind::Terrain), None);
         assert_eq!(category(RecipeKind::Other), None);
     }

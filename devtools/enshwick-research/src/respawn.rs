@@ -7,7 +7,8 @@ use std::ops::ControlFlow;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use enshwick::world::{ComponentType, World};
+use enshwick::ecs::ComponentType;
+use enshwick::world::World;
 use enshwick::{Load, Off};
 use rustc_hash::FxHashMap;
 
@@ -43,7 +44,7 @@ pub(crate) fn link(load: &mut Load<'_>, world: World) -> Result<(), Off> {
         .map_err(|_| Off::new("TargetInfo: out of range"))?;
     let base = offset("keen::ecs::SelectedTargets", "targets")? + SPAWN_SLOT * target;
     let slot = Slot {
-        ty: world.component_type(load, "keen::ecs::SelectedTargets")?,
+        ty: ComponentType::resolve(load, "keen::ecs::SelectedTargets")?,
         position: base + offset("keen::ecs::TargetInfo", "targetTransform")?,
         entity: base + offset("keen::ecs::TargetInfo", "targetEntityId")?,
     };

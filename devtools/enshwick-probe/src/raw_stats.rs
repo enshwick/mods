@@ -5,7 +5,8 @@
 use core::fmt::Write as _;
 
 use enshwick::Entity;
-use enshwick::world::{ComponentType, World};
+use enshwick::ecs::ComponentType;
+use enshwick::world::World;
 use enshwick::{Load, Off};
 
 /// Bytes read of a set whose size reflection does not give.
@@ -51,15 +52,15 @@ impl RawStats {
             let ty_name = format!("keen::ecs::{name}");
             sets.push(Set {
                 name,
-                ty: world.component_type(load, &ty_name)?,
+                ty: ComponentType::resolve(load, &ty_name)?,
                 size: load.type_size(&ty_name).unwrap_or(FALLBACK_SIZE),
                 root: load.constant(root)?,
                 max_slot: load.constant(max_slot)?,
             });
         }
         Ok(Self {
-            network_health: world.component_type(load, "keen::ecs::NetworkHealth").ok(),
-            network_stamina: world.component_type(load, "keen::ecs::NetworkStamina").ok(),
+            network_health: ComponentType::resolve(load, "keen::ecs::NetworkHealth").ok(),
+            network_stamina: ComponentType::resolve(load, "keen::ecs::NetworkStamina").ok(),
             data_offset: slot("ecs.level_data_offset")?,
             flags: slot("ecs.level_flags")?,
             count: slot("ecs.attribute_count")?,

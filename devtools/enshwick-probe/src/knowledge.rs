@@ -36,13 +36,13 @@ impl KnowledgeChecks {
         })?;
         match load.on::<PlayerDied>(|death| {
             enshwick::info!(
-                "event: player {} died, cause {}, at {:?}, killer {:02x?} entity {}, deadly shroud {}, drowned {}",
+                "event: player {} died, cause {}, at {:?}, cause guid {:02x?}, killer entity {}, deadly fog {}, drowned {}",
                 death.entity,
                 death.cause,
                 death.position,
-                death.killer,
+                death.cause_guid,
                 death.killer_entity,
-                death.deadly_shroud,
+                death.was_deadly_fog,
                 death.drowned
             );
         }) {

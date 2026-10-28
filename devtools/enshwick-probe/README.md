@@ -70,7 +70,7 @@ Ten seconds after the world has loaded, and again on the `check` action:
 
 While enabled, from start it counts the damage its damage filter sees by cause,
 and every game event by type, named as the game's reflection names it, and logs the counts every minute. It logs each
-typed game event it receives, each fall and shroud damage, and the first 200
+typed game event it receives, each fall and fog damage, and the first 200
 hits a player takes or deals, with the amount before and after the filter; a
 typed event whose fields this game build lacks shows as `FAIL typed <type>`.
 

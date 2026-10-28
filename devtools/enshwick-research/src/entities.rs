@@ -21,9 +21,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use enshwick::Entity;
-use enshwick::ecs::metres;
+use enshwick::ecs::{ComponentType, metres};
 use enshwick::state::ModLocal;
-use enshwick::world::{ComponentType, Placed, World};
+use enshwick::world::{Placed, World};
 use enshwick::{Load, Next, Off};
 
 use crate::memory;
@@ -207,8 +207,7 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
     let references = REFERENCES
         .iter()
         .filter_map(|&(ty, name, offset)| {
-            world
-                .component_type(load, ty)
+            ComponentType::resolve(load, ty)
                 .ok()
                 .map(|t| (name, t.hash(), offset))
         })
@@ -224,7 +223,7 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
         // SAFETY: as above.
         read_component: unsafe { core::mem::transmute::<usize, ReadComponent>(read_component) },
         transform: world.transform_type().hash(),
-        local_player: world.component_type(load, LOCAL_PLAYER)?.hash(),
+        local_player: ComponentType::resolve(load, LOCAL_PLAYER)?.hash(),
         references,
         start: Instant::now(),
     };
@@ -244,8 +243,7 @@ pub(crate) fn link_server(load: &mut Load<'_>, world: World) -> Result<(), Off> 
     let references: Vec<(&'static str, ComponentType, usize)> = REFERENCES
         .iter()
         .filter_map(|&(ty, name, offset)| {
-            world
-                .component_type(load, ty)
+            ComponentType::resolve(load, ty)
                 .ok()
                 .map(|t| (name, t, offset))
         })

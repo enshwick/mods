@@ -5,13 +5,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use enshwick::Entity;
+use enshwick::ecs::ComponentType;
 use enshwick::effects::{Effects, Spawn, Teleport};
 use enshwick::entity_data::{EntityData, Replication};
 use enshwick::game_events::{EventType, RawGameEvent};
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
-use enshwick::world::{ComponentType, ContainerKinds, World, WorldError};
-use enshwick::{Load, Off};
+use enshwick::world::{ContainerKinds, World, WritableType};
+use enshwick::{Load, Off, WorldError};
 
 /// Entities whose stats a check compares.
 const SAMPLE: usize = 5;
@@ -77,19 +78,17 @@ impl Checks {
     pub(crate) fn new(load: &mut Load<'_>) -> Result<Self, Off> {
         let world = load.world()?;
         Ok(Self {
-            network_health: world.component_type(load, "keen::ecs::NetworkHealth")?,
+            network_health: ComponentType::resolve(load, "keen::ecs::NetworkHealth")?,
             teleport_parts: [
-                world.component_type(load, "keen::ecs::Teleport")?,
-                world.component_type(load, "keen::ecs::TeleportCount")?,
-                world.component_type(load, "keen::ecs::LastTransform")?,
+                ComponentType::resolve(load, "keen::ecs::Teleport")?,
+                ComponentType::resolve(load, "keen::ecs::TeleportCount")?,
+                ComponentType::resolve(load, "keen::ecs::LastTransform")?,
             ],
             store: load.world_store("visits")?,
             world,
             save_asked: AtomicBool::new(false),
             scheduler: load.scheduler()?,
-            copies_refused: world
-                .writable_type(load, "keen::ecs::NetworkHealth")
-                .is_err(),
+            copies_refused: WritableType::resolve(load, "keen::ecs::NetworkHealth").is_err(),
             effects: load.effects(),
             died: load.game_event_type("entity_died_event")?,
             ping_sent: AtomicBool::new(false),

@@ -52,7 +52,7 @@ impl DamageSeen {
         let target = damage.target();
         let source = damage.source();
         let cause = damage.cause();
-        if cause == DamageCause::Hit {
+        if cause == DamageCause::Impact {
             let by_player = source.is_some_and(|s| world.player(s).is_some());
             if world.player(target).is_none() && !by_player {
                 return;

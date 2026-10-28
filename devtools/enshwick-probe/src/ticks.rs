@@ -89,7 +89,7 @@ impl TickChecks {
         let seen = Arc::clone(&calls);
         load.on_every_step(move |tick| {
             seen.steps.fetch_add(1, Ordering::Relaxed);
-            if tick.elapsed_steps() != 1 {
+            if tick.elapsed_steps != 1 {
                 seen.skipped.fetch_add(1, Ordering::Relaxed);
             }
         })?;
@@ -101,7 +101,7 @@ impl TickChecks {
         let period = load.on_tick(EVERY, move |tick| {
             seen.periodic.fetch_add(1, Ordering::Relaxed);
             seen.periodic_steps
-                .fetch_add(tick.elapsed_steps(), Ordering::Relaxed);
+                .fetch_add(tick.elapsed_steps, Ordering::Relaxed);
         })?;
         Ok(Self {
             calls,

@@ -181,8 +181,8 @@ fn pass(loot: &LootPass<'_>) {
             if !queue.is_empty() {
                 enshwick::debug!(
                     "{} emptied {}: taking {} more",
-                    player.0,
-                    container.entity.0,
+                    player,
+                    container.entity,
                     queue.len()
                 );
                 take_next(player, queue, switches().game.load(Ordering::Acquire));
@@ -286,8 +286,8 @@ fn take_next(player: Entity, mut queue: VecDeque<Entity>, game: u64) {
         t.release(next);
         enshwick::debug!(
             "area loot for {} skips {}: opened since or another player at it",
-            player.0,
-            next.0
+            player,
+            next
         );
     };
     let batch = Batch::new()
@@ -312,8 +312,8 @@ fn take_next(player: Entity, mut queue: VecDeque<Entity>, game: u64) {
         // Inventory full or the container changed: the rest stays for later.
         enshwick::debug!(
             "area loot for {} stopped at {}: {:?}",
-            player.0,
-            container.0,
+            player,
+            container,
             outcome.done
         );
         if let Some(t) = tracker().as_mut() {

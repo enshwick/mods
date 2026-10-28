@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use enshwick::events::{ShutdownStarted, Ticked, WorldLoaded};
+use enshwick::events::{ShutdownStarted, WorldLoaded};
 use enshwick::progress::Experience;
 use enshwick::state::{ModLocal, Store, WorldStore};
 use enshwick::{Load, Mod, Off};
@@ -211,7 +211,7 @@ impl Mod for SharedExperience {
         let store = load.world_store::<Saved>("experience")?;
         let _first = last.set(store.clone());
         let kept = store.clone();
-        load.on::<Ticked>(move |_| {
+        load.on_every_step(move |_| {
             shared().moment.store(0, Ordering::Relaxed);
             keep(&kept);
         })?;
@@ -270,13 +270,9 @@ mod tests {
         }
     }
 
-    fn tick(loader: &enshwick::test::Installed, step: u64) {
-        use enshwick::abi::{Header, TickData};
-
-        let _ran = loader.raise::<Ticked>(&TickData {
-            header: Header::of::<TickData>(),
-            step,
-        });
+    /// One server step of a sixtieth of a second.
+    fn step(loader: &enshwick::test::Installed) {
+        assert_eq!(loader.tick(std::time::Duration::from_millis(16)), 1);
     }
 
     /// A game of the world `key` with the mod's data in `dir`.
@@ -339,7 +335,7 @@ mod tests {
                 gained: 0,
             },
         ];
-        tick(&loader, 1);
+        step(&loader);
         loader.experience(&mut rows, 10, |_| 100);
         assert_eq!(
             (rows[0].gained, rows[1].gained),
@@ -407,8 +403,6 @@ mod tests {
 
     #[test]
     fn one_kill_shared_across_batches_counts_once() {
-        use enshwick::abi::{Header, TickData};
-
         let dir =
             std::env::temp_dir().join(format!("shared-experience-moment-{}", std::process::id()));
         let loader = enshwick::test::FakeHost::new()
@@ -428,13 +422,7 @@ mod tests {
             need: 1000,
             gained,
         };
-        let tick = |step| {
-            let _ran = loader.raise::<Ticked>(&TickData {
-                header: Header::of::<TickData>(),
-                step,
-            });
-        };
-        tick(1);
+        step(&loader);
         // A and B share a kill worth 120, in two batches of one step.
         let mut a = [row(1, 0, 120)];
         let mut b = [row(2, 0, 120)];
@@ -442,7 +430,7 @@ mod tests {
         loader.experience(&mut b, 10, |_| 1000);
         assert_eq!(shared().high_water.load(Ordering::Relaxed), 120);
         assert_eq!((a[0].gained, b[0].gained), (120, 120));
-        tick(2);
+        step(&loader);
         let mut both = [row(1, 120, 0), row(2, 120, 0)];
         loader.experience(&mut both, 10, |_| 1000);
         assert_eq!((both[0].gained, both[1].gained), (0, 0), "nobody is behind");

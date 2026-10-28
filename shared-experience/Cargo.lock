@@ -129,9 +129,9 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "enshwick"
-version = "1.0.0-alpha.9"
+version = "1.0.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ce432e5d972dede56a7dc53dc1e7a103119661cdd84f001aefd210594f68576"
+checksum = "f2003001740e90d3efcc3498229fa629dce5071d8ef3beb55e9efe6aa8b2d65f"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -154,9 +154,9 @@ dependencies = [
 
 [[package]]
 name = "enshwick-macros"
-version = "1.0.0-alpha.9"
+version = "1.0.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f77da6bf793f7b14e6d2d0470eec1f1a730eb6795943848bec3ada171fcd041"
+checksum = "036dc7128e0926c8e026f21043c6a6309265030dce78512c1a7066872db08fa7"
 dependencies = [
  "proc-macro2",
  "quote",

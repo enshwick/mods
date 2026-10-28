@@ -617,9 +617,9 @@ copy_staff_boss_chance = 0.0
         );
         let check = BedCheck {
             header: Header::of::<BedCheck>(),
-            survivor: SURVIVOR,
+            npc_id: SURVIVOR,
             entity: Entity(10),
-            bed: Entity(50),
+            bed_id: Entity(50),
             home: [10, 0, 10],
             bed_at: [150, 0, 10],
         };
@@ -672,9 +672,9 @@ copy_staff_locked_chest_chance = 0.0
         );
         let check = BedCheck {
             header: Header::of::<BedCheck>(),
-            survivor: SURVIVOR,
+            npc_id: SURVIVOR,
             entity: Entity(10),
-            bed: Entity(50),
+            bed_id: Entity(50),
             home: [10, 0, 10],
             bed_at: [150, 0, 10],
         };

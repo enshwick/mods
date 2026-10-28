@@ -427,7 +427,7 @@ fn outside_long_enough(outside: &mut BTreeMap<u32, Instant>, me: u32, now: Insta
 /// Whether a copy keeps a bed the game kept: not one at another altar than
 /// its home's.
 fn keeps(shared: &Shared, check: &BedCheck) -> bool {
-    if !shared.copies.knows_altars() || shared.copies.copy_count(check.survivor) <= 1 {
+    if !shared.copies.knows_altars() || shared.copies.copy_count(check.npc_id) <= 1 {
         return true;
     }
     let (Some(mine), Some(beds)) = (

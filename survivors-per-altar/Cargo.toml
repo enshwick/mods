@@ -17,11 +17,11 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-enshwick = "=1.0.0-alpha.10"
+enshwick = { version = "=1.0.0-alpha.11", features = ["unstable"] }
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
-enshwick = { version = "=1.0.0-alpha.10", features = ["test"] }
+enshwick = { version = "=1.0.0-alpha.11", features = ["test", "unstable"] }
 toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]

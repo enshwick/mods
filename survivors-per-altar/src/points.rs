@@ -18,9 +18,8 @@
 )]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CopyLimit {
-    /// The survivor, the number of its
-    /// [`SurvivorId`](enshwick::survivors::SurvivorId).
-    pub survivor: u32,
+    /// The survivor.
+    pub survivor: enshwick::survivors::NpcId,
     /// How many altars stand.
     pub altars: u32,
     /// How many entities of the survivor stand now, its original included
@@ -43,9 +42,8 @@ pub struct CopyLimit {
 )]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ChargeCost {
-    /// The survivor, the number of its
-    /// [`SurvivorId`](enshwick::survivors::SurvivorId).
-    pub survivor: u32,
+    /// The survivor.
+    pub survivor: enshwick::survivors::NpcId,
     /// How many entities of the survivor stand now, its original included
     /// wherever it is.
     pub copies: u32,

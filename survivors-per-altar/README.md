@@ -62,7 +62,8 @@ vanilla_staff_places_copies = false
 - `copy_staff_charges`: the charges of a full copy staff, 1 to 100.
 - `copy_staff_charges_min`: a dropped staff holds from this many up to
   `copy_staff_charges`, at random; 0 drops every staff full. It may not be
-  above `copy_staff_charges`.
+  above `copy_staff_charges`: the Mods screen refuses such a value and says
+  why in the player's language.
 - `copy_staff_boss_chance`, `copy_staff_locked_chest_chance`: the chance that a
   boss's corpse holds a staff, and that a chest which needs a key or a lockpick
   holds one, from 0 to 1; 0 turns that source off. A value above 1 counts as 1
@@ -110,7 +111,8 @@ follows their grown zones when that mod runs.
 Other mods change how many copies of a survivor the altars hold at the
 extension point `enshwick.survivors-per-altar:copy-limit`, and how many
 charges a new copy costs at `enshwick.survivors-per-altar:charge-cost`, where
-they may also refuse the staff's use. See
+they may also refuse the staff's use. Both name the survivor by its
+`NpcId`. See
 [Extending other mods](https://github.com/enshwick/enshwick/blob/main/book/src/extending.md).
 
 Licensed under [MIT](LICENSE).

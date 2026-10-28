@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 
 /// A survivor's id, the hash of its template.
-pub(crate) type Survivor = u32;
+pub(crate) type Survivor = enshwick::survivors::NpcId;
 /// An entity id.
 pub(crate) type Entity = u32;
 /// An altar's identity: its entity.
@@ -317,7 +317,7 @@ impl Copies {
 mod tests {
     use super::*;
 
-    const SMITH: Survivor = 0x47a2_094a;
+    const SMITH: Survivor = Survivor::new(0x47a2_094a);
 
     fn zone(x: i64) -> Zone {
         Zone::new([x, 0, 0], [x + 80, 80, 80])

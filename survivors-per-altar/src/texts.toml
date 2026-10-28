@@ -17,6 +17,7 @@
 "config.copy_staff_charges.doc" = "The charges a full copy staff holds, 1 to 100. A change takes effect when the game starts again."
 "config.copy_staff_charges_min" = "Fewest charges"
 "config.copy_staff_charges_min.doc" = "The fewest charges a dropped staff holds, at random up to the full count, 0 to 100. 0 drops every staff full."
+"config.copy_staff_charges_min.above_full" = "Fewest charges ({min}) cannot be more than Charges when full ({full})."
 "config.vanilla_staff_places_copies" = "Survivor's staff places copies"
 "config.vanilla_staff_places_copies.doc" = "On, the survivor's own staff places a copy at an altar without one and moves the copy an altar has. Off, it moves the survivor itself, as in the base game."
 
@@ -39,6 +40,7 @@
 "config.copy_staff_charges.doc" = "Скільки зарядів має повний посох копії, від 1 до 100. Зміна діє після перезапуску гри."
 "config.copy_staff_charges_min" = "Найменше зарядів"
 "config.copy_staff_charges_min.doc" = "Найменше зарядів у знайденому посоху, випадково до повного числа, від 0 до 100. 0: кожен посох випадає повним."
+"config.copy_staff_charges_min.above_full" = "«Найменше зарядів» ({min}) не може бути більше, ніж «Зарядів, коли повний» ({full})."
 "config.vanilla_staff_places_copies" = "Посох вцілілого ставить копії"
 "config.vanilla_staff_places_copies.doc" = "Якщо увімкнено, власний посох вцілілого ставить копію біля олтаря без неї й переносить копію, що вже є. Якщо вимкнено, він переносить самого вцілілого, як у звичайній грі."
 
@@ -61,6 +63,7 @@
 "config.copy_staff_charges.doc" = "Die Ladungen eines vollen Kopiestabs, 1 bis 100. Eine Änderung gilt ab dem nächsten Spielstart."
 "config.copy_staff_charges_min" = "Wenigste Ladungen"
 "config.copy_staff_charges_min.doc" = "Die wenigsten Ladungen eines gefundenen Stabs, zufällig bis zur vollen Zahl, 0 bis 100. 0: Jeder Stab ist voll."
+"config.copy_staff_charges_min.above_full" = "„Wenigste Ladungen“ ({min}) darf nicht höher sein als „Ladungen, wenn voll“ ({full})."
 "config.vanilla_staff_places_copies" = "Stab des Überlebenden stellt Kopien auf"
 "config.vanilla_staff_places_copies.doc" = "An: Der eigene Stab des Überlebenden stellt an einem Altar ohne Kopie eine auf und versetzt die Kopie eines Altars. Aus: Er versetzt den Überlebenden selbst, wie im Grundspiel."
 
@@ -83,6 +86,7 @@
 "config.copy_staff_charges.doc" = "Les charges d'un bâton de copie plein, de 1 à 100. Un changement prend effet au prochain lancement du jeu."
 "config.copy_staff_charges_min" = "Charges minimales"
 "config.copy_staff_charges_min.doc" = "Le moins de charges d'un bâton trouvé, au hasard jusqu'au plein, de 0 à 100. 0 : chaque bâton tombe plein."
+"config.copy_staff_charges_min.above_full" = "« Charges minimales » ({min}) ne peut pas dépasser « Charges une fois plein » ({full})."
 "config.vanilla_staff_places_copies" = "Le bâton du survivant place des copies"
 "config.vanilla_staff_places_copies.doc" = "Activé, le bâton du survivant place une copie à un autel qui n'en a pas et déplace la copie d'un autel. Désactivé, il déplace le survivant lui-même, comme dans le jeu de base."
 
@@ -105,6 +109,7 @@
 "config.copy_staff_charges.doc" = "Le cariche di un bastone di copia pieno, da 1 a 100. Una modifica vale dal prossimo avvio del gioco."
 "config.copy_staff_charges_min" = "Cariche minime"
 "config.copy_staff_charges_min.doc" = "Le cariche minime di un bastone trovato, a caso fino al pieno, da 0 a 100. 0: ogni bastone cade pieno."
+"config.copy_staff_charges_min.above_full" = "«Cariche minime» ({min}) non può superare «Cariche a pieno» ({full})."
 "config.vanilla_staff_places_copies" = "Il bastone del sopravvissuto colloca copie"
 "config.vanilla_staff_places_copies.doc" = "Se attivo, il bastone del sopravvissuto colloca una copia presso un altare che non ne ha e sposta la copia di un altare. Se disattivato, sposta il sopravvissuto stesso, come nel gioco base."
 
@@ -127,6 +132,7 @@
 "config.copy_staff_charges.doc" = "Las cargas de un bastón de copia lleno, de 1 a 100. Un cambio se aplica al volver a iniciar el juego."
 "config.copy_staff_charges_min" = "Cargas mínimas"
 "config.copy_staff_charges_min.doc" = "Las cargas mínimas de un bastón encontrado, al azar hasta el total, de 0 a 100. 0: cada bastón sale lleno."
+"config.copy_staff_charges_min.above_full" = "«Cargas mínimas» ({min}) no puede superar «Cargas cuando está lleno» ({full})."
 "config.vanilla_staff_places_copies" = "El bastón del superviviente coloca copias"
 "config.vanilla_staff_places_copies.doc" = "Activado, el bastón del propio superviviente coloca una copia en un altar sin ella y mueve la copia de un altar. Desactivado, mueve al superviviente, como en el juego base."
 
@@ -149,6 +155,7 @@
 "config.copy_staff_charges.doc" = "Сколько зарядов у полного посоха копии, от 1 до 100. Изменение действует после перезапуска игры."
 "config.copy_staff_charges_min" = "Минимум зарядов"
 "config.copy_staff_charges_min.doc" = "Наименьшее число зарядов у найденного посоха, случайно до полного, от 0 до 100. 0: каждый посох выпадает полным."
+"config.copy_staff_charges_min.above_full" = "«Минимум зарядов» ({min}) не может быть больше, чем «Зарядов при полном» ({full})."
 "config.vanilla_staff_places_copies" = "Посох выжившего ставит копии"
 "config.vanilla_staff_places_copies.doc" = "Если включено, собственный посох выжившего ставит копию у алтаря без неё и переносит копию алтаря. Если выключено, он переносит самого выжившего, как в обычной игре."
 
@@ -171,6 +178,7 @@
 "config.copy_staff_charges.doc" = "Ładunki pełnego kostura kopii, od 1 do 100. Zmiana działa po ponownym uruchomieniu gry."
 "config.copy_staff_charges_min" = "Najmniej ładunków"
 "config.copy_staff_charges_min.doc" = "Najmniej ładunków znalezionego kostura, losowo do pełnej liczby, od 0 do 100. 0: każdy kostur wypada pełny."
+"config.copy_staff_charges_min.above_full" = "„Najmniej ładunków” ({min}) nie może przekraczać wartości „Ładunki, gdy pełny” ({full})."
 "config.vanilla_staff_places_copies" = "Kostur ocalałego stawia kopie"
 "config.vanilla_staff_places_copies.doc" = "Włączone: własny kostur ocalałego stawia kopię przy ołtarzu bez niej i przenosi kopię ołtarza. Wyłączone: przenosi samego ocalałego, jak w podstawowej grze."
 
@@ -193,6 +201,7 @@
 "config.copy_staff_charges.doc" = "満タンの複製の杖のチャージ数（1～100）。変更はゲームの再起動後に反映されます。"
 "config.copy_staff_charges_min" = "最小チャージ"
 "config.copy_staff_charges_min.doc" = "ドロップした杖の最小チャージ数で、最大値までランダムです（0～100）。0にするとすべて満タンでドロップします。"
+"config.copy_staff_charges_min.above_full" = "「最小チャージ」（{min}）は「最大チャージ」（{full}）を超えられません。"
 "config.vanilla_staff_places_copies" = "生存者の杖で複製を置く"
 "config.vanilla_staff_places_copies.doc" = "オンにすると、生存者自身の杖が、複製のいない祭壇に複製を置き、祭壇の複製を移動します。オフにすると、通常のゲームと同じく生存者本人を移動します。"
 
@@ -215,6 +224,7 @@
 "config.copy_staff_charges.doc" = "가득 찬 복제 지팡이의 충전 횟수입니다. 1~100. 변경 사항은 게임을 다시 시작하면 적용됩니다."
 "config.copy_staff_charges_min" = "최소 충전"
 "config.copy_staff_charges_min.doc" = "드롭된 지팡이의 최소 충전 횟수로, 최대치까지 무작위입니다. 0~100. 0이면 모든 지팡이가 가득 찬 상태로 드롭됩니다."
+"config.copy_staff_charges_min.above_full" = "'최소 충전'({min})은 '최대 충전'({full})보다 클 수 없습니다."
 "config.vanilla_staff_places_copies" = "생존자 지팡이로 복제 배치"
 "config.vanilla_staff_places_copies.doc" = "켜면 생존자 자신의 지팡이가 복제가 없는 제단에 복제를 두고 제단의 복제를 옮깁니다. 끄면 기본 게임처럼 생존자 본인을 옮깁니다."
 
@@ -237,6 +247,7 @@
 "config.copy_staff_charges.doc" = "As cargas de um cajado de cópia cheio, de 1 a 100. Uma mudança vale quando o jogo iniciar de novo."
 "config.copy_staff_charges_min" = "Mínimo de cargas"
 "config.copy_staff_charges_min.doc" = "O mínimo de cargas de um cajado encontrado, ao acaso até o total, de 0 a 100. 0: todo cajado vem cheio."
+"config.copy_staff_charges_min.above_full" = "“Mínimo de cargas” ({min}) não pode ser maior que “Cargas quando cheio” ({full})."
 "config.vanilla_staff_places_copies" = "Cajado do sobrevivente coloca cópias"
 "config.vanilla_staff_places_copies.doc" = "Ligado, o cajado do próprio sobrevivente coloca uma cópia em um altar sem ela e move a cópia de um altar. Desligado, move o próprio sobrevivente, como no jogo base."
 
@@ -259,6 +270,7 @@
 "config.copy_staff_charges.doc" = "จำนวนประจุของคทาสำเนาที่เต็ม ตั้งแต่ 1 ถึง 100 การเปลี่ยนแปลงจะมีผลเมื่อเริ่มเกมใหม่"
 "config.copy_staff_charges_min" = "ประจุต่ำสุด"
 "config.copy_staff_charges_min.doc" = "จำนวนประจุต่ำสุดของคทาที่ดรอป สุ่มได้จนถึงจำนวนเต็ม ตั้งแต่ 0 ถึง 100 ค่า 0 ทำให้คทาทุกอันดรอปแบบเต็ม"
+"config.copy_staff_charges_min.above_full" = "“ประจุต่ำสุด” ({min}) ต้องไม่มากกว่า “ประจุเมื่อเต็ม” ({full})"
 "config.vanilla_staff_places_copies" = "คทาของผู้รอดชีวิตวางสำเนา"
 "config.vanilla_staff_places_copies.doc" = "เมื่อเปิด คทาของผู้รอดชีวิตเองจะวางสำเนาที่แท่นบูชาที่ยังไม่มีสำเนา และย้ายสำเนาของแท่นบูชา เมื่อปิด คทาจะย้ายตัวผู้รอดชีวิตเอง เหมือนเกมปกติ"
 
@@ -281,6 +293,7 @@
 "config.copy_staff_charges.doc" = "Dolu bir kopya asasının şarj sayısı, 1 ile 100 arası. Değişiklik oyun yeniden başlayınca geçerli olur."
 "config.copy_staff_charges_min" = "En az şarj"
 "config.copy_staff_charges_min.doc" = "Düşen bir asanın en az şarjı, dolu sayıya kadar rastgele, 0 ile 100 arası. 0 her asayı dolu düşürür."
+"config.copy_staff_charges_min.above_full" = "“En az şarj” ({min}), “Doluyken şarj” ({full}) değerinden büyük olamaz."
 "config.vanilla_staff_places_copies" = "Hayatta kalanın asası kopya koyar"
 "config.vanilla_staff_places_copies.doc" = "Açıkken hayatta kalanın kendi asası kopyası olmayan bir sunağa kopya koyar ve sunağın kopyasını taşır. Kapalıyken temel oyundaki gibi hayatta kalanın kendisini taşır."
 
@@ -303,6 +316,7 @@
 "config.copy_staff_charges.doc" = "满充能复制法杖的充能次数，1 到 100。更改在游戏重新启动后生效。"
 "config.copy_staff_charges_min" = "最少充能次数"
 "config.copy_staff_charges_min.doc" = "掉落法杖的最少充能次数，随机到满值，0 到 100。0 表示每根法杖都满充能掉落。"
+"config.copy_staff_charges_min.above_full" = "“最少充能次数”（{min}）不能大于“满充能次数”（{full}）。"
 "config.vanilla_staff_places_copies" = "幸存者的法杖放置复制体"
 "config.vanilla_staff_places_copies.doc" = "开启后，幸存者自己的法杖会在没有复制体的祭坛放置复制体，并移动祭坛的复制体。关闭后，它会像原版游戏一样移动幸存者本人。"
 
@@ -325,5 +339,6 @@
 "config.copy_staff_charges.doc" = "滿充能複製法杖的充能次數，1 到 100。變更在遊戲重新啟動後生效。"
 "config.copy_staff_charges_min" = "最少充能次數"
 "config.copy_staff_charges_min.doc" = "掉落法杖的最少充能次數，隨機到滿值，0 到 100。0 表示每根法杖都滿充能掉落。"
+"config.copy_staff_charges_min.above_full" = "「最少充能次數」（{min}）不能大於「滿充能次數」（{full}）。"
 "config.vanilla_staff_places_copies" = "倖存者的法杖放置複製體"
 "config.vanilla_staff_places_copies.doc" = "開啟後，倖存者自己的法杖會在沒有複製體的祭壇放置複製體，並移動祭壇的複製體。關閉後，它會像原版遊戲一樣移動倖存者本人。"

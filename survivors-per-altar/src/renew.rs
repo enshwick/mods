@@ -19,13 +19,12 @@ const SWEEP: Duration = Duration::from_secs(60);
 fn renew(inventories: &Inventories, root: Entity, staffs: &[ItemId]) {
     let asked = inventories.renew(root, staffs, Fill::FULL, move |outcome| {
         enshwick::info!(
-            "old copy staffs in {} renewed with full charges: {:?}",
-            root.0,
+            "old copy staffs in {root} renewed with full charges: {:?}",
             outcome.done
         );
     });
     if asked.is_some() {
-        enshwick::debug!("old copy staffs in {}: renewal asked", root.0);
+        enshwick::debug!("old copy staffs in {root}: renewal asked");
     }
 }
 

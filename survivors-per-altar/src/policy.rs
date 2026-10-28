@@ -22,7 +22,7 @@ use enshwick::inventory::{Bar, Batch, Fill, Inventories, Op, SlotRef};
 use enshwick::points::OwnedPoint;
 use enshwick::state::ModLocal;
 use enshwick::survivors::{
-    Answer, BedCheck, Lookup, Purpose, Summon, SummonVerdict, WorkshopSurvivor,
+    Answer, BedCheck, Lookup, NpcId, Purpose, Summon, SummonVerdict, WorkshopSurvivor,
 };
 use enshwick::{Entity, ItemId, Load, Off};
 
@@ -54,7 +54,7 @@ pub(crate) struct Staffs {
 /// handler after the use, all inside the game's spawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Plan {
-    survivor: u32,
+    survivor: NpcId,
     answer: Answer,
     /// A copy staff placing a new copy, which spends `cost` charges.
     places: bool,
@@ -70,7 +70,7 @@ thread_local! {
 struct Shared {
     copies: Copies,
     /// Each survivor's original, the entity the game's record names.
-    originals: BTreeMap<u32, u32>,
+    originals: BTreeMap<NpcId, u32>,
     /// When the uniqueness pass last saw each copy.
     seen: BTreeMap<u32, Instant>,
     /// Since when each copy has stood outside every known zone.
@@ -105,7 +105,7 @@ static CHARGE_COST: ModLocal<OwnedPoint<ChargeCost>> = ModLocal::new();
 
 /// The most entities `survivor` may have with `altars` altars standing and
 /// `copies` entities now: one per altar, or what other mods' links answer.
-fn copy_limit(survivor: u32, altars: usize, copies: usize) -> usize {
+fn copy_limit(survivor: NpcId, altars: usize, copies: usize) -> usize {
     let Some(point) = COPY_LIMIT.get() else {
         return altars;
     };
@@ -120,7 +120,7 @@ fn copy_limit(survivor: u32, altars: usize, copies: usize) -> usize {
 
 /// The charges a new copy of `survivor` costs, 1 or what other mods' links
 /// answer; `None` when a link refuses the staff's use.
-fn charge_cost(survivor: u32, copies: usize, meter: Option<Bar>, full: u16) -> Option<u16> {
+fn charge_cost(survivor: NpcId, copies: usize, meter: Option<Bar>, full: u16) -> Option<u16> {
     let Some(point) = CHARGE_COST.get() else {
         return Some(1);
     };
@@ -194,7 +194,8 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
 }
 
 /// Copy staffs that placed a copy and owe their charge, spent on the game
-/// thread after the step of the use, or at the latest as the game stops.
+/// thread at the scheduler's next pass after the use, or at the latest as the
+/// game stops.
 static OWED: ModLocal<Mutex<Vec<(Entity, u16)>>> = ModLocal::new();
 
 fn owed() -> std::sync::MutexGuard<'static, Vec<(Entity, u16)>> {
@@ -283,7 +284,7 @@ fn settling(shared: &Shared, now: Instant) -> bool {
 
 /// The uniqueness pass, which files copies.
 fn answer(shared: &mut Shared, lookup: &Lookup) -> Answer {
-    let npc = lookup.survivor.0;
+    let npc = lookup.survivor;
     let found = lookup.vanilla.map_or(0, |e| e.0);
     match lookup.purpose {
         Purpose::Uniqueness { entity, home } => {
@@ -313,7 +314,7 @@ fn note_pass(shared: &mut Shared, now: Instant) {
 
 /// Every other lookup, which only reads.
 fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
-    let npc = lookup.survivor.0;
+    let npc = lookup.survivor;
     let found = lookup.vanilla.map_or(0, |e| e.0);
     match lookup.purpose {
         Purpose::Cursor => {
@@ -343,8 +344,7 @@ fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
                 .altar_at(bed_at)
                 .and_then(|a| shared.copies.slot(npc, a));
             enshwick::info!(
-                "survivor {npc:#010x}: staff gives bed {} to {}",
-                bed.0,
+                "survivor {npc:#010x}: staff gives bed {bed} to {}",
                 answer.unwrap_or(0)
             );
             entity_or_nobody(answer)
@@ -368,7 +368,7 @@ fn entity_or_nobody(entity: Option<u32>) -> Answer {
 
 fn file_copy(
     shared: &mut Shared,
-    npc: u32,
+    npc: NpcId,
     found: u32,
     me: u32,
     home: [i64; 3],
@@ -427,7 +427,7 @@ fn outside_long_enough(outside: &mut BTreeMap<u32, Instant>, me: u32, now: Insta
 /// Whether a copy keeps a bed the game kept: not one at another altar than
 /// its home's.
 fn keeps(shared: &Shared, check: &BedCheck) -> bool {
-    if !shared.copies.knows_altars() || shared.copies.copy_count(check.survivor.0) <= 1 {
+    if !shared.copies.knows_altars() || shared.copies.copy_count(check.survivor) <= 1 {
         return true;
     }
     let (Some(mine), Some(beds)) = (
@@ -443,12 +443,11 @@ fn keeps(shared: &Shared, check: &BedCheck) -> bool {
 fn spend(world: enshwick::world::World, staff: Entity, cost: u16) {
     match world.change_item_meter(staff, |c| (c - i32::from(cost)).max(0)) {
         Ok(left) => enshwick::info!(
-            "copy staff {}: {} of {} charges left",
-            staff.0,
+            "copy staff {staff}: {} of {} charges left",
             left.current,
             left.max
         ),
-        Err(why) => enshwick::warn!("copy staff {}: no charge spent: {why}", staff.0),
+        Err(why) => enshwick::warn!("copy staff {staff}: no charge spent: {why}"),
     }
 }
 
@@ -489,7 +488,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
     if summon.ammo.is_some() {
         return SummonVerdict::Allow;
     }
-    let survivor = summon.template.id();
+    let survivor = NpcId::from_guid(summon.template);
     let original = shared.originals.get(&survivor).copied().unwrap_or(0);
     if let Some(staff) = crate::staffs::copy_staff(summon.item) {
         let charges = staffs.charges;
@@ -575,7 +574,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
 fn judge_own_staff(
     shared: &Shared,
     summon: &Summon,
-    survivor: u32,
+    survivor: NpcId,
     original: u32,
 ) -> SummonVerdict {
     // The survivor's own staff moves the original, as in vanilla; a copy at
@@ -612,7 +611,7 @@ fn judge_own_staff(
 /// at `target` beyond the copy limit.
 fn vanilla_staff_over_limit(
     copies: &Copies,
-    survivor: u32,
+    survivor: NpcId,
     target: [i64; 3],
     original: u32,
 ) -> bool {
@@ -642,6 +641,8 @@ fn sweep(shared: &mut Shared, now: Instant) {
 mod tests {
     use super::*;
 
+    const SMITH: NpcId = NpcId(7);
+
     #[test]
     fn a_copy_outside_every_zone_goes_only_after_the_grace() {
         let mut shared = Shared::new();
@@ -651,11 +652,11 @@ mod tests {
         ]);
         let t0 = Instant::now();
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 10, [10, 0, 10], t0),
+            file_copy(&mut shared, SMITH, 10, 10, [10, 0, 10], t0),
             Answer::Entity(Entity(10))
         );
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [120, 0, 10], t0),
+            file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], t0),
             Answer::Entity(Entity(11))
         );
         // Right after a load only one altar is listed yet: the copy at the
@@ -665,7 +666,7 @@ mod tests {
             .set_altars([(1, Zone::new([0, 0, 0], [80, 80, 80]))]);
         let soon = t0 + Duration::from_secs(1);
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [120, 0, 10], soon),
+            file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], soon),
             Answer::Entity(Entity(11)),
             "kept while the altars arrive"
         );
@@ -675,7 +676,7 @@ mod tests {
         ]);
         let later = t0 + OUTSIDE_GRACE + Duration::from_secs(1);
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [120, 0, 10], later),
+            file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], later),
             Answer::Entity(Entity(11)),
             "filed at its altar once it is listed"
         );
@@ -685,16 +686,16 @@ mod tests {
             .copies
             .set_altars([(1, Zone::new([0, 0, 0], [80, 80, 80]))]);
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [120, 0, 10], later),
+            file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], later),
             Answer::Entity(Entity(11))
         );
         let gone = later + OUTSIDE_GRACE;
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [120, 0, 10], gone),
+            file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], gone),
             Answer::Entity(Entity(10)),
             "the original keeps the survivor"
         );
-        assert_eq!(shared.copies.copy_count(7), 1);
+        assert_eq!(shared.copies.copy_count(SMITH), 1);
         assert!(shared.outside.is_empty());
     }
 
@@ -708,26 +709,30 @@ mod tests {
         let t0 = Instant::now();
         set_altars(&mut shared, t0, [one]);
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 10, [10, 0, 10], t0),
+            file_copy(&mut shared, SMITH, 10, 10, [10, 0, 10], t0),
             Answer::Entity(Entity(10))
         );
         let soon = t0 + Duration::from_secs(1);
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [75, 0, 10], soon),
+            file_copy(&mut shared, SMITH, 10, 11, [75, 0, 10], soon),
             Answer::Entity(Entity(11)),
             "kept while the altars arrive"
         );
         set_altars(&mut shared, soon, [one, two]);
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 11, [75, 0, 10], soon),
+            file_copy(&mut shared, SMITH, 10, 11, [75, 0, 10], soon),
             Answer::Entity(Entity(11))
         );
-        assert_eq!(shared.copies.slot(7, 2), Some(11), "filed at its own altar");
-        assert_eq!(shared.copies.slot(7, 1), Some(10));
+        assert_eq!(
+            shared.copies.slot(SMITH, 2),
+            Some(11),
+            "filed at its own altar"
+        );
+        assert_eq!(shared.copies.slot(SMITH, 1), Some(10));
         // Once the altars are in, a second copy in a slot goes at once.
         let later = t0 + OUTSIDE_GRACE;
         assert_eq!(
-            file_copy(&mut shared, 7, 10, 12, [100, 0, 10], later),
+            file_copy(&mut shared, SMITH, 10, 12, [100, 0, 10], later),
             Answer::Entity(Entity(11))
         );
     }

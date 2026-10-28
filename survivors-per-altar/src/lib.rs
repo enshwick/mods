@@ -17,9 +17,14 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use enshwick::abi::Side;
+use enshwick::config::ConfigError;
 use enshwick::loot::Drop;
 use enshwick::state::ModLocal;
 use enshwick::{ItemId, Load, Mod, Off};
+
+/// The text refusing fewest charges above the full count, with `{min}` and
+/// `{full}`.
+const CHARGES_MIN_ABOVE_FULL: &str = "config.copy_staff_charges_min.above_full";
 
 /// The settings in force, as the game's hooks read them: the server's on a
 /// joined client.
@@ -124,11 +129,14 @@ pub(crate) struct Charges {
 
 impl Settings {
     /// Refuses a fewest count above the full one.
-    fn check(&self) -> Result<(), String> {
+    fn check(&self) -> Result<(), ConfigError> {
         if self.copy_staff_charges_min > self.copy_staff_charges {
-            return Err(format!(
-                "copy_staff_charges_min ({}) is above copy_staff_charges ({})",
-                self.copy_staff_charges_min, self.copy_staff_charges
+            return Err(ConfigError::text(
+                CHARGES_MIN_ABOVE_FULL,
+                &[
+                    ("min", &self.copy_staff_charges_min.to_string()),
+                    ("full", &self.copy_staff_charges.to_string()),
+                ],
             ));
         }
         Ok(())
@@ -334,36 +342,38 @@ enshwick::declare_mod!(SurvivorsPerAltar);
 mod tests {
     use enshwick::Entity;
     use enshwick::content::types;
+    use enshwick::survivors::{Answer, NpcId};
 
     use super::*;
 
     /// The type hash the fake loader gives item resources.
     const ITEM_INFO: u32 = 20;
 
-    /// The fake loader's survivor lookup, with entities by their numbers.
+    /// The survivor the lookups ask about.
+    const SURVIVOR: NpcId = NpcId(7);
+
+    /// The fake loader's survivor lookup, with entities by their numbers and
+    /// 0 for none.
     fn lookup(
         loader: &enshwick::test::Installed,
-        survivor: u32,
+        survivor: NpcId,
         vanilla: u32,
         purpose: u32,
         entity: u32,
         cell: [i64; 3],
         beds: &[(u32, u32)],
-    ) -> Option<u32> {
+    ) -> Answer {
         let beds: Vec<(Entity, Entity)> = beds
             .iter()
             .map(|&(survivor, bed)| (Entity(survivor), Entity(bed)))
             .collect();
-        loader
-            .survivor_lookup(
-                survivor,
-                Entity(vanilla),
-                purpose,
-                Entity(entity),
-                cell,
-                &beds,
-            )
-            .map(|found| found.0)
+        let some = |entity| (entity != 0).then_some(Entity(entity));
+        loader.survivor_lookup(survivor, some(vanilla), purpose, some(entity), cell, &beds)
+    }
+
+    /// The answer that names entity `entity`.
+    const fn found(entity: u32) -> Answer {
+        Answer::Entity(Entity(entity))
     }
 
     /// A loader that knows the item layout the copy staffs need, with
@@ -435,15 +445,21 @@ copy_staff_boss_chance = 0.0
 
         let texts = Texts::parse(staffs::TEXTS).unwrap();
         assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(Language::OFFERED), []);
         let schema = Settings::schema();
-        let keys = [MOD_NAME.to_owned(), MOD_DESCRIPTION.to_owned(), schema.text]
-            .into_iter()
-            .chain(
-                schema
-                    .fields
-                    .into_iter()
-                    .flat_map(|field| [format!("{}.doc", field.text), field.text]),
-            );
+        let keys = [
+            MOD_NAME.to_owned(),
+            MOD_DESCRIPTION.to_owned(),
+            CHARGES_MIN_ABOVE_FULL.to_owned(),
+            schema.text,
+        ]
+        .into_iter()
+        .chain(
+            schema
+                .fields
+                .into_iter()
+                .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+        );
         for key in keys {
             assert!(texts.get(&key, Language::FALLBACK).is_some(), "{key}");
         }
@@ -523,7 +539,11 @@ copy_staff_boss_chance = 0.0
         assert_eq!(with(5, 0).charges(), Charges { full: 5, min: 5 });
         assert_eq!(with(5, 2).charges(), Charges { full: 5, min: 2 });
         assert!(with(5, 2).check().is_ok());
-        assert!(with(5, 6).check().is_err());
+        assert_eq!(
+            with(5, 6).check().map_err(|refused| refused.to_string()),
+            Err(format!("{CHARGES_MIN_ABOVE_FULL} (min = 6, full = 5)")),
+            "refused with a text of the mod's own"
+        );
     }
 
     #[test]
@@ -555,31 +575,31 @@ copy_staff_boss_chance = 0.0
         loader.set_altars(&[altar(1, 0), altar(2, 100)]);
         policy::settle();
         let ask = |vanilla, purpose, entity, cell, beds: &[(u32, u32)]| {
-            lookup(&loader, 7, vanilla, purpose, entity, cell, beds)
+            lookup(&loader, SURVIVOR, vanilla, purpose, entity, cell, beds)
         };
         let unique = SurvivorLookup::UNIQUENESS;
         assert_eq!(
             ask(10, unique, 10, [10, 0, 10], &[]),
-            Some(10),
+            found(10),
             "the original stays"
         );
         assert_eq!(
             ask(10, unique, 11, [120, 0, 10], &[]),
-            Some(11),
+            found(11),
             "a copy at the other altar"
         );
         assert_eq!(
             ask(10, unique, 12, [130, 0, 10], &[]),
-            Some(11),
+            found(11),
             "a second copy goes"
         );
         assert_eq!(
             ask(10, SurvivorLookup::SPAWN, 0, [20, 0, 20], &[]),
-            Some(10)
+            found(10)
         );
         assert_eq!(
             ask(10, SurvivorLookup::BED_OWNER, 0, [150, 0, 10], &[]),
-            Some(11)
+            found(11)
         );
         assert_eq!(
             ask(
@@ -589,12 +609,15 @@ copy_staff_boss_chance = 0.0
                 [150, 0, 10],
                 &[(11, 50)]
             ),
-            Some(11)
+            found(11)
         );
-        assert_eq!(ask(10, SurvivorLookup::CURSOR, 0, [0; 3], &[]), Some(0));
+        assert_eq!(
+            ask(10, SurvivorLookup::CURSOR, 0, [0; 3], &[]),
+            Answer::Nobody
+        );
         let check = BedCheck {
             header: Header::of::<BedCheck>(),
-            survivor: 7,
+            survivor: SURVIVOR,
             entity: Entity(10),
             bed: Entity(50),
             home: [10, 0, 10],
@@ -629,8 +652,8 @@ copy_staff_boss_chance = 0.0
         policy::settle();
         let unique = SurvivorLookup::UNIQUENESS;
         assert_eq!(
-            lookup(&loader, 7, 10, unique, 11, [120, 0, 10], &[]),
-            Some(11),
+            lookup(&loader, SURVIVOR, 10, unique, 11, [120, 0, 10], &[]),
+            found(11),
             "per altar: a copy at the other altar"
         );
         loader.set_settings(
@@ -643,13 +666,13 @@ copy_staff_locked_chest_chance = 0.0
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
         assert!(!in_force().per_altar.load(Ordering::Relaxed));
         assert_eq!(
-            lookup(&loader, 7, 10, unique, 11, [120, 0, 10], &[]),
-            None,
+            lookup(&loader, SURVIVOR, 10, unique, 11, [120, 0, 10], &[]),
+            Answer::Vanilla,
             "the world's per_altar is off: the game's own answer"
         );
         let check = BedCheck {
             header: Header::of::<BedCheck>(),
-            survivor: 7,
+            survivor: SURVIVOR,
             entity: Entity(10),
             bed: Entity(50),
             home: [10, 0, 10],
@@ -796,8 +819,8 @@ copy_staff_locked_chest_chance = 0.0
 ",
             )
             .resource(alchemist.staff().key_by_hash(ITEM_INFO), info)
-            .game_text(tag.id(), Language::EN_US, "Balthazar")
-            .game_text(tag.id(), Language::UK_UA, "Бальтазар")
+            .game_text(tag.fnv1a(), Language::EN_US, "Balthazar")
+            .game_text(tag.fnv1a(), Language::UK_UA, "Бальтазар")
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
@@ -807,7 +830,8 @@ copy_staff_locked_chest_chance = 0.0
             .find(|s| s.key() == "alchemist")
             .unwrap()
             .name
-            .id();
+            .guid()
+            .fnv1a();
         let texts = loader.texts();
         let text = |language: Language| {
             texts
@@ -841,17 +865,17 @@ copy_staff_locked_chest_chance = 0.0
         loader.set_altars(&[altar(1, 0), altar(2, 100), altar(3, 200)]);
         policy::settle();
         let smith = &WORKSHOP_SURVIVORS[0];
-        let survivor = smith.id().0;
+        let survivor = smith.id();
         let ask = |purpose, entity, cell| lookup(&loader, survivor, 10, purpose, entity, cell, &[]);
         let unique = SurvivorLookup::UNIQUENESS;
         // The original at altar 1, copies at altars 2 and 3.
-        assert_eq!(ask(unique, 10, [10, 0, 10]), Some(10));
-        assert_eq!(ask(unique, 11, [120, 0, 10]), Some(11));
-        assert_eq!(ask(unique, 12, [220, 0, 10]), Some(12));
+        assert_eq!(ask(unique, 10, [10, 0, 10]), found(10));
+        assert_eq!(ask(unique, 11, [120, 0, 10]), found(11));
+        assert_eq!(ask(unique, 12, [220, 0, 10]), found(12));
         // The survivor's own staff aimed at altar 2.
         let summon = Summon {
             header: Header::of::<Summon>(),
-            item: ItemId::new(smith.staff().id()),
+            item: ItemId::from_guid(smith.staff()),
             ammo: ItemId::new(0),
             template: smith.template().0,
             target: [130, 0, 10],
@@ -864,18 +888,18 @@ copy_staff_locked_chest_chance = 0.0
         assert_eq!(loader.summon(&summon), 0, "allowed, nothing taken");
         assert_eq!(
             ask(SurvivorLookup::SPAWN, 0, [130, 0, 10]),
-            Some(10),
+            found(10),
             "the original moves, not the copy there"
         );
         // The original now stands at altar 2: the copy there gives way, the
         // one at altar 3 stays.
-        assert_eq!(ask(unique, 10, [130, 0, 10]), Some(10));
+        assert_eq!(ask(unique, 10, [130, 0, 10]), found(10));
         assert_eq!(
             ask(unique, 11, [120, 0, 10]),
-            Some(10),
+            found(10),
             "copy 11 is removed"
         );
-        assert_eq!(ask(unique, 12, [220, 0, 10]), Some(12));
+        assert_eq!(ask(unique, 12, [220, 0, 10]), found(12));
         assert!(loader.faults().is_empty());
     }
 
@@ -911,21 +935,21 @@ vanilla_staff_places_copies = true
         loader.set_altars(&[altar(1, 0), altar(2, 100)]);
         policy::settle();
         let smith = &WORKSHOP_SURVIVORS[0];
-        let survivor = smith.id().0;
+        let survivor = smith.id();
         let unique = SurvivorLookup::UNIQUENESS;
         // The original out in the world, a copy at altar 1: two entities,
         // two altars.
         assert_eq!(
             lookup(&loader, survivor, 10, unique, 10, [900, 0, 10], &[]),
-            Some(10)
+            found(10)
         );
         assert_eq!(
             lookup(&loader, survivor, 10, unique, 11, [10, 0, 10], &[]),
-            Some(11)
+            found(11)
         );
         let summon = |x| Summon {
             header: Header::of::<Summon>(),
-            item: ItemId::new(smith.staff().id()),
+            item: ItemId::from_guid(smith.staff()),
             ammo: ItemId::new(0),
             template: smith.template().0,
             target: [x, 0, 10],
@@ -984,7 +1008,7 @@ copy_staff_locked_chest_chance = 0.0
         loader.set_altars(&[altar(1, 0), altar(2, 100), altar(3, 200)]);
         policy::settle();
         let smith = &WORKSHOP_SURVIVORS[0];
-        let survivor = smith.id().0;
+        let survivor = smith.id();
         let original = lookup(
             &loader,
             survivor,
@@ -994,7 +1018,7 @@ copy_staff_locked_chest_chance = 0.0
             [10, 0, 10],
             &[],
         );
-        assert_eq!(original, Some(10));
+        assert_eq!(original, found(10));
         let Some(staff) = staffs::staffs()
             .iter()
             .find(|s| s.survivor.id() == smith.id())
@@ -1003,7 +1027,7 @@ copy_staff_locked_chest_chance = 0.0
         };
         let summon = |current| Summon {
             header: Header::of::<Summon>(),
-            item: ItemId::new(staff.copy.id()),
+            item: staff.item(),
             ammo: ItemId::new(0),
             template: smith.template().0,
             target: [130, 0, 10],

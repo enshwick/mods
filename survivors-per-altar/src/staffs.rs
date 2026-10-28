@@ -60,6 +60,11 @@ impl Staff {
         self.survivor.key()
     }
 
+    /// The copy staff's game id.
+    pub(crate) const fn item(&self) -> ItemId {
+        ItemId::from_guid(self.copy.guid())
+    }
+
     fn of(survivor: &'static WorkshopSurvivor) -> Option<Self> {
         let id = |suffix: &str| {
             let name = format!("{STAFF_IDS}{}{suffix}", survivor.key());
@@ -163,21 +168,20 @@ pub(crate) fn staffs() -> &'static [Staff] {
 /// The copy staff with the game id `item`, its own or the one it had
 /// before.
 pub(crate) fn copy_staff(item: ItemId) -> Option<&'static Staff> {
-    let item = enshwick::migrations::current_id(item.get());
-    staffs().iter().find(|s| s.copy.id() == item)
+    let item = enshwick::migrations::current_id(item);
+    staffs().iter().find(|s| s.item() == item)
 }
 
 /// The game ids of every copy staff.
 pub(crate) fn copy_ids() -> Vec<ItemId> {
-    staffs().iter().map(|s| ItemId::new(s.copy.id())).collect()
+    staffs().iter().map(Staff::item).collect()
 }
 
 /// The game ids of every copy staff, with the ids saved stacks may hold.
 pub(crate) fn known_ids() -> Vec<ItemId> {
     staffs()
         .iter()
-        .flat_map(|s| std::iter::once(s.copy.id()).chain(s.old.map(Guid::id)))
-        .map(ItemId::new)
+        .flat_map(|s| std::iter::once(s.item()).chain(s.old.map(ItemId::from_guid)))
         .collect()
 }
 
@@ -265,9 +269,9 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
 pub(crate) fn file(load: &mut Load<'_>) -> Result<(), Off> {
     for staff in staffs() {
         let survivor = staff.survivor.id();
-        load.add_summon_item(ItemId::new(staff.copy.id()), survivor)?;
+        load.add_summon_item(staff.item(), survivor)?;
         if let Some(old) = staff.old {
-            load.add_summon_item(ItemId::new(old.id()), survivor)?;
+            load.add_summon_item(ItemId::from_guid(old), survivor)?;
         }
     }
     Ok(())
@@ -284,28 +288,22 @@ mod tests {
         let mut ids = std::collections::BTreeSet::new();
         for staff in staffs() {
             for id in [staff.copy, staff.name, staff.description, staff.icon] {
-                assert!(ids.insert(id.id()), "{}", staff.key());
+                assert!(ids.insert(ItemId::from_guid(id.guid())), "{}", staff.key());
             }
             if let Some(old) = staff.old {
-                assert!(ids.insert(old.id()), "{}", staff.key());
-                assert!(
-                    known_ids().contains(&ItemId::new(old.id())),
-                    "{}",
-                    staff.key()
-                );
+                let old = ItemId::from_guid(old);
+                assert!(ids.insert(old), "{}", staff.key());
+                assert!(known_ids().contains(&old), "{}", staff.key());
                 assert_eq!(
-                    copy_staff(ItemId::new(old.id())).map(Staff::key),
+                    copy_staff(old).map(Staff::key),
                     None,
                     "only once the migration is declared"
                 );
             }
-            let vanilla = staff.survivor.staff().id();
-            assert_ne!(staff.copy.id(), vanilla);
-            assert_eq!(
-                copy_staff(ItemId::new(staff.copy.id())).map(Staff::key),
-                Some(staff.key())
-            );
-            assert_eq!(copy_staff(ItemId::new(vanilla)).map(Staff::key), None);
+            let vanilla = ItemId::from_guid(staff.survivor.staff());
+            assert_ne!(staff.item(), vanilla);
+            assert_eq!(copy_staff(staff.item()).map(Staff::key), Some(staff.key()));
+            assert_eq!(copy_staff(vanilla).map(Staff::key), None);
         }
         assert_eq!(staffs().len(), WORKSHOP_SURVIVORS.len());
     }

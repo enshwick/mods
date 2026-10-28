@@ -162,7 +162,7 @@ fn input(zones: ZoneSizes) -> Input {
             if altar.tilted {
                 enshwick::warn!(
                     "altar {} is tilted; it keeps its vanilla zone",
-                    altar.entity.0
+                    altar.entity
                 );
             }
             !altar.tilted && !altar.levels.is_empty()

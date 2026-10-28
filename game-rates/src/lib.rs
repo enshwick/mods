@@ -219,6 +219,7 @@ impl Rates {
             let on = match category {
                 Category::Blocks => recipes.blocks,
                 Category::Overgrowth => recipes.overgrowth,
+                Category::Decor => recipes.decor,
             };
             (handle, if on { multiplier } else { 1.0 })
         });
@@ -248,15 +249,14 @@ impl Rates {
 }
 
 impl Settings {
-    /// Puts these settings in force; whether the decor recipes changed.
-    fn apply(&self, rates: &Rates) -> bool {
+    /// Puts these settings in force.
+    fn apply(&self, rates: &Rates) {
         let Recipes {
             multiplier,
             blocks,
             overgrowth,
             decor,
         } = self.recipes;
-        let changed = recipes::set_decor(if decor { multiplier } else { 1 });
         rates.apply(self);
         enshwick::info!(
             "recipe output x{multiplier}: blocks {blocks}, overgrowth {overgrowth}, decor {decor}; {:?}",
@@ -268,7 +268,6 @@ impl Settings {
                 &self.skills
             )
         );
-        changed
     }
 }
 
@@ -294,29 +293,8 @@ impl Mod for GameRates {
         let rates = Rates::declare(load);
         let settings: Settings = load.config()?;
         settings.apply(&rates);
-        // Values that arrive later, an edited file or a joined server's
-        // values and the file's again on leaving, rebuild the registry the
-        // game already holds when they change decor; the loader rebuilds
-        // it for the recipe output rates.
-        load.on_config_change(move |settings: Settings| {
-            if !settings.apply(&rates) {
-                return;
-            }
-            match enshwick::content::recipes::rebuild_recipes() {
-                Ok(()) => enshwick::info!("recipe counts follow the new values"),
-                Err(off) => enshwick::warn!(
-                    "recipes already built keep their counts until the next start: {off}"
-                ),
-            }
-        })?;
-        load.modify_recipes(recipes::scale_decor)?;
-        // A dedicated server builds its recipes before it loads the items
-        // that tell their kinds, so the kinds apply in a rebuild.
-        load.on::<enshwick::events::WorldLoaded>(|()| {
-            if let Err(off) = enshwick::content::recipes::rebuild_recipes() {
-                enshwick::warn!("recipes keep their counts until the next start: {off}");
-            }
-        })?;
+        // The loader rebuilds the recipes when a recipe output rate changes.
+        load.on_config_change(move |settings: Settings| settings.apply(&rates))?;
         Ok(Self)
     }
 }
@@ -328,38 +306,6 @@ mod tests {
     use enshwick::config::Config as _;
 
     use super::*;
-
-    /// A host with the recipe layout the recipe patch reads.
-    fn recipe_host() -> enshwick::test::FakeHost {
-        let mut host = enshwick::test::FakeHost::new().type_hash(
-            enshwick::content::types::RECIPE_REGISTRY_RESOURCE.id(),
-            0x5e1f_0001,
-        );
-        for (id, size) in [
-            ("recipe", 0xa8),
-            ("recipe_ingredient", 48),
-            ("recipe_stack", 24),
-        ] {
-            host = host.type_size(id, size);
-        }
-        for (id, at) in [
-            ("recipe_registry.recipes", 8),
-            ("recipe.guid", 0),
-            ("recipe.id", 0x10),
-            ("recipe.workshop_guid", 0x14),
-            ("recipe.workshop", 0x24),
-            ("recipe.input", 0x28),
-            ("recipe.output", 0x30),
-            ("recipe.required_props", 0x40),
-            ("recipe.completion", 0x5c),
-            ("recipe.debug_name", 0x78),
-            ("recipe_stack.item", 0x10),
-            ("recipe_stack.count", 0x14),
-        ] {
-            host = host.constant(id, at);
-        }
-        host
-    }
 
     fn comfort(value: i32) -> enshwick::abi::Comfort {
         enshwick::abi::Comfort {
@@ -409,7 +355,7 @@ mod tests {
         use enshwick::events::SettingsChanged;
         use enshwick::rates::{ExperienceGroup, Rate};
 
-        let loader = recipe_host()
+        let loader = enshwick::test::FakeHost::new()
             .side(enshwick::abi::Side::SERVER)
             .settings("[experience]\ncombat = 3.0\n[drops]\nloot = 2.0\n[skills]\npoints = 1.5\n")
             .install();
@@ -438,7 +384,7 @@ mod tests {
         use enshwick::abi::Status;
         use enshwick::rates::Rate;
 
-        let loader = recipe_host()
+        let loader = enshwick::test::FakeHost::new()
             .side(enshwick::abi::Side::SERVER)
             .settings(
                 "[recipes]\nmultiplier = 4\nblocks = true\novergrowth = false\ndecor = false\n",
@@ -450,12 +396,11 @@ mod tests {
         for &kind in RecipeKind::ALL {
             let expected = match recipes::category(kind) {
                 Some(Category::Blocks) => Some(4.0),
-                Some(Category::Overgrowth) => Some(1.0),
+                Some(Category::Overgrowth | Category::Decor) => Some(1.0),
                 None => None,
             };
             assert_eq!(loader.rate(Rate::RecipeOutput(kind)), expected, "{kind:?}");
         }
-        assert_eq!(recipes::decor_multiplier(), 1, "decor stays vanilla");
         assert!(loader.faults().is_empty());
     }
 
@@ -464,7 +409,9 @@ mod tests {
         use enshwick::abi::Status;
         use enshwick::rates::Rate;
 
-        let loader = recipe_host().without_rate(Rate::Loot).install();
+        let loader = enshwick::test::FakeHost::new()
+            .without_rate(Rate::Loot)
+            .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
@@ -473,32 +420,33 @@ mod tests {
     }
 
     #[test]
-    fn a_joined_server_s_values_and_leaving_rebuild_the_recipes() {
+    fn a_joined_server_s_values_and_leaving_set_the_recipe_rates() {
         use enshwick::abi::Status;
         use enshwick::events::SettingsChanged;
         use enshwick::rates::Rate;
 
         const BLOCKS: Rate = Rate::RecipeOutput(RecipeKind::BuildingBlock);
+        const DECOR: Rate = Rate::RecipeOutput(RecipeKind::Decorative);
 
-        let loader = recipe_host()
+        let loader = enshwick::test::FakeHost::new()
             .side(enshwick::abi::Side::CLIENT)
             .settings("[recipes]\nmultiplier = 2\nblocks = true\novergrowth = true\ndecor = true\n")
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        let allowed = loader.rebuilds().len();
-        assert_eq!(allowed, 1, "the registry may be rebuilt");
-        loader.set_server_synced(Some("{ recipes = { multiplier = 5 } }"));
+        loader.set_server_synced(Some("{ recipes = { multiplier = 5, decor = false } }"));
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(recipes::decor_multiplier(), 5);
         assert_eq!(loader.rate(BLOCKS), Some(5.0));
-        assert_eq!(loader.rebuilds().len(), allowed + 1, "joined: rebuilt");
+        assert_eq!(
+            loader.rate(DECOR),
+            Some(1.0),
+            "the server keeps decor vanilla"
+        );
         loader.set_server_synced(None);
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(recipes::decor_multiplier(), 2);
         assert_eq!(loader.rate(BLOCKS), Some(2.0));
-        assert_eq!(loader.rebuilds().len(), allowed + 2, "left: rebuilt");
+        assert_eq!(loader.rate(DECOR), Some(2.0));
         assert!(loader.faults().is_empty());
     }
 
@@ -507,7 +455,9 @@ mod tests {
         use enshwick::abi::Status;
         use enshwick::events::SettingsChanged;
 
-        let loader = recipe_host().side(enshwick::abi::Side::SERVER).install();
+        let loader = enshwick::test::FakeHost::new()
+            .side(enshwick::abi::Side::SERVER)
+            .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
@@ -605,9 +555,11 @@ mod tests {
     /// The loader installed with `others`, each a mod id and its settings
     /// file, and the mod started.
     fn started_with(others: &[(&str, &str)]) -> enshwick::test::Installed {
-        let host = others.iter().fold(recipe_host(), |host, &(id, text)| {
-            host.other_settings(id, text)
-        });
+        let host = others
+            .iter()
+            .fold(enshwick::test::FakeHost::new(), |host, &(id, text)| {
+                host.other_settings(id, text)
+            });
         let loader = host.install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };

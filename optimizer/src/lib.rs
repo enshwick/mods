@@ -26,7 +26,7 @@
 use enshwick::abi::Side;
 use enshwick::pacing::TaskWorkers;
 use enshwick::state::ModLocal;
-use enshwick::{Host, Load, Mod, Off, events};
+use enshwick::{Host, Load, Mod, Off};
 
 use crate::env::CpuLimit;
 use crate::platform::{Change, Platform, default_on};
@@ -263,7 +263,7 @@ impl Mod for Optimizer {
             linked.server,
             workers.is_some()
         );
-        load.on::<events::Ticked>(|_| waits::stepped())?;
+        load.on_every_step(|_| waits::stepped())?;
         let _first = FOUND.set(Found {
             platform,
             summary: format!("environment: {summary}"),
@@ -295,6 +295,7 @@ enshwick::declare_mod!(Optimizer);
 mod tests {
     use enshwick::abi::Status;
     use enshwick::config::Config as _;
+    use enshwick::events;
 
     use super::*;
 
@@ -400,17 +401,15 @@ mod tests {
         assert_eq!(waits::SLEEPS.load(Ordering::Relaxed), slept + 1);
 
         // Before any step the server wait stays vanilla; right after one it
-        // grows to the cap; the idle wait never changes.
+        // grows to the cap; the idle wait never changes. Every step counts,
+        // however short.
         let online = enshwick::pacing::SERVER_ONLINE_WAIT_NS;
         let idle = enshwick::pacing::SERVER_IDLE_WAIT_NS;
         assert_eq!(loader.server_wait(online), online);
-        assert_eq!(
-            loader.raise::<events::Ticked>(&enshwick::abi::TickData {
-                header: enshwick::abi::Header::of::<enshwick::abi::TickData>(),
-                step: 1
-            }),
-            1
-        );
+        let steps = waits::STEPS.load(Ordering::Relaxed);
+        assert_eq!(loader.tick(std::time::Duration::from_millis(16)), 1);
+        assert_eq!(loader.tick(std::time::Duration::from_millis(16)), 1);
+        assert_eq!(waits::STEPS.load(Ordering::Relaxed), steps + 2);
         assert_eq!(loader.server_wait(online), 4_000_000);
         assert_eq!(loader.server_wait(idle), idle);
 

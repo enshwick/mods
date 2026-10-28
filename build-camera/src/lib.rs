@@ -99,14 +99,14 @@ enshwick::declare_mod!(BuildCamera);
 
 #[cfg(test)]
 mod tests {
-    use enshwick::abi::{Header, SkillCheck as RawCheck, Status};
+    use enshwick::abi::{Header, SkillCheck as RawCheck, SkillNode, Status};
     use enshwick::config::Config as _;
     use enshwick::events;
 
     use super::*;
 
     /// The node the fake host names for Airborne Architect.
-    const NODE: u32 = 0x51;
+    const NODE: SkillNode = SkillNode(0x51);
 
     #[test]
     fn enabled_is_the_join_value_and_on_by_default() {
@@ -147,7 +147,7 @@ mod tests {
     fn the_gate_follows_the_settings_and_the_servers_join_value() {
         let loader = enshwick::test::FakeHost::new()
             .settings("enabled = true\n")
-            .constant("skill.airborne_architect", NODE.into())
+            .constant("skill.airborne_architect", NODE.0.into())
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
@@ -169,7 +169,7 @@ mod tests {
             "another caller stays vanilla"
         );
         assert_eq!(
-            ask(NODE + 1, RawCheck::FLY_MODE),
+            ask(SkillNode(NODE.0 + 1), RawCheck::FLY_MODE),
             RawCheck::VANILLA,
             "another node stays vanilla"
         );

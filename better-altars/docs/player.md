@@ -1,14 +1,19 @@
 ---
 id: enshwick.better-altars
 name: Better Altars
-summary: More Flame Altars at each Flame level, up to 32 in 16 bases, and altar zones that touch grow together so friends can build side by side.
+summary: More Flame Altars at each Flame level, up to 255, in up to 179 bases, and altar zones that touch grow together so friends can build side by side.
 needs: everyone
 settings:
   - key: count.altars_per_flame_level
     default: "[2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]"
-    range: 1 to 32 for each level
+    range: 1 to 255 for each level
     meaning: How many altars each Flame level allows. The first number is level 0, which comes before the Flame level 1 a new world starts at. Later levels use the last number. An empty list keeps the usual counts.
     applies: at-once
+  - key: count.bases
+    default: 16
+    range: 16 to 179
+    meaning: How many bases a world holds. Altars whose zones touch share a base. The game refuses an altar that would start one base more.
+    applies: restart
   - key: zones.clusters
     default: true
     meaning: Altars whose zones touch grow together and share their area.
@@ -27,13 +32,14 @@ settings:
 
 ## Who needs it?
 
-Players who want more altars, and friends who build side by side. The server and
-every player need it.
+The server and every player need it.
 
 ## What happens past 16 altars?
 
-Altars whose zones touch share one base. A world holds at most 16 bases, so the
-game refuses an altar whose zone would start a 17th.
+Up to 255 altars fit in 16 bases: altars whose zones touch share one. The game
+refuses an altar that would start a 17th base. Set `count.bases` to allow up to
+179 bases, then start the game again. Without the mod, only the first 16 altar
+zones work as bases.
 
 ## Install
 

@@ -4,8 +4,8 @@ More Flame Altars per Flame level, and altar zones that grow together. An
 Enshrouded mod for the [Enshwick](https://github.com/enshwick/enshwick) loader,
 for anyone who builds big or builds next to friends.
 
-- **More altars.** Each Flame level allows its own number of altars, up to 32 in
-  16 bases. The default doubles the vanilla count.
+- **More altars.** Each Flame level allows its own number of altars, up to 255,
+  in up to 179 bases. The default doubles the vanilla count in 16 bases.
 - **Zones that grow together.** Altars whose zones touch form a group: each
   grows until the group covers as much ground as its altars would apart, and a
   piece may sit across the seam between two zones of a group.
@@ -25,6 +25,7 @@ and each world keeps its own copy of it (see
 ```toml
 [count]
 altars_per_flame_level = [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]
+bases = 16
 
 [zones]
 clusters = true
@@ -40,11 +41,16 @@ start it takes the settings and data of both, under each id they had
 
 The first entry of `altars_per_flame_level` is Flame level 0, which comes before
 the Flame level 1 a new world starts at. Levels past the end of the list use its
-last entry. An empty list is the vanilla table. Each level takes 1 to 32 altars,
+last entry. An empty list is the vanilla table. Each level takes 1 to 255 altars,
 and the mod moves a value outside that range to the nearest limit, with a
 warning in the log. Where the mod keeps the game's limit of 16, it lowers larger
 values to 16. A change applies while the game runs. The number of levels in the
 list changes in the file only.
+
+`bases` is how many bases a world holds, from 16 to 179. It is each game's
+own: it lives in the file for every world and applies when the game starts
+again. A joined player groups the bases the server holds. Where the game cannot
+hold more than 16 bases, the mod keeps 16 and says so in its log.
 
 ### Altar zones
 
@@ -68,27 +74,29 @@ its zones or keeps them vanilla by its own value, with no restart.
 
 ## What happens past 16 altars?
 
-The vanilla game groups the zones of only 16 altars into bases, and holds 16
-bases. The mod changes this grouping on the server and on every player's game,
-so that it takes 32 altars:
+The vanilla game puts the zones of only its first 16 altars into bases, and holds
+16 bases. The mod changes this grouping on the server and on every player's
+game, so that it takes up to 255 altars in up to 179 bases:
 
 - altars whose zones touch, directly or through other altars, share one base, as
   in vanilla;
-- a world holds at most 16 bases. An altar whose zone touches no base would
-  start a 17th, so the game refuses it as "too many altars". Place it so its
-  zone touches one of your bases;
-- if a 17th base comes about anyway, its zone still allows building. It is no
-  base (no comfort, crafting from chests or survivors) until it touches another
-  base's zone, and the log says so.
+- a world holds at most `bases` bases, 16 by default. An altar whose zone
+  touches no base would start one more, so the game refuses it as "too many
+  altars". Place it so its zone touches one of your bases;
+- if one base more comes about anyway, its zone still allows building. It is
+  no base (no comfort, crafting from chests or survivors) until it touches
+  another base's zone, and the log says so.
 
 After a game update, the mod may not find the game code it changes. It then
 keeps the limit of 16 and says so in its log.
 
 ## Why does my server stop before the world loads?
 
-The save keeps every altar as vanilla does. Without the mod, the game groups the
-altars past 16 on its own and may crash. So a dedicated server whose world has
-more than 16 altars holds the game.
+The save keeps every altar as vanilla does. Without the mod, the game puts only
+the first 16 altar zones into bases. The altars past them keep their zones, but
+lose their base features: no comfort, no crafting from chests or survivors. So a
+dedicated server whose world has more than 16 altar zones, or more than 16
+bases, holds the game.
 
 The server stops before the world loads when:
 
@@ -98,8 +106,9 @@ The server stops before the world loads when:
 
 `logs/enshwick/loader.log` says why. Update Enshwick and the mod, or remove
 altars down to 16 with the mod running. The hold goes once the loaded world has
-had 16 altar zones or fewer for a minute. To open the world anyway, at your own
-risk, delete `mod-data/enshwick.better-altars/hold.txt`.
+had 16 altar zones or fewer, in 16 bases or fewer, for a minute. To open the
+world anyway, delete `mod-data/enshwick.better-altars/hold.txt`: the altars past
+16 then lose their base features.
 
 Only a dedicated server keeps the hold. A player who hosts such a world must
 keep the mod running and up to date.

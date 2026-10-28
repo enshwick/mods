@@ -62,7 +62,9 @@ impl AltarZones {
         seams().store(zones.building_across_seams, Ordering::Relaxed);
         // Always linked: the server's value may turn seams on for a joined
         // client, and a change applies while the game runs.
-        load.on_zone_check(|check| seams().load(Ordering::Relaxed) && seam::accepts(check))?;
+        load.on_building_zone_check(|check| {
+            seams().load(Ordering::Relaxed) && seam::accepts(check)
+        })?;
         // Linked whatever the settings say: each world's own value turns
         // clusters on or off as it loads.
         let sizes = load.on_altar_zone(solver::resize)?;

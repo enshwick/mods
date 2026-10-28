@@ -13,13 +13,13 @@
 //! it never allocates.
 
 use arrayvec::ArrayVec;
-use enshwick::altars::{MAX_ZONES, ZoneCheck};
+use enshwick::altars::{BuildingZoneCheck, MAX_ZONES};
 
 type Zone = ([i64; 3], [i64; 3]);
 
 /// Whether the union of the check's zones covers the object.
 #[must_use]
-pub(crate) fn accepts(check: &ZoneCheck<'_>) -> bool {
+pub(crate) fn accepts(check: &BuildingZoneCheck<'_>) -> bool {
     let mut zones: ArrayVec<Zone, MAX_ZONES> = ArrayVec::new();
     for zone in check.zones.iter().take(MAX_ZONES) {
         zones.push((zone.min, zone.max));

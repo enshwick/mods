@@ -1,6 +1,6 @@
-//! Better Altars: how many Flame Altars each Flame level allows, up to 32 in
-//! 16 bases, and Flame Altar zones that touch grow together and can be built
-//! across.
+//! Better Altars: how many Flame Altars each Flame level allows, up to 255 in
+//! up to 179 bases, and Flame Altar zones that touch grow together and can be
+//! built across.
 //!
 //! The two parts were the mods More Altars and Flame altar zones; their
 //! settings are the groups `[count]` and `[zones]`, and their former ids carry
@@ -75,6 +75,7 @@ impl Mod for BetterAltars {
     }
 
     fn ready(&'static self, _host: enshwick::Host) {
+        self.count.ready();
         AltarZones::ready();
     }
 }
@@ -150,6 +151,7 @@ mod tests {
     fn every_text_exists_in_all_languages() {
         let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
         assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(enshwick::i18n::Language::OFFERED), []);
     }
 
     #[test]
@@ -166,6 +168,7 @@ mod tests {
             .filter(|key| key != "config.doc")
             .chain(lists.map(|field| format!("{}.element", field.text)))
             .chain([enshwick::i18n::MOD_NAME, enshwick::i18n::MOD_DESCRIPTION].map(str::to_owned))
+            .chain([hold::PAST_TEXT, hold::THREAD_TEXT, count::GROUPING_TEXT].map(str::to_owned))
             .collect();
         let tables: toml::Table = toml::from_str(TEXTS).unwrap();
         for (language, table) in &tables {
@@ -275,16 +278,158 @@ mod tests {
     }
 
     #[test]
-    fn a_level_outside_1_to_32_altars_is_held_to_the_range() {
+    fn a_level_outside_the_settings_range_is_held_to_it() {
         let loader = started(
             Side::CLIENT,
-            "[count]\naltars_per_flame_level = [0, 40, 5]\n",
+            "[count]\naltars_per_flame_level = [0, 40, 300, 5]\n",
             &[],
         );
         assert_eq!(loader.altar_limit(0, 1), 1);
-        assert_eq!(loader.altar_limit(1, 2), 32);
-        assert_eq!(loader.altar_limit(2, 4), 5);
+        assert_eq!(loader.altar_limit(1, 2), 40);
+        assert_eq!(loader.altar_limit(2, 4), CAP);
+        assert_eq!(loader.altar_limit(3, 6), 5);
         assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn the_mod_asks_for_every_altar_zone_the_table_takes_in_the_game_s_own_bases() {
+        let loader = started(Side::CLIENT, "", &[]);
+        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 16)));
+        let limit = enshwick::altars::base_limit().unwrap();
+        assert_eq!((limit.zones, limit.bases), (u32::from(CAP), 16));
+    }
+
+    #[test]
+    fn the_bases_setting_is_the_bases_the_mod_asks_for() {
+        let loader = started(Side::SERVER, "[count]\nbases = 40\n", &[]);
+        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 40)));
+        assert_eq!(enshwick::altars::base_limit().unwrap().bases, 40);
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn a_build_that_keeps_16_bases_keeps_the_altar_table() {
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::SERVER)
+            .settings("[count]\nbases = 179\n")
+            .without_bases_past_16()
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(enshwick::altars::base_limit().unwrap().bases, 16);
+        assert_eq!(loader.altar_limit(11, 16), 32);
+        assert!(
+            loader
+                .logs()
+                .iter()
+                .any(|(_, line)| line.contains("16 bases here, not the 179")),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn the_table_answers_the_limit_past_32_altars() {
+        let loader = started(
+            Side::CLIENT,
+            "[count]\naltars_per_flame_level = [2, 64, 200, 255]\n",
+            &[],
+        );
+        assert_eq!(loader.altar_limit(1, 2), 64);
+        assert_eq!(loader.altar_limit(2, 4), 200);
+        assert_eq!(loader.altar_limit(11, 16), 255);
+        assert!(loader.faults().is_empty());
+    }
+
+    /// The hold's reason and its text, waiting up to `wait` for it, on a
+    /// server whose world groups `zones` altar zones in `bases` bases.
+    fn held(zones: u32, bases: u32, wait: Duration) -> Option<(String, String)> {
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-better-altars-hold-{}-{zones}-{bases}",
+            std::process::id()
+        ));
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::SERVER)
+            .data_dir(dir.to_str().unwrap())
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        loader.set_grouping(zones, bases);
+        let hold = enshwick::state::Hold::new(&dir);
+        let deadline = Instant::now() + wait;
+        while hold.reason().is_none() && Instant::now() < deadline {
+            assert!(loader.raise::<AltarsChanged>(&()) >= 1);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let reason = hold.reason().zip(hold.text());
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+        reason
+    }
+
+    /// A reason's `text` in every offered language, its values filled in.
+    fn in_every_language(text: &str) -> Vec<String> {
+        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let mut parts = text.split('\t');
+        let key = parts.next().unwrap();
+        let args: Vec<(&str, &str)> = parts.filter_map(|arg| arg.split_once('=')).collect();
+        enshwick::i18n::Language::OFFERED
+            .iter()
+            .map(|&language| texts.fill(key, language, &args))
+            .collect()
+    }
+
+    #[test]
+    fn a_server_holds_a_world_past_the_game_s_own_bases() {
+        let (reason, text) = held(16, 17, Duration::from_secs(10)).expect("held");
+        assert!(reason.contains("16 altar zones in 17 bases"), "{reason}");
+        assert!(reason.contains("lose their base features"), "{reason}");
+        assert!(text.starts_with(hold::PAST_TEXT), "{text}");
+    }
+
+    #[test]
+    fn a_server_holds_a_world_past_the_game_s_own_altar_zones() {
+        let (reason, _) = held(66, 5, Duration::from_secs(10)).expect("held");
+        assert!(reason.contains("66 altar zones in 5 bases"), "{reason}");
+    }
+
+    #[test]
+    fn the_hold_s_reason_reads_in_every_language_with_its_values() {
+        let (_, text) = held(40, 20, Duration::from_secs(10)).expect("held");
+        for line in in_every_language(&text) {
+            assert!(!line.contains('{'), "{line}");
+            for value in ["40", "20", "16"] {
+                assert!(line.contains(value), "{value}: {line}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_held_world_on_a_build_with_an_unknown_grouping_turns_the_mod_off_with_its_text() {
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-better-altars-unknown-{}",
+            std::process::id()
+        ));
+        let hold = enshwick::state::Hold::new(&dir);
+        hold.set("held").unwrap();
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::SERVER)
+            .data_dir(dir.to_str().unwrap())
+            .without_base_limit()
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(status, Status::REFUSED);
+        assert_eq!(loader.faults(), [count::GROUPING_TEXT]);
+    }
+
+    #[test]
+    fn a_server_does_not_hold_a_world_within_the_game_s_own_limits() {
+        assert_eq!(held(16, 16, Duration::from_secs(1)), None);
     }
 
     #[test]
@@ -309,9 +454,9 @@ mod tests {
     }
 
     #[test]
-    fn the_table_answers_the_limit_with_the_base_limit_raised() {
+    fn the_table_answers_the_limit_with_the_base_limits_requested() {
         let loader = started(Side::CLIENT, "", &[]);
-        assert!(loader.base_limit_raised());
+        assert!(loader.requested_base_limits().is_some());
         assert_eq!(loader.altar_limit(1, 2), 4);
         assert_eq!(loader.altar_limit(11, 16), 32);
         assert!(loader.faults().is_empty());
@@ -353,10 +498,13 @@ mod tests {
             min: [5, 1, 1],
             max: [15, 9, 9],
         };
-        assert!(loader.zone_check(&zones, across, 0));
-        assert!(!loader.zone_check(&zones[..1], across, 0));
+        assert!(loader.building_zone_check(&zones, across, 0));
+        assert!(!loader.building_zone_check(&zones[..1], across, 0));
         AltarZones::set_seams(false);
-        assert!(!loader.zone_check(&zones, across, 0), "seams off: vanilla");
+        assert!(
+            !loader.building_zone_check(&zones, across, 0),
+            "seams off: vanilla"
+        );
         AltarZones::set_seams(true);
         assert!(loader.faults().is_empty());
     }

@@ -291,10 +291,8 @@ impl Mod for GameRates {
         load.texts(TEXTS)?;
         load.migrate(migrations::all())?;
         let rates = Rates::declare(load);
-        let settings: Settings = load.config()?;
-        settings.apply(&rates);
         // The loader rebuilds the recipes when a recipe output rate changes.
-        load.on_config_change(move |settings: Settings| settings.apply(&rates))?;
+        load.apply_config(move |settings: &Settings| settings.apply(&rates))?;
         Ok(Self)
     }
 }

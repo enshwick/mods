@@ -432,3 +432,227 @@ fn components(n: usize, touches: impl Fn(usize, usize) -> bool) -> Vec<Vec<usize
     }
     groups
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use proptest::prelude::*;
+
+    use super::*;
+
+    /// A zone near the origin, so that zones often touch; a zero width
+    /// gives the empty footprint of level 0.
+    fn zone() -> impl Strategy<Value = Box3> {
+        ([-24i64..24, -4..4, -24..24], [0i64..10, 1..8, 0..10]).prop_map(|(min, size)| {
+            Box3::new(min, [min[0] + size[0], min[1] + size[1], min[2] + size[2]])
+        })
+    }
+
+    /// `zone` widened by `by`: the lower corner moves down by the first three,
+    /// the upper corner up by the last three.
+    fn widened(zone: Box3, by: [i64; 6]) -> Box3 {
+        Box3::new(
+            [
+                zone.min[0] - by[0],
+                zone.min[1] - by[1],
+                zone.min[2] - by[2],
+            ],
+            [
+                zone.max[0] + by[3],
+                zone.max[1] + by[4],
+                zone.max[2] + by[5],
+            ],
+        )
+    }
+
+    /// How far a level reaches past the one below, as [`widened`] takes it.
+    fn raise() -> impl Strategy<Value = [i64; 6]> {
+        prop::array::uniform6(0i64..4)
+    }
+
+    /// An altar's zones from its first level to its current one, each
+    /// inside the next.
+    fn levels() -> impl Strategy<Value = Vec<Box3>> {
+        (zone(), prop::collection::vec(raise(), 0..3)).prop_map(|(first, raises)| {
+            let mut levels = vec![first];
+            for by in raises {
+                let below = levels[levels.len() - 1];
+                levels.push(widened(below, by));
+            }
+            levels
+        })
+    }
+
+    /// Up to six altars with unique keys, in no particular order.
+    fn altars() -> impl Strategy<Value = Vec<Altar>> {
+        prop::collection::vec(levels(), 0..7)
+            .prop_map(|all| {
+                all.into_iter()
+                    .zip(0u64..)
+                    .map(|(levels, i)| Altar {
+                        key: 3 * i + 1,
+                        levels,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .prop_shuffle()
+    }
+
+    /// The vanilla zone of every altar, by key.
+    fn vanilla(altars: &[Altar]) -> BTreeMap<u64, Box3> {
+        altars.iter().map(|a| (a.key, a.zone())).collect()
+    }
+
+    /// The placements of every cluster that has a footprint, by cluster.
+    fn by_cluster(placements: &[Placement], altars: &[Altar]) -> BTreeMap<u64, Vec<Placement>> {
+        let vanilla = vanilla(altars);
+        let mut clusters: BTreeMap<u64, Vec<Placement>> = BTreeMap::new();
+        for placement in placements {
+            if vanilla[&placement.key].footprint_area() > 0 {
+                clusters
+                    .entry(placement.cluster)
+                    .or_default()
+                    .push(*placement);
+            }
+        }
+        clusters
+    }
+
+    proptest! {
+        #[test]
+        fn there_is_one_placement_per_altar_in_key_order(altars in altars()) {
+            let placements = clusters(&altars).unwrap();
+            let keys: Vec<u64> = placements.iter().map(|p| p.key).collect();
+            let mut expected: Vec<u64> = altars.iter().map(|a| a.key).collect();
+            expected.sort_unstable();
+            prop_assert_eq!(keys, expected);
+        }
+
+        #[test]
+        fn the_order_of_the_altars_does_not_change_any_zone(
+            (altars, shuffled) in altars().prop_flat_map(|a| (Just(a.clone()), Just(a).prop_shuffle()))
+        ) {
+            prop_assert_eq!(clusters(&altars).unwrap(), clusters(&shuffled).unwrap());
+        }
+
+        #[test]
+        fn every_zone_holds_its_vanilla_zone(altars in altars()) {
+            let vanilla = vanilla(&altars);
+            for placement in clusters(&altars).unwrap() {
+                prop_assert!(
+                    placement.zone.contains(&vanilla[&placement.key]),
+                    "{placement:?} lost part of {:?}", vanilla[&placement.key]
+                );
+            }
+        }
+
+        #[test]
+        fn an_altar_without_a_footprint_keeps_its_zone_alone(altars in altars()) {
+            let vanilla = vanilla(&altars);
+            for placement in clusters(&altars).unwrap() {
+                let zone = vanilla[&placement.key];
+                if zone.footprint_area() == 0 {
+                    prop_assert_eq!(placement.zone, zone);
+                    prop_assert_eq!(placement.growth, 0);
+                    prop_assert_eq!(placement.cluster, placement.key);
+                }
+            }
+        }
+
+        #[test]
+        fn a_cluster_grows_by_one_step_to_its_tallest_height(altars in altars()) {
+            let vanilla = vanilla(&altars);
+            let placements = clusters(&altars).unwrap();
+            for (cluster, members) in by_cluster(&placements, &altars) {
+                prop_assert_eq!(cluster, members[0].key, "the smallest key names the cluster");
+                let growth = members[0].growth;
+                let height = members.iter().map(|m| vanilla[&m.key].height()).max().unwrap();
+                for member in &members {
+                    let grown = vanilla[&member.key].grown(growth);
+                    prop_assert_eq!(member.growth, growth);
+                    prop_assert_eq!(member.zone.height(), height);
+                    prop_assert_eq!(
+                        [member.zone.min[0], member.zone.max[0], member.zone.min[2], member.zone.max[2]],
+                        [grown.min[0], grown.max[0], grown.min[2], grown.max[2]]
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn no_cluster_gets_less_than_its_budget(altars in altars()) {
+            let vanilla = vanilla(&altars);
+            let placements = clusters(&altars).unwrap();
+            for members in by_cluster(&placements, &altars).values() {
+                let budget: i128 = members.iter().map(|m| vanilla[&m.key].footprint_area()).sum();
+                let zones: Vec<Box3> = members.iter().map(|m| m.zone).collect();
+                let wider: Vec<Box3> = zones.iter().map(|z| z.grown(1)).collect();
+                // The budget, to the nearest step: half a step rounds up.
+                prop_assert!(
+                    2 * budget < union_footprint_area(&zones) + union_footprint_area(&wider),
+                    "{members:?} short of {budget}"
+                );
+            }
+        }
+
+        #[test]
+        fn zones_of_different_clusters_never_touch(altars in altars()) {
+            let placements = clusters(&altars).unwrap();
+            let clusters: Vec<Vec<Placement>> =
+                by_cluster(&placements, &altars).into_values().collect();
+            for (i, one) in clusters.iter().enumerate() {
+                for other in &clusters[i + 1..] {
+                    for a in one {
+                        for b in other {
+                            prop_assert!(!a.zone.footprint_touches(&b.zone), "{a:?} touches {b:?}");
+                        }
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn placing_an_altar_never_shrinks_a_zone(altars in altars(), levels in levels()) {
+            let before = clusters(&altars).unwrap();
+            let mut more = altars.clone();
+            more.push(Altar { key: 0, levels });
+            let after: BTreeMap<u64, Box3> =
+                clusters(&more).unwrap().into_iter().map(|p| (p.key, p.zone)).collect();
+            for placement in before {
+                prop_assert!(
+                    after[&placement.key].contains(&placement.zone),
+                    "{placement:?} shrank to {:?}", after[&placement.key]
+                );
+            }
+        }
+
+        #[test]
+        fn raising_a_level_never_shrinks_a_zone(
+            altars in altars(),
+            which in any::<prop::sample::Index>(),
+            // A raised level keeps its vertical centre: zones are made as
+            // tall as the cluster's tallest around their own centre, so a
+            // level that reached further down than up would move its top
+            // down.
+            by in raise().prop_map(|mut by| {
+                by[4] = by[1];
+                by
+            }),
+        ) {
+            prop_assume!(!altars.is_empty());
+            let before = clusters(&altars).unwrap();
+            let mut raised = altars.clone();
+            let altar = &mut raised[which.index(altars.len())];
+            altar.levels.push(widened(altar.zone(), by));
+            let after: BTreeMap<u64, Box3> =
+                clusters(&raised).unwrap().into_iter().map(|p| (p.key, p.zone)).collect();
+            for placement in before {
+                prop_assert!(
+                    after[&placement.key].contains(&placement.zone),
+                    "{placement:?} shrank to {:?}", after[&placement.key]
+                );
+            }
+        }
+    }
+}

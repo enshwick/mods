@@ -1,7 +1,7 @@
 ---
 id: enshwick.survivors-per-altar
-name: Survivors per altar
-summary: Every friend's house gets its own Blacksmith, Alchemist and the rest. A survivor may have a copy at every Flame Altar.
+name: Survivors per Altar
+summary: A survivor may have a copy at every Flame Altar. Each player's base can have its own Blacksmith, Alchemist and other survivors.
 needs: everyone
 settings:
   - key: per_altar
@@ -10,7 +10,7 @@ settings:
     applies: world-load
   - key: copy_staffs
     default: true
-    meaning: Copy staffs drop and work. Turned off, the staffs players hold stay for later.
+    meaning: Copy staffs drop and work. When it is off, players keep the staffs they hold.
     applies: at-once
   - key: copy_staff_boss_chance
     default: 0.10
@@ -52,14 +52,14 @@ A full staff holds 3 charges, and the last one uses the staff up.
 
 ## What happens when I remove an altar or the mod?
 
-The copies of a removed altar go ten seconds later, and the survivor itself
+The copies of a removed altar disappear ten seconds later. The survivor itself
 stays. Without the mod, the game removes the copies and the copy staffs.
 
 ## Install
 
-Survivors per altar comes in enshwick.zip, and the
+Survivors per Altar comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It needs Enshwick.
 
 ## Settings
 
@@ -69,7 +69,7 @@ shows.
 
 ## Multiplayer
 
-The server and every player need Survivors per altar in the same version. On a
+The server and every player need Survivors per Altar in the same version. On a
 server, every player runs with the server's `per_altar` and `copy_staffs`
 values.
 

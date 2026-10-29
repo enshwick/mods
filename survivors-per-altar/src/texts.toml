@@ -1,10 +1,10 @@
 [en]
-"mod.name" = "Survivors per altar"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "A copy of each survivor may stand at every Flame Altar."
 "copy.name" = "Copy staff: {survivor}"
 "copy.description" = "At a Flame Altar without one: places a copy of {survivor} there and spends a charge; the last charge uses the staff up. Where the altar has a copy, it moves that copy, free."
 "copy.full_charges" = "Charges when full"
-"config" = "Survivors per altar"
+"config" = "Survivors per Altar"
 "config.per_altar" = "A copy at every altar"
 "config.per_altar.doc" = "A copy of each survivor may stand at every Flame Altar, one per altar zone. Off, survivors and staffs work as in the base game in this world. Players who join use the server's value."
 "config.copy_staffs" = "Copy staffs"
@@ -22,12 +22,12 @@
 "config.vanilla_staff_places_copies.doc" = "On, the survivor's own staff places a copy at an altar without one and moves the copy an altar has. Off, it moves the survivor itself, as in the base game."
 
 [uk]
-"mod.name" = "Врятовані біля кожного олтаря"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Копія кожного вцілілого може стояти біля кожного Олтаря Полумʼя."
 "copy.name" = "Посох копії: {survivor}"
 "copy.description" = "Біля Олтаря Полумʼя без копії: ставить там копію вцілілого {survivor} і витрачає заряд; з останнім зарядом посох зникає. Де копія вже є, переносить її безплатно."
 "copy.full_charges" = "Зарядів, коли повний"
-"config" = "Врятовані біля кожного олтаря"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Копія біля кожного олтаря"
 "config.per_altar.doc" = "Копія кожного вцілілого може стояти біля кожного Олтаря Полумʼя, одна на зону олтаря. Якщо вимкнено, вцілілі й посохи в цьому світі працюють як у звичайній грі. Гравці, що приєднуються, мають значення сервера."
 "config.copy_staffs" = "Посохи копії"
@@ -45,12 +45,12 @@
 "config.vanilla_staff_places_copies.doc" = "Якщо увімкнено, власний посох вцілілого ставить копію біля олтаря без неї й переносить копію, що вже є. Якщо вимкнено, він переносить самого вцілілого, як у звичайній грі."
 
 [de]
-"mod.name" = "Überlebende pro Altar"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Eine Kopie jedes Überlebenden kann an jedem Flammenaltar stehen."
 "copy.name" = "Kopiestab: {survivor}"
 "copy.description" = "An einem Flammenaltar ohne Kopie: stellt dort eine Kopie von {survivor} auf und verbraucht eine Ladung; mit der letzten ist der Stab verbraucht. Hat der Altar schon eine Kopie, versetzt er sie kostenlos."
 "copy.full_charges" = "Ladungen, wenn voll"
-"config" = "Überlebende pro Altar"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Eine Kopie an jedem Altar"
 "config.per_altar.doc" = "Eine Kopie jedes Überlebenden kann an jedem Flammenaltar stehen, eine pro Altarzone. Aus: Überlebende und Stäbe verhalten sich in dieser Welt wie im Grundspiel. Beitretende Spieler nutzen den Wert des Servers."
 "config.copy_staffs" = "Kopiestäbe"
@@ -68,12 +68,12 @@
 "config.vanilla_staff_places_copies.doc" = "An: Der eigene Stab des Überlebenden stellt an einem Altar ohne Kopie eine auf und versetzt die Kopie eines Altars. Aus: Er versetzt den Überlebenden selbst, wie im Grundspiel."
 
 [fr]
-"mod.name" = "Survivants par autel"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Une copie de chaque survivant peut se tenir à chaque autel de la Flamme."
 "copy.name" = "Bâton de copie : {survivor}"
 "copy.description" = "Près d'un autel de la Flamme sans copie : y place une copie de {survivor} et consomme une charge ; la dernière consomme le bâton. Si l'autel a déjà une copie, il la déplace gratuitement."
 "copy.full_charges" = "Charges une fois plein"
-"config" = "Survivants par autel"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Une copie à chaque autel"
 "config.per_altar.doc" = "Une copie de chaque survivant peut se tenir à chaque autel de la Flamme, une par zone d'autel. Désactivé, survivants et bâtons fonctionnent comme dans le jeu de base dans ce monde. Les joueurs qui rejoignent utilisent la valeur du serveur."
 "config.copy_staffs" = "Bâtons de copie"
@@ -91,12 +91,12 @@
 "config.vanilla_staff_places_copies.doc" = "Activé, le bâton du survivant place une copie à un autel qui n'en a pas et déplace la copie d'un autel. Désactivé, il déplace le survivant lui-même, comme dans le jeu de base."
 
 [it]
-"mod.name" = "Sopravvissuti per altare"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Una copia di ogni sopravvissuto può stare presso ogni Altare della Fiamma."
 "copy.name" = "Bastone di copia: {survivor}"
 "copy.description" = "Presso un Altare della Fiamma senza copia: vi colloca una copia di {survivor} e consuma una carica; con l'ultima il bastone si esaurisce. Se l'altare ha già una copia, la sposta gratis."
 "copy.full_charges" = "Cariche a pieno"
-"config" = "Sopravvissuti per altare"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Una copia per ogni altare"
 "config.per_altar.doc" = "Una copia di ogni sopravvissuto può stare presso ogni Altare della Fiamma, una per zona d'altare. Se disattivato, sopravvissuti e bastoni funzionano come nel gioco base in questo mondo. I giocatori che si uniscono usano il valore del server."
 "config.copy_staffs" = "Bastoni di copia"
@@ -114,12 +114,12 @@
 "config.vanilla_staff_places_copies.doc" = "Se attivo, il bastone del sopravvissuto colloca una copia presso un altare che non ne ha e sposta la copia di un altare. Se disattivato, sposta il sopravvissuto stesso, come nel gioco base."
 
 [es]
-"mod.name" = "Supervivientes por altar"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Una copia de cada superviviente puede estar en cada altar de la Llama."
 "copy.name" = "Bastón de copia: {survivor}"
 "copy.description" = "En un altar de la Llama sin copia: coloca allí una copia de {survivor} y gasta una carga; con la última se gasta el bastón. Si el altar ya tiene una copia, la mueve gratis."
 "copy.full_charges" = "Cargas cuando está lleno"
-"config" = "Supervivientes por altar"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Una copia en cada altar"
 "config.per_altar.doc" = "Una copia de cada superviviente puede estar en cada altar de la Llama, una por zona de altar. Desactivado, los supervivientes y los bastones funcionan como en el juego base en este mundo. Los jugadores que se unen usan el valor del servidor."
 "config.copy_staffs" = "Bastones de copia"
@@ -137,12 +137,12 @@
 "config.vanilla_staff_places_copies.doc" = "Activado, el bastón del propio superviviente coloca una copia en un altar sin ella y mueve la copia de un altar. Desactivado, mueve al superviviente, como en el juego base."
 
 [ru]
-"mod.name" = "Выжившие у каждого алтаря"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Копия каждого выжившего может стоять у каждого Алтаря пламени."
 "copy.name" = "Посох копии: {survivor}"
 "copy.description" = "У Алтаря пламени без копии: ставит там копию {survivor} и тратит заряд; с последним зарядом посох исчезает. Если у алтаря уже есть копия, переносит её бесплатно."
 "copy.full_charges" = "Зарядов при полном"
-"config" = "Выжившие у каждого алтаря"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Копия у каждого алтаря"
 "config.per_altar.doc" = "Копия каждого выжившего может стоять у каждого Алтаря пламени, одна на зону алтаря. Если выключено, выжившие и посохи в этом мире работают как в обычной игре. Подключившиеся игроки используют значение сервера."
 "config.copy_staffs" = "Посохи копии"
@@ -160,12 +160,12 @@
 "config.vanilla_staff_places_copies.doc" = "Если включено, собственный посох выжившего ставит копию у алтаря без неё и переносит копию алтаря. Если выключено, он переносит самого выжившего, как в обычной игре."
 
 [pl]
-"mod.name" = "Ocaleni przy każdym ołtarzu"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Kopia każdego ocalałego może stać przy każdym ołtarzu Płomienia."
 "copy.name" = "Kostur kopii: {survivor}"
 "copy.description" = "Przy ołtarzu Płomienia bez kopii: stawia tam kopię postaci {survivor} i zużywa ładunek; z ostatnim kostur się zużywa. Gdy ołtarz ma już kopię, przenosi ją za darmo."
 "copy.full_charges" = "Ładunki, gdy pełny"
-"config" = "Ocaleni przy każdym ołtarzu"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Kopia przy każdym ołtarzu"
 "config.per_altar.doc" = "Kopia każdego ocalałego może stać przy każdym ołtarzu Płomienia, jedna na strefę ołtarza. Wyłączone: ocaleni i kostury działają w tym świecie jak w podstawowej grze. Gracze, którzy dołączają, używają wartości serwera."
 "config.copy_staffs" = "Kostury kopii"
@@ -183,12 +183,12 @@
 "config.vanilla_staff_places_copies.doc" = "Włączone: własny kostur ocalałego stawia kopię przy ołtarzu bez niej i przenosi kopię ołtarza. Wyłączone: przenosi samego ocalałego, jak w podstawowej grze."
 
 [ja]
-"mod.name" = "祭壇ごとの生存者"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "各生存者の複製を、すべての炎の祭壇に置けます。"
 "copy.name" = "複製の杖：{survivor}"
 "copy.description" = "複製のいない炎の祭壇で：{survivor}の複製を置き、チャージを1つ消費します。最後のチャージで杖はなくなります。祭壇にすでに複製がいる場合は、その複製を無料で移動します。"
 "copy.full_charges" = "最大チャージ"
-"config" = "祭壇ごとの生存者"
+"config" = "Survivors per Altar"
 "config.per_altar" = "祭壇ごとに複製"
 "config.per_altar.doc" = "各生存者の複製を、すべての炎の祭壇に祭壇ゾーンごとに1体置けます。オフにすると、このワールドの生存者と杖は通常のゲームと同じになります。参加したプレイヤーにはサーバーの値が適用されます。"
 "config.copy_staffs" = "複製の杖"
@@ -206,12 +206,12 @@
 "config.vanilla_staff_places_copies.doc" = "オンにすると、生存者自身の杖が、複製のいない祭壇に複製を置き、祭壇の複製を移動します。オフにすると、通常のゲームと同じく生存者本人を移動します。"
 
 [ko]
-"mod.name" = "제단별 생존자"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "각 생존자의 복제를 모든 불꽃 제단에 둘 수 있습니다."
 "copy.name" = "복제 지팡이: {survivor}"
 "copy.description" = "복제가 없는 불꽃 제단에서: {survivor}의 복제를 배치하고 충전을 1회 소모합니다. 마지막 충전을 쓰면 지팡이가 사라집니다. 제단에 이미 복제가 있으면 무료로 옮깁니다."
 "copy.full_charges" = "최대 충전"
-"config" = "제단별 생존자"
+"config" = "Survivors per Altar"
 "config.per_altar" = "제단마다 복제"
 "config.per_altar.doc" = "각 생존자의 복제를 모든 불꽃 제단에 제단 구역마다 하나씩 둘 수 있습니다. 끄면 이 월드의 생존자와 지팡이가 기본 게임처럼 작동합니다. 접속한 플레이어는 서버의 값을 따릅니다."
 "config.copy_staffs" = "복제 지팡이"
@@ -229,12 +229,12 @@
 "config.vanilla_staff_places_copies.doc" = "켜면 생존자 자신의 지팡이가 복제가 없는 제단에 복제를 두고 제단의 복제를 옮깁니다. 끄면 기본 게임처럼 생존자 본인을 옮깁니다."
 
 [pt-br]
-"mod.name" = "Sobreviventes por altar"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Uma cópia de cada sobrevivente pode ficar em cada Altar da Chama."
 "copy.name" = "Cajado de cópia: {survivor}"
 "copy.description" = "Em um Altar da Chama sem cópia: coloca ali uma cópia de {survivor} e gasta uma carga; com a última, o cajado se esgota. Se o altar já tem uma cópia, ele a move de graça."
 "copy.full_charges" = "Cargas quando cheio"
-"config" = "Sobreviventes por altar"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Uma cópia em cada altar"
 "config.per_altar.doc" = "Uma cópia de cada sobrevivente pode ficar em cada Altar da Chama, uma por zona de altar. Desligado, sobreviventes e cajados funcionam como no jogo base neste mundo. Jogadores que entram usam o valor do servidor."
 "config.copy_staffs" = "Cajados de cópia"
@@ -252,12 +252,12 @@
 "config.vanilla_staff_places_copies.doc" = "Ligado, o cajado do próprio sobrevivente coloca uma cópia em um altar sem ela e move a cópia de um altar. Desligado, move o próprio sobrevivente, como no jogo base."
 
 [th]
-"mod.name" = "ผู้รอดชีวิตต่อแท่นบูชา"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "สำเนาของผู้รอดชีวิตแต่ละคนอยู่ที่แท่นบูชาเปลวไฟได้ทุกแท่น"
 "copy.name" = "คทาสำเนา: {survivor}"
 "copy.description" = "ที่แท่นบูชาเปลวไฟที่ยังไม่มีสำเนา: วางสำเนาของ {survivor} ไว้ที่นั่นและใช้ประจุ 1 ครั้ง เมื่อใช้ประจุสุดท้าย คทาจะหายไป หากแท่นบูชามีสำเนาอยู่แล้ว จะย้ายสำเนานั้นได้ฟรี"
 "copy.full_charges" = "ประจุเมื่อเต็ม"
-"config" = "ผู้รอดชีวิตต่อแท่นบูชา"
+"config" = "Survivors per Altar"
 "config.per_altar" = "สำเนาที่ทุกแท่นบูชา"
 "config.per_altar.doc" = "สำเนาของผู้รอดชีวิตแต่ละคนอยู่ที่แท่นบูชาเปลวไฟได้ทุกแท่น หนึ่งตัวต่อเขตแท่นบูชา เมื่อปิด ผู้รอดชีวิตและคทาในโลกนี้จะทำงานเหมือนเกมปกติ ผู้เล่นที่เข้าร่วมจะใช้ค่าของเซิร์ฟเวอร์"
 "config.copy_staffs" = "คทาสำเนา"
@@ -275,12 +275,12 @@
 "config.vanilla_staff_places_copies.doc" = "เมื่อเปิด คทาของผู้รอดชีวิตเองจะวางสำเนาที่แท่นบูชาที่ยังไม่มีสำเนา และย้ายสำเนาของแท่นบูชา เมื่อปิด คทาจะย้ายตัวผู้รอดชีวิตเอง เหมือนเกมปกติ"
 
 [tr]
-"mod.name" = "Sunak başına hayatta kalanlar"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "Her hayatta kalanın bir kopyası her Alev Sunağı'nda durabilir."
 "copy.name" = "Kopya asası: {survivor}"
 "copy.description" = "Kopyası olmayan bir Alev Sunağı'nda: oraya {survivor} kopyasını yerleştirir ve bir şarj harcar; son şarjla asa tükenir. Sunakta zaten bir kopya varsa onu ücretsiz taşır."
 "copy.full_charges" = "Doluyken şarj"
-"config" = "Sunak başına hayatta kalanlar"
+"config" = "Survivors per Altar"
 "config.per_altar" = "Her sunakta bir kopya"
 "config.per_altar.doc" = "Her hayatta kalanın bir kopyası her Alev Sunağı'nda, sunak bölgesi başına bir tane durabilir. Kapalıyken bu dünyada hayatta kalanlar ve asalar temel oyundaki gibi çalışır. Katılan oyuncular sunucunun değerini kullanır."
 "config.copy_staffs" = "Kopya asaları"
@@ -298,12 +298,12 @@
 "config.vanilla_staff_places_copies.doc" = "Açıkken hayatta kalanın kendi asası kopyası olmayan bir sunağa kopya koyar ve sunağın kopyasını taşır. Kapalıyken temel oyundaki gibi hayatta kalanın kendisini taşır."
 
 [zh-cn]
-"mod.name" = "每座祭坛的幸存者"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "每位幸存者的复制体都可以站在每座火焰祭坛旁。"
 "copy.name" = "复制法杖：{survivor}"
 "copy.description" = "在没有复制体的火焰祭坛旁：在那里放置{survivor}的复制体并消耗一次充能；最后一次充能用完后法杖消失。若祭坛已有复制体，则免费移动它。"
 "copy.full_charges" = "满充能次数"
-"config" = "每座祭坛的幸存者"
+"config" = "Survivors per Altar"
 "config.per_altar" = "每座祭坛一个复制体"
 "config.per_altar.doc" = "每位幸存者的复制体都可以站在每座火焰祭坛旁，每个祭坛区域一个。关闭后，此世界中的幸存者和法杖与原版游戏相同。加入的玩家使用服务器的值。"
 "config.copy_staffs" = "复制法杖"
@@ -321,12 +321,12 @@
 "config.vanilla_staff_places_copies.doc" = "开启后，幸存者自己的法杖会在没有复制体的祭坛放置复制体，并移动祭坛的复制体。关闭后，它会像原版游戏一样移动幸存者本人。"
 
 [zh-tw]
-"mod.name" = "每座祭壇的倖存者"
+"mod.name" = "Survivors per Altar"
 "mod.description" = "每位倖存者的複製體都可以站在每座火焰祭壇旁。"
 "copy.name" = "複製法杖：{survivor}"
 "copy.description" = "在沒有複製體的火焰祭壇旁：在那裡放置{survivor}的複製體並消耗一次充能；最後一次充能用完後法杖消失。若祭壇已有複製體，則免費移動它。"
 "copy.full_charges" = "滿充能次數"
-"config" = "每座祭壇的倖存者"
+"config" = "Survivors per Altar"
 "config.per_altar" = "每座祭壇一個複製體"
 "config.per_altar.doc" = "每位倖存者的複製體都可以站在每座火焰祭壇旁，每個祭壇區域一個。關閉後，此世界中的倖存者和法杖與原版遊戲相同。加入的玩家使用伺服器的值。"
 "config.copy_staffs" = "複製法杖"

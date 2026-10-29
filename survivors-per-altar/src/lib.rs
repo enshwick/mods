@@ -187,7 +187,7 @@ impl Mod for SurvivorsPerAltar {
         enshwick::manifest!(
             id: "enshwick.survivors-per-altar",
             side: BOTH,
-            name: "Survivors per altar",
+            name: "Survivors per Altar",
             join: true,
             was: ["survivors-per-altar"],
             points: [points::CopyLimit, points::ChargeCost],

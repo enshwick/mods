@@ -18,12 +18,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arc-swap = { version = "1.9.3", default-features = false }
-enshwick = { version = "=1.0.0-alpha.11", features = ["unstable"] }
+enshwick = { workspace = true, features = ["unstable"] }
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
-enshwick = { version = "=1.0.0-alpha.11", features = ["test", "unstable"] }
+enshwick = { workspace = true, features = ["test", "unstable"] }
 toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]
@@ -32,6 +32,11 @@ workspace = true
 [workspace]
 members = [".", "tools/xtask"]
 resolver = "3"
+
+[workspace.dependencies]
+# The platform from git, at a commit of its main branch.
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "6477a95ffec44997eff6b58cb834beb200072b6a" }
+
 
 [workspace.lints.rust]
 missing_docs = "deny"

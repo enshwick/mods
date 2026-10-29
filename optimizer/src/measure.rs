@@ -11,7 +11,8 @@ use std::fmt::Write as _;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use enshwick::state::ModLocal;
@@ -47,10 +48,74 @@ fn lines() -> &'static Lines {
     LINES.get_or_init(Lines::default)
 }
 
-/// `text` locked, whether or not a thread panicked while it held it: a line
-/// is whole or stale, never torn.
-fn relock(text: &Mutex<String>) -> MutexGuard<'_, String> {
-    text.lock().unwrap_or_else(PoisonError::into_inner)
+/// The measuring thread and the signal that ends it.
+#[derive(Debug, Default)]
+struct Worker {
+    /// Whether the thread is asked to end.
+    stop: Mutex<bool>,
+    /// Wakes the thread from its wait between lines.
+    wake: Condvar,
+    /// The running thread, until it is stopped.
+    thread: Mutex<Option<JoinHandle<()>>>,
+}
+
+/// The measuring thread of this mod life.
+static WORKER: ModLocal<Worker> = ModLocal::new();
+
+/// The measuring thread of this mod life, not started at first.
+fn worker() -> &'static Worker {
+    WORKER.get_or_init(Worker::default)
+}
+
+/// `value` locked, whether or not a thread panicked while it held it: a line
+/// is whole or stale, never torn, and a flag or a handle is never torn.
+fn relock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
+    value.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Starts the measuring thread; `wine` as for [`run`].
+///
+/// # Errors
+///
+/// The error of the system when it starts no thread.
+pub(crate) fn start(wine: bool) -> std::io::Result<()> {
+    let thread = std::thread::Builder::new()
+        .name("enshwick-optimizer".into())
+        .spawn(move || run(wine))?;
+    *relock(&worker().thread) = Some(thread);
+    Ok(())
+}
+
+/// Ends the measuring thread and waits until it has ended; nothing when it
+/// never started.
+pub(crate) fn stop() {
+    let worker = worker();
+    *relock(&worker.stop) = true;
+    worker.wake.notify_all();
+    let thread = relock(&worker.thread).take();
+    if let Some(thread) = thread
+        && thread.join().is_err()
+    {
+        enshwick::warn!("measure mode ended with a panic");
+    }
+}
+
+/// Whether the measuring thread runs.
+#[cfg(test)]
+pub(crate) fn running() -> bool {
+    relock(&worker().thread)
+        .as_ref()
+        .is_some_and(|thread| !thread.is_finished())
+}
+
+/// Waits `period`, or less when the thread is asked to end; whether it is.
+fn stopped_within(period: Duration) -> bool {
+    let worker = worker();
+    let (stop, _timeout) = worker
+        .wake
+        .wait_timeout_while(relock(&worker.stop), period, |stop| !*stop)
+        .unwrap_or_else(PoisonError::into_inner);
+    *stop
 }
 
 /// Turns measure mode on or off; `context` names the platform and what runs.
@@ -459,17 +524,19 @@ impl Meter {
     }
 }
 
-/// Measures until the process ends: one line every [`PERIOD`] while measure
-/// mode is on. On Windows it also keeps the exact waits' slack at the timer
-/// resolution the game set.
-pub(crate) fn run(wine: bool) {
+/// Measures until [`stop`]: one line every [`PERIOD`] while measure mode is
+/// on. On Windows (`wine` false) it also keeps the exact waits' slack at the
+/// timer resolution the game set.
+fn run(wine: bool) {
     let mut meter = Meter::new();
     let mut workers_told = false;
     loop {
         if !wine {
             waits::tune_for_windows();
         }
-        std::thread::sleep(PERIOD);
+        if stopped_within(PERIOD) {
+            return;
+        }
         let minute = meter.minute();
         if !workers_told {
             let game = crate::env::parse_game_log(&game_log_text());

@@ -280,12 +280,13 @@ impl Mod for Optimizer {
         let wine = FOUND.get().is_some_and(|found| {
             matches!(found.platform, Platform::WineServer | Platform::WineClient)
         });
-        let started = std::thread::Builder::new()
-            .name("enshwick-optimizer".into())
-            .spawn(move || measure::run(wine));
-        if let Err(e) = started {
+        if let Err(e) = measure::start(wine) {
             enshwick::warn!("measure mode does not run: {e}");
         }
+    }
+
+    fn shutdown(&'static self) {
+        measure::stop();
     }
 }
 
@@ -428,5 +429,27 @@ mod tests {
                 .any(|line| line.contains("environment: "))
         );
         assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn ready_starts_measuring_and_shutdown_ends_it_at_once() {
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::SERVER)
+            .settings(
+                "exact_waits = \"auto\"\ntask_workers = 0\nserver_wait_cap_ms = 1\nmeasure = true\n",
+            )
+            .install();
+        // SAFETY: the exports of `declare_mod!` above, `ready` after `init`
+        // returned OK.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert!(measure::running(), "{:?}", loader.logs());
+
+        // The thread waits a minute between lines; shutdown wakes it at once.
+        let asked = std::time::Instant::now();
+        enshwick_mod_shutdown();
+        assert!(!measure::running());
+        assert!(asked.elapsed() < measure::PERIOD / 2);
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
     }
 }

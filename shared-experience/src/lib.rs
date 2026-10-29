@@ -194,8 +194,10 @@ impl Mod for SharedExperience {
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
-        let settings: Settings = load.config()?;
-        shared().enabled.store(settings.enabled, Ordering::Relaxed);
+        load.apply_config(|settings: &Settings| {
+            shared().enabled.store(settings.enabled, Ordering::Relaxed);
+            enshwick::info!("shared experience {}", on_off(settings.enabled));
+        })?;
         load.on_experience(share_experience)?;
         let dir = load.data_dir()?;
         // The store closes at shutdown in a handler of its own: the mark the
@@ -222,11 +224,6 @@ impl Mod for SharedExperience {
             shared.high_water.store(0, Ordering::Relaxed);
             shared.stored.store(0, Ordering::Relaxed);
         })?;
-        load.on_config_change(|settings: Settings| {
-            shared().enabled.store(settings.enabled, Ordering::Relaxed);
-            enshwick::info!("shared experience {}", on_off(settings.enabled));
-        })?;
-        enshwick::info!("shared experience {}", on_off(settings.enabled));
         Ok(Self)
     }
 }

@@ -85,12 +85,10 @@ impl Mod for BuildCamera {
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
-        let settings: Settings = load.config()?;
+        load.apply_config(apply)?;
         load.on_skill(Skill::AirborneArchitect, |check| {
             lifts(check.gate, enabled().load(Ordering::Relaxed))
         })?;
-        load.on_config_change(|settings: Settings| apply(&settings))?;
-        apply(&settings);
         Ok(Self)
     }
 }

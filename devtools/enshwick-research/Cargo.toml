@@ -30,6 +30,7 @@ windows-sys = { version = "0.61.2", default-features = false, features = [
 ] }
 
 [dev-dependencies]
+enshwick = { workspace = true, features = ["test", "unstable"] }
 enshwick-gamedata.workspace = true
 
 [lints]

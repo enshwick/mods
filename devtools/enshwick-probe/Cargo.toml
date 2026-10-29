@@ -20,6 +20,9 @@ crate-type = ["cdylib", "rlib"]
 enshwick = { workspace = true, features = ["unstable"] }
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
 
+[dev-dependencies]
+enshwick = { workspace = true, features = ["test", "unstable"] }
+
 [lints]
 workspace = true
 

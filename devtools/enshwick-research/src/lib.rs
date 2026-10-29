@@ -271,6 +271,57 @@ impl Mod for Research {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use enshwick::abi::{Side, Status};
+
+    use super::*;
+
+    /// Starts the research mod on a fake host of `side` with `settings`;
+    /// the status and the host to look at.
+    fn start(side: Side, settings: &str) -> (Status, enshwick::test::Installed) {
+        let loader = enshwick::test::FakeHost::new()
+            .side(side)
+            .settings(settings)
+            .install();
+        // SAFETY: the exports of the `declare_mod!` below.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        (status, loader)
+    }
+
+    #[test]
+    fn off_by_default_it_starts_and_registers_nothing() {
+        let (status, loader) = start(Side::SERVER, "");
+        assert_eq!(status, Status::OK);
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+        assert!(
+            !loader.logs().iter().any(|(_, line)| line == "research on"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn on_either_side_it_starts_or_turns_off_with_one_reason_and_never_panics() {
+        for side in [Side::SERVER, Side::CLIENT] {
+            let (status, loader) = start(side, "enabled = true\n");
+            let faults = loader.faults();
+            let on = loader.logs().iter().any(|(_, line)| line == "research on");
+            if status == Status::OK {
+                assert!(on, "{side:?}: {:?}", loader.logs());
+                assert!(faults.is_empty(), "{side:?}: {faults:?}");
+            } else {
+                // The fake host lacks some game data the mod links: it turns
+                // off with that reason, as on a game build without it.
+                assert_eq!(status, Status::REFUSED, "{side:?}");
+                assert!(!on, "{side:?}");
+                assert_eq!(faults.len(), 1, "{side:?}: {faults:?}");
+                assert!(!faults[0].contains("panic"), "{side:?}: {faults:?}");
+            }
+        }
+    }
+}
+
 /// Links R11 on the server side and, on a client, on the client side.
 fn entities_link(load: &mut Load<'_>, client: bool) {
     let world = match load.world() {

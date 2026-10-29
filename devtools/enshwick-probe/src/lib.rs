@@ -412,4 +412,50 @@ impl Mod for Probe {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use enshwick::abi::Status;
+
+    use super::*;
+
+    /// Starts the probe on a fake host with `settings`; the status and the
+    /// host to look at.
+    fn start(settings: &str) -> (Status, enshwick::test::Installed) {
+        let loader = enshwick::test::FakeHost::new().settings(settings).install();
+        // SAFETY: the exports of the `declare_mod!` below.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        (status, loader)
+    }
+
+    #[test]
+    fn off_by_default_it_starts_and_registers_nothing() {
+        let (status, loader) = start("");
+        assert_eq!(status, Status::OK);
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+        assert!(
+            !loader.logs().iter().any(|(_, line)| line == "probe on"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn on_it_starts_or_turns_off_with_one_reason_and_never_panics() {
+        let (status, loader) = start("enabled = true\n");
+        let faults = loader.faults();
+        let on = loader.logs().iter().any(|(_, line)| line == "probe on");
+        if status == Status::OK {
+            assert!(on, "{:?}", loader.logs());
+            assert!(faults.is_empty(), "{faults:?}");
+        } else {
+            // The fake host lacks some game data the probe links: it turns
+            // off with that reason, as on a game build without it.
+            assert_eq!(status, Status::REFUSED);
+            assert!(!on);
+            assert_eq!(faults.len(), 1, "{faults:?}");
+            assert!(!faults[0].contains("panic"), "{faults:?}");
+        }
+    }
+}
+
 enshwick::declare_mod!(Probe);

@@ -12,7 +12,7 @@ release_always = false
 # A version with a prerelease part (`0.2.0-alpha.1`) makes a GitHub prerelease.
 git_release_type = "auto"
 git_tag_name = "v{{ version }}"
-git_release_name = "Area loot {{ version }}"
+git_release_name = "Area Loot {{ version }}"
 # Renovate moves the dependencies.
 dependencies_update = false
 pr_labels = ["release"]

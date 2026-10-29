@@ -1,5 +1,5 @@
-//! Area loot: when a player empties an enemy's loot, the loot of the other
-//! enemies around comes along. Corpses and enemy loot bags within the radius
+//! Area Loot: when a player empties an enemy's loot, the player also gets the
+//! loot of the other enemies nearby. Corpses and enemy loot bags within the radius
 //! are emptied into the same player, nearest first, until one does not fit;
 //! containers another player has open stay as they are. Items on the ground
 //! keep the game's own pickup.
@@ -14,7 +14,7 @@ use enshwick::{Load, Mod, Off};
 /// language.
 const TEXTS: &str = include_str!("texts.toml");
 
-/// Area loot settings.
+/// Area Loot settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 struct Settings {
@@ -60,7 +60,7 @@ impl Mod for AreaLoot {
         enshwick::manifest!(
             id: "enshwick.area-loot",
             side: SERVER,
-            name: "Area loot",
+            name: "Area Loot",
             was: ["area-loot"],
             points: [points::Eligible],
         )

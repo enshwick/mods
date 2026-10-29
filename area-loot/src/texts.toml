@@ -1,7 +1,7 @@
 [en]
-"mod.name" = "Area loot"
-"mod.description" = "Empty one enemy corpse and the loot of the others around it comes along."
-"config" = "Area loot"
+"mod.name" = "Area Loot"
+"mod.description" = "Empty one enemy corpse, and you also get the loot of the enemies nearby."
+"config" = "Area Loot"
 "config.radius" = "Radius"
 "config.radius.doc" = "Metres across the ground from the emptied corpse, from 0.1 to 50."
 "config.height" = "Height"
@@ -10,9 +10,9 @@
 "config.enabled.doc" = "Emptying one enemy's loot also takes the loot of the enemies around. Off leaves looting as in the game."
 
 [de]
-"mod.name" = "Flächenbeute"
-"mod.description" = "Leere eine feindliche Leiche, und die Beute der anderen in der Nähe kommt mit."
-"config" = "Flächenbeute"
+"mod.name" = "Area Loot"
+"mod.description" = "Leere eine feindliche Leiche, und du bekommst auch die Beute der Feinde in der Nähe."
+"config" = "Area Loot"
 "config.radius" = "Radius"
 "config.radius.doc" = "Meter über den Boden von der geleerten Leiche aus, von 0,1 bis 50."
 "config.height" = "Höhe"
@@ -21,9 +21,9 @@
 "config.enabled.doc" = "Wer die Beute eines Feindes leert, nimmt auch die Beute der Feinde in der Nähe. Aus lässt das Plündern wie im Spiel."
 
 [fr]
-"mod.name" = "Butin de zone"
-"mod.description" = "Videz le cadavre d'un ennemi, et le butin des autres autour vient avec."
-"config" = "Butin de zone"
+"mod.name" = "Area Loot"
+"mod.description" = "Videz le cadavre d'un ennemi, et vous recevez aussi le butin des ennemis proches."
+"config" = "Area Loot"
 "config.radius" = "Rayon"
 "config.radius.doc" = "Mètres au sol autour du cadavre vidé, de 0,1 à 50."
 "config.height" = "Hauteur"
@@ -32,9 +32,9 @@
 "config.enabled.doc" = "Vider le butin d'un ennemi prend aussi le butin des ennemis autour. Désactivé, le pillage reste comme dans le jeu."
 
 [it]
-"mod.name" = "Bottino ad area"
-"mod.description" = "Svuota il cadavere di un nemico e arriva anche il bottino degli altri intorno."
-"config" = "Bottino ad area"
+"mod.name" = "Area Loot"
+"mod.description" = "Svuota il cadavere di un nemico e ricevi anche il bottino dei nemici vicini."
+"config" = "Area Loot"
 "config.radius" = "Raggio"
 "config.radius.doc" = "Metri sul terreno dal cadavere svuotato, da 0,1 a 50."
 "config.height" = "Altezza"
@@ -43,9 +43,9 @@
 "config.enabled.doc" = "Svuotare il bottino di un nemico prende anche quello dei nemici intorno. Disattivato, il saccheggio resta come nel gioco."
 
 [es]
-"mod.name" = "Botín en área"
-"mod.description" = "Vacía el cadáver de un enemigo y el botín de los demás a su alrededor viene con él."
-"config" = "Botín en área"
+"mod.name" = "Area Loot"
+"mod.description" = "Vacía el cadáver de un enemigo y recibes también el botín de los enemigos cercanos."
+"config" = "Area Loot"
 "config.radius" = "Radio"
 "config.radius.doc" = "Metros por el suelo desde el cadáver vaciado, de 0,1 a 50."
 "config.height" = "Altura"
@@ -54,9 +54,9 @@
 "config.enabled.doc" = "Vaciar el botín de un enemigo también toma el botín de los enemigos de alrededor. Desactivado, el saqueo queda como en el juego."
 
 [ru]
-"mod.name" = "Добыча вокруг"
-"mod.description" = "Опустошите тело одного врага, и добыча остальных вокруг придёт вместе с ней."
-"config" = "Добыча вокруг"
+"mod.name" = "Area Loot"
+"mod.description" = "Опустошите тело одного врага, и вы также получите добычу врагов рядом."
+"config" = "Area Loot"
 "config.radius" = "Радиус"
 "config.radius.doc" = "Метры по земле от опустошённого тела, от 0,1 до 50."
 "config.height" = "Высота"
@@ -65,9 +65,9 @@
 "config.enabled.doc" = "Когда игрок опустошает добычу одного врага, он забирает и добычу врагов вокруг. Если выключено, обыск как в игре."
 
 [pl]
-"mod.name" = "Łup z obszaru"
-"mod.description" = "Opróżnij zwłoki jednego wroga, a łup pozostałych wokół przyjdzie razem z nim."
-"config" = "Łup z obszaru"
+"mod.name" = "Area Loot"
+"mod.description" = "Opróżnij zwłoki jednego wroga, a dostaniesz też łup wrogów w pobliżu."
+"config" = "Area Loot"
 "config.radius" = "Promień"
 "config.radius.doc" = "Metry po ziemi od opróżnionych zwłok, od 0,1 do 50."
 "config.height" = "Wysokość"
@@ -76,9 +76,9 @@
 "config.enabled.doc" = "Opróżnienie łupu jednego wroga zabiera też łup wrogów wokół. Wyłączone zostawia przeszukiwanie jak w grze."
 
 [ja]
-"mod.name" = "範囲ルート"
-"mod.description" = "敵の死体を1つ空にすると、周りのほかの敵の戦利品も一緒に手に入ります。"
-"config" = "範囲ルート"
+"mod.name" = "Area Loot"
+"mod.description" = "敵の死体を1つ空にすると、近くの敵の戦利品も手に入ります。"
+"config" = "Area Loot"
 "config.radius" = "半径"
 "config.radius.doc" = "空にした死体から地面沿いの距離（メートル、0.1〜50）です。"
 "config.height" = "高さ"
@@ -87,9 +87,9 @@
 "config.enabled.doc" = "敵1体の戦利品を空にすると、周りの敵の戦利品も取ります。オフにすると通常のゲームどおりです。"
 
 [ko]
-"mod.name" = "범위 전리품"
-"mod.description" = "적의 시체 하나를 비우면 주변 다른 적의 전리품도 함께 얻습니다."
-"config" = "범위 전리품"
+"mod.name" = "Area Loot"
+"mod.description" = "적의 시체 하나를 비우면 근처 적의 전리품도 얻습니다."
+"config" = "Area Loot"
 "config.radius" = "반경"
 "config.radius.doc" = "비운 시체에서 지면을 따라 잰 거리(미터)로, 0.1에서 50까지입니다."
 "config.height" = "높이"
@@ -98,9 +98,9 @@
 "config.enabled.doc" = "적 하나의 전리품을 비우면 주변 적의 전리품도 가져옵니다. 끄면 원래 게임처럼 약탈합니다."
 
 [pt-br]
-"mod.name" = "Saque em área"
-"mod.description" = "Esvazie o cadáver de um inimigo e o saque dos outros ao redor vem junto."
-"config" = "Saque em área"
+"mod.name" = "Area Loot"
+"mod.description" = "Esvazie o cadáver de um inimigo e receba também o saque dos inimigos próximos."
+"config" = "Area Loot"
 "config.radius" = "Raio"
 "config.radius.doc" = "Metros pelo chão a partir do cadáver esvaziado, de 0,1 a 50."
 "config.height" = "Altura"
@@ -109,9 +109,9 @@
 "config.enabled.doc" = "Esvaziar o saque de um inimigo também pega o saque dos inimigos ao redor. Desligado, o saque fica como no jogo."
 
 [th]
-"mod.name" = "เก็บของรอบพื้นที่"
-"mod.description" = "เก็บของจากศพศัตรูหนึ่งตัว แล้วของจากศัตรูตัวอื่นรอบ ๆ จะมาด้วย"
-"config" = "เก็บของรอบพื้นที่"
+"mod.name" = "Area Loot"
+"mod.description" = "เก็บของจากศพศัตรูหนึ่งตัว แล้วคุณจะได้ของจากศัตรูที่อยู่ใกล้ด้วย"
+"config" = "Area Loot"
 "config.radius" = "รัศมี"
 "config.radius.doc" = "ระยะเป็นเมตรตามพื้นจากศพที่เก็บของแล้ว ตั้งแต่ 0.1 ถึง 50"
 "config.height" = "ความสูง"
@@ -120,9 +120,9 @@
 "config.enabled.doc" = "เมื่อเก็บของจากศัตรูหนึ่งตัว จะเก็บของจากศัตรูรอบ ๆ ด้วย ปิดไว้จะเก็บของเหมือนในเกมปกติ"
 
 [tr]
-"mod.name" = "Alan Ganimeti"
-"mod.description" = "Bir düşman cesedini boşalt, etraftaki diğerlerinin ganimeti de gelsin."
-"config" = "Alan Ganimeti"
+"mod.name" = "Area Loot"
+"mod.description" = "Bir düşman cesedini boşalt, yakındaki düşmanların ganimetini de al."
+"config" = "Area Loot"
 "config.radius" = "Yarıçap"
 "config.radius.doc" = "Boşaltılan cesetten yer boyunca metre, 0,1 ile 50 arası."
 "config.height" = "Yükseklik"
@@ -131,9 +131,9 @@
 "config.enabled.doc" = "Bir düşmanın ganimetini boşaltmak etraftaki düşmanların ganimetini de alır. Kapalıyken yağma oyundaki gibidir."
 
 [zh-cn]
-"mod.name" = "范围拾取"
-"mod.description" = "搜空一具敌人尸体，周围其他敌人的战利品也一并拾取。"
-"config" = "范围拾取"
+"mod.name" = "Area Loot"
+"mod.description" = "搜空一具敌人尸体，也会获得附近敌人的战利品。"
+"config" = "Area Loot"
 "config.radius" = "半径"
 "config.radius.doc" = "从被搜空的尸体沿地面的距离（米），范围 0.1 到 50。"
 "config.height" = "高度"
@@ -142,9 +142,9 @@
 "config.enabled.doc" = "搜空一个敌人的战利品时，也拾取周围敌人的战利品。关闭后搜刮与原版相同。"
 
 [zh-tw]
-"mod.name" = "範圍拾取"
-"mod.description" = "搜空一具敵人屍體，周圍其他敵人的戰利品也一併拾取。"
-"config" = "範圍拾取"
+"mod.name" = "Area Loot"
+"mod.description" = "搜空一具敵人屍體，也會獲得附近敵人的戰利品。"
+"config" = "Area Loot"
 "config.radius" = "半徑"
 "config.radius.doc" = "從被搜空的屍體沿地面的距離（公尺），範圍 0.1 到 50。"
 "config.height" = "高度"
@@ -153,9 +153,9 @@
 "config.enabled.doc" = "搜空一個敵人的戰利品時，也拾取周圍敵人的戰利品。關閉後搜刮與原版相同。"
 
 [uk]
-"mod.name" = "Здобич навколо"
-"mod.description" = "Обшукайте тіло одного ворога, і здобич інших довкола прийде разом із нею."
-"config" = "Здобич навколо"
+"mod.name" = "Area Loot"
+"mod.description" = "Обшукайте тіло одного ворога, і ви також отримаєте здобич ворогів поруч."
+"config" = "Area Loot"
 "config.radius" = "Радіус"
 "config.radius.doc" = "Метри по землі від обшуканого тіла, від 0,1 до 50."
 "config.height" = "Висота"

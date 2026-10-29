@@ -1,7 +1,7 @@
 ---
 id: enshwick.area-loot
-name: Area loot
-summary: Empty one enemy corpse, and the loot of the enemy corpses and loot bags around it comes along.
+name: Area Loot
+summary: Empty one enemy corpse, and the mod also gives you the loot of the enemy corpses and loot bags nearby.
 needs: server
 settings:
   - key: radius
@@ -21,8 +21,8 @@ settings:
 ---
 
 - When you empty an enemy corpse or loot bag, the enemy loot within 12 metres
-  comes to you too.
-- The nearest loot comes first, with the usual pickup messages.
+  goes into your inventory too.
+- You get the nearest loot first, with the usual pickup messages.
 - The emptied corpses dissolve as usual.
 
 ## What if my inventory is full?
@@ -32,9 +32,9 @@ its container, and loot further away stays where it is.
 
 ## Does it take loot another player wants?
 
-No. A container stays with another player who has it open or opened it in the
-last 10 seconds. It also stays with a player who opened it last and stands
-within 4 metres of it.
+No. The mod skips a container that another player has open or opened in the last
+10 seconds. It also skips a container whose last opener stands within 4 metres
+of it.
 
 ## What stays as it was?
 
@@ -43,9 +43,9 @@ in the base game.
 
 ## Install
 
-Area loot comes in enshwick.zip, and the
+Area Loot comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It needs Enshwick.
 
 ## Settings
 
@@ -55,13 +55,13 @@ shows.
 
 ## Multiplayer
 
-Only the server, or the player who hosts the game, needs Area loot. Players
-without it get the loot all the same.
+Only the server, or the player who hosts the game, needs Area Loot. Players
+without it get the loot too.
 
 ## Problems
 
-**Nothing comes along when you empty a corpse.** Check that `enabled` is on and
-that the other loot is within `radius` and `height`.
+**You get no extra loot when you empty a corpse.** Check that `enabled` is on
+and that the other loot is within `radius` and `height`.
 
 **Something else goes wrong.** Open an issue in the
 [mod's repository](https://github.com/enshwick/mod-area-loot/issues). Attach the

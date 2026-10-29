@@ -178,6 +178,27 @@ fn input(zones: ZoneSizes) -> Input {
         .collect()
 }
 
+/// The log line for the placed altars: how many stand at each Flame level,
+/// since entity ids change with every load. Right after a load the game
+/// briefly lists every altar at level 1, so a list all at level 1 says so.
+fn placed(input: &Input) -> String {
+    let mut per_level = BTreeMap::<usize, usize>::new();
+    for levels in input.values() {
+        *per_level.entry(levels.len()).or_default() += 1;
+    }
+    if per_level.keys().eq([&1]) {
+        format!(
+            "{} altars placed, all at Flame level 1, as the game lists them right after a load",
+            input.len()
+        )
+    } else {
+        format!(
+            "{} altars placed, per Flame level {per_level:?}",
+            input.len()
+        )
+    }
+}
+
 fn maybe_solve(state: &mut State, zones: ZoneSizes) {
     if state.solving || !state.on {
         return;
@@ -186,8 +207,7 @@ fn maybe_solve(state: &mut State, zones: ZoneSizes) {
     if !state.wants(&input) {
         return;
     }
-    let levels: Vec<(u32, usize)> = input.iter().map(|(id, l)| (*id, l.len())).collect();
-    enshwick::info!("{} altars placed, levelled {levels:?}", input.len());
+    enshwick::info!("{}", placed(&input));
     state.solving = true;
     let game = state.game;
     let spawned = std::thread::Builder::new()
@@ -261,6 +281,30 @@ pub(crate) fn sizes(input: &Input) -> Vec<Size> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn at_levels(levels: &[usize]) -> Input {
+        levels
+            .iter()
+            .zip(1..)
+            .map(|(&level, id)| (id, vec![Box3::new([0, 0, 0], [8, 8, 8]); level]))
+            .collect()
+    }
+
+    #[test]
+    fn the_placed_altars_are_counted_per_flame_level_without_entity_ids() {
+        assert_eq!(
+            placed(&at_levels(&[3, 1, 3, 5])),
+            "4 altars placed, per Flame level {1: 1, 3: 2, 5: 1}"
+        );
+    }
+
+    #[test]
+    fn a_world_listed_all_at_level_1_is_marked_as_the_pass_after_a_load() {
+        assert_eq!(
+            placed(&at_levels(&[1, 1])),
+            "2 altars placed, all at Flame level 1, as the game lists them right after a load"
+        );
+    }
 
     #[test]
     fn the_next_game_solves_the_same_altars_again() {

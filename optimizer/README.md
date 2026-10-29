@@ -1,11 +1,14 @@
 # Optimizer
 
-Less CPU for an Enshrouded server, on Windows and under Wine or Proton, such
-as the Docker images for Linux hosts, and the numbers to check it. Players
-notice nothing.
+A dedicated Enshrouded server uses less CPU, on Windows and under Wine or
+Proton, such as in the Docker images for Linux hosts. The mod also measures the
+result. Players notice no change.
 
-The mod finds out where it runs, the dedicated server or the game, on
-Windows or under Wine, and turns on only what was measured to help there.
+Built on [Enshwick](https://github.com/enshwick/enshwick).
+
+The mod checks where it runs: on the dedicated server or in the game, on Windows
+or under Wine. It turns on only the changes that measurements showed to help
+there.
 
 | Change          | Windows server | Wine server         | Windows client | Wine client |
 | --------------- | -------------- | ------------------- | -------------- | ----------- |
@@ -13,7 +16,7 @@ Windows or under Wine, and turns on only what was measured to help there.
 | Task workers    | off            | on with a CPU limit | off            | off         |
 | Server wait cap | off            | off                 | off            | off         |
 
-An idle dedicated server, process CPU, 100 % being one core (details under
+CPU use of an idle dedicated server, where 100 % is one core (see
 [Measurements](#measurements)):
 
 | Server                        | Without the mod | With the mod |
@@ -24,48 +27,49 @@ An idle dedicated server, process CPU, 100 % being one core (details under
 
 ## What it changes
 
-- **Exact waits.** The engine's event loop waits for its next deadline in
-  whole milliseconds. With less than a millisecond left it asks for a 0 ms
-  wait over and over until the deadline passes: about 0.6 ms of every 60 Hz
-  frame of the main loop, about 0.9 ms of every 5 ms of the network session's
-  loop, and 0.1 ms after every slow server pass. The mod sleeps that last
-  fraction instead, then lets the game's own 0 ms wait run once, so the game
-  still sees every event, and the mod waits on no handle of the game's. Under
-  Wine the sleep is a plain Unix sleep; on Windows it is a high-resolution
-  timer, which wakes on average 0.17 ms after the deadline, where the polling
-  would have ended on it. On the dedicated server only: on the game the frame
-  pacing of the window has not been measured.
-- **Task workers.** The engine starts a task worker thread per logical CPU,
-  up to 8 per group plus the ECS queue. Under Wine those are the host's CPUs,
-  whatever the container's limit, so a server in a container limited to 4 CPUs
-  on a 32-thread host runs 8 workers per group that wake hundreds of times a
-  second each. With a CPU limit, the mod starts no more workers than the limit
-  rounded up, and at least 2. The game's own log shows the result:
-  `[task] Group 'Default' Worker:6 Main:2` is 4 workers and 2 main slots. The
-  dedicated server's own start-up waits for the loader, so the cap is in place
+- **Exact waits.** The engine's event loop waits for its next deadline in whole
+  milliseconds. With less than a millisecond left, it asks for a 0 ms wait again
+  and again until the deadline passes. This costs about 0.6 ms of every 60 Hz
+  frame of the main loop. It costs about 0.9 ms of every 5 ms of the network
+  session's loop, and 0.1 ms after every slow server pass. The mod sleeps for
+  that last fraction instead. Then it lets the game's own 0 ms wait run once, so
+  the game still sees every event. The mod waits on no handle of the game. Under
+  Wine the sleep is a plain Unix sleep. On Windows it is a high-resolution
+  timer, which wakes on average 0.17 ms after the deadline; the polling would
+  end on the deadline. By default, exact waits are on for the dedicated server
+  only, because the frame pacing of the game window has not been measured.
+- **Task workers.** The engine starts one task worker thread per logical CPU, up
+  to 8 per group, plus the ECS queue. Under Wine the engine counts the host's
+  CPUs and ignores the container's limit. A server in a container limited to 4
+  CPUs on a 32-thread host runs 8 workers per group. Each of them wakes hundreds
+  of times a second. With a CPU limit, the mod starts no more workers than the
+  limit rounded up, and at least 2. The game's own log shows the result:
+  `[task] Group 'Default' Worker:6 Main:2` means 4 workers and 2 main slots. The
+  dedicated server waits for the loader at start-up, so the cap is in place
   before the task system starts.
-- **Server wait cap.** With players online the server's game loop waits 1 ms
-  after each pass: 700 to 900 passes a second for 60 simulation steps. The cap
-  lets it wait longer, never past the next step: a wait can wake one timer
-  tick late (the timer resolution on Windows, a millisecond under Wine), so
-  the longer wait ends a tick and half a millisecond before the step is due,
-  and stays at 1 ms where that leaves less. Off by default everywhere:
-  what it saves was measured only with an emulated player (see below), and
-  what arrives between two steps may wait up to the cap.
-- **Measure mode.** A line a minute in the log and the status summary: the
-  platform and what runs on it, the CPU of the process, its main thread, the
-  server loop's thread and its busiest groups of threads, the loop and step
-  rates, the exact waits slept and how late they woke, and the server's "Bad
-  Performance" warnings.
+- **Server wait cap.** With players online, the server's game loop waits 1 ms
+  after each pass. That makes 700 to 900 passes a second for 60 simulation
+  steps. The cap lets the loop wait longer, but never past the next step. A wait
+  can wake one timer tick late: the timer resolution on Windows, or a
+  millisecond under Wine. So the longer wait ends one tick and half a
+  millisecond before the step is due. Where that leaves less than 1 ms, the wait
+  stays at 1 ms. The cap is off by default everywhere. Its saving was measured
+  only with an emulated player (see below). Input that arrives between two steps
+  can wait up to the cap.
+- **Measure mode.** The mod writes a line a minute to the log and the status
+  summary. The line holds the platform, the CPU of the process, its main thread,
+  the server loop's thread and its busiest thread groups. It also holds the loop
+  and step rates, the exact waits slept and how late they woke, and the server's
+  "Bad Performance" warnings.
 - **Environment report.** At start, one line names what the server runs on.
-  Under Wine: the Wine version and host, the fast synchronisation available
-  (ntsync, esync, fsync), the CPU governor, the container's CPU limit and the
-  CPUs the game saw, and a line of advice for each thing on the host that is
-  known to help and missing. On Windows: the logical CPUs.
+  Under Wine it names the Wine version and host, the fast synchronisation
+  available (ntsync, esync, fsync), the CPU governor, the container's CPU limit
+  and the CPUs the game saw. It adds a line of advice for each missing host
+  feature that is known to help. On Windows it names the logical CPUs.
 
-An earlier community fix made every wait of every thread longer; CPU went
-down, but players spawned under the ground and gliding broke. This mod does
-not do that: the exact waits only sleep time the game would have spent
+An earlier community fix made every wait of every thread longer. CPU use went
+down, but players spawned under the ground and gliding broke. This mod does not
+make waits longer. The exact waits sleep only for the time the game would spend
 polling, and the simulation keeps its 60 steps a second.
 
 ```text
@@ -76,12 +80,12 @@ info  [enshwick.optimizer] measure: Wine server: exact waits on, task workers at
 
 ## Settings
 
-`mod-configs/enshwick.optimizer.toml`, written on first start; each
-world keeps its own copy of it (see
-[Settings](https://github.com/enshwick/enshwick#settings)). On the first
-start the mod copies the settings it had under its former ids, `optimizer`
-or `proton-optimizer`. The mod's gear on the Mods screen shows them in the
-player's game language:
+The settings file is `mod-configs/enshwick.optimizer.toml`. The mod writes it on
+the first start. Each world keeps its own copy (see
+[Settings](https://github.com/enshwick/enshwick#settings)). On the first start,
+the mod copies the settings it had under its former ids, `optimizer` or
+`proton-optimizer`. The mod's gear on the Mods screen shows the settings in the
+player's game language.
 
 ```toml
 exact_waits = "auto"
@@ -90,51 +94,55 @@ server_wait_cap_ms = 1
 measure = true
 ```
 
-- `exact_waits`: `"auto"` where the table above says on, `"on"` everywhere,
-  the game included, `"off"` never. Turning them off takes effect at once;
-  turning them on takes effect at the next start if they were off at start.
+- `exact_waits`: `"auto"` turns them on where the table above says on. `"on"`
+  turns them on everywhere, the game included. `"off"` turns them off. Turning
+  them off takes effect at once. Turning them on takes effect at the next start
+  if they were off at start.
 - `task_workers`: the most workers each task group of the dedicated server
-  starts, 1 to 64. The server starts its workers once, so the value is read
-  from `mod-configs/enshwick.optimizer.toml` for every world, and a change
-  takes effect when the server starts again. 0 is automatic: the container's CPU limit
-  under Wine, rounded up and at least 2, else as many as the game picks.
-- `server_wait_cap_ms`: 1 to 8. 1 is vanilla. Before keeping more, check in
-  game that gliding, joining or respawning and combat feel the same. A change
-  applies at once, except a cap raised while the game started with it at 1
-  and `measure = false`: the server loop's wait is hooked only at start, so
-  that cap takes effect at the next start, and the log says so.
-- `measure`: the line a minute. It costs a few atomic counters and a look at
-  the threads once a minute.
+  starts, from 1 to 64. The server starts its workers once. So the mod reads
+  this value from `mod-configs/enshwick.optimizer.toml` for every world, and a
+  change takes effect at the next server start. 0 means automatic: under Wine,
+  the container's CPU limit rounded up and at least 2; otherwise as many as the
+  game picks.
+- `server_wait_cap_ms`: from 1 to 8. 1 is the base game. Before you keep a
+  higher value, check in the game that gliding, joining, respawning and combat
+  feel the same. A change applies at once, with one exception. The mod hooks the
+  server loop's wait only at start. If the game started with the cap at 1 and
+  `measure = false`, a higher cap takes effect at the next start, and the log
+  says so.
+- `measure`: the line a minute. It costs a few atomic counters and a look at the
+  threads once a minute.
 
-A setting that forces exact waits or a task worker cap where the table says
-off is logged as such.
+When a setting forces exact waits or a task worker cap where the table says off,
+the log says so.
 
 ## On the host
 
-The biggest wins under Wine are outside any mod:
+Under Wine, two host settings save more CPU than any mod:
 
 - **ntsync.** Recent Wine and Proton builds wait through the kernel's
   `/dev/ntsync` (Linux 6.14 and later) instead of the Wine server. Load the
-  module (`modprobe ntsync`), pass the device into the container
-  (`--device /dev/ntsync`) and check that the environment line says
-  `/dev/ntsync present`. Without it, fsync (`WINEFSYNC=1`, the default of
-  Proton) still beats the Wine server.
-- **The `performance` governor.** With `powersave` or `schedutil` the CPU
-  clocks down between the short bursts of a game loop, and every pass takes
-  longer. `cpupower frequency-set -g performance` on the host.
-- **CPU limits.** Wine counts the host's CPUs, not the container's limit. The
-  mod caps the task workers to the limit; a node of the size you want, with
-  requests and no limit, avoids the question.
+  module (`modprobe ntsync`) and pass the device into the container
+  (`--device /dev/ntsync`). Then check that the environment line says
+  `/dev/ntsync present`. Without ntsync, fsync (`WINEFSYNC=1`, the Proton
+  default) is still faster than the Wine server.
+- **The `performance` governor.** With `powersave` or `schedutil`, the CPU
+  lowers its clock between the short bursts of a game loop, and every pass takes
+  longer. Run `cpupower frequency-set -g performance` on the host.
+
+Wine also counts the host's CPUs, not the container's limit. The mod caps the
+task workers to the limit. A node of the size you want, with requests and no
+limit, avoids the problem.
 
 ## Measurements
 
-Idle dedicated server on a copy of a played world, nobody online, two runs
-of each, 3 minutes each after 2 minutes of loading; process CPU, 100 % being
-one core. Windows: Windows 11, Ryzen 9 9950X3D. Proton: the
-`mornedhels/enshrouded-server:stable-proton` image (GE-Proton 11-9, Wine
-11.0, fsync, no ntsync) in Docker Desktop's Hyper-V virtual machine with 16
-CPUs on the same machine; compare those rows with each other, not with
-Windows.
+The test server was idle, on a copy of a played world, with nobody online. Each
+setup ran twice, 3 minutes each after 2 minutes of loading. The tables show
+process CPU, where 100 % is one core. Windows: Windows 11, Ryzen 9 9950X3D.
+Proton: the `mornedhels/enshrouded-server:stable-proton` image (GE-Proton 11-9,
+Wine 11.0, fsync, no ntsync) in Docker Desktop's Hyper-V virtual machine with 16
+CPUs on the same machine. Compare the Proton rows with each other, not with the
+Windows rows.
 
 | Server and settings                            | CPU    | Busiest threads                                   |
 | ---------------------------------------------- | ------ | ------------------------------------------------- |
@@ -150,53 +158,55 @@ Windows.
 | Proton, 4-CPU limit, exact waits only          | 16.5 % | Task-Default x8 10.0 %, GameServer 3.5 %          |
 | Proton, 4-CPU limit, defaults (4 task workers) | 6.7 %  | GameServer 2.3 %, Task-Default x4 1.3 %           |
 
-Every run kept 24 simulation steps a second (the idle rate) and logged no Bad
-Performance warning. The exact waits slept about 240 times a second on
-Windows and 260 under Proton, for about 0.9 ms each, and woke on average
-0.17 ms after the deadline on Windows and 0.08 ms under Proton.
+Every run kept 24 simulation steps a second, the idle rate, and logged no Bad
+Performance warning. The exact waits slept about 240 times a second on Windows
+and 260 times under Proton, for about 0.9 ms each. They woke on average 0.17 ms
+after the deadline on Windows and 0.08 ms under Proton.
 
-With players online the server loop runs 700 to 900 passes a second. With
-that loop emulated (the server loop forced to its online wait; real players
-were not available), one run each: under Proton the process used 49.8 % with
-everything off, 20.0 % with the defaults and 14.6 % with `task_workers = 4`;
-with a 4-CPU limit 20.1 % with exact waits only and 10.9 % with the defaults.
-The server wait cap at 4 ms took the Proton server from 29.6 % to 20.3 % but
-changed nothing measurable on Windows, so it waits for a check with real
-players. Capping the task workers on a server without a CPU limit halves
-idle CPU again, but its cost with players was not measured, so it stays a
-setting there.
+With players online, the server loop runs 700 to 900 passes a second. Real
+players were not available, so the online loop was emulated: the server loop was
+forced to its online wait. Each setup ran once. Under Proton the process used
+49.8 % with everything off, 20.0 % with the defaults and 14.6 % with
+`task_workers = 4`. With a 4-CPU limit it used 20.1 % with exact waits only and
+10.9 % with the defaults. The server wait cap at 4 ms took the Proton server
+from 29.6 % to 20.3 %. On Windows it changed nothing measurable, so it stays off
+until a check with real players. On a server without a CPU limit, a task worker
+cap halves idle CPU again. Its cost with players was not measured, so there it
+stays a setting.
 
 ## How to measure your own server
 
-Compare a run with a change on against one with it off, on a test copy of
-the server, never on the server people play on:
+Compare a run with a change on against a run with it off. Use a test copy of the
+server, never the server people play on:
 
-1. Copy the server and a copy of the save to a test instance with the same
-   image and tag.
-2. Start it with the change off, let it load, and keep it running a few
-   minutes idle, then a few minutes with one player standing still. Note the
-   `measure:` lines in `logs/enshwick/mods/enshwick.optimizer.log`.
-3. Turn the change on, restart, repeat.
-4. Compare the process and thread CPU and the Bad Performance count. On a
-   Linux host, `pidstat -t -p <pid> 5` shows each thread and `ps -o %cpu -C
-   wineserver` the Wine server.
+1. Copy the server and its save to a test instance with the same image and tag.
+2. Start it with the change off and let it load. Keep it running a few minutes
+   idle, then a few minutes with one player standing still. Note the `measure:`
+   lines in `logs/enshwick/mods/enshwick.optimizer.log`.
+3. Turn the change on, restart and repeat.
+4. Compare the process and thread CPU and the Bad Performance count. On a Linux
+   host, `pidstat -t -p <pid> 5` shows each thread, and
+   `ps -o %cpu -C wineserver` shows the Wine server.
 
 ## Install
 
-Download [`enshwick-optimizer.zip`](https://github.com/enshwick/mod-optimizer/releases/download/dev/enshwick-optimizer.zip)
+Download
+[`enshwick-optimizer.zip`](https://github.com/enshwick/mod-optimizer/releases/download/dev/enshwick-optimizer.zip)
 and extract it into the folder that holds `enshrouded.exe` or
-`enshrouded_server.exe`. It needs Enshwick Loader:
+`enshrouded_server.exe`. The mod needs the Enshwick loader. Get
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)
-alone, or [`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-with every mod. These are development builds of the newest commit: until
-the first release, 1.0.0, there are no others.
+for the loader alone, or
+[`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
+for the loader with every mod. These files are development builds of the newest
+commit. Until the first release, 1.0.0, there are no other builds.
 
 ## Who needs it
 
-The dedicated server. In the game, hosting a game or not, every change is
-off by default, as the table says, since none was measured there; a setting
-forces one on (the task workers stay as the game picks, which only the
-dedicated server lets the mod change), and measure mode and the environment
-line run. Players need nothing, and it does not count in the join check.
+The dedicated server needs it. In the game, hosted or not, every change is off
+by default, as the table shows, because none was measured there. A setting can
+force a change on. The task workers stay as the game picks them, because only
+the dedicated server lets the mod change them. Measure mode and the environment
+line run in the game too. Players need nothing, and the mod does not count in
+the join check.
 
 Licensed under [MIT](LICENSE).

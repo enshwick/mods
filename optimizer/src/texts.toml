@@ -15,9 +15,9 @@
 "config.measure.doc" = "A line a minute in the log and the status summary: CPU by thread group, loop and step rates, exact waits and the server's Bad Performance warnings."
 
 [uk]
-"mod.name" = "Оптимізатор"
+"mod.name" = "Optimizer"
 "mod.description" = "Виділений сервер витрачає менше CPU, на Windows і під Wine чи Proton."
-"config" = "Оптимізатор"
+"config" = "Optimizer"
 "config.exact_waits" = "Точні очікування"
 "config.exact_waits.doc" = "Короткі очікування в циклі подій гри сплять, а не опитують. Авто: там, де вимірювання показали користь. Увімкнено: всюди, і в грі. Вимкнено: ніде. Увімкнення діє з наступного запуску, якщо на старті вони були вимкнені."
 "config.exact_waits.auto" = "Авто"
@@ -31,9 +31,9 @@
 "config.measure.doc" = "Рядок щохвилини в журналі та у зведенні стану: CPU за групами потоків, частота циклу й кроків, точні очікування та попередження сервера Bad Performance."
 
 [de]
-"mod.name" = "Optimierer"
+"mod.name" = "Optimizer"
 "mod.description" = "Ein dedizierter Server braucht weniger CPU, unter Windows und unter Wine oder Proton."
-"config" = "Optimierer"
+"config" = "Optimizer"
 "config.exact_waits" = "Exakte Wartezeiten"
 "config.exact_waits.doc" = "Kurze Wartezeiten in der Ereignisschleife des Spiels schlafen, statt abzufragen. Auto: wo Messungen einen Nutzen zeigten. An: überall, auch im Spiel. Aus: nie. Das Einschalten gilt ab dem nächsten Start, wenn sie beim Start aus waren."
 "config.exact_waits.auto" = "Auto"
@@ -47,9 +47,9 @@
 "config.measure.doc" = "Eine Zeile pro Minute im Log und in der Statusübersicht: CPU nach Threadgruppe, Schleifen- und Schrittraten, exakte Wartezeiten und die Bad-Performance-Warnungen des Servers."
 
 [fr]
-"mod.name" = "Optimiseur"
+"mod.name" = "Optimizer"
 "mod.description" = "Un serveur dédié utilise moins de CPU, sous Windows et sous Wine ou Proton."
-"config" = "Optimiseur"
+"config" = "Optimizer"
 "config.exact_waits" = "Attentes exactes"
 "config.exact_waits.doc" = "Les attentes courtes de la boucle d'événements du jeu dorment au lieu d'interroger. Auto : là où les mesures ont montré un gain. Activé : partout, jeu compris. Désactivé : jamais. Les activer prend effet au prochain lancement si elles étaient désactivées au lancement."
 "config.exact_waits.auto" = "Auto"
@@ -63,9 +63,9 @@
 "config.measure.doc" = "Une ligne par minute dans le journal et le résumé d'état : CPU par groupe de threads, fréquences de boucle et d'étape, attentes exactes et avertissements Bad Performance du serveur."
 
 [it]
-"mod.name" = "Ottimizzatore"
+"mod.name" = "Optimizer"
 "mod.description" = "Un server dedicato usa meno CPU, su Windows e sotto Wine o Proton."
-"config" = "Ottimizzatore"
+"config" = "Optimizer"
 "config.exact_waits" = "Attese esatte"
 "config.exact_waits.doc" = "Le attese brevi nel ciclo degli eventi del gioco dormono invece di interrogare. Auto: dove le misure hanno mostrato un vantaggio. Attivo: ovunque, gioco compreso. Disattivo: mai. Attivarle vale dal prossimo avvio se all'avvio erano disattivate."
 "config.exact_waits.auto" = "Auto"
@@ -79,9 +79,9 @@
 "config.measure.doc" = "Una riga al minuto nel log e nel riepilogo di stato: CPU per gruppo di thread, frequenze di ciclo e di passo, attese esatte e avvisi Bad Performance del server."
 
 [es]
-"mod.name" = "Optimizador"
+"mod.name" = "Optimizer"
 "mod.description" = "Un servidor dedicado usa menos CPU, en Windows y bajo Wine o Proton."
-"config" = "Optimizador"
+"config" = "Optimizer"
 "config.exact_waits" = "Esperas exactas"
 "config.exact_waits.doc" = "Las esperas cortas del bucle de eventos del juego duermen en vez de sondear. Auto: donde las mediciones mostraron que ayudan. Activado: en todas partes, también en el juego. Desactivado: nunca. Activarlas se aplica en el próximo inicio si estaban desactivadas al iniciar."
 "config.exact_waits.auto" = "Auto"
@@ -95,9 +95,9 @@
 "config.measure.doc" = "Una línea por minuto en el registro y en el resumen de estado: CPU por grupo de hilos, frecuencias de bucle y de paso, esperas exactas y los avisos Bad Performance del servidor."
 
 [ru]
-"mod.name" = "Оптимизатор"
+"mod.name" = "Optimizer"
 "mod.description" = "Выделенный сервер тратит меньше CPU, на Windows и под Wine или Proton."
-"config" = "Оптимизатор"
+"config" = "Optimizer"
 "config.exact_waits" = "Точные ожидания"
 "config.exact_waits.doc" = "Короткие ожидания в цикле событий игры спят, а не опрашивают. Авто: там, где замеры показали пользу. Вкл.: везде, в том числе в игре. Выкл.: нигде. Включение действует со следующего запуска, если при запуске они были выключены."
 "config.exact_waits.auto" = "Авто"
@@ -111,9 +111,9 @@
 "config.measure.doc" = "Строка в минуту в журнале и в сводке состояния: CPU по группам потоков, частота цикла и шагов, точные ожидания и предупреждения сервера Bad Performance."
 
 [pl]
-"mod.name" = "Optymalizator"
+"mod.name" = "Optimizer"
 "mod.description" = "Serwer dedykowany zużywa mniej CPU, w Windows oraz pod Wine lub Proton."
-"config" = "Optymalizator"
+"config" = "Optimizer"
 "config.exact_waits" = "Dokładne oczekiwania"
 "config.exact_waits.doc" = "Krótkie oczekiwania w pętli zdarzeń gry śpią zamiast odpytywać. Auto: tam, gdzie pomiary wykazały korzyść. Wł.: wszędzie, także w grze. Wył.: nigdy. Włączenie działa od następnego uruchomienia, jeśli przy starcie były wyłączone."
 "config.exact_waits.auto" = "Auto"
@@ -127,9 +127,9 @@
 "config.measure.doc" = "Wiersz na minutę w dzienniku i w podsumowaniu stanu: CPU według grup wątków, częstotliwości pętli i kroków, dokładne oczekiwania oraz ostrzeżenia serwera Bad Performance."
 
 [ja]
-"mod.name" = "オプティマイザー"
+"mod.name" = "Optimizer"
 "mod.description" = "専用サーバーのCPU使用量を減らします。Windowsでも、WineやProton上でも動作します。"
-"config" = "オプティマイザー"
+"config" = "Optimizer"
 "config.exact_waits" = "正確な待機"
 "config.exact_waits.doc" = "ゲームのイベントループ内の短い待機を、ポーリングではなくスリープで行います。自動：測定で効果があった場所のみ。オン：ゲームを含むすべての場所。オフ：使用しません。起動時にオフだった場合、オンにした設定は次回の起動から反映されます。"
 "config.exact_waits.auto" = "自動"
@@ -143,9 +143,9 @@
 "config.measure.doc" = "ログとステータス概要に1分ごとに1行：スレッドグループ別のCPU、ループとステップの頻度、正確な待機、サーバーのBad Performance警告。"
 
 [ko]
-"mod.name" = "최적화 도구"
+"mod.name" = "Optimizer"
 "mod.description" = "전용 서버가 Windows와 Wine 또는 Proton에서 CPU를 덜 사용합니다."
-"config" = "최적화 도구"
+"config" = "Optimizer"
 "config.exact_waits" = "정밀 대기"
 "config.exact_waits.doc" = "게임 이벤트 루프의 짧은 대기를 폴링 대신 슬립으로 처리합니다. 자동: 측정에서 효과가 확인된 곳에서만. 켜기: 게임을 포함한 모든 곳. 끄기: 사용 안 함. 시작할 때 꺼져 있었다면 켠 설정은 다음 시작부터 적용됩니다."
 "config.exact_waits.auto" = "자동"
@@ -159,9 +159,9 @@
 "config.measure.doc" = "로그와 상태 요약에 1분마다 한 줄: 스레드 그룹별 CPU, 루프와 단계 빈도, 정밀 대기, 서버의 Bad Performance 경고."
 
 [pt-br]
-"mod.name" = "Otimizador"
+"mod.name" = "Optimizer"
 "mod.description" = "Um servidor dedicado usa menos CPU, no Windows e no Wine ou Proton."
-"config" = "Otimizador"
+"config" = "Optimizer"
 "config.exact_waits" = "Esperas exatas"
 "config.exact_waits.doc" = "Esperas curtas no loop de eventos do jogo dormem em vez de consultar. Auto: onde as medições mostraram ganho. Ligado: em todo lugar, inclusive no jogo. Desligado: nunca. Ligá-las vale a partir do próximo início se estavam desligadas no início."
 "config.exact_waits.auto" = "Auto"
@@ -175,9 +175,9 @@
 "config.measure.doc" = "Uma linha por minuto no log e no resumo de status: CPU por grupo de threads, taxas de loop e de passo, esperas exatas e os avisos Bad Performance do servidor."
 
 [th]
-"mod.name" = "ตัวเพิ่มประสิทธิภาพ"
+"mod.name" = "Optimizer"
 "mod.description" = "เซิร์ฟเวอร์เฉพาะใช้ CPU น้อยลง ทั้งบน Windows และใต้ Wine หรือ Proton"
-"config" = "ตัวเพิ่มประสิทธิภาพ"
+"config" = "Optimizer"
 "config.exact_waits" = "การรอแบบแม่นยำ"
 "config.exact_waits.doc" = "การรอสั้น ๆ ในลูปเหตุการณ์ของเกมจะพักแทนการตรวจซ้ำ อัตโนมัติ: เฉพาะที่การวัดพบว่าช่วยได้ เปิด: ทุกที่ รวมถึงในเกม ปิด: ไม่ใช้เลย การเปิดจะมีผลเมื่อเริ่มครั้งถัดไป หากตอนเริ่มปิดอยู่"
 "config.exact_waits.auto" = "อัตโนมัติ"
@@ -191,9 +191,9 @@
 "config.measure.doc" = "หนึ่งบรรทัดต่อนาทีในล็อกและสรุปสถานะ: CPU ตามกลุ่มเธรด อัตราลูปและขั้น การรอแบบแม่นยำ และคำเตือน Bad Performance ของเซิร์ฟเวอร์"
 
 [tr]
-"mod.name" = "Optimize edici"
+"mod.name" = "Optimizer"
 "mod.description" = "Adanmış sunucu Windows'ta ve Wine ya da Proton altında daha az CPU kullanır."
-"config" = "Optimize edici"
+"config" = "Optimizer"
 "config.exact_waits" = "Tam beklemeler"
 "config.exact_waits.doc" = "Oyunun olay döngüsündeki kısa beklemeler yoklamak yerine uyur. Otomatik: ölçümlerin fayda gösterdiği yerlerde. Açık: oyun dahil her yerde. Kapalı: hiçbir zaman. Başlangıçta kapalıysa açmak bir sonraki başlatmada geçerli olur."
 "config.exact_waits.auto" = "Otomatik"
@@ -207,9 +207,9 @@
 "config.measure.doc" = "Günlükte ve durum özetinde dakikada bir satır: iş parçacığı grubuna göre CPU, döngü ve adım hızları, tam beklemeler ve sunucunun Bad Performance uyarıları."
 
 [zh-cn]
-"mod.name" = "优化器"
+"mod.name" = "Optimizer"
 "mod.description" = "专用服务器占用更少的 CPU，适用于 Windows 以及 Wine 或 Proton。"
-"config" = "优化器"
+"config" = "Optimizer"
 "config.exact_waits" = "精确等待"
 "config.exact_waits.doc" = "游戏事件循环中的短等待改为休眠，而不是轮询。自动：仅在测量显示有效的地方。开：所有地方，包括游戏。关：从不。若启动时为关，开启后将在下次启动时生效。"
 "config.exact_waits.auto" = "自动"
@@ -223,9 +223,9 @@
 "config.measure.doc" = "每分钟在日志和状态摘要中写一行：按线程组的 CPU、循环和步进频率、精确等待以及服务器的 Bad Performance 警告。"
 
 [zh-tw]
-"mod.name" = "最佳化工具"
+"mod.name" = "Optimizer"
 "mod.description" = "專用伺服器佔用更少的 CPU，適用於 Windows 以及 Wine 或 Proton。"
-"config" = "最佳化工具"
+"config" = "Optimizer"
 "config.exact_waits" = "精確等待"
 "config.exact_waits.doc" = "遊戲事件迴圈中的短等待改為休眠，而不是輪詢。自動：僅在量測顯示有效的地方。開：所有地方，包括遊戲。關：從不。若啟動時為關，開啟後將在下次啟動時生效。"
 "config.exact_waits.auto" = "自動"

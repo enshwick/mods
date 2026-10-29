@@ -46,9 +46,9 @@ start, a log line names what your host lacks.
 
 ## Install
 
-Optimizer comes in enshwick.zip, and the
+Optimizer comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It needs Enshwick.
 
 ## Settings
 

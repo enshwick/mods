@@ -33,7 +33,7 @@ resolver = "3"
 
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.
-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "fd94a463c4dbcc232e41dd4f03859062d1eaeeb2" }
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "bc575f6a126a0349dd9dc2fcc640ab98fb7ceaa4" }
 
 
 [workspace.lints.rust]

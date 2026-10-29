@@ -75,6 +75,10 @@ vanilla zone, even next to other altars. `clusters` applies when the world
 loads: each world uses its own value, with no restart. `building_across_seams`
 applies while the game runs.
 
+The mod works out the clusters on a thread of its own. If that thread cannot
+start, the log says so, clusters stay off in that world and every altar keeps
+its vanilla zone.
+
 ## What happens past 16 altars?
 
 The vanilla game puts the zones of only its first 16 altars into bases, and it

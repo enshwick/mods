@@ -73,6 +73,13 @@ impl State {
         self.solved = Some(input);
         true
     }
+
+    /// Turns clusters off after a solve that could not start, so no later
+    /// change of the altars tries again in this world.
+    fn fail_start(&mut self) {
+        self.solving = false;
+        self.switch(false);
+    }
 }
 
 /// What the mod grows one altar's zone by while it stays at one level.
@@ -226,8 +233,12 @@ fn maybe_solve(state: &mut State, zones: ZoneSizes) {
             // The altars may have moved on while this ran.
             maybe_solve(&mut state, zones);
         });
-    if spawned.is_err() {
-        state.solving = false;
+    if let Err(error) = spawned {
+        state.fail_start();
+        publish(zones, Vec::new());
+        enshwick::warn!(
+            "the solver thread did not start: {error}; clusters are off in this world and every altar keeps its vanilla zone"
+        );
     }
 }
 
@@ -344,6 +355,21 @@ mod tests {
         assert!(!state.finish(started, input.clone()));
         assert!(!state.wants(&input));
         // A world with clusters on again solves the same altars afresh.
+        assert!(state.switch(true));
+        assert!(state.wants(&input));
+    }
+
+    #[test]
+    fn a_solve_that_cannot_start_turns_clusters_off_until_the_next_world() {
+        let mut input = Input::new();
+        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        let mut state = State::new();
+        assert!(state.switch(true));
+        state.solving = true;
+        state.fail_start();
+        assert!(!state.solving);
+        assert!(!state.wants(&input), "no retry on the next altar change");
+        // The next world with clusters on solves its altars.
         assert!(state.switch(true));
         assert!(state.wants(&input));
     }

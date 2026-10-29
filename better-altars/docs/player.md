@@ -45,7 +45,7 @@ zones work as bases.
 
 Better Altars comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick. Delete More Altars and Flame altar zones: Better
+put it. It needs Enshwick. Delete More Altars and Flame altar zones: Better
 Altars takes over their settings.
 
 ## Settings
@@ -62,7 +62,7 @@ your bases.
 **The zones did not grow after you changed `clusters`.** Load the world again.
 
 **A dedicated server stops before a world with more than 16 altars loads.**
-Update enshwick and the mod. `logs/enshwick/loader.log` says why.
+Update Enshwick and the mod. `logs/enshwick/loader.log` says why.
 
 **Anything else.** Open an issue in the
 [mod's repository](https://github.com/enshwick/mod-better-altars/issues). Attach

@@ -20,9 +20,9 @@
 "off.thread" = "Better Altars could not start watching the altars: {error}."
 
 [de]
-"mod.name" = "Bessere Altäre"
+"mod.name" = "Better Altars"
 "mod.description" = "Mehr Flammenaltäre pro Flammenstufe; Altarzonen, die sich berühren, wachsen zusammen, und man kann über ihre Grenze bauen."
-"config" = "Bessere Altäre"
+"config" = "Better Altars"
 "config.count" = "Anzahl der Altäre"
 "config.count.doc" = "Wie viele Flammenaltäre jede Flammenstufe erlaubt."
 "config.count.altars_per_flame_level" = "Altäre pro Flammenstufe"
@@ -41,9 +41,9 @@
 "off.thread" = "Better Altars konnte die Beobachtung der Altäre nicht starten: {error}."
 
 [fr]
-"mod.name" = "Meilleurs autels"
+"mod.name" = "Better Altars"
 "mod.description" = "Plus d'Autels de la Flamme par niveau de Flamme ; les zones d'autels qui se touchent grandissent ensemble et l'on peut bâtir à cheval sur leur limite."
-"config" = "Meilleurs autels"
+"config" = "Better Altars"
 "config.count" = "Nombre d'autels"
 "config.count.doc" = "Combien d'Autels de la Flamme chaque niveau de Flamme permet."
 "config.count.altars_per_flame_level" = "Autels par niveau de Flamme"
@@ -62,9 +62,9 @@
 "off.thread" = "Better Altars n'a pas pu commencer à surveiller les autels : {error}."
 
 [it]
-"mod.name" = "Altari migliori"
+"mod.name" = "Better Altars"
 "mod.description" = "Più Altari della Fiamma per livello della Fiamma; le zone degli altari che si toccano crescono insieme e si può costruire a cavallo del confine."
-"config" = "Altari migliori"
+"config" = "Better Altars"
 "config.count" = "Numero di altari"
 "config.count.doc" = "Quanti Altari della Fiamma consente ogni livello della Fiamma."
 "config.count.altars_per_flame_level" = "Altari per livello della Fiamma"
@@ -83,9 +83,9 @@
 "off.thread" = "Better Altars non è riuscito ad avviare il controllo degli altari: {error}."
 
 [es]
-"mod.name" = "Mejores altares"
+"mod.name" = "Better Altars"
 "mod.description" = "Más Altares de la Llama por nivel de Llama; las zonas de altar que se tocan crecen juntas y se puede construir sobre su unión."
-"config" = "Mejores altares"
+"config" = "Better Altars"
 "config.count" = "Número de altares"
 "config.count.doc" = "Cuántos Altares de la Llama permite cada nivel de Llama."
 "config.count.altars_per_flame_level" = "Altares por nivel de Llama"
@@ -104,9 +104,9 @@
 "off.thread" = "Better Altars no pudo empezar a vigilar los altares: {error}."
 
 [ru]
-"mod.name" = "Улучшенные алтари"
+"mod.name" = "Better Altars"
 "mod.description" = "Больше алтарей пламени на уровень пламени; соприкасающиеся зоны алтарей растут вместе, и через их границу можно строить."
-"config" = "Улучшенные алтари"
+"config" = "Better Altars"
 "config.count" = "Число алтарей"
 "config.count.doc" = "Сколько алтарей пламени позволяет каждый уровень пламени."
 "config.count.altars_per_flame_level" = "Алтари по уровню пламени"
@@ -125,9 +125,9 @@
 "off.thread" = "Better Altars не смог начать следить за алтарями: {error}."
 
 [pl]
-"mod.name" = "Lepsze ołtarze"
+"mod.name" = "Better Altars"
 "mod.description" = "Więcej Ołtarzy Płomienia na poziom Płomienia; stykające się strefy ołtarzy rosną razem i można budować na ich granicy."
-"config" = "Lepsze ołtarze"
+"config" = "Better Altars"
 "config.count" = "Liczba ołtarzy"
 "config.count.doc" = "Ile Ołtarzy Płomienia pozwala postawić każdy poziom Płomienia."
 "config.count.altars_per_flame_level" = "Ołtarze na poziom Płomienia"
@@ -146,9 +146,9 @@
 "off.thread" = "Better Altars nie mógł zacząć śledzić ołtarzy: {error}."
 
 [ja]
-"mod.name" = "祭壇強化"
+"mod.name" = "Better Altars"
 "mod.description" = "炎レベルごとに置ける炎の祭壇を増やし、接している祭壇エリアを一緒に広げて、その境目をまたいで建築できるようにします。"
-"config" = "祭壇強化"
+"config" = "Better Altars"
 "config.count" = "祭壇の数"
 "config.count.doc" = "各炎レベルで置ける炎の祭壇の数です。"
 "config.count.altars_per_flame_level" = "炎レベルごとの祭壇数"
@@ -167,9 +167,9 @@
 "off.thread" = "Better Altarsは祭壇の監視を開始できませんでした：{error}"
 
 [ko]
-"mod.name" = "향상된 제단"
+"mod.name" = "Better Altars"
 "mod.description" = "불꽃 레벨마다 더 많은 불꽃 제단을 허용하고, 맞닿은 제단 구역은 함께 커지며 경계를 넘어 건축할 수 있습니다."
-"config" = "향상된 제단"
+"config" = "Better Altars"
 "config.count" = "제단 수"
 "config.count.doc" = "불꽃 레벨마다 허용되는 불꽃 제단 수입니다."
 "config.count.altars_per_flame_level" = "불꽃 레벨별 제단 수"
@@ -188,9 +188,9 @@
 "off.thread" = "Better Altars가 제단 감시를 시작하지 못했습니다: {error}"
 
 [pt-br]
-"mod.name" = "Altares Melhores"
+"mod.name" = "Better Altars"
 "mod.description" = "Mais Altares da Chama por nível da Chama; zonas de altar que se tocam crescem juntas e permitem construir sobre a divisa."
-"config" = "Altares Melhores"
+"config" = "Better Altars"
 "config.count" = "Número de altares"
 "config.count.doc" = "Quantos Altares da Chama cada nível da Chama permite."
 "config.count.altars_per_flame_level" = "Altares por nível da Chama"
@@ -209,9 +209,9 @@
 "off.thread" = "O Better Altars não conseguiu começar a acompanhar os altares: {error}."
 
 [th]
-"mod.name" = "แท่นบูชาที่ดีขึ้น"
+"mod.name" = "Better Altars"
 "mod.description" = "เพิ่มจำนวนแท่นบูชาเปลวไฟต่อระดับเปลวไฟ และเขตแท่นบูชาที่ติดกันจะขยายไปด้วยกันและสร้างข้ามรอยต่อได้"
-"config" = "แท่นบูชาที่ดีขึ้น"
+"config" = "Better Altars"
 "config.count" = "จำนวนแท่นบูชา"
 "config.count.doc" = "จำนวนแท่นบูชาเปลวไฟที่แต่ละระดับเปลวไฟอนุญาต"
 "config.count.altars_per_flame_level" = "แท่นบูชาต่อระดับเปลวไฟ"
@@ -230,9 +230,9 @@
 "off.thread" = "Better Altars เริ่มติดตามแท่นบูชาไม่ได้: {error}"
 
 [tr]
-"mod.name" = "Daha İyi Sunaklar"
+"mod.name" = "Better Altars"
 "mod.description" = "Alev Seviyesi başına daha fazla Alev Sunağı; birbirine değen sunak alanları birlikte büyür ve sınırları üzerine inşa edilebilir."
-"config" = "Daha İyi Sunaklar"
+"config" = "Better Altars"
 "config.count" = "Sunak sayısı"
 "config.count.doc" = "Her Alev Seviyesinin izin verdiği Alev Sunağı sayısı."
 "config.count.altars_per_flame_level" = "Alev Seviyesi başına sunak"
@@ -251,9 +251,9 @@
 "off.thread" = "Better Altars sunakları izlemeye başlayamadı: {error}."
 
 [zh-cn]
-"mod.name" = "更好的祭坛"
+"mod.name" = "Better Altars"
 "mod.description" = "每个火焰等级可放置更多火焰祭坛；相接的祭坛区域一起扩展，并可跨越接缝建造。"
-"config" = "更好的祭坛"
+"config" = "Better Altars"
 "config.count" = "祭坛数量"
 "config.count.doc" = "每个火焰等级允许的火焰祭坛数量。"
 "config.count.altars_per_flame_level" = "各火焰等级的祭坛数"
@@ -272,9 +272,9 @@
 "off.thread" = "Better Altars 无法开始监视祭坛：{error}"
 
 [zh-tw]
-"mod.name" = "更好的祭壇"
+"mod.name" = "Better Altars"
 "mod.description" = "每個火焰等級可放置更多火焰祭壇；相接的祭壇區域一起擴展，並可跨越接縫建造。"
-"config" = "更好的祭壇"
+"config" = "Better Altars"
 "config.count" = "祭壇數量"
 "config.count.doc" = "每個火焰等級允許的火焰祭壇數量。"
 "config.count.altars_per_flame_level" = "各火焰等級的祭壇數"
@@ -293,9 +293,9 @@
 "off.thread" = "Better Altars 無法開始監視祭壇：{error}"
 
 [uk]
-"mod.name" = "Кращі олтарі"
+"mod.name" = "Better Altars"
 "mod.description" = "Більше Олтарів Полумʼя на Рівень Полумʼя; зони олтарів, що торкаються, ростуть разом, і через їхні шви можна будувати."
-"config" = "Кращі олтарі"
+"config" = "Better Altars"
 "config.count" = "Кількість олтарів"
 "config.count.doc" = "Скільки Олтарів Полумʼя дозволяє кожен Рівень Полумʼя."
 "config.count.altars_per_flame_level" = "Олтарі за Рівнем Полумʼя"

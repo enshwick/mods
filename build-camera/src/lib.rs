@@ -189,4 +189,27 @@ mod tests {
         );
         assert!(loader.faults().is_empty());
     }
+
+    #[test]
+    fn a_build_without_the_skill_turns_the_mod_off_and_fly_mode_stays_vanilla() {
+        // No `skill.airborne_architect` constant: the host refuses the
+        // override, so the mod turns off with the reason and answers nothing.
+        let loader = enshwick::test::FakeHost::new()
+            .settings("enabled = true\n")
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_ne!(status, Status::OK);
+        let faults = loader.faults();
+        assert_eq!(faults.len(), 1, "{faults:?}");
+        assert!(faults[0].contains("skill.airborne_architect"), "{faults:?}");
+        let answer = loader.skill(&RawCheck {
+            header: Header::of::<RawCheck>(),
+            node: NODE,
+            gate: RawCheck::FLY_MODE,
+            unlocked: 0,
+            reserved: [0; 3],
+        });
+        assert_eq!(answer, RawCheck::VANILLA);
+    }
 }

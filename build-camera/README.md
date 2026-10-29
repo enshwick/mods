@@ -20,6 +20,10 @@ Everything else works as in vanilla:
   refund points spent on it.
 - Other skills and their prerequisites do not change.
 
+If a game version does not have the Airborne Architect skill where the mod
+expects it, the mod turns off and the Mods screen shows the reason. Fly mode
+then needs the skill, as in vanilla.
+
 ## Settings
 
 The settings file is `mod-configs/enshwick.build-camera.toml`. The mod writes it

@@ -81,4 +81,4 @@ dump_interval_ms = 1000
 max_dumps = 300
 ```
 
-Licensed under [MIT](../../LICENSE).
+Licensed under [MIT](../LICENSE).

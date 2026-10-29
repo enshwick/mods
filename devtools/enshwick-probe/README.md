@@ -123,4 +123,4 @@ keep_across_restart = false
 `enabled` is off by default: until it is `true` the probe does nothing, no
 checks, counts or actions, and the other settings have no effect.
 
-Licensed under [MIT](../../LICENSE).
+Licensed under [MIT](../LICENSE).

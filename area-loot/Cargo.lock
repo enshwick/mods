@@ -130,7 +130,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=8138040baba277a94e1000b9933584fb1f4779e2#8138040baba277a94e1000b9933584fb1f4779e2"
+source = "git+https://github.com/enshwick/enshwick?rev=fd94a463c4dbcc232e41dd4f03859062d1eaeeb2#fd94a463c4dbcc232e41dd4f03859062d1eaeeb2"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -163,7 +163,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=8138040baba277a94e1000b9933584fb1f4779e2#8138040baba277a94e1000b9933584fb1f4779e2"
+source = "git+https://github.com/enshwick/enshwick?rev=fd94a463c4dbcc232e41dd4f03859062d1eaeeb2#fd94a463c4dbcc232e41dd4f03859062d1eaeeb2"
 dependencies = [
  "proc-macro2",
  "quote",

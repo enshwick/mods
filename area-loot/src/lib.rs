@@ -68,14 +68,11 @@ impl Mod for AreaLoot {
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
-        let settings: Settings = load.config()?;
-        take::apply(&settings);
-        take::link(load)?;
-        load.on_config_change(|settings: Settings| {
-            take::apply(&settings);
-            describe(&settings);
+        load.apply_config(|settings: &Settings| {
+            take::apply(settings);
+            describe(settings);
         })?;
-        describe(&settings);
+        take::link(load)?;
         Ok(Self)
     }
 }

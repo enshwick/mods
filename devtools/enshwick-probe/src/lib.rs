@@ -325,7 +325,13 @@ fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> 
 
 impl Mod for Probe {
     fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(id: "enshwick.probe", side: SERVER, name: "Probe", was: ["probe"])
+        enshwick::manifest!(
+            id: "enshwick.probe",
+            side: SERVER,
+            name: "Probe",
+            developer: true,
+            was: ["probe"],
+        )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
@@ -425,6 +431,12 @@ mod tests {
         // SAFETY: the exports of the `declare_mod!` below.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         (status, loader)
+    }
+
+    #[test]
+    fn the_probe_is_a_developer_tool() {
+        let flags = Probe::manifest().flags;
+        assert!(flags.contains(enshwick::abi::ManifestFlags::DEVELOPER));
     }
 
     #[test]

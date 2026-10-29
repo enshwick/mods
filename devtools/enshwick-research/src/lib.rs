@@ -129,6 +129,7 @@ impl Mod for Research {
             id: "enshwick.research",
             side: BOTH,
             name: "Research",
+            developer: true,
             was: ["research"],
             builds: [{
                 side: CLIENT,
@@ -287,6 +288,12 @@ mod tests {
         // SAFETY: the exports of the `declare_mod!` below.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         (status, loader)
+    }
+
+    #[test]
+    fn the_research_mod_is_a_developer_tool() {
+        let flags = Research::manifest().flags;
+        assert!(flags.contains(enshwick::abi::ManifestFlags::DEVELOPER));
     }
 
     #[test]

@@ -41,9 +41,9 @@ F7. Вікно покаже гравців онлайн, кожного з пе�
 
 ## Встановлення
 
-Personal Safes входить в enshwick.zip, а
-[посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод працює на enshwick.
+Personal Safes входить в enshwick.zip.
+[Посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
+показує, куди його покласти. Мод потребує Enshwick.
 
 ## Налаштування
 
@@ -52,7 +52,7 @@ Personal Safes входить в enshwick.zip, а
 
 ## Гра по мережі
 
-Сервер і кожен гравець потребують Personal Safes тієї самої версії. На
+Personal Safes потрібен серверу й кожному гравцеві, у тій самій версії. На
 сервері меню майстрування показує ціну сервера.
 
 ## Проблеми

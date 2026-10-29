@@ -30,8 +30,8 @@ settings:
 Stand within 4 metres of your Safe and press the actions key, F7 by default. A
 window lists the players online, each with a switch.
 
-A player you switch on gets the same use of the Safe as you, except picking it
-up. You may switch them off at any time, even while they are away.
+A player you switch on can use the Safe as you do, but cannot pick it up. You
+can switch the player off at any time, also while the player is away.
 
 ## What happens without the mod?
 
@@ -40,9 +40,9 @@ with every item still in it. You cannot upgrade a Safe.
 
 ## Install
 
-Personal Safes comes in enshwick.zip, and the
+Personal Safes comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It needs Enshwick.
 
 ## Settings
 

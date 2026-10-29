@@ -31,9 +31,9 @@
 "command.refused" = "You may not change who opens your Safe at {at}."
 
 [uk]
-"mod.name" = "Особисті сейфи"
+"mod.name" = "Personal Safes"
 "mod.description" = "Додає сейф: скриню, яку можуть відкрити лише власник і гравці, яким він дозволив."
-"config" = "Особисті сейфи"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Множник вартості"
 "config.cost_multiplier.doc" = "Сейф коштує як інгредієнти деревʼяної скрині, помножені на це число, від 1 до 100. Гравці, що приєднуються, бачать вартість сервера."
 "config.admins_can_open" = "Адміністратори відкривають сейфи"
@@ -63,9 +63,9 @@
 "command.refused" = "Ви не можете змінювати, хто відкриває ваш сейф у {at}."
 
 [de]
-"mod.name" = "Persönliche Tresore"
+"mod.name" = "Personal Safes"
 "mod.description" = "Fügt den Tresor hinzu, eine Truhe, die nur ihr Besitzer und die Spieler, denen er es erlaubt, öffnen können."
-"config" = "Persönliche Tresore"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Kostenfaktor"
 "config.cost_multiplier.doc" = "Der Tresor kostet die Zutaten der Holztruhe mal diesen Wert, 1 bis 100. Beitretende Spieler sehen die Kosten des Servers."
 "config.admins_can_open" = "Administratoren öffnen Tresore"
@@ -95,9 +95,9 @@
 "command.refused" = "Du darfst nicht ändern, wer deinen Tresor bei {at} öffnet."
 
 [fr]
-"mod.name" = "Coffres-forts personnels"
+"mod.name" = "Personal Safes"
 "mod.description" = "Ajoute le coffre-fort, un coffre que seuls son propriétaire et les joueurs qu'il autorise peuvent ouvrir."
-"config" = "Coffres-forts personnels"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Multiplicateur de coût"
 "config.cost_multiplier.doc" = "Le coffre-fort coûte les ingrédients du coffre en bois multipliés par cette valeur, de 1 à 100. Les joueurs qui rejoignent voient le coût du serveur."
 "config.admins_can_open" = "Les administrateurs ouvrent les coffres-forts"
@@ -127,9 +127,9 @@
 "command.refused" = "Vous ne pouvez pas changer qui ouvre votre coffre-fort en {at}."
 
 [it]
-"mod.name" = "Casseforti personali"
+"mod.name" = "Personal Safes"
 "mod.description" = "Aggiunge la cassaforte, un forziere che solo il proprietario e i giocatori che autorizza possono aprire."
-"config" = "Casseforti personali"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Moltiplicatore di costo"
 "config.cost_multiplier.doc" = "La cassaforte costa gli ingredienti del forziere di legno moltiplicati per questo valore, da 1 a 100. I giocatori che si uniscono vedono il costo del server."
 "config.admins_can_open" = "Gli amministratori aprono le casseforti"
@@ -159,9 +159,9 @@
 "command.refused" = "Non puoi cambiare chi apre la tua cassaforte in {at}."
 
 [es]
-"mod.name" = "Cajas fuertes personales"
+"mod.name" = "Personal Safes"
 "mod.description" = "Añade la caja fuerte, un cofre que solo pueden abrir su dueño y los jugadores a los que este dé permiso."
-"config" = "Cajas fuertes personales"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Multiplicador de coste"
 "config.cost_multiplier.doc" = "La caja fuerte cuesta los ingredientes del cofre de madera multiplicados por este valor, de 1 a 100. Los jugadores que se unen ven el coste del servidor."
 "config.admins_can_open" = "Los administradores abren cajas fuertes"
@@ -191,9 +191,9 @@
 "command.refused" = "No puedes cambiar quién abre tu caja fuerte en {at}."
 
 [ru]
-"mod.name" = "Личные сейфы"
+"mod.name" = "Personal Safes"
 "mod.description" = "Добавляет сейф: сундук, который могут открыть только владелец и игроки, которым он разрешил."
-"config" = "Личные сейфы"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Множитель стоимости"
 "config.cost_multiplier.doc" = "Сейф стоит как ингредиенты деревянного сундука, умноженные на это число, от 1 до 100. Подключившиеся игроки видят стоимость сервера."
 "config.admins_can_open" = "Администраторы открывают сейфы"
@@ -223,9 +223,9 @@
 "command.refused" = "Вы не можете менять, кто открывает ваш сейф в {at}."
 
 [pl]
-"mod.name" = "Osobiste sejfy"
+"mod.name" = "Personal Safes"
 "mod.description" = "Dodaje sejf, skrzynię, którą mogą otworzyć tylko jej właściciel i gracze, którym na to pozwoli."
-"config" = "Osobiste sejfy"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Mnożnik kosztu"
 "config.cost_multiplier.doc" = "Sejf kosztuje tyle, co składniki drewnianej skrzyni razy ta wartość, od 1 do 100. Gracze, którzy dołączają, widzą koszt serwera."
 "config.admins_can_open" = "Administratorzy otwierają sejfy"
@@ -255,9 +255,9 @@
 "command.refused" = "Nie możesz zmieniać, kto otwiera twój sejf w {at}."
 
 [ja]
-"mod.name" = "個人用金庫"
+"mod.name" = "Personal Safes"
 "mod.description" = "持ち主と、持ち主が許可したプレイヤーだけが開けられるチェスト「金庫」を追加します。"
-"config" = "個人用金庫"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "コスト倍率"
 "config.cost_multiplier.doc" = "金庫のコストは、木のチェストの材料にこの値を掛けたものです（1～100）。参加したプレイヤーにはサーバーのコストが表示されます。"
 "config.admins_can_open" = "管理者が金庫を開ける"
@@ -287,9 +287,9 @@
 "command.refused" = "{at}にあるあなたの金庫を開けられる人は変更できません。"
 
 [ko]
-"mod.name" = "개인 금고"
+"mod.name" = "Personal Safes"
 "mod.description" = "주인과 주인이 허락한 플레이어만 열 수 있는 상자인 금고를 추가합니다."
-"config" = "개인 금고"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "비용 배수"
 "config.cost_multiplier.doc" = "금고 비용은 나무 상자 재료에 이 값을 곱한 것입니다. 1~100. 접속한 플레이어에게는 서버의 비용이 보입니다."
 "config.admins_can_open" = "관리자가 금고 열기"
@@ -319,9 +319,9 @@
 "command.refused" = "{at}의 내 금고를 열 수 있는 사람을 바꿀 수 없습니다."
 
 [pt-br]
-"mod.name" = "Cofres pessoais"
+"mod.name" = "Personal Safes"
 "mod.description" = "Adiciona o cofre, um baú que só o dono e os jogadores que ele permitir podem abrir."
-"config" = "Cofres pessoais"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Multiplicador de custo"
 "config.cost_multiplier.doc" = "O cofre custa os ingredientes do baú de madeira vezes este valor, de 1 a 100. Jogadores que entram veem o custo do servidor."
 "config.admins_can_open" = "Administradores abrem cofres"
@@ -351,9 +351,9 @@
 "command.refused" = "Você não pode mudar quem abre o seu cofre em {at}."
 
 [th]
-"mod.name" = "ตู้เซฟส่วนตัว"
+"mod.name" = "Personal Safes"
 "mod.description" = "เพิ่มตู้เซฟ หีบที่เปิดได้เฉพาะเจ้าของและผู้เล่นที่เจ้าของอนุญาต"
-"config" = "ตู้เซฟส่วนตัว"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "ตัวคูณราคา"
 "config.cost_multiplier.doc" = "ตู้เซฟใช้วัตถุดิบของหีบไม้คูณด้วยค่านี้ ตั้งแต่ 1 ถึง 100 ผู้เล่นที่เข้าร่วมจะเห็นราคาของเซิร์ฟเวอร์"
 "config.admins_can_open" = "ผู้ดูแลเปิดตู้เซฟได้"
@@ -383,9 +383,9 @@
 "command.refused" = "คุณเปลี่ยนผู้ที่เปิดตู้เซฟของคุณที่ {at} ไม่ได้"
 
 [tr]
-"mod.name" = "Kişisel Kasalar"
+"mod.name" = "Personal Safes"
 "mod.description" = "Yalnızca sahibinin ve izin verdiği oyuncuların açabildiği bir sandık olan kasayı ekler."
-"config" = "Kişisel Kasalar"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "Maliyet çarpanı"
 "config.cost_multiplier.doc" = "Kasa, ahşap sandığın malzemelerinin bu değerle çarpımı kadar tutar, 1 ile 100 arası. Katılan oyuncular sunucunun maliyetini görür."
 "config.admins_can_open" = "Yöneticiler kasaları açar"
@@ -415,9 +415,9 @@
 "command.refused" = "{at} konumundaki kasanı kimin açacağını değiştiremezsin."
 
 [zh-cn]
-"mod.name" = "个人保险箱"
+"mod.name" = "Personal Safes"
 "mod.description" = "加入保险箱：只有主人和主人允许的玩家才能打开的箱子。"
-"config" = "个人保险箱"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "成本倍数"
 "config.cost_multiplier.doc" = "保险箱的成本为木箱材料乘以此值，1 到 100。加入的玩家看到服务器的成本。"
 "config.admins_can_open" = "管理员可打开保险箱"
@@ -447,9 +447,9 @@
 "command.refused" = "你不能更改谁可以打开你在 {at} 处的保险箱。"
 
 [zh-tw]
-"mod.name" = "個人保險箱"
+"mod.name" = "Personal Safes"
 "mod.description" = "加入保險箱：只有主人和主人允許的玩家才能打開的箱子。"
-"config" = "個人保險箱"
+"config" = "Personal Safes"
 "config.cost_multiplier" = "成本倍數"
 "config.cost_multiplier.doc" = "保險箱的成本為木箱材料乘以此值，1 到 100。加入的玩家看到伺服器的成本。"
 "config.admins_can_open" = "管理員可打開保險箱"

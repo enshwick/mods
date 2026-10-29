@@ -2,6 +2,12 @@
 members = ["enshwick-probe", "enshwick-research", "tools/xtask"]
 resolver = "3"
 
+[workspace.dependencies]
+# The platform from git, at a commit of its main branch.
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "6477a95ffec44997eff6b58cb834beb200072b6a" }
+enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "6477a95ffec44997eff6b58cb834beb200072b6a" }
+
+
 [workspace.lints.rust]
 missing_docs = "deny"
 missing_debug_implementations = "deny"

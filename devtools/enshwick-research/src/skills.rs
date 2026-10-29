@@ -39,10 +39,10 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
     unsafe { load.hook(&CHANGE, change) }
 }
 
-fn change(next: Next<Change>, node: u32, nodes: *mut u8, add: u8, view: *const u8) -> u8 {
+fn change(next: Next<'_, Change>, node: u32, nodes: *mut u8, add: u8, view: *const u8) -> u8 {
     let before = level(nodes.addr(), node);
     // SAFETY: the game's own arguments, forwarded unchanged.
-    let answer = unsafe { next.get()(node, nodes, add, view) };
+    let answer = unsafe { next.call(node, nodes, add, view) };
     let number = SEEN.fetch_add(1, Ordering::Relaxed) + 1;
     if number <= MOST {
         let after = level(nodes.addr(), node);

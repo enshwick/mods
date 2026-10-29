@@ -5,8 +5,8 @@
 
 use enshwick::affixes::{AffixDef, Affixes, ItemRarity, Range, RollRules};
 use enshwick::content::categories::ItemCategoryMask;
+use enshwick::inventory::ItemInstance;
 use enshwick::inventory::{Inventories, InventoryCategory};
-use enshwick::item_data::ItemInstance;
 use enshwick::stats::{Lasting, Modifier, Op, Stat, StatDef, Stats, builtin};
 use enshwick::world::Player;
 use enshwick::world::{ContainerKinds, World};

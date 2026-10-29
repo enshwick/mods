@@ -105,12 +105,12 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
     })
 }
 
-fn join_game(next: Next<JoinGame>, provider: *mut u8, target: *mut u8) -> u8 {
+fn join_game(next: Next<'_, JoinGame>, provider: *mut u8, target: *mut u8) -> u8 {
     let number = counts().joins.fetch_add(1, Ordering::Relaxed) + 1;
     enshwick::info!("R8 join {number} asked: {}; {}", described(target), menus());
     let start = Instant::now();
     // SAFETY: forwarded unchanged to the rest of the chain.
-    let state_changed = unsafe { next.get()(provider, target) };
+    let state_changed = unsafe { next.call(provider, target) };
     enshwick::info!(
         "R8 join {number} returned {state_changed} after {} ms",
         start.elapsed().as_millis()
@@ -140,16 +140,16 @@ fn field<const N: usize>(bytes: &[u8; TARGET_BYTES], at: usize) -> [u8; N] {
     core::array::from_fn(|i| bytes[at + i])
 }
 
-fn main_entry(next: Next<MainEntry>, menu: usize, entry: *const u8) -> u8 {
+fn main_entry(next: Next<'_, MainEntry>, menu: usize, entry: *const u8) -> u8 {
     counts().main_entries.fetch_add(1, Ordering::Relaxed);
     // SAFETY: forwarded unchanged to the rest of the chain.
-    unsafe { next.get()(menu, entry) }
+    unsafe { next.call(menu, entry) }
 }
 
-fn pause_entry(next: Next<PauseEntry>, text: *const u8, enabled: u8, attention: u8) -> u8 {
+fn pause_entry(next: Next<'_, PauseEntry>, text: *const u8, enabled: u8, attention: u8) -> u8 {
     counts().pause_entries.fetch_add(1, Ordering::Relaxed);
     // SAFETY: forwarded unchanged to the rest of the chain.
-    unsafe { next.get()(text, enabled, attention) }
+    unsafe { next.call(text, enabled, attention) }
 }
 
 /// The menu entries drawn so far.

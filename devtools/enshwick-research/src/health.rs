@@ -70,7 +70,7 @@ pub(crate) fn counts() -> (u32, u32) {
 }
 
 fn writer(
-    next: Next<Writer>,
+    next: Next<'_, Writer>,
     out: *mut u8,
     attribute: u32,
     entity: u32,
@@ -86,7 +86,7 @@ fn writer(
         writes().other.fetch_add(1, Ordering::Relaxed);
     }
     // SAFETY: the game's own arguments, forwarded unchanged.
-    unsafe { next.get()(out, attribute, entity, value, program) }
+    unsafe { next.call(out, attribute, entity, value, program) }
 }
 
 /// The pin's type at `+8`, its scratch offset at `+0xe`, and the program's

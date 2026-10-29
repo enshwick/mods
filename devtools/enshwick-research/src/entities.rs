@@ -322,9 +322,9 @@ fn server_around(
     }
 }
 
-fn client_cursor(next: Next<System>, ctx: *mut u64) {
+fn client_cursor(next: Next<'_, System>, ctx: *mut u64) {
     // SAFETY: forwarded unchanged to the rest of the chain.
-    unsafe { next.get()(ctx) };
+    unsafe { next.call(ctx) };
     let Some(engine) = ENGINE.get() else {
         return;
     };

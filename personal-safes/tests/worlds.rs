@@ -598,4 +598,83 @@ label_language = \"en\"
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn safes_stay_locked_while_their_owners_do_not_read() {
+        use std::time::Duration;
+
+        use enshwick::events::WorldSaved;
+        use enshwick::interactions::{Interaction, Kind};
+        use enshwick_personal_safes::access::Seen;
+
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-unread-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        let world = dir.join("worlds/world0-dd");
+        std::fs::create_dir_all(&world).unwrap();
+        let file = world.join("owners.toml");
+        let damaged = "[[safes]]\ncell = [2, 0, 2]\nowner = \"00000000000000ff\"\nname = ";
+        std::fs::write(&file, damaged).unwrap();
+        let safe = ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid());
+        let loader = containers(host())
+            .placed(3, Entity(700), [20.0, 1.0, 20.0])
+            .component(Entity(700), 2, &safe.get().to_le_bytes())
+            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .data_dir(dir.to_str().unwrap())
+            .world_key("world0-dd")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
+        snapshots()
+            .players
+            .store(std::sync::Arc::new(rustc_hash::FxHashMap::from_iter([(
+                Entity(10),
+                Seen {
+                    key: PlayerKey::new(3),
+                    admin: false,
+                },
+            )])));
+        let open = Interaction {
+            kind: Kind::Open,
+            player: Entity(10),
+            target: Entity(900),
+            item: Some(safe),
+            position: Some([20.0, 1.0, 20.0]),
+        };
+        assert!(
+            !enshwick_personal_safes::access::filter(&open),
+            "a Safe whose owner is unknown stays shut"
+        );
+        let stock = Interaction {
+            kind: Kind::Stock,
+            target: Entity(700),
+            item: None,
+            position: None,
+            ..open
+        };
+        // The sweep runs every 2 s of wall time, on the next tick after.
+        std::thread::sleep(Duration::from_millis(2100));
+        let _ran = loader.tick(Duration::from_millis(100));
+        assert!(
+            !enshwick_personal_safes::access::filter(&stock),
+            "lends no stock either"
+        );
+        assert!(loader.raise::<WorldSaved>(&()) >= 1);
+        assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            damaged,
+            "kept for a fix"
+        );
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
 }

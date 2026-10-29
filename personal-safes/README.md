@@ -93,6 +93,10 @@ player hosts has its own file. Files from 0.1 load as they are. Settings, texts
 and owners under the mod's former id, `safes`, move to the new id on the first
 start.
 
+If this file cannot be read, the mod leaves it as it is and keeps every Safe
+without a known owner locked for everyone. The log names the file. Fix or
+restore it, then restart the server.
+
 ## Install
 
 Download

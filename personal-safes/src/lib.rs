@@ -250,8 +250,19 @@ fn save(store: &'static WorldStore<Owners>) {
 /// Puts the running world's owners in force for the checks. A world
 /// without owners of its own takes those of the mod-wide `owners.toml`
 /// written before owners were kept per world, once; the file is then
-/// renamed out of the way.
-fn open_world(store: &WorldStore<Owners>, dir: &Path) {
+/// renamed out of the way. While the world's owners do not read, its Safes
+/// stay shut.
+fn open_world(store: &WorldStore<Owners>, dir: &Path, world: World) {
+    // The store stays shut on a world it could not read; the world has a
+    // key only on the side that keeps it.
+    let unread = store.key().is_none() && world.key().is_some();
+    snapshots().owners_unread.store(unread, Ordering::Relaxed);
+    if unread {
+        enshwick::error!(
+            "Safe owners of world {} do not read: every Safe without a known owner stays shut until the file is fixed",
+            world.key().unwrap_or_default()
+        );
+    }
     let mut owners = store.with(Owners::to_map).unwrap_or_default();
     let shared = dir.join(SHARED_OWNERS_FILE);
     if owners.is_empty() && store.key().is_some() && shared.exists() {
@@ -346,7 +357,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     let store: &'static WorldStore<Owners> =
         Box::leak(Box::new(load.world_store::<Owners>(OWNERS)?));
     let _first = STORE.set(store);
-    load.on::<WorldLoaded>(move |()| open_world(store, &dir))?;
+    load.on::<WorldLoaded>(move |()| open_world(store, &dir, world))?;
 
     let _first = access::POINT.set(load.define_point()?);
     load.on_interaction(access::filter)?;

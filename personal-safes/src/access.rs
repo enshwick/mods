@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -259,6 +259,11 @@ pub struct Access {
     /// A character the players snapshot lacks asked about a Safe: the
     /// snapshot wants a refresh.
     pub unregistered: AtomicBool,
+    /// The world's owners did not read: a Safe without a recorded owner
+    /// stays shut to everyone instead of open to all.
+    pub owners_unread: AtomicBool,
+    /// Safes seen this session without a recorded owner.
+    pub unowned: ArcSwap<FxHashSet<Entity>>,
 }
 
 static ACCESS: ModLocal<Access> = ModLocal::new();
@@ -279,6 +284,8 @@ impl Access {
             players: ArcSwap::from_pointee(FxHashMap::default()),
             admins_open: AtomicBool::new(true),
             unregistered: AtomicBool::new(false),
+            owners_unread: AtomicBool::new(false),
+            unowned: ArcSwap::from_pointee(FxHashSet::default()),
         }
     }
 
@@ -393,7 +400,15 @@ impl Access {
     /// The owner recorded near `at` for the Safe `entity`, remembered for
     /// the session.
     pub fn seen(&self, entity: Entity, at: Cell) -> Option<(PlayerKey, Cell)> {
-        let found = owner_near(&self.owners.load(), at).map(|(at, safe)| (safe.owner, at))?;
+        let Some(found) = owner_near(&self.owners.load(), at).map(|(at, safe)| (safe.owner, at))
+        else {
+            self.unowned.rcu(|unowned| {
+                let mut unowned = FxHashSet::clone(unowned);
+                unowned.insert(entity);
+                unowned
+            });
+            return None;
+        };
         self.safes.rcu(|safes| {
             let mut safes = FxHashMap::clone(safes);
             safes.insert(entity, found);
@@ -410,8 +425,26 @@ impl Access {
             Some((owner, at)) => {
                 self.may(owner, at, interaction.target, interaction.player, action)
             }
-            None => true,
+            None => !self.locked(interaction.target, interaction.item),
         }
+    }
+
+    /// Whether `chest` is a Safe without a recorded owner while the world's
+    /// owners did not read, known by `item` or from this session.
+    #[must_use]
+    pub fn locked(&self, chest: Entity, item: Option<ItemId>) -> bool {
+        if !self.owners_unread.load(Ordering::Relaxed) {
+            return false;
+        }
+        let locked =
+            item.is_some_and(crate::content::is_safe) || self.unowned.load().contains(&chest);
+        if locked {
+            enshwick::warn_every!(
+                std::time::Duration::from_secs(60),
+                "a Safe stays shut: the world's Safe owners did not read"
+            );
+        }
+        locked
     }
 
     /// Whether `chest` is a Safe `player` may not use, from what this
@@ -422,6 +455,7 @@ impl Access {
             .load()
             .get(&chest)
             .is_some_and(|&(owner, at)| !self.may(owner, at, chest, player, Action::Use))
+            || self.locked(chest, None)
     }
 
     /// Forgets the Safes and players of a game that stopped or the world
@@ -429,6 +463,7 @@ impl Access {
     pub fn forget_session(&self) {
         self.safes.store(Arc::new(FxHashMap::default()));
         self.players.store(Arc::new(FxHashMap::default()));
+        self.unowned.store(Arc::new(FxHashSet::default()));
     }
 
     /// Records a Safe just placed by the player with `key`, named `name`.
@@ -489,9 +524,12 @@ impl Access {
 pub fn filter(interaction: &Interaction) -> bool {
     match interaction.kind {
         Kind::Stock => !snapshots().refused_seen(interaction.target, interaction.player),
-        Kind::Upgrade => snapshots()
-            .owner(interaction.target, interaction.item, interaction.position)
-            .is_none(),
+        Kind::Upgrade => {
+            snapshots()
+                .owner(interaction.target, interaction.item, interaction.position)
+                .is_none()
+                && !snapshots().locked(interaction.target, interaction.item)
+        }
         Kind::Dismantle => snapshots().allowed(interaction, Action::Remove),
         _ => snapshots().allowed(interaction, Action::Use),
     }

@@ -1,104 +1,104 @@
 [en]
-"mod.name" = "Build camera"
+"mod.name" = "Build Camera"
 "mod.description" = "Airborne Architect's building fly mode for every player, within the vanilla limits."
-"config" = "Build camera"
+"config" = "Build Camera"
 "config.enabled" = "Fly mode without the skill"
 "config.enabled.doc" = "Every player may use the building fly mode near a base without the Airborne Architect skill. Players on a server use the server's value."
 
 [de]
-"mod.name" = "Baukamera"
+"mod.name" = "Build Camera"
 "mod.description" = "Der Bau-Flugmodus von Luftarchitekt für jeden Spieler, in den Grenzen des Spiels."
-"config" = "Baukamera"
+"config" = "Build Camera"
 "config.enabled" = "Flugmodus ohne Fertigkeit"
 "config.enabled.doc" = "Jeder Spieler darf den Bau-Flugmodus nahe einer Basis ohne die Fertigkeit Luftarchitekt nutzen. Spieler auf einem Server nutzen den Wert des Servers."
 
 [fr]
-"mod.name" = "Caméra de construction"
+"mod.name" = "Build Camera"
 "mod.description" = "Le mode de vol de construction d'Architecte aérien pour chaque joueur, dans les limites du jeu."
-"config" = "Caméra de construction"
+"config" = "Build Camera"
 "config.enabled" = "Mode de vol sans la compétence"
 "config.enabled.doc" = "Chaque joueur peut utiliser le mode de vol de construction près d'une base sans la compétence Architecte aérien. Les joueurs sur un serveur utilisent la valeur du serveur."
 
 [it]
-"mod.name" = "Telecamera di costruzione"
+"mod.name" = "Build Camera"
 "mod.description" = "La modalità volo di costruzione di Architetto aereo per ogni giocatore, entro i limiti del gioco."
-"config" = "Telecamera di costruzione"
+"config" = "Build Camera"
 "config.enabled" = "Volo senza l'abilità"
 "config.enabled.doc" = "Ogni giocatore può usare la modalità volo di costruzione vicino a una base senza l'abilità Architetto aereo. I giocatori su un server usano il valore del server."
 
 [es]
-"mod.name" = "Cámara de construcción"
+"mod.name" = "Build Camera"
 "mod.description" = "El modo de vuelo de construcción de Arquitecto aéreo para todos los jugadores, dentro de los límites del juego."
-"config" = "Cámara de construcción"
+"config" = "Build Camera"
 "config.enabled" = "Modo de vuelo sin la habilidad"
 "config.enabled.doc" = "Cualquier jugador puede usar el modo de vuelo de construcción cerca de una base sin la habilidad Arquitecto aéreo. Los jugadores en un servidor usan el valor del servidor."
 
 [ru]
-"mod.name" = "Строительная камера"
+"mod.name" = "Build Camera"
 "mod.description" = "Режим полёта при строительстве от навыка «Воздушный архитектор» для каждого игрока, в пределах игры."
-"config" = "Строительная камера"
+"config" = "Build Camera"
 "config.enabled" = "Режим полёта без навыка"
 "config.enabled.doc" = "Каждый игрок может летать в режиме строительства рядом с базой без навыка «Воздушный архитектор». Игроки на сервере играют со значением сервера."
 
 [pl]
-"mod.name" = "Kamera budowania"
+"mod.name" = "Build Camera"
 "mod.description" = "Tryb lotu przy budowaniu z umiejętności Powietrzny architekt dla każdego gracza, w granicach gry."
-"config" = "Kamera budowania"
+"config" = "Build Camera"
 "config.enabled" = "Tryb lotu bez umiejętności"
 "config.enabled.doc" = "Każdy gracz może latać w trybie budowania przy bazie bez umiejętności Powietrzny architekt. Gracze na serwerze grają z wartością serwera."
 
 [ja]
-"mod.name" = "建築カメラ"
+"mod.name" = "Build Camera"
 "mod.description" = "空中建築家の建築飛行モードを、ゲームの制限内ですべてのプレイヤーが使えるようにします。"
-"config" = "建築カメラ"
+"config" = "Build Camera"
 "config.enabled" = "スキルなしで飛行モード"
 "config.enabled.doc" = "すべてのプレイヤーが、空中建築家のスキルなしで拠点の近くで建築飛行モードを使えます。サーバーのプレイヤーはサーバーの値を使います。"
 
 [ko]
-"mod.name" = "건축 카메라"
+"mod.name" = "Build Camera"
 "mod.description" = "공중 건축가의 건축 비행 모드를 게임의 제한 안에서 모든 플레이어가 쓸 수 있게 합니다."
-"config" = "건축 카메라"
+"config" = "Build Camera"
 "config.enabled" = "기술 없이 비행 모드"
 "config.enabled.doc" = "모든 플레이어가 공중 건축가 기술 없이 기지 근처에서 건축 비행 모드를 쓸 수 있습니다. 서버의 플레이어는 서버의 값을 사용합니다."
 
 [pt-br]
-"mod.name" = "Câmera de construção"
+"mod.name" = "Build Camera"
 "mod.description" = "O modo de voo de construção do Arquiteto Aéreo para todos os jogadores, dentro dos limites do jogo."
-"config" = "Câmera de construção"
+"config" = "Build Camera"
 "config.enabled" = "Modo de voo sem a habilidade"
 "config.enabled.doc" = "Qualquer jogador pode usar o modo de voo de construção perto de uma base sem a habilidade Arquiteto Aéreo. Jogadores em um servidor usam o valor do servidor."
 
 [th]
-"mod.name" = "กล้องก่อสร้าง"
+"mod.name" = "Build Camera"
 "mod.description" = "โหมดบินก่อสร้างของสถาปนิกกลางอากาศสำหรับผู้เล่นทุกคน ภายในขีดจำกัดของเกม"
-"config" = "กล้องก่อสร้าง"
+"config" = "Build Camera"
 "config.enabled" = "โหมดบินโดยไม่ต้องมีทักษะ"
 "config.enabled.doc" = "ผู้เล่นทุกคนใช้โหมดบินก่อสร้างใกล้ฐานได้โดยไม่ต้องมีทักษะสถาปนิกกลางอากาศ ผู้เล่นบนเซิร์ฟเวอร์ใช้ค่าของเซิร์ฟเวอร์"
 
 [tr]
-"mod.name" = "İnşa Kamerası"
+"mod.name" = "Build Camera"
 "mod.description" = "Hava Mimarı'nın inşa uçuş modu, oyunun sınırları içinde her oyuncu için."
-"config" = "İnşa Kamerası"
+"config" = "Build Camera"
 "config.enabled" = "Yetenek olmadan uçuş modu"
 "config.enabled.doc" = "Her oyuncu, Hava Mimarı yeteneği olmadan bir üssün yakınında inşa uçuş modunu kullanabilir. Sunucudaki oyuncular sunucunun değerini kullanır."
 
 [zh-cn]
-"mod.name" = "建造镜头"
+"mod.name" = "Build Camera"
 "mod.description" = "让每位玩家都能在游戏原有限制内使用空中建筑师的建造飞行模式。"
-"config" = "建造镜头"
+"config" = "Build Camera"
 "config.enabled" = "无需技能即可飞行"
 "config.enabled.doc" = "每位玩家无需空中建筑师技能，即可在基地附近使用建造飞行模式。服务器上的玩家使用服务器的值。"
 
 [zh-tw]
-"mod.name" = "建造鏡頭"
+"mod.name" = "Build Camera"
 "mod.description" = "讓每位玩家都能在遊戲原有限制內使用空中建築師的建造飛行模式。"
-"config" = "建造鏡頭"
+"config" = "Build Camera"
 "config.enabled" = "無需技能即可飛行"
 "config.enabled.doc" = "每位玩家無需空中建築師技能，即可在基地附近使用建造飛行模式。伺服器上的玩家使用伺服器的值。"
 
 [uk]
-"mod.name" = "Будівельна камера"
+"mod.name" = "Build Camera"
 "mod.description" = "Режим польоту в будівництві від навички «Повітряний архітектор» для кожного гравця, у межах гри."
-"config" = "Будівельна камера"
+"config" = "Build Camera"
 "config.enabled" = "Режим польоту без навички"
 "config.enabled.doc" = "Кожен гравець може літати в режимі будівництва біля оплоту без навички «Повітряний архітектор». Гравці на сервері отримують значення сервера."

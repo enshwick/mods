@@ -24,7 +24,7 @@ fn enabled() -> &'static AtomicBool {
     ENABLED.get_or_init(|| AtomicBool::new(false))
 }
 
-/// Build camera settings.
+/// Build Camera settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 struct Settings {
@@ -77,7 +77,7 @@ impl Mod for BuildCamera {
         enshwick::manifest!(
             id: "enshwick.build-camera",
             side: BOTH,
-            name: "Build camera",
+            name: "Build Camera",
             join: true,
             was: ["build-camera"],
         )

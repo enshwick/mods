@@ -1,6 +1,6 @@
 ---
 id: enshwick.build-camera
-name: Build camera
+name: Build Camera
 summary: Every player may use the building fly mode of the Airborne Architect skill near a base, with no skill points spent.
 needs: everyone
 settings:
@@ -12,7 +12,7 @@ settings:
 
 - Every player may use the building fly mode near a base.
 - No skill points go into Airborne Architect for it.
-- Your character stays put while a flying spark carries the camera.
+- Your character stays in place while a flying spark carries the camera.
 - You place and remove blocks and props from the spark.
 
 ## When does fly mode work?
@@ -30,20 +30,20 @@ spent on it stay spent. Other skills and what they need stay the same.
 
 ## Install
 
-Build camera comes in enshwick.zip, and the
+Build Camera comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It needs Enshwick.
 
 ## Settings
 
 You change this value in the game, as the
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
-shows. On the first start the mod keeps the value you set under its former
-name, `build-camera`.
+shows. On the first start the mod keeps the value you set under its former name,
+`build-camera`.
 
 ## Multiplayer
 
-The server and every player need Build camera in the same version. On a server,
+The server and every player need Build Camera in the same version. On a server,
 every player runs with the server's value of `enabled`.
 
 ## Problems

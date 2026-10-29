@@ -25,7 +25,7 @@ pub use share::{Character, Levels, high_water};
 /// The labels and descriptions of the settings, a table per language.
 const TEXTS: &str = include_str!("texts.toml");
 
-/// Shared experience settings.
+/// Shared Experience settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
 #[serde(deny_unknown_fields)]
 struct Settings {
@@ -187,7 +187,7 @@ impl Mod for SharedExperience {
         enshwick::manifest!(
             id: "enshwick.shared-experience",
             side: SERVER,
-            name: "Shared experience",
+            name: "Shared Experience",
             was: ["shared-experience"],
         )
     }

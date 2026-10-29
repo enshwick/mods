@@ -1,7 +1,7 @@
 ---
 id: enshwick.game-rates
 name: Game Rates
-summary: Building recipes make more, furniture gives more comfort, and experience, workshops, loot and skill points follow their own multipliers.
+summary: Building recipes make more, and furniture gives more comfort. Experience, workshops, loot and skill points each have a multiplier.
 needs: everyone
 settings:
   - key: recipes.multiplier
@@ -74,24 +74,24 @@ settings:
 
 Crafting stations, chests, storage shelves, altars and water devices keep their
 usual recipes. Comfort furniture makes more, like other decor and furniture.
-Only the best piece of each comfort category counts, as in the base game. Item tooltips show the usual comfort numbers, but your rested time
-uses the new ones.
+Only the best piece of each comfort category counts, as in the base game. Item
+tooltips show the usual comfort numbers. Your rested time uses the new ones.
 
 ## Did you use an older building or comfort mod?
 
-Game Rates takes the place of Building materials, Building yield and Furniture
-comfort. Their old files no longer load, and you can delete them. Their settings,
-and those Game Rates kept under its former id `game-rates`, move into Game Rates
-on the first start.
+Game Rates replaces Building materials, Building yield and Furniture comfort.
+Their old files no longer load, and you can delete them. On the first start,
+their settings move into Game Rates. Settings under the former id `game-rates`
+move too.
 
 Placed Bulk Workbenches turn into plain workbenches. You lose the Bulk Workbench
 items in inventories.
 
 ## Install
 
-Game Rates comes in enshwick.zip, and the
+Game Rates comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It runs on enshwick.
+put it. It needs Enshwick.
 
 ## Settings
 
@@ -102,7 +102,8 @@ shows.
 ## Multiplayer
 
 The server and every player need Game Rates in the same version. On a server,
-everyone gets the server's values, and their own again after leaving.
+everyone gets the server's values. After leaving, each player has their own
+values again.
 
 ## Problems
 

@@ -40,9 +40,9 @@
 "config.skills.points.doc" = "Skill points each level gives, times this and rounded, from 0 to 100: 1 is vanilla. Points from knowledge stay. A joined player runs with the server's value."
 
 [de]
-"mod.name" = "Spielraten"
+"mod.name" = "Game Rates"
 "mod.description" = "Raten für Baurezepte, Möbelkomfort, Erfahrung, Werkstatttempo, Beute und Fertigkeitspunkte."
-"config" = "Spielraten"
+"config" = "Game Rates"
 "config.recipes" = "Baurezepte"
 "config.recipes.doc" = "Wie viel mehr die Baurezepte herstellen, und wovon."
 "config.recipes.multiplier" = "Ertrag"
@@ -81,9 +81,9 @@
 "config.skills.points.doc" = "Fertigkeitspunkte jeder Stufe, mal diesem Wert und gerundet, von 0 bis 100: 1 ist wie im Spiel. Punkte aus Wissen bleiben. Ein beigetretener Spieler nutzt den Wert des Servers."
 
 [fr]
-"mod.name" = "Taux de jeu"
+"mod.name" = "Game Rates"
 "mod.description" = "Des taux pour les recettes de construction, le confort des meubles, l'expérience, la vitesse des ateliers, le butin et les points de compétence."
-"config" = "Taux de jeu"
+"config" = "Game Rates"
 "config.recipes" = "Recettes de construction"
 "config.recipes.doc" = "Combien les recettes de construction produisent en plus, et de quoi."
 "config.recipes.multiplier" = "Production"
@@ -122,9 +122,9 @@
 "config.skills.points.doc" = "Points de compétence de chaque niveau, multipliés par cette valeur et arrondis, de 0 à 100 : 1 comme dans le jeu. Les points du savoir restent. Un joueur connecté utilise la valeur du serveur."
 
 [it]
-"mod.name" = "Tassi di gioco"
+"mod.name" = "Game Rates"
 "mod.description" = "Tassi per ricette di costruzione, comfort dei mobili, esperienza, velocità dei laboratori, bottino e punti abilità."
-"config" = "Tassi di gioco"
+"config" = "Game Rates"
 "config.recipes" = "Ricette di costruzione"
 "config.recipes.doc" = "Quanto di più producono le ricette di costruzione, e di cosa."
 "config.recipes.multiplier" = "Resa"
@@ -163,9 +163,9 @@
 "config.skills.points.doc" = "Punti abilità di ogni livello, moltiplicati per questo valore e arrotondati, da 0 a 100: 1 è come nel gioco. I punti dalle conoscenze restano. Un giocatore connesso usa il valore del server."
 
 [es]
-"mod.name" = "Tasas de juego"
+"mod.name" = "Game Rates"
 "mod.description" = "Tasas para recetas de construcción, comodidad de los muebles, experiencia, velocidad de los talleres, botín y puntos de habilidad."
-"config" = "Tasas de juego"
+"config" = "Game Rates"
 "config.recipes" = "Recetas de construcción"
 "config.recipes.doc" = "Cuánto más producen las recetas de construcción, y de qué."
 "config.recipes.multiplier" = "Producción"
@@ -204,9 +204,9 @@
 "config.skills.points.doc" = "Puntos de habilidad de cada nivel, multiplicados por este valor y redondeados, de 0 a 100: 1 es como en el juego. Los puntos del saber se mantienen. Un jugador conectado usa el valor del servidor."
 
 [ru]
-"mod.name" = "Игровые множители"
+"mod.name" = "Game Rates"
 "mod.description" = "Множители для строительных рецептов, уюта от мебели, опыта, скорости мастерских, добычи и очков навыков."
-"config" = "Игровые множители"
+"config" = "Game Rates"
 "config.recipes" = "Строительные рецепты"
 "config.recipes.doc" = "Насколько больше дают строительные рецепты и чего именно."
 "config.recipes.multiplier" = "Выход"
@@ -245,9 +245,9 @@
 "config.skills.points.doc" = "Очки навыков за каждый уровень, умноженные на это число и округлённые, от 0 до 100: 1 как в игре. Очки за знания остаются. Игрок на сервере получает значение сервера."
 
 [pl]
-"mod.name" = "Mnożniki gry"
+"mod.name" = "Game Rates"
 "mod.description" = "Mnożniki dla przepisów budowlanych, komfortu mebli, doświadczenia, tempa warsztatów, łupów i punktów umiejętności."
-"config" = "Mnożniki gry"
+"config" = "Game Rates"
 "config.recipes" = "Przepisy budowlane"
 "config.recipes.doc" = "Ile więcej dają przepisy budowlane i czego."
 "config.recipes.multiplier" = "Wydajność"
@@ -286,9 +286,9 @@
 "config.skills.points.doc" = "Punkty umiejętności z każdego poziomu, pomnożone przez tę wartość i zaokrąglone, od 0 do 100: 1 jak w grze. Punkty z wiedzy zostają. Gracz na serwerze dostaje wartość serwera."
 
 [ja]
-"mod.name" = "ゲーム倍率"
+"mod.name" = "Game Rates"
 "mod.description" = "建築レシピ、家具の快適度、経験値、工房の速度、戦利品、スキルポイントの倍率を変えます。"
-"config" = "ゲーム倍率"
+"config" = "Game Rates"
 "config.recipes" = "建築レシピ"
 "config.recipes.doc" = "建築レシピで何がどれだけ多く作れるかを決めます。"
 "config.recipes.multiplier" = "生産量"
@@ -327,9 +327,9 @@
 "config.skills.points.doc" = "各レベルのスキルポイントにこの値を掛けて丸めます（0〜100）。1はバニラです。知識から得たポイントはそのままです。サーバーに参加したプレイヤーはサーバーの値を使います。"
 
 [ko]
-"mod.name" = "게임 배율"
+"mod.name" = "Game Rates"
 "mod.description" = "건축 레시피, 가구 편안함, 경험치, 작업장 속도, 전리품, 기술 포인트의 배율을 바꿉니다."
-"config" = "게임 배율"
+"config" = "Game Rates"
 "config.recipes" = "건축 레시피"
 "config.recipes.doc" = "건축 레시피가 무엇을 얼마나 더 만드는지 정합니다."
 "config.recipes.multiplier" = "생산량"
@@ -368,9 +368,9 @@
 "config.skills.points.doc" = "레벨마다 받는 기술 포인트에 이 값을 곱하고 반올림합니다. 0에서 100까지이며, 1은 바닐라입니다. 지식으로 얻은 포인트는 그대로입니다. 서버에 접속한 플레이어는 서버의 값을 사용합니다."
 
 [pt-br]
-"mod.name" = "Taxas do Jogo"
+"mod.name" = "Game Rates"
 "mod.description" = "Taxas para receitas de construção, conforto dos móveis, experiência, velocidade das oficinas, saque e pontos de habilidade."
-"config" = "Taxas do Jogo"
+"config" = "Game Rates"
 "config.recipes" = "Receitas de construção"
 "config.recipes.doc" = "Quanto a mais as receitas de construção produzem, e do quê."
 "config.recipes.multiplier" = "Produção"
@@ -409,9 +409,9 @@
 "config.skills.points.doc" = "Pontos de habilidade de cada nível, multiplicados por este valor e arredondados, de 0 a 100: 1 é como no jogo. Pontos de conhecimento ficam. Um jogador conectado usa o valor do servidor."
 
 [th]
-"mod.name" = "อัตราในเกม"
+"mod.name" = "Game Rates"
 "mod.description" = "อัตราของสูตรก่อสร้าง ความสบายจากเฟอร์นิเจอร์ ค่าประสบการณ์ ความเร็วโรงงาน ของที่ได้ และแต้มทักษะ"
-"config" = "อัตราในเกม"
+"config" = "Game Rates"
 "config.recipes" = "สูตรก่อสร้าง"
 "config.recipes.doc" = "สูตรก่อสร้างผลิตอะไรได้มากขึ้นเท่าไร"
 "config.recipes.multiplier" = "ผลผลิต"
@@ -450,9 +450,9 @@
 "config.skills.points.doc" = "แต้มทักษะของแต่ละเลเวล คูณด้วยค่านี้แล้วปัดเศษ ตั้งแต่ 0 ถึง 100: 1 คือค่าเดิมของเกม แต้มจากความรู้ยังอยู่ ผู้เล่นที่เข้าร่วมเซิร์ฟเวอร์ใช้ค่าของเซิร์ฟเวอร์"
 
 [tr]
-"mod.name" = "Oyun Oranları"
+"mod.name" = "Game Rates"
 "mod.description" = "İnşa tarifleri, mobilya konforu, deneyim, atölye hızı, ganimet ve yetenek puanları için oranlar."
-"config" = "Oyun Oranları"
+"config" = "Game Rates"
 "config.recipes" = "İnşa tarifleri"
 "config.recipes.doc" = "İnşa tariflerinin neyi ne kadar fazla ürettiği."
 "config.recipes.multiplier" = "Verim"
@@ -491,9 +491,9 @@
 "config.skills.points.doc" = "Her seviyenin verdiği yetenek puanı, bu değerle çarpılıp yuvarlanır, 0 ile 100 arası: 1 oyundaki gibidir. Bilgiden gelen puanlar kalır. Sunucuya katılan oyuncu sunucunun değerini kullanır."
 
 [zh-cn]
-"mod.name" = "游戏倍率"
+"mod.name" = "Game Rates"
 "mod.description" = "调整建造配方、家具舒适度、经验、工坊速度、战利品和技能点的倍率。"
-"config" = "游戏倍率"
+"config" = "Game Rates"
 "config.recipes" = "建造配方"
 "config.recipes.doc" = "建造配方多产出多少，以及产出什么。"
 "config.recipes.multiplier" = "产量"
@@ -532,9 +532,9 @@
 "config.skills.points.doc" = "每级给的技能点乘以此值并取整，范围 0 到 100：1 为原版。来自知识的技能点保留。加入服务器的玩家使用服务器的值。"
 
 [zh-tw]
-"mod.name" = "遊戲倍率"
+"mod.name" = "Game Rates"
 "mod.description" = "調整建造配方、家具舒適度、經驗、工坊速度、戰利品和技能點的倍率。"
-"config" = "遊戲倍率"
+"config" = "Game Rates"
 "config.recipes" = "建造配方"
 "config.recipes.doc" = "建造配方多產出多少，以及產出什麼。"
 "config.recipes.multiplier" = "產量"
@@ -573,9 +573,9 @@
 "config.skills.points.doc" = "每級給的技能點乘以此值並取整，範圍 0 到 100：1 為原版。來自知識的技能點保留。加入伺服器的玩家使用伺服器的值。"
 
 [uk]
-"mod.name" = "Ігрові множники"
+"mod.name" = "Game Rates"
 "mod.description" = "Множники для будівельних рецептів, затишку від меблів, досвіду, швидкості майстерень, здобичі й очок навичок."
-"config" = "Ігрові множники"
+"config" = "Game Rates"
 "config.recipes" = "Будівельні рецепти"
 "config.recipes.doc" = "Наскільки більше дають будівельні рецепти і що саме."
 "config.recipes.multiplier" = "Вихід"

@@ -65,6 +65,7 @@ across restarts, on a dedicated server and in a hosted game. An older version
 kept one mark for the whole server in
 `mod-data/enshwick.shared-experience/experience.toml`. That mark moves once into
 the first world that loads without a mark of its own. The old file is then
-renamed `experience.toml.moved`.
+renamed `experience.toml.moved`. If the old file cannot be read, it stays where
+it is, the log says why, and the world starts without a mark.
 
 Licensed under [MIT](LICENSE).

@@ -399,6 +399,28 @@ mod tests {
     }
 
     #[test]
+    fn an_unreadable_server_wide_mark_stays_in_place_and_says_so() {
+        let dir =
+            std::env::temp_dir().join(format!("shared-experience-broken-{}", std::process::id()));
+        let _fresh = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("experience.toml"), "high_water = \"thirty\"\n").unwrap();
+        let loader = game(&dir, "first");
+        assert_eq!(shared().high_water.load(Ordering::Relaxed), 0);
+        assert!(dir.join("experience.toml").exists(), "left for the admin");
+        assert!(!dir.join("experience.toml.moved").exists());
+        assert!(
+            loader
+                .logs()
+                .iter()
+                .any(|(_, line)| line.starts_with("experience.toml not read")),
+            "{:?}",
+            loader.logs()
+        );
+        let _cleaned = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn one_kill_shared_across_batches_counts_once() {
         let dir =
             std::env::temp_dir().join(format!("shared-experience-moment-{}", std::process::id()));

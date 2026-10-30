@@ -8,7 +8,6 @@ use enshwick::content::recipes::RecipeKind;
 use enshwick::rates::{ExperienceGroup, MAX_FACTOR, Rate, RateHandle};
 use enshwick::{Load, Mod, Off};
 
-mod migrations;
 mod recipes;
 
 use crate::recipes::Category;
@@ -282,14 +281,11 @@ impl Mod for GameRates {
             side: BOTH,
             name: "Game Rates",
             join: true,
-            replaces: ["building-materials", "building-yield", "furniture-comfort"],
-            was: ["game-rates"],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         load.texts(TEXTS)?;
-        load.migrate(migrations::all())?;
         let rates = Rates::declare(load);
         // The loader rebuilds the recipes when a recipe output rate changes.
         load.apply_config(move |settings: &Settings| settings.apply(&rates))?;
@@ -469,30 +465,6 @@ mod tests {
     }
 
     #[test]
-    fn the_migrated_ids_are_the_manifest_s_former_and_replaced_ids() {
-        use enshwick::abi::Relation;
-
-        let manifest = GameRates::manifest();
-        // SAFETY: `manifest!` points `dependencies` at a static array of
-        // `dependency_count` entries.
-        let all =
-            unsafe { std::slice::from_raw_parts(manifest.dependencies, manifest.dependency_count) };
-        let ids = |relation| -> Vec<&str> {
-            all.iter()
-                .filter(|dependency| dependency.relation == relation)
-                // SAFETY: each id is a static string literal of `manifest!`.
-                .filter_map(|dependency| unsafe { dependency.id.as_str() })
-                .collect()
-        };
-        assert_eq!(ids(Relation::WAS), [migrations::FORMER_ID]);
-        let mut folded: Vec<&str> = migrations::FOLDED.iter().map(|&(id, _)| id).collect();
-        let mut replaced = ids(Relation::REPLACES);
-        folded.sort_unstable();
-        replaced.sort_unstable();
-        assert_eq!(folded, replaced);
-    }
-
-    #[test]
     fn every_text_exists_in_all_languages() {
         let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
         assert_eq!(texts.untranslated(), []);
@@ -548,80 +520,5 @@ mod tests {
             };
             assert!(settings.validate().is_ok(), "{comfort_multiplier}");
         }
-    }
-
-    /// The loader installed with `others`, each a mod id and its settings
-    /// file, and the mod started.
-    fn started_with(others: &[(&str, &str)]) -> enshwick::test::Installed {
-        let host = others
-            .iter()
-            .fold(enshwick::test::FakeHost::new(), |host, &(id, text)| {
-                host.other_settings(id, text)
-            });
-        let loader = host.install();
-        // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
-        assert_eq!(status, enshwick::abi::Status::OK, "{:?}", loader.logs());
-        loader
-    }
-
-    const FLAT: &str = "recipe_multiplier = 4\nrecipe_blocks = true\nrecipe_overgrowth = false\nrecipe_decor = true\ncomfort_multiplier = 3.0\n";
-
-    #[test]
-    fn the_former_id_s_flat_settings_move_into_their_groups() {
-        let loader = started_with(&[(migrations::FORMER_ID, FLAT)]);
-        let migrated = loader.migrate_settings(FLAT).unwrap();
-        let settings: Settings = toml::from_str(&migrated).unwrap();
-        assert_eq!(settings.recipes.multiplier, 4);
-        assert!(!settings.recipes.overgrowth);
-        assert!((settings.comfort.multiplier - 3.0).abs() < f32::EPSILON);
-        assert!(!migrated.contains("recipe_"), "{migrated}");
-    }
-
-    #[test]
-    fn the_folded_mods_settings_move_into_their_groups() {
-        let loader = started_with(&[
-            (
-                "building-yield",
-                "multiplier = 3\ndecor = false\nown_workbench = true\n",
-            ),
-            ("furniture-comfort", "multiplier = 4.5\n"),
-        ]);
-        let migrated = loader.migrate_settings("").unwrap();
-        let settings: Settings = toml::from_str(&migrated).unwrap();
-        assert_eq!(settings.recipes.multiplier, 3);
-        assert!(!settings.recipes.decor);
-        assert!(
-            settings.recipes.blocks,
-            "a key no mod gives keeps its default"
-        );
-        assert!((settings.comfort.multiplier - 4.5).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn building_materials_wins_over_building_yield() {
-        let loader = started_with(&[
-            ("building-materials", "multiplier = 5\nblocks = false\n"),
-            (
-                "building-yield",
-                "multiplier = 3\nblocks = true\novergrowth = false\n",
-            ),
-        ]);
-        let migrated = loader.migrate_settings("").unwrap();
-        let settings: Settings = toml::from_str(&migrated).unwrap();
-        assert_eq!(settings.recipes.multiplier, 5);
-        assert!(!settings.recipes.blocks);
-        assert!(!settings.recipes.overgrowth);
-    }
-
-    #[test]
-    fn the_former_id_s_values_win_over_the_folded_mods() {
-        let own = "recipe_multiplier = 7\n";
-        let loader = started_with(&[
-            ("building-materials", "multiplier = 5\n"),
-            (migrations::FORMER_ID, own),
-        ]);
-        let settings: Settings = toml::from_str(&loader.migrate_settings(own).unwrap()).unwrap();
-        assert_eq!(settings.recipes.multiplier, 7);
     }
 }

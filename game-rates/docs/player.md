@@ -77,16 +77,6 @@ usual recipes. Comfort furniture makes more, like other decor and furniture.
 Only the best piece of each comfort category counts, as in the base game. Item
 tooltips show the usual comfort numbers. Your rested time uses the new ones.
 
-## Did you use an older building or comfort mod?
-
-Game Rates replaces Building materials, Building yield and Furniture comfort.
-Their old files no longer load, and you can delete them. On the first start,
-their settings move into Game Rates. Settings under the former id `game-rates`
-move too.
-
-Placed Bulk Workbenches turn into plain workbenches. You lose the Bulk Workbench
-items in inventories.
-
 ## Install
 
 Game Rates comes in enshwick.zip. The

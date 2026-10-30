@@ -77,25 +77,6 @@ the crafting menu. After leaving, the player has the file's own values again.
 A change applies while the game runs. When the game cannot rebuild its recipes,
 the log says so. The new counts then apply at the next start.
 
-## Coming from older versions and mods
-
-Game Rates had the id `game-rates`, and it replaces Building materials, Building
-yield and Furniture comfort. The loader does not start the old files of these
-mods in `mods/` and logs that you can delete them. On the first start their
-settings move into Game Rates, in `mod-configs/` and in each world's copy:
-
-| Old setting                                                                                         | New key                                                                       |
-| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `recipe_multiplier`, `recipe_blocks`, `recipe_overgrowth`, `recipe_decor` of `game-rates.toml`      | `recipes.multiplier`, `recipes.blocks`, `recipes.overgrowth`, `recipes.decor` |
-| `comfort_multiplier` of `game-rates.toml`                                                           | `comfort.multiplier`                                                          |
-| `multiplier`, `blocks`, `overgrowth`, `decor` of `building-materials.toml` or `building-yield.toml` | `recipes.multiplier`, `recipes.blocks`, `recipes.overgrowth`, `recipes.decor` |
-| `multiplier` of `furniture-comfort.toml`                                                            | `comfort.multiplier`                                                          |
-
-A value from `game-rates.toml` wins over the values of the older mods. Building
-materials wins over Building yield. Game Rates drops the `own_workbench` key of
-Building yield. Placed Bulk Workbenches load as plain workbenches. Bulk
-Workbench items in inventories are lost.
-
 ## Install
 
 Download

@@ -61,7 +61,6 @@ impl Mod for AreaLoot {
             id: "enshwick.area-loot",
             side: SERVER,
             name: "Area Loot",
-            was: ["area-loot"],
             points: [points::Eligible],
         )
     }

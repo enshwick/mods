@@ -79,15 +79,15 @@ mod tests {
     }
 
     #[test]
-    fn the_old_owners_file_moves_into_the_world_that_loads() {
+    fn a_world_s_owners_load_with_the_world() {
         let dir = std::env::temp_dir().join(format!(
             "enshwick-personal-safes-worlds-{}",
             std::process::id()
         ));
         let _gone = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join("worlds/world0-aa")).unwrap();
         std::fs::write(
-            dir.join("owners.toml"),
+            dir.join("worlds/world0-aa/owners.toml"),
             "[[safes]]\ncell = [1, 2, 3]\nowner = \"00000000000000ff\"\nname = \"Ann\"\n",
         )
         .unwrap();
@@ -111,9 +111,6 @@ mod tests {
             owners.get(&(1, 2, 3)).map(|safe| safe.owner),
             Some(PlayerKey::new(0xff))
         );
-        assert!(dir.join("worlds/world0-aa/owners.toml").exists());
-        assert!(!dir.join("owners.toml").exists());
-        assert!(dir.join("owners.toml.moved").exists());
         assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         assert_eq!(snapshots().owners.load().len(), 1, "the world's own file");

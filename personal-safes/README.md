@@ -15,8 +15,8 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 ## How does a Safe show its owner?
 
 A Safe gets its owner's name when the owner places it, such as "Safe · Ann". The
-name is in the server's language and shows on hover. An older Safe without a
-name gets one a few seconds after its area loads. The server must know the
+name is in the server's language and shows on hover. A Safe without a name
+gets one a few seconds after its area loads. The server must know the
 owner's name first, from its records or because the owner is online.
 
 Only the owner can rename a Safe. Administrators can rename it too when the
@@ -89,9 +89,7 @@ same form.
 
 The mod keeps owners and allowed players per world, in
 `mod-data/enshwick.personal-safes/worlds/<world>/owners.toml`. Each world a
-player hosts has its own file. Files from 0.1 load as they are. Settings, texts
-and owners under the mod's former id, `safes`, move to the new id on the first
-start.
+player hosts has its own file.
 
 If this file cannot be read, the mod leaves it as it is and keeps every Safe
 without a known owner locked for everyone. The log names the file. Fix or

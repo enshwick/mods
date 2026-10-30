@@ -5,31 +5,21 @@ use enshwick::ItemId;
 use enshwick::content::items::NewItem;
 use enshwick::content::recipes::NewRecipe;
 use enshwick::content::{Guid, Id};
-use enshwick::migrations::Migrations;
 
 /// The vanilla wooden chest item.
 pub const CHEST: Guid = Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d");
 /// The Safe item.
-pub const SAFE: Id = Id::new("safes:safe");
+pub const SAFE: Id = Id::new("enshwick.personal-safes:safe");
 /// The Safe's recipe.
-pub const SAFE_RECIPE: Id = Id::new("safes:safe.recipe");
+pub const SAFE_RECIPE: Id = Id::new("enshwick.personal-safes:safe.recipe");
 /// The Safe's name text.
-pub const SAFE_NAME: Id = Id::new("safes:safe.name");
+pub const SAFE_NAME: Id = Id::new("enshwick.personal-safes:safe.name");
 /// The Safe's description text.
-pub const SAFE_DESCRIPTION: Id = Id::new("safes:safe.description");
-/// The GUID the Safe had before content ids; stacks saved with it stay.
-const OLD_SAFE: Guid = Guid::parse("8a3f6e21-5c4b-4d7e-9f10-2b7c5e6a9d31");
-
-/// Every migration of the mod's content, oldest first.
-#[must_use]
-pub fn migrations() -> Migrations {
-    Migrations::new().add("0.5.0", |m| m.rename_content(OLD_SAFE, SAFE.guid()))
-}
-
-/// Whether `item` is a Safe, under its id or one it had before.
+pub const SAFE_DESCRIPTION: Id = Id::new("enshwick.personal-safes:safe.description");
+/// Whether `item` is a Safe.
 #[must_use]
 pub fn is_safe(item: ItemId) -> bool {
-    enshwick::migrations::current_id(item) == ItemId::from_guid(SAFE.guid())
+    item == ItemId::from_guid(SAFE.guid())
 }
 
 /// The mod's texts, per language.

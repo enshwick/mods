@@ -19,7 +19,6 @@ mod keys;
 pub mod points;
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -32,7 +31,7 @@ use enshwick::events::{
     WorldLoaded, WorldSaved,
 };
 use enshwick::i18n::Language;
-use enshwick::state::{ModLocal, Store, WorldStore};
+use enshwick::state::{ModLocal, WorldStore};
 use enshwick::world::Rename;
 use enshwick::world::{ContainerKinds, World};
 use enshwick::{Entity, Load, Mod, Off, PlayerKey};
@@ -102,13 +101,8 @@ fn set_cost(cost: u32) {
     }
 }
 
-/// The name of the owners' store, per world and in the mod-wide file of
-/// earlier versions.
+/// The name of the owners' store of each world.
 const OWNERS: &str = "owners";
-/// The mod-wide owners file from before owners were kept per world.
-const SHARED_OWNERS_FILE: &str = "owners.toml";
-/// Where the mod-wide owners file goes once a world took its owners.
-const MOVED_OWNERS_FILE: &str = "owners.toml.moved";
 
 /// The owners as stored: one record per Safe.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -122,10 +116,10 @@ struct Record {
     cell: [i64; 3],
     /// The owner's account key, in hex: TOML integers stop at i64.
     owner: String,
-    /// The owner's name as last seen; absent in files from 0.1.
+    /// The owner's name as last seen.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     name: String,
-    /// Players the owner allowed; absent in files from 0.1.
+    /// Players the owner allowed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     allowed: Vec<AllowedRecord>,
 }
@@ -247,12 +241,9 @@ fn save(store: &'static WorldStore<Owners>) {
     }
 }
 
-/// Puts the running world's owners in force for the checks. A world
-/// without owners of its own takes those of the mod-wide `owners.toml`
-/// written before owners were kept per world, once; the file is then
-/// renamed out of the way. While the world's owners do not read, its Safes
-/// stay shut.
-fn open_world(store: &WorldStore<Owners>, dir: &Path, world: World) {
+/// Puts the running world's owners in force for the checks. While the
+/// world's owners do not read, its Safes stay shut.
+fn open_world(store: &WorldStore<Owners>, world: World) {
     // The store stays shut on a world it could not read; the world has a
     // key only on the side that keeps it.
     let unread = store.key().is_none() && world.key().is_some();
@@ -263,27 +254,7 @@ fn open_world(store: &WorldStore<Owners>, dir: &Path, world: World) {
             world.key().unwrap_or_default()
         );
     }
-    let mut owners = store.with(Owners::to_map).unwrap_or_default();
-    let shared = dir.join(SHARED_OWNERS_FILE);
-    if owners.is_empty() && store.key().is_some() && shared.exists() {
-        match Store::<Owners>::new(dir, OWNERS).load() {
-            Ok(old) => {
-                owners = old.to_map();
-                store.update(|kept| *kept = old);
-                let moved = store.flush().map_err(|e| e.to_string()).and_then(|()| {
-                    std::fs::rename(&shared, dir.join(MOVED_OWNERS_FILE)).map_err(|e| e.to_string())
-                });
-                match moved {
-                    Ok(()) => enshwick::info!(
-                        "{} Safe owners moved from owners.toml into this world",
-                        owners.len()
-                    ),
-                    Err(why) => enshwick::warn!("owners.toml stays: {why}"),
-                }
-            }
-            Err(error) => enshwick::warn!("owners.toml not read: {error}"),
-        }
-    }
+    let owners = store.with(Owners::to_map).unwrap_or_default();
     enshwick::info!(
         "{} Safe owners in world {}",
         owners.len(),
@@ -305,13 +276,11 @@ impl Mod for PersonalSafes {
             side: BOTH,
             name: "Personal Safes",
             join: true,
-            was: ["safes"],
             points: [points::Access],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        load.migrate(content::migrations())?;
         let settings: Settings = load.config()?;
         let cost = settings.cost_multiplier;
         cost_in_force().store(cost, Ordering::Relaxed);
@@ -345,7 +314,6 @@ impl Mod for PersonalSafes {
 fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     let world = load.world()?;
     let client = load.host().build().side == Side::CLIENT;
-    let dir = load.data_dir()?;
     // Before the store's own handler, which writes what this hands over.
     load.on::<WorldSaved>(|()| {
         removed().clear();
@@ -357,7 +325,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     let store: &'static WorldStore<Owners> =
         Box::leak(Box::new(load.world_store::<Owners>(OWNERS)?));
     let _first = STORE.set(store);
-    load.on::<WorldLoaded>(move |()| open_world(store, &dir, world))?;
+    load.on::<WorldLoaded>(move |()| open_world(store, world))?;
 
     let _first = access::POINT.set(load.define_point()?);
     load.on_interaction(access::filter)?;
@@ -704,16 +672,6 @@ label_language = \"uk\"
     }
 
     #[test]
-    fn settings_from_0_1_still_parse() {
-        use enshwick::config::Config;
-        let old: Settings =
-            toml::from_str("cost_multiplier = 3\nadmins_can_open = false\n").unwrap();
-        assert_eq!(old.cost_multiplier, 3);
-        assert_eq!(old.label_language, "en");
-        assert!(old.validate().is_ok());
-    }
-
-    #[test]
     fn owners_survive_the_file_with_keys_past_i64() {
         let mut friendly = Safe::new(PlayerKey::new(5), "Ann");
         friendly.allow(PlayerKey::new(u64::MAX - 1), "Bob Lee");
@@ -724,15 +682,5 @@ label_language = \"uk\"
         let text = toml::to_string(&Owners::from_map(&owners)).unwrap();
         let back: Owners = toml::from_str(&text).unwrap();
         assert_eq!(back.to_map(), owners);
-    }
-
-    #[test]
-    fn owners_files_from_0_1_still_load() {
-        let old = "[[safes]]\ncell = [1, 2, 3]\nowner = \"00000000000000ff\"\n";
-        let back: Owners = toml::from_str(old).unwrap();
-        assert_eq!(
-            back.to_map(),
-            FxHashMap::from_iter([((1, 2, 3), Safe::new(PlayerKey::new(0xff), ""))])
-        );
     }
 }

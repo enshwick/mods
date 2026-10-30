@@ -33,11 +33,6 @@ clusters = true
 building_across_seams = true
 ```
 
-This mod joins two former mods, More Altars and Flame altar zones. On the first
-start it takes the settings and data of both into these groups. It reads them
-under each id the former mods had: `enshwick.more-altars`, `flame-altar-count`,
-`enshwick.flame-altar-zones` and `flame-altar-zones`.
-
 ### Altar count
 
 The first entry of `altars_per_flame_level` is Flame level 0. Level 0 comes
@@ -126,10 +121,6 @@ keep the mod running and up to date.
    [`enshwick-better-altars.zip`](https://github.com/enshwick/mod-better-altars/releases/download/dev/enshwick-better-altars.zip).
 2. Extract it into the folder that holds `enshrouded.exe` or
    `enshrouded_server.exe`.
-3. Delete the former mods from `mods/` if they are there:
-   `enshwick-more-altars.dll`, `enshwick-flame-altar-count.dll` and
-   `enshwick-flame-altar-zones.dll`. Enshwick runs only Better Altars and names
-   each old file in `logs/enshwick/loader.log`.
 
 The mod needs the Enshwick loader:
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)

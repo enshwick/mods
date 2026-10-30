@@ -45,8 +45,7 @@ zones work as bases.
 
 Better Altars comes in enshwick.zip, and the
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick. Delete More Altars and Flame altar zones: Better
-Altars takes over their settings.
+put it. It needs Enshwick.
 
 ## Settings
 

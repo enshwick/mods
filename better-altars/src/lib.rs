@@ -2,14 +2,11 @@
 //! up to 179 bases, and Flame Altar zones that touch grow together and can be
 //! built across.
 //!
-//! The two parts were the mods More Altars and Flame altar zones; their
-//! settings are the groups `[count]` and `[zones]`, and their former ids carry
-//! over through the manifest's `was` and a migration.
+//! The two parts keep their settings in the groups `[count]` and `[zones]`.
 
 mod count;
 pub mod geometry;
 mod hold;
-mod migrations;
 mod zones;
 
 use count::{AltarCount, Count};
@@ -45,18 +42,11 @@ impl Mod for BetterAltars {
             side: BOTH,
             name: "Better Altars",
             join: true,
-            was: [
-                "enshwick.more-altars",
-                "flame-altar-count",
-                "enshwick.flame-altar-zones",
-                "flame-altar-zones",
-            ],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
-        load.migrate(migrations::all())?;
         let settings: Settings = load.config()?;
         let count = AltarCount::start(load, &settings.count)?;
         let zones = AltarZones::start(load, &settings.zones)?;
@@ -94,15 +84,11 @@ mod tests {
     use super::*;
     use crate::count::{AltarTable, CAP};
 
-    /// The loader installed on `side` with `settings` and the settings files
-    /// of `others`, each a mod id and its file, and the mod started.
-    fn started(side: Side, settings: &str, others: &[(&str, &str)]) -> enshwick::test::Installed {
-        let host = enshwick::test::FakeHost::new()
+    /// The loader installed on `side` with `settings`, and the mod started.
+    fn started(side: Side, settings: &str) -> enshwick::test::Installed {
+        let loader = enshwick::test::FakeHost::new()
             .side(side)
-            .settings(settings);
-        let loader = others
-            .iter()
-            .fold(host, |host, &(id, text)| host.other_settings(id, text))
+            .settings(settings)
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
@@ -181,108 +167,10 @@ mod tests {
     }
 
     #[test]
-    fn the_former_ids_are_the_manifest_s_was() {
-        use enshwick::abi::Relation;
-
-        let manifest = BetterAltars::manifest();
-        // SAFETY: `manifest!` points `dependencies` at a static array of
-        // `dependency_count` entries.
-        let all =
-            unsafe { std::slice::from_raw_parts(manifest.dependencies, manifest.dependency_count) };
-        let mut was: Vec<&str> = all
-            .iter()
-            .filter(|dependency| dependency.relation == Relation::WAS)
-            // SAFETY: each id is a static string literal of `manifest!`.
-            .filter_map(|dependency| unsafe { dependency.id.as_str() })
-            .collect();
-        let mut former: Vec<&str> = migrations::FORMER.iter().map(|&(id, _)| id).collect();
-        was.sort_unstable();
-        former.sort_unstable();
-        assert_eq!(was, former);
-    }
-
-    const MORE_ALTARS: &str = "altars_per_flame_level = [3, 5, 7]\n";
-    const ZONES: &str = "clusters = false\nbuilding_across_seams = false\n";
-
-    #[test]
-    fn both_merged_mods_settings_carry_over_into_their_groups() {
-        let loader = started(
-            Side::CLIENT,
-            "",
-            &[
-                ("enshwick.more-altars", MORE_ALTARS),
-                ("enshwick.flame-altar-zones", ZONES),
-            ],
-        );
-        let migrated = loader.migrate_settings("").unwrap();
-        let settings: Settings = toml::from_str(&migrated).unwrap();
-        assert_eq!(settings.count.altars_per_flame_level, [3, 5, 7]);
-        assert!(!settings.zones.clusters);
-        assert!(!settings.zones.building_across_seams);
-    }
-
-    #[test]
-    fn the_file_carried_from_a_former_id_loses_its_flat_keys() {
-        for (id, flat) in [
-            ("enshwick.more-altars", MORE_ALTARS),
-            ("enshwick.flame-altar-zones", ZONES),
-        ] {
-            let loader = started(Side::CLIENT, "", &[(id, flat)]);
-            let migrated = loader.migrate_settings(flat).unwrap();
-            let top: toml::Table = toml::from_str(&migrated).unwrap();
-            assert!(
-                top.values().all(toml::Value::is_table),
-                "{id}: only groups are left: {migrated}"
-            );
-            assert!(
-                toml::from_str::<Settings>(&migrated).is_ok(),
-                "{id}: {migrated}"
-            );
-        }
-    }
-
-    #[test]
-    fn each_mod_s_newer_id_wins_over_its_older_one() {
-        let loader = started(
-            Side::CLIENT,
-            "",
-            &[
-                ("flame-altar-count", "altars_per_flame_level = [9]\n"),
-                ("enshwick.more-altars", MORE_ALTARS),
-                (
-                    "flame-altar-zones",
-                    "clusters = true\nbuilding_across_seams = true\n",
-                ),
-                ("enshwick.flame-altar-zones", ZONES),
-            ],
-        );
-        let settings: Settings = toml::from_str(&loader.migrate_settings("").unwrap()).unwrap();
-        assert_eq!(settings.count.altars_per_flame_level, [3, 5, 7]);
-        assert!(!settings.zones.clusters);
-    }
-
-    #[test]
-    fn a_key_no_former_id_gives_keeps_its_default() {
-        let loader = started(
-            Side::CLIENT,
-            "",
-            &[("flame-altar-zones", "clusters = false\n")],
-        );
-        let settings: Settings = toml::from_str(&loader.migrate_settings("").unwrap()).unwrap();
-        assert!(!settings.zones.clusters);
-        assert!(settings.zones.building_across_seams);
-        assert_eq!(
-            settings.count.altars_per_flame_level,
-            Count::default().altars_per_flame_level
-        );
-    }
-
-    #[test]
     fn a_level_outside_the_settings_range_is_held_to_it() {
         let loader = started(
             Side::CLIENT,
             "[count]\naltars_per_flame_level = [0, 40, 300, 5]\n",
-            &[],
         );
         assert_eq!(loader.altar_limit(0, 1), 1);
         assert_eq!(loader.altar_limit(1, 2), 40);
@@ -293,7 +181,7 @@ mod tests {
 
     #[test]
     fn the_mod_asks_for_every_altar_zone_the_table_takes_in_the_game_s_own_bases() {
-        let loader = started(Side::CLIENT, "", &[]);
+        let loader = started(Side::CLIENT, "");
         assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 16)));
         let limit = enshwick::altars::base_limit().unwrap();
         assert_eq!((limit.zones, limit.bases), (u32::from(CAP), 16));
@@ -301,7 +189,7 @@ mod tests {
 
     #[test]
     fn the_bases_setting_is_the_bases_the_mod_asks_for() {
-        let loader = started(Side::SERVER, "[count]\nbases = 40\n", &[]);
+        let loader = started(Side::SERVER, "[count]\nbases = 40\n");
         assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 40)));
         assert_eq!(enshwick::altars::base_limit().unwrap().bases, 40);
         assert!(loader.faults().is_empty());
@@ -334,7 +222,6 @@ mod tests {
         let loader = started(
             Side::CLIENT,
             "[count]\naltars_per_flame_level = [2, 64, 200, 255]\n",
-            &[],
         );
         assert_eq!(loader.altar_limit(1, 2), 64);
         assert_eq!(loader.altar_limit(2, 4), 200);
@@ -455,7 +342,7 @@ mod tests {
 
     #[test]
     fn the_table_answers_the_limit_with_the_base_limits_requested() {
-        let loader = started(Side::CLIENT, "", &[]);
+        let loader = started(Side::CLIENT, "");
         assert!(loader.requested_base_limits().is_some());
         assert_eq!(loader.altar_limit(1, 2), 4);
         assert_eq!(loader.altar_limit(11, 16), 32);
@@ -464,7 +351,7 @@ mod tests {
 
     #[test]
     fn it_sizes_the_zones_of_touching_altars_and_accepts_a_box_across_them() {
-        let loader = started(Side::CLIENT, &Settings::template(), &[]);
+        let loader = started(Side::CLIENT, &Settings::template());
         assert_eq!(loader.altars_opened(), (true, true));
         loader.set_altars(&[altar(Entity(1), 0), altar(Entity(2), 40)]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
@@ -512,7 +399,7 @@ mod tests {
     #[test]
     fn a_world_s_own_clusters_value_applies_when_it_loads() {
         let off = "[zones]\nclusters = false\n";
-        let loader = started(Side::CLIENT, off, &[]);
+        let loader = started(Side::CLIENT, off);
         loader.set_altars(&[altar(Entity(1), 0), altar(Entity(2), 40)]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
         assert_eq!(loader.zone_resizes(), 0);

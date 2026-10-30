@@ -46,8 +46,7 @@ settings:
 
 Better Altars входить в enshwick.zip, а
 [посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод потребує Enshwick. Видаліть More Altars і Flame
-altar zones, якщо вони у вас є: Better Altars бере їхні налаштування.
+показує, куди його покласти. Мод потребує Enshwick.
 
 ## Налаштування
 

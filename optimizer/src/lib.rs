@@ -218,7 +218,6 @@ impl Mod for Optimizer {
             id: "enshwick.optimizer",
             side: BOTH,
             name: "Optimizer",
-            was: ["optimizer", "proton-optimizer"],
         )
     }
 

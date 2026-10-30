@@ -82,10 +82,8 @@ info  [enshwick.optimizer] measure: Wine server: exact waits on, task workers at
 
 The settings file is `mod-configs/enshwick.optimizer.toml`. The mod writes it on
 the first start. Each world keeps its own copy (see
-[Settings](https://github.com/enshwick/enshwick#settings)). On the first start,
-the mod copies the settings it had under its former ids, `optimizer` or
-`proton-optimizer`. The mod's gear on the Mods screen shows the settings in the
-player's game language.
+[Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
+the Mods screen shows the settings in the player's game language.
 
 ```toml
 exact_waits = "auto"

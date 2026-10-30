@@ -98,9 +98,6 @@ value, so the bed cursor and the survivor menu follow the server's world.
 The mod reads it from `mod-configs/enshwick.survivors-per-altar.toml` for every
 world. A change applies when the game starts again.
 
-Settings kept under the mod's former id, `survivors-per-altar`, move to the new
-id on the first start.
-
 ## Install
 
 Download

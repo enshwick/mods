@@ -43,7 +43,7 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
     let inventories = load.inventories()?;
     let world = load.world()?;
     let scheduler = load.scheduler()?;
-    let staffs = crate::staffs::known_ids();
+    let staffs = crate::staffs::copy_ids();
     let sweep = {
         let staffs = staffs.clone();
         move || {

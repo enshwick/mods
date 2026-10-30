@@ -189,13 +189,11 @@ impl Mod for SurvivorsPerAltar {
             side: BOTH,
             name: "Survivors per Altar",
             join: true,
-            was: ["survivors-per-altar"],
             points: [points::CopyLimit, points::ChargeCost],
         )
     }
 
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        load.migrate(staffs::migrations())?;
         let settings: Settings = load.config()?;
         // The staffs stay in the game when they are off, so a value that
         // changes while it runs, or the server's on a joined client, finds
@@ -731,7 +729,7 @@ copy_staff_locked_chest_chance = 0.0
         const DROP: u32 = 52;
         /// The entity the game's inventory reads skip: none here.
         static NOBODY: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-        let staff = staffs::known_ids()[0];
+        let staff = staffs::copy_ids()[0];
         let mut setup = vec![0u8; 0x54];
         setup[0x53] = 1;
         let mut stacks = vec![0u8; 0x60];

@@ -8,11 +8,10 @@
 //! charge as consuming, which makes the game take the staff in the same
 //! transaction as the spawn or move, and only when that works.
 
+use enshwick::content::Id;
 use enshwick::content::icons::{Icon, Pixels, Tint};
 use enshwick::content::items::{FuelSetup, ImpactUiValue, NewItem, StatFormat};
-use enshwick::content::{Guid, Id};
 use enshwick::i18n::{Language, Texts};
-use enshwick::migrations::Migrations;
 use enshwick::state::ModLocal;
 use enshwick::survivors::{WORKSHOP_SURVIVORS, WorkshopSurvivor};
 use enshwick::{ItemId, Load, Off};
@@ -21,9 +20,7 @@ use enshwick::{ItemId, Load, Off};
 pub(crate) const TEXTS: &str = include_str!("texts.toml");
 
 /// The template of every copy staff's own entity, which keeps its charges.
-const STAFF_ENTITY: Id = Id::new("survivors-per-altar:copy-staff.entity");
-/// The GUID the template had before content ids; saved staffs name it.
-const OLD_STAFF_ENTITY: Guid = Guid::parse("79250fcb-6170-4767-bfbb-2745e36e905a");
+const STAFF_ENTITY: Id = Id::new("enshwick.survivors-per-altar:copy-staff.entity");
 /// The colour copy staffs' icons take, so they stand apart from the
 /// survivors' own staffs.
 const ICON_TINT: Tint = Tint {
@@ -31,10 +28,10 @@ const ICON_TINT: Tint = Tint {
     amount: 55,
 };
 /// The tag of the tooltip line with a staff's full charges.
-const FULL_CHARGES: Id = Id::new("survivors-per-altar:copy-staff.full-charges");
+const FULL_CHARGES: Id = Id::new("enshwick.survivors-per-altar:copy-staff.full-charges");
 
 /// The namespace and folder of every copy staff's ids.
-const STAFF_IDS: &str = "survivors-per-altar:copy-staff/";
+const STAFF_IDS: &str = "enshwick.survivors-per-altar:copy-staff/";
 
 /// A workshop survivor and its copy staff.
 #[derive(Debug)]
@@ -49,9 +46,6 @@ pub(crate) struct Staff {
     pub description: Id,
     /// Its icon: the vanilla staff's, recoloured.
     pub icon: Id,
-    /// The GUID the copy staff had before content ids, when it had one;
-    /// saved stacks keep it.
-    pub old: Option<Guid>,
 }
 
 impl Staff {
@@ -76,87 +70,9 @@ impl Staff {
             name: id(".name")?,
             description: id(".description")?,
             icon: id(".icon")?,
-            old: OLD_STAFFS
-                .iter()
-                .find(|(key, _)| *key == survivor.key())
-                .map(|&(_, old)| old),
         })
     }
 }
-
-/// The GUIDs the copy staffs had before content ids, by survivor key: saved
-/// stacks of those days hold them. A survivor the game adds later has none.
-const OLD_STAFFS: &[(&str, Guid)] = &[
-    (
-        "blacksmith",
-        Guid::parse("dac11dad-687c-4397-b528-fdec7cdb6ba1"),
-    ),
-    (
-        "blacksmith_assistant",
-        Guid::parse("10b19c0f-b86a-4bb2-96c6-5dfef7e996d3"),
-    ),
-    (
-        "alchemist",
-        Guid::parse("448e4f2a-d620-41ca-bfc6-f311320779e5"),
-    ),
-    (
-        "alchemist_assistant",
-        Guid::parse("bbecddee-022a-4506-bde1-ffe07d1b6727"),
-    ),
-    (
-        "carpenter",
-        Guid::parse("177d03e4-ac34-439a-b342-fee6973629f6"),
-    ),
-    (
-        "carpenter_assistant",
-        Guid::parse("f54ca128-3ed7-4e30-bb93-6f82d8fc0d29"),
-    ),
-    (
-        "hunter",
-        Guid::parse("8057fdfe-c990-4338-8a8d-a850a12458ab"),
-    ),
-    (
-        "hunter_assistant",
-        Guid::parse("a3bca904-6d54-4c66-a11b-8fc0f52daba5"),
-    ),
-    (
-        "farmer",
-        Guid::parse("42f978ea-d349-4f44-8796-b61bebaa7123"),
-    ),
-    (
-        "farmer_assistant",
-        Guid::parse("d5bf7763-a011-4ad0-af9b-09b67e1f5a91"),
-    ),
-    ("bard", Guid::parse("afbaccbe-d61d-4997-84d8-9e2c69359ee8")),
-    (
-        "bard_assistant",
-        Guid::parse("17dfc67d-1749-4318-88f7-6aa1c48064f2"),
-    ),
-    (
-        "crypt_keeper",
-        Guid::parse("4e56d680-2fe3-497b-ad1c-40a8306b2923"),
-    ),
-    (
-        "crypt_keeper_assistant",
-        Guid::parse("9d99fcc0-7431-41a3-a1e3-9f37cd5ba8a7"),
-    ),
-    (
-        "barber",
-        Guid::parse("de8e029e-5be3-4ad9-ad7d-817538046f9a"),
-    ),
-    (
-        "researcher",
-        Guid::parse("5eaf09fd-a724-4d8e-93f4-3bf9e3395e83"),
-    ),
-    (
-        "trader",
-        Guid::parse("6181d065-0d20-4361-ab4f-2622ceefa542"),
-    ),
-    (
-        "fisher",
-        Guid::parse("b19d25af-3283-416e-8173-9506ddd8f26e"),
-    ),
-];
 
 static STAFFS: ModLocal<Vec<Staff>> = ModLocal::new();
 
@@ -165,38 +81,14 @@ pub(crate) fn staffs() -> &'static [Staff] {
     STAFFS.get_or_init(|| WORKSHOP_SURVIVORS.iter().filter_map(Staff::of).collect())
 }
 
-/// The copy staff with the game id `item`, its own or the one it had
-/// before.
+/// The copy staff with the game id `item`.
 pub(crate) fn copy_staff(item: ItemId) -> Option<&'static Staff> {
-    let item = enshwick::migrations::current_id(item);
     staffs().iter().find(|s| s.item() == item)
 }
 
 /// The game ids of every copy staff.
 pub(crate) fn copy_ids() -> Vec<ItemId> {
     staffs().iter().map(Staff::item).collect()
-}
-
-/// The game ids of every copy staff, with the ids saved stacks may hold.
-pub(crate) fn known_ids() -> Vec<ItemId> {
-    staffs()
-        .iter()
-        .flat_map(|s| std::iter::once(s.item()).chain(s.old.map(ItemId::from_guid)))
-        .collect()
-}
-
-/// Every migration of the copy staffs, oldest first: the GUIDs they had
-/// before content ids.
-pub(crate) fn migrations() -> Migrations {
-    Migrations::new().add("0.5.0", |mut m| {
-        m = m.rename_content(OLD_STAFF_ENTITY, STAFF_ENTITY.guid());
-        for staff in staffs() {
-            if let Some(old) = staff.old {
-                m = m.rename_content(old, staff.copy.guid());
-            }
-        }
-        m
-    })
 }
 
 /// `template` with `{survivor}` filled in.
@@ -270,9 +162,6 @@ pub(crate) fn file(load: &mut Load<'_>) -> Result<(), Off> {
     for staff in staffs() {
         let survivor = staff.survivor.id();
         load.add_summon_item(staff.item(), survivor)?;
-        if let Some(old) = staff.old {
-            load.add_summon_item(ItemId::from_guid(old), survivor)?;
-        }
     }
     Ok(())
 }
@@ -283,22 +172,11 @@ mod tests {
 
     #[test]
     fn every_workshop_survivor_has_a_staff_with_its_own_ids() {
-        // A mod life of its own, with no migration declared yet.
         let _loader = enshwick::test::FakeHost::new().install();
         let mut ids = std::collections::BTreeSet::new();
         for staff in staffs() {
             for id in [staff.copy, staff.name, staff.description, staff.icon] {
                 assert!(ids.insert(ItemId::from_guid(id.guid())), "{}", staff.key());
-            }
-            if let Some(old) = staff.old {
-                let old = ItemId::from_guid(old);
-                assert!(ids.insert(old), "{}", staff.key());
-                assert!(known_ids().contains(&old), "{}", staff.key());
-                assert_eq!(
-                    copy_staff(old).map(Staff::key),
-                    None,
-                    "only once the migration is declared"
-                );
             }
             let vanilla = ItemId::from_guid(staff.survivor.staff());
             assert_ne!(staff.item(), vanilla);
@@ -306,13 +184,6 @@ mod tests {
             assert_eq!(copy_staff(vanilla).map(Staff::key), None);
         }
         assert_eq!(staffs().len(), WORKSHOP_SURVIVORS.len());
-    }
-
-    #[test]
-    fn every_old_staff_guid_belongs_to_a_workshop_survivor() {
-        for (key, _) in OLD_STAFFS {
-            assert!(WorkshopSurvivor::find(key).is_some(), "{key}");
-        }
     }
 
     #[test]

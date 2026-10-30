@@ -14,11 +14,11 @@ use enshwick::{Load, Off};
 
 /// The probe's key for the modifiers its commands set.
 const KEY: &str = "probe-command";
-/// The stat the probe defines, under the namespace saved worlds know it by.
-const LUCKY: &str = "probe:lucky";
+/// The stat the probe defines.
+const LUCKY: &str = "enshwick.probe:lucky";
 /// The affixes the probe defines.
-const STURDY: &str = "probe:sturdy";
-const FORTUNATE: &str = "probe:fortunate";
+const STURDY: &str = "enshwick.probe:sturdy";
+const FORTUNATE: &str = "enshwick.probe:fortunate";
 /// The seed of the probe's check roll.
 const SEED: u64 = 0x5eed;
 

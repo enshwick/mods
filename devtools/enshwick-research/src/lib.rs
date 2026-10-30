@@ -130,7 +130,6 @@ impl Mod for Research {
             side: BOTH,
             name: "Research",
             developer: true,
-            was: ["research"],
             builds: [{
                 side: CLIENT,
                 guid: "69f0e9573b32c24a8838d3fff550824c",

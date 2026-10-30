@@ -330,7 +330,6 @@ impl Mod for Probe {
             side: SERVER,
             name: "Probe",
             developer: true,
-            was: ["probe"],
         )
     }
 

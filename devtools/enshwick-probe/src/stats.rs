@@ -14,8 +14,8 @@ use enshwick::{Load, Off};
 const SETTLE: Duration = Duration::from_secs(1);
 /// The extra maximum health the probe gives.
 const EXTRA: i16 = 100;
-/// The stat the probe defines, under the namespace saved worlds know it by.
-const LUCK: &str = "probe:luck";
+/// The stat the probe defines.
+const LUCK: &str = "enshwick.probe:luck";
 /// The probe's key for its modifiers.
 const KEY: &str = "probe";
 

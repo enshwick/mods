@@ -42,8 +42,6 @@ Shared Experience входить в enshwick.zip.
 
 Це значення змінюється в грі, як показує
 [посібник про налаштування](https://enshwick.github.io/docs/uk/guides/change-mod-settings/).
-Під час першого запуску мод бере значення й позначку кожного світу з попередньої
-назви, `shared-experience`.
 
 ## Гра по мережі
 

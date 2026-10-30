@@ -31,9 +31,7 @@ character to other worlds.
 The settings file is `mod-configs/enshwick.shared-experience.toml`. The mod
 writes it on the first start. Each world keeps its own copy (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
-the Mods screen shows the setting in the player's game language. On the first
-start, the mod copies its settings and marks from its former id,
-`shared-experience`.
+the Mods screen shows the setting in the player's game language.
 
 ```toml
 enabled = true
@@ -61,11 +59,6 @@ not count in the join check.
 
 The mark of each world is saved in
 `mod-data/enshwick.shared-experience/worlds/<world>/experience.toml`. It stays
-across restarts, on a dedicated server and in a hosted game. An older version
-kept one mark for the whole server in
-`mod-data/enshwick.shared-experience/experience.toml`. That mark moves once into
-the first world that loads without a mark of its own. The old file is then
-renamed `experience.toml.moved`. If the old file cannot be read, it stays where
-it is, the log says why, and the world starts without a mark.
+across restarts, on a dedicated server and in a hosted game.
 
 Licensed under [MIT](LICENSE).

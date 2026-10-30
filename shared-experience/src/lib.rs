@@ -11,13 +11,12 @@
 
 mod share;
 
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use enshwick::events::{ShutdownStarted, WorldLoaded};
 use enshwick::progress::Experience;
-use enshwick::state::{ModLocal, Store, WorldStore};
+use enshwick::state::{ModLocal, WorldStore};
 use enshwick::{Load, Mod, Off};
 
 pub use share::{Character, Levels, high_water};
@@ -141,31 +140,9 @@ fn keep(store: &WorldStore<Saved>) {
     }
 }
 
-/// Puts the loaded world's mark in force. A world without a mark of its own
-/// takes the one the mod kept for the whole server before marks were kept
-/// per world, once; that file is then renamed out of the way.
-fn open_world(store: &WorldStore<Saved>, dir: &Path) {
-    let mut mark = store.with(|saved| saved.high_water).unwrap_or(0);
-    let server_wide = dir.join("experience.toml");
-    if mark == 0 && store.key().is_some() && server_wide.exists() {
-        match Store::<Saved>::new(dir, "experience").load() {
-            Ok(old) => {
-                mark = old.high_water;
-                store.update(|saved| saved.high_water = mark);
-                let moved = store.flush().map_err(|e| e.to_string()).and_then(|()| {
-                    std::fs::rename(&server_wide, dir.join("experience.toml.moved"))
-                        .map_err(|e| e.to_string())
-                });
-                match moved {
-                    Ok(()) => enshwick::info!(
-                        "experience mark {mark} moved from experience.toml into this world"
-                    ),
-                    Err(why) => enshwick::warn!("experience.toml stays: {why}"),
-                }
-            }
-            Err(error) => enshwick::warn!("experience.toml not read: {error}"),
-        }
-    }
+/// Puts the loaded world's mark in force.
+fn open_world(store: &WorldStore<Saved>) {
+    let mark = store.with(|saved| saved.high_water).unwrap_or(0);
     let shared = shared();
     shared.stored.store(mark, Ordering::Relaxed);
     let mark = shared
@@ -188,7 +165,6 @@ impl Mod for SharedExperience {
             id: "enshwick.shared-experience",
             side: SERVER,
             name: "Shared Experience",
-            was: ["shared-experience"],
         )
     }
 
@@ -199,7 +175,6 @@ impl Mod for SharedExperience {
             enshwick::info!("shared experience {}", on_off(settings.enabled));
         })?;
         load.on_experience(share_experience)?;
-        let dir = load.data_dir()?;
         // The store closes at shutdown in a handler of its own: the mark the
         // last step moved goes to it first, as no tick follows.
         let last: Arc<OnceLock<WorldStore<Saved>>> = Arc::default();
@@ -217,7 +192,7 @@ impl Mod for SharedExperience {
             shared().moment.store(0, Ordering::Relaxed);
             keep(&kept);
         })?;
-        load.on::<WorldLoaded>(move |()| open_world(&store, &dir))?;
+        load.on::<WorldLoaded>(move |()| open_world(&store))?;
         // The next game may be another world.
         load.on::<ShutdownStarted>(|()| {
             let shared = shared();
@@ -236,6 +211,8 @@ enshwick::declare_mod!(SharedExperience);
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use enshwick::config::Config as _;
 
     use super::*;
@@ -299,23 +276,16 @@ mod tests {
     fn a_world_raises_the_trailing_keeps_its_mark_and_a_fresh_world_starts_clean() {
         let dir = std::env::temp_dir().join(format!("shared-experience-{}", std::process::id()));
         let _fresh = std::fs::remove_dir_all(&dir);
-        // A mark kept for the whole server before marks were per world.
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join("worlds").join("first")).unwrap();
         std::fs::write(
-            dir.join("experience.toml"),
+            dir.join("worlds").join("first").join("experience.toml"),
             "high_water = 30
 ",
         )
         .unwrap();
 
         let loader = game(&dir, "first");
-        assert_eq!(
-            shared().high_water.load(Ordering::Relaxed),
-            30,
-            "moved into the first world"
-        );
-        assert!(!dir.join("experience.toml").exists());
-        assert!(dir.join("experience.toml.moved").exists());
+        assert_eq!(shared().high_water.load(Ordering::Relaxed), 30);
         let mut rows = [
             Experience {
                 entity: enshwick::Entity(1),
@@ -337,7 +307,7 @@ mod tests {
         assert_eq!(
             (rows[0].gained, rows[1].gained),
             (70, 70),
-            "both catch up with the moved mark"
+            "both catch up with the world's mark"
         );
         // The game stops right after that step: no tick hands the mark over.
         assert_eq!(loader.raise::<ShutdownStarted>(&()), 3);
@@ -362,12 +332,6 @@ mod tests {
 ",
         )
         .unwrap();
-        std::fs::write(
-            dir.join("experience.toml.moved"),
-            "high_water = 30
-",
-        )
-        .unwrap();
         let _loader = game(&dir, "second");
         assert_eq!(shared().high_water.load(Ordering::Relaxed), 0);
         let _cleaned = std::fs::remove_dir_all(&dir);
@@ -385,38 +349,8 @@ mod tests {
 ",
         )
         .unwrap();
-        // A server-wide mark left beside it is not this world's.
-        std::fs::write(
-            dir.join("experience.toml"),
-            "high_water = 30
-",
-        )
-        .unwrap();
         let _loader = game(&dir, "first");
         assert_eq!(shared().high_water.load(Ordering::Relaxed), 70);
-        assert!(dir.join("experience.toml").exists());
-        let _cleaned = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn an_unreadable_server_wide_mark_stays_in_place_and_says_so() {
-        let dir =
-            std::env::temp_dir().join(format!("shared-experience-broken-{}", std::process::id()));
-        let _fresh = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("experience.toml"), "high_water = \"thirty\"\n").unwrap();
-        let loader = game(&dir, "first");
-        assert_eq!(shared().high_water.load(Ordering::Relaxed), 0);
-        assert!(dir.join("experience.toml").exists(), "left for the admin");
-        assert!(!dir.join("experience.toml.moved").exists());
-        assert!(
-            loader
-                .logs()
-                .iter()
-                .any(|(_, line)| line.starts_with("experience.toml not read")),
-            "{:?}",
-            loader.logs()
-        );
         let _cleaned = std::fs::remove_dir_all(&dir);
     }
 

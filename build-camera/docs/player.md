@@ -38,8 +38,7 @@ put it. It needs Enshwick.
 
 You change this value in the game, as the
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
-shows. On the first start the mod keeps the value you set under its former name,
-`build-camera`.
+shows.
 
 ## Multiplayer
 

@@ -40,8 +40,6 @@ Build Camera входить в enshwick.zip, а
 
 Це значення змінюється в грі, як показує
 [посібник про налаштування](https://enshwick.github.io/docs/uk/guides/change-mod-settings/).
-Під час першого запуску мод бере значення, задане під попередньою назвою,
-`build-camera`.
 
 ## Гра по мережі
 

@@ -79,7 +79,6 @@ impl Mod for BuildCamera {
             side: BOTH,
             name: "Build Camera",
             join: true,
-            was: ["build-camera"],
         )
     }
 

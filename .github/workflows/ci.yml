@@ -34,6 +34,7 @@ jobs:
       contents: read
     outputs:
       skip: ${{ steps.scope.outputs.skip }}
+      pages: ${{ steps.scope.outputs.pages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,7 +47,9 @@ jobs:
           BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
         run: |
           reason=""
+          pages=true
           if [ "$FULL" != true ]; then
+            git diff --name-only "$BASE...HEAD" | grep -qE '^[^/]+/docs/player[^/]*\.md$' || pages=false
             never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/(dev|release-plz)\.yml|actions/release-files/.*)$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
             if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
               reason="no file that builds changed"
@@ -54,6 +57,39 @@ jobs:
             fi
           fi
           echo "skip=$reason" >> "$GITHUB_OUTPUT"
+          echo "pages=$pages" >> "$GITHUB_OUTPUT"
+
+  # Every player page against the schema and rules the site builds it with,
+  # from the site's own checker, so the two never disagree.
+  pages:
+    needs: scope
+    if: needs.scope.outputs.pages == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/docs
+          path: .site
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      # No lifecycle scripts: the site's only one installs git hooks.
+      - name: Install the site's packages
+        working-directory: .site
+        run: bun install --frozen-lockfile --ignore-scripts --production
+
+      - name: Check the player pages
+        run: bun .site/tools/check-player-page.ts ./*/docs/player*.md
 
   rust:
     needs: scope
@@ -174,7 +210,7 @@ jobs:
 
   # The required check: every part passed, or there was nothing to prove.
   check:
-    needs: [scope, rust, windows]
+    needs: [scope, pages, rust, windows]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 2
@@ -183,9 +219,10 @@ jobs:
       - name: Result
         env:
           SCOPE: ${{ needs.scope.result }}
+          PAGES: ${{ needs.pages.result }}
           RUST: ${{ needs.rust.result }}
           WINDOWS: ${{ needs.windows.result }}
         run: |
-          echo "scope: $SCOPE, rust: $RUST, Windows tests: $WINDOWS"
+          echo "scope: $SCOPE, player pages: $PAGES, rust: $RUST, Windows tests: $WINDOWS"
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
-          [ "$SCOPE" = success ] && ok "$RUST" && ok "$WINDOWS"
+          [ "$SCOPE" = success ] && ok "$PAGES" && ok "$RUST" && ok "$WINDOWS"

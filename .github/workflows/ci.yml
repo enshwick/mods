@@ -60,7 +60,8 @@ jobs:
           echo "pages=$pages" >> "$GITHUB_OUTPUT"
 
   # Every player page against the schema and rules the site builds it with,
-  # from the site's own checker, so the two never disagree.
+  # from the site's own checker, so the two never disagree. The site stays at
+  # one commit, which Renovate moves.
   pages:
     needs: scope
     if: needs.scope.outputs.pages == 'true'
@@ -76,6 +77,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: enshwick/docs
+          ref: 388629e10aeb062bf07822db7567a436c6fa2bbb # main
           path: .site
           persist-credentials: false
 

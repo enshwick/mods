@@ -37,18 +37,27 @@ const MAX_LOGGED: usize = 40;
 
 /// The replicated components that hold an entity id, with its offset.
 const REFERENCES: [(&str, &str, usize); 4] = [
+    // Research on how entities link: the API has no id for a despawn link.
+    // ast-grep-ignore: engine-names-stay-in-loader
     ("keen::ecs::DespawnLink", "DespawnLink.parentEntityId", 0),
     (
+        // The owner link, which the API reads only inside inventory walks.
+        // ast-grep-ignore: engine-names-stay-in-loader
         "keen::ecs::OwnerRelationship",
         "OwnerRelationship.ownerEntityId",
         0,
     ),
     (
+        // The hearth a survivor's comfort points at, which the API has no
+        // id for yet.
+        // ast-grep-ignore: engine-names-stay-in-loader
         "keen::ecs::NetworkComfort",
         "NetworkComfort.hearthEntityId",
         0,
     ),
     (
+        // The entity an enemy aims at, which the API has no id for yet.
+        // ast-grep-ignore: engine-names-stay-in-loader
         "keen::ecs::AggroTargetNetworkData",
         "AggroTargetNetworkData.entityId",
         4,
@@ -56,6 +65,9 @@ const REFERENCES: [(&str, &str, usize); 4] = [
 ];
 
 /// The component only the local player's character has on a client.
+// The research tells the local player apart by a component the API has no
+// id for yet.
+// ast-grep-ignore: engine-names-stay-in-loader
 const LOCAL_PLAYER: &str = "keen::ecs::ClientPlayerInput";
 
 /// The engine's layout on client build 1269579, as the loader's build

@@ -49,6 +49,9 @@ impl RawStats {
             ("Stamina", "attribute.stamina", "attribute.stamina_max_slot"),
             ("Mana", "attribute.mana", "attribute.mana_max_slot"),
         ] {
+            // The smoke test reads each attribute set raw, through the
+            // reflection API by engine name, to compare with the typed calls.
+            // ast-grep-ignore: engine-names-stay-in-loader
             let ty_name = format!("keen::ecs::{name}");
             sets.push(Set {
                 name,
@@ -59,7 +62,12 @@ impl RawStats {
             });
         }
         Ok(Self {
+            // The replicated health the smoke test compares the raw read
+            // with, resolved by engine name.
+            // ast-grep-ignore: engine-names-stay-in-loader
             network_health: ComponentType::resolve(load, "keen::ecs::NetworkHealth").ok(),
+            // The replicated stamina, compared the same way.
+            // ast-grep-ignore: engine-names-stay-in-loader
             network_stamina: ComponentType::resolve(load, "keen::ecs::NetworkStamina").ok(),
             data_offset: slot("ecs.level_data_offset")?,
             flags: slot("ecs.level_flags")?,

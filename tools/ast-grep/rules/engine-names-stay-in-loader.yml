@@ -5,14 +5,14 @@ message: a mod names game data through the API's ids and types, not an engine na
 note: >-
   Engine names, offsets and addresses live in the loader and its build tables,
   so a game update changes a table, not every mod. The rule reads string
-  literals that spell a `keen::` name in the mods and their tests. The
-  developer tools in `devtools/` are left out: the probe checks that the
-  API's reflection calls resolve engine names, and the research mod reads
-  engine types the API has no call for yet. An offset or an address in a
-  number is left to review.
+  literals that spell a `keen::` name in the mods and their tests; a developer
+  tool that needs one says why beside it. A reflected name without the
+  `keen::` prefix, and an offset or an address in a number, are not seen and
+  are left to review.
 ignores:
-  - "devtools/**"
   - "tools/**"
 rule:
-  kind: string_literal
+  any:
+    - kind: string_literal
+    - kind: raw_string_literal
   regex: '\bkeen::'

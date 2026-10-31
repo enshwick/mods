@@ -8,6 +8,8 @@ invalid:
   - "fn f(load: &Load) { let beds = ComponentType::resolve(load, \"keen::ecs::NpcBed\"); }"
   - "const BED: &str = \"keen::ecs::NpcBed\";"
   - "fn f() -> String { format!(\"{}\", \"keen::ItemInstance\") }"
+  - "const BED: &str = r\"keen::ecs::NpcBed\";"
+  - "const BED: &str = r#\"keen::ecs::NpcBed\"#;"
   - |
     #[cfg(test)]
     mod tests {

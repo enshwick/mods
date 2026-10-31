@@ -25,7 +25,7 @@ settings:
 ---
 
 - Each Flame level allows twice as many Flame Altars as in the base game: 4 at
-  Flame level 1, up to 32 from level 11 on. You choose the count.
+  level 1, up to 32 from level 11 on. You choose the count.
 - Flame Altar zones that touch form a group. Each altar of the group grows, so
   the group covers as much ground as its altars would apart. No zone shrinks.
 - You may place a piece across the seam between two zones of a group.
@@ -37,7 +37,9 @@ The server and every player need it.
 ## What happens past 16 altars?
 
 Up to 255 altars fit in 16 bases: altars whose zones touch share one. The game
-refuses an altar that would start a 17th base. Set `count.bases` to allow up to
+refuses an altar that would start a 17th base.
+
+Set `count.bases` to allow up to
 179 bases, then start the game again. Without the mod, only the first 16 altar
 zones work as bases.
 

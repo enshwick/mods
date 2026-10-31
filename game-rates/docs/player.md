@@ -74,8 +74,9 @@ settings:
 
 Crafting stations, chests, storage shelves, altars and water devices keep their
 usual recipes. Comfort furniture makes more, like other decor and furniture.
-Only the best piece of each comfort category counts, as in the base game. Item
-tooltips show the usual comfort numbers. Your rested time uses the new ones.
+Only the best piece of each comfort category counts, as in the base game.
+
+Item tooltips show the usual comfort numbers. Your rested time uses the new ones.
 
 ## Install
 

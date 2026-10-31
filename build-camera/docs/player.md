@@ -17,9 +17,11 @@ settings:
 
 ## When does fly mode work?
 
-The usual limits of the base game stay. Fly mode starts only near a building
-zone, for a player allowed to edit the base. You must be alive and not gliding.
-Fly mode ends when one of these no longer holds.
+The usual limits of the base game stay.
+
+Fly mode starts only near a building zone, for a player allowed to edit the
+base. You must be alive and not gliding. Fly mode ends when one of these no
+longer holds.
 
 Build reach is the usual one, measured from the spark.
 

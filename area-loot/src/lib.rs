@@ -13,11 +13,12 @@ use enshwick::{Load, Mod, Off};
 
 /// The labels and descriptions of the settings and the mod, a table per
 /// language.
+#[cfg(test)]
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Area Loot settings.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+#[enshwick::config]
+#[derive(Debug)]
 struct Settings {
     /// Metres across the ground from the emptied container.
     #[config(runtime, range = 0.1..=50.0)]
@@ -58,7 +59,7 @@ pub struct AreaLoot;
 
 impl Mod for AreaLoot {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let _texts = load.texts(TEXTS)?;
+        let _texts = load.texts()?;
         load.apply_config(|settings: &Settings| {
             take::apply(settings);
             describe(settings);

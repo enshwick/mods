@@ -56,8 +56,8 @@ const CHECK_DELAY: Duration = Duration::from_secs(10);
 const NOTICE: &str = "Probe notice";
 
 /// Probe settings, read at start.
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug, Default)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "independent switches of a development mod's settings file"

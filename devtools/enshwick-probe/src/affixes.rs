@@ -17,8 +17,8 @@ const KEY: &str = "probe-command";
 /// The stat the probe defines.
 const LUCKY: enshwick::content::Id = enshwick::content::id!("lucky");
 /// The affixes the probe defines.
-const STURDY: &str = "sturdy";
-const FORTUNATE: &str = "fortunate";
+const STURDY: enshwick::content::Id = enshwick::content::id!("sturdy");
+const FORTUNATE: enshwick::content::Id = enshwick::content::id!("fortunate");
 /// The seed of the probe's check roll.
 const SEED: u64 = 0x5eed;
 
@@ -43,31 +43,22 @@ impl AffixChecks {
         let world = load.world()?;
         let mut kinds = Vec::new();
         for (id, _) in builtin::ALL {
-            kinds.push((id.to_owned(), load.open_stat(id)?));
+            kinds.push((id.to_string(), load.open_stat(id)?));
         }
-        let lucky = load.define_stat(
-            &LUCKY.to_string(),
-            &StatDef::additive("probe.lucky").range(0.0, 100.0),
-        )?;
+        let lucky = load.define_stat(LUCKY, &StatDef::additive().range(0.0, 100.0))?;
         kinds.push((LUCKY.to_string(), lucky));
         let health = load.open_stat(builtin::HEALTH_MAX)?;
         load.define_affix(
             STURDY,
-            &AffixDef::new(
-                "probe.affix.sturdy",
-                ItemCategoryMask::EQUIPMENT | ItemCategoryMask::WEAPONS,
-            )
-            .with(Range::new(health, Op::Add, 10.0, 30.0).step(1.0)),
+            &AffixDef::new(ItemCategoryMask::EQUIPMENT | ItemCategoryMask::WEAPONS)
+                .with(Range::new(health, Op::Add, 10.0, 30.0).step(1.0)),
         )?;
         load.define_affix(
             FORTUNATE,
-            &AffixDef::new(
-                "probe.affix.fortunate",
-                ItemCategoryMask::EQUIPMENT | ItemCategoryMask::WEAPONS,
-            )
-            .with(Range::new(lucky, Op::Add, 1.0, 5.0).step(1.0))
-            .rarity(ItemRarity::Rare)
-            .weight(30),
+            &AffixDef::new(ItemCategoryMask::EQUIPMENT | ItemCategoryMask::WEAPONS)
+                .with(Range::new(lucky, Op::Add, 1.0, 5.0).step(1.0))
+                .rarity(ItemRarity::Rare)
+                .weight(30),
         )?;
         Ok(Self {
             affixes: load.affixes(),

@@ -42,8 +42,8 @@ use crate::actions::Phrases;
 use crate::locks::Relock;
 
 /// Safe settings.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 #[config(validate = Settings::check)]
 struct Settings {
     /// The Safe costs the wooden chest's ingredients times this. A joined
@@ -273,7 +273,7 @@ impl Mod for PersonalSafes {
         let settings: Settings = load.config()?;
         let cost = settings.cost_multiplier;
         cost_in_force().store(cost, Ordering::Relaxed);
-        let texts = load.texts(content::TEXTS)?;
+        let texts = load.texts()?;
         load.add_texts(
             &texts,
             &[

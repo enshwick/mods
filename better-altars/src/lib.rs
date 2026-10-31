@@ -15,11 +15,12 @@ use enshwick::{Load, Mod, Off};
 use zones::{AltarZones, Zones};
 
 /// The labels of the settings on the Mods screen, per language.
+#[cfg(test)]
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Better Altars: how many altars, then how their zones grow.
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug, Default)]
 struct Settings {
     /// How many Flame Altars each Flame level allows.
     #[config(group)]
@@ -38,7 +39,7 @@ pub struct BetterAltars {
 
 impl Mod for BetterAltars {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let _texts = load.texts(TEXTS)?;
+        let _texts = load.texts()?;
         let settings: Settings = load.config()?;
         let count = AltarCount::start(load, &settings.count)?;
         let zones = AltarZones::start(load, &settings.zones)?;

@@ -53,8 +53,8 @@ fn requested_bases(bases: u8) -> u32 {
 }
 
 /// How many altars each Flame level allows.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 pub(crate) struct Count {
     /// Altars this Flame level allows, from 1 to 255; the list starts at level
     /// 0, before the level 1 a new world starts at, and levels past it use

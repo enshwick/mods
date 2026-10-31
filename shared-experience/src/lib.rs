@@ -22,11 +22,12 @@ use enshwick::{Load, Mod, Off};
 pub use share::{Character, Levels, high_water};
 
 /// The labels and descriptions of the settings, a table per language.
+#[cfg(test)]
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Shared Experience settings.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+#[enshwick::config]
+#[derive(Debug)]
 struct Settings {
     /// Every character catches up with the one furthest ahead in experience.
     #[config(runtime)]
@@ -161,7 +162,7 @@ pub struct SharedExperience;
 
 impl Mod for SharedExperience {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let _texts = load.texts(TEXTS)?;
+        let _texts = load.texts()?;
         load.apply_config(|settings: &Settings| {
             shared().enabled.store(settings.enabled, Ordering::Relaxed);
             enshwick::info!("shared experience {}", on_off(settings.enabled));

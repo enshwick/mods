@@ -1,0 +1,188 @@
+# The merge gate: `cargo xtask check` over every mod in one build, its
+# dependencies compiled once, on a GitHub-hosted runner, and the tests of the
+# Windows-only crates natively on a Windows runner. A push to main runs the
+# full suite and fills the build caches pull requests start from. The job
+# `check` sums them up and is the required check.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  # Only a pull request's newer push cancels its older run: a run on main
+  # fills the caches pull requests start from and must finish.
+  group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # A pull request checks what builds; every other run, the full suite.
+  FULL: ${{ github.event_name != 'pull_request' }}
+
+jobs:
+  # A change to files that never build (documents, repository settings, the
+  # release workflows) has nothing to compile or test.
+  scope:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      skip: ${{ steps.scope.outputs.skip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: What is left to prove
+        id: scope
+        env:
+          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          reason=""
+          if [ "$FULL" != true ]; then
+            never='^(\.github/(actionlint\.yaml|zizmor\.yml)$|[^/]+\.md$|(.*/)?(CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.markdownlint-cli2\.yaml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$|package\.json$|bun\.lock$)'
+            if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
+              reason="no file that builds changed"
+              echo "nothing to check: $reason" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "skip=$reason" >> "$GITHUB_OUTPUT"
+
+  rust:
+    needs: scope
+    if: needs.scope.outputs.skip == ''
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Nothing persists between jobs: the toolchain, the Windows SDK and the
+      # apt packages come from the cache.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/rustup
+          key: rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+      # The Windows SDK and CRT cargo-xwin downloads for the Windows lint,
+      # about 12 minutes from Microsoft on a hosted runner.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/xwin
+          key: xwin-${{ runner.os }}-0.23.1-v1
+      # clang of the toolchain's LLVM.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/apt-archives
+          key: apt-${{ runner.os }}-v1
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          tools: cargo-nextest@0.9.150,cargo-deny@0.20.2
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          prefix-key: v1-rust
+          # Branch caches would fill the repository's cache storage and evict
+          # the entries main's runs and pull requests restore.
+          save-if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+      # The job `windows` runs the Windows-only crates' tests, not Wine here.
+      - name: cargo xtask check
+        run: |
+          if [ "$FULL" = true ]; then
+            cargo xtask check --all --no-wine
+          else
+            cargo fmt --all --check
+            cargo xtask check
+          fi
+
+  # The tests of the crates marked `windows-only`, natively on Windows.
+  windows:
+    needs: scope
+    if: needs.scope.outputs.skip == ''
+    runs-on: windows-2025
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install
+          rustc --version
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          prefix-key: v1-rust
+          key: windows
+          save-if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+      - name: Windows tests to run
+        id: list
+        run: |
+          tests=$(cargo metadata --no-deps --format-version 1 | jq -r \
+            '.packages[] | select(.metadata.enshwick["windows-only"] == true) | .name' | xargs)
+          echo "Windows tests: ${tests:-none}"
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+
+      # One test thread: the hook and patch tests share the process.
+      - name: Windows tests
+        if: steps.list.outputs.tests != ''
+        env:
+          TESTS: ${{ steps.list.outputs.tests }}
+        run: |
+          packages=()
+          for package in $TESTS; do packages+=(-p "$package"); done
+          status=0
+          cargo test --target x86_64-pc-windows-msvc "${packages[@]}" -- --test-threads 1 || status=$?
+          if [ "$status" != 0 ]; then
+            # A crash takes the harness's buffered output with it: run the
+            # library tests one by one to name the ones that crash.
+            echo "::group::Each test alone"
+            for package in $TESTS; do
+              cargo test --quiet --target x86_64-pc-windows-msvc -p "$package" --lib -- --list --format terse |
+                sed -n 's/: test$//p' > "$RUNNER_TEMP/tests.txt"
+              exe=$(cargo test --no-run --message-format json --target x86_64-pc-windows-msvc -p "$package" --lib |
+                grep '"test":true' | grep -o '"executable":"[^"]*"' | head -1 | sed 's/^"executable":"//; s/"$//; s/\\\\/\//g')
+              while read -r name; do
+                "$exe" --exact "$name" --test-threads 1 > /dev/null 2>&1 || echo "::error::$package: crashed or failed alone: $name"
+              done < "$RUNNER_TEMP/tests.txt"
+            done
+            echo "::endgroup::"
+          fi
+          exit "$status"
+
+  # The required check: every part passed, or there was nothing to prove.
+  check:
+    needs: [scope, rust, windows]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Result
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          RUST: ${{ needs.rust.result }}
+          WINDOWS: ${{ needs.windows.result }}
+        run: |
+          echo "scope: $SCOPE, rust: $RUST, Windows tests: $WINDOWS"
+          ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
+          [ "$SCOPE" = success ] && ok "$RUST" && ok "$WINDOWS"

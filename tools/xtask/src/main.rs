@@ -7,7 +7,8 @@
 //! out; off Windows clippy also runs for Windows through `cargo xwin`,
 //! beside the host checks. `--windows` runs the Windows-only packages' tests
 //! under Wine, and `--all` adds formatting, rustdoc, cargo-deny and those
-//! tests.
+//! tests; `--no-wine` leaves them out, for CI, which runs them natively on
+//! Windows.
 //!
 //! `cargo xtask dist` builds the release DLLs and writes what a player
 //! downloads: `<package>.zip` with `mods/<package>.dll` and the license, and
@@ -21,7 +22,7 @@ use std::process::{Command, ExitCode};
 use std::thread;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cargo xtask check [--all] [--windows] [--base <git ref>] | cargo xtask dist [--out <dir>]";
+const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--out <dir>]";
 const WINDOWS_TARGET: &str = "x86_64-pc-windows-msvc";
 
 fn main() -> ExitCode {
@@ -46,11 +47,13 @@ fn run(args: &[String]) -> Result<bool, String> {
     }
     let mut all = false;
     let mut windows = false;
+    let mut wine = true;
     let mut rest = rest.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--all" => all = true,
             "--windows" => windows = true,
+            "--no-wine" => wine = false,
             // A mod repository is small: every change checks all of it.
             "--base" => {
                 rest.next().ok_or(USAGE)?;
@@ -58,9 +61,12 @@ fn run(args: &[String]) -> Result<bool, String> {
             _ => return Err(USAGE.to_owned()),
         }
     }
+    if windows && !wine {
+        return Err(USAGE.to_owned());
+    }
     let packages = packages()?;
     let mut ok = check(&packages, all);
-    if ok && (all || windows) {
+    if ok && wine && (all || windows) {
         let windows_only: Vec<&str> = packages
             .iter()
             .filter(|p| p.windows_only)

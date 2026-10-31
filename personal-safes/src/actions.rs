@@ -10,7 +10,7 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use enshwick::actions::{Action, Ask, Outcome, Request, Subject, Value};
+use enshwick::actions::{Action, Ask, FindSubjectError, Outcome, Request, Subject, Value};
 use enshwick::i18n::{Language, Texts};
 use enshwick::world::World;
 use enshwick::{Load, Off, PlayerKey};
@@ -100,11 +100,11 @@ fn whose(say: &Say<'_>, safe: &Safe, key: PlayerKey) -> String {
 
 /// The Safe at hand for the player who asks: within reach, one they may
 /// manage, their own first; or why there is none.
-fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, String> {
+fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, FindSubjectError> {
     let me = ask.player;
     let position = world
         .position(me.entity)
-        .ok_or_else(|| ask.say(keys::NO_SAFE, &[]))?;
+        .ok_or_else(|| FindSubjectError::from(ask.say(keys::NO_SAFE, &[])))?;
     let seen = Seen {
         key: me.key,
         admin: me.is_admin(),
@@ -125,7 +125,8 @@ fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, String> {
         match nearest_own(&snapshots().owners.load(), me.key, position, REACH) {
             Some(own) => ask.say(keys::REFUSED, &[(keys::value::AT, &place(own))]),
             None => ask.say(keys::NO_SAFE, &[]),
-        },
+        }
+        .into(),
     )
 }
 

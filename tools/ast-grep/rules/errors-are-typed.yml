@@ -1,0 +1,68 @@
+id: errors-are-typed
+language: rust
+severity: error
+message: return a `thiserror` type named `Error` or `VerbObjectError`, not a `String`
+note: >-
+  A typed error lets the caller match on what failed, carries its source and
+  converts with `?` into the API's `Off`; a string can only be shown. The
+  rule refuses `Result<_, String>` and a tuple holding a `String` in the
+  error's place, such as `(Status, String)`, in a mod's code; a type alias
+  hides one from it. Build scripts, the repository tools and tests may keep
+  strings.
+ignores:
+  - "tools/**"
+  - "**/build.rs"
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_tests.rs"
+  - "**/benches/**"
+utils:
+  string:
+    any:
+      - kind: type_identifier
+      - kind: scoped_type_identifier
+    regex: '(^|::)String$'
+  in-test:
+    any:
+      - kind: mod_item
+        follows:
+          kind: attribute_item
+          stopBy:
+            not:
+              any:
+                - kind: attribute_item
+                - kind: line_comment
+          regex: '^#\[cfg\(.*\btest\b'
+      - kind: function_item
+        follows:
+          kind: attribute_item
+          stopBy:
+            not:
+              any:
+                - kind: attribute_item
+                - kind: line_comment
+          regex: '^#\[(test|cfg\(.*\btest\b)'
+rule:
+  kind: generic_type
+  all:
+    - has:
+        field: type
+        regex: '(^|::)Result$'
+    - has:
+        field: type_arguments
+        has:
+          any:
+            - matches: string
+            - kind: tuple_type
+              has:
+                matches: string
+          nthChild:
+            position: 2
+          all:
+            - nthChild:
+                position: 1
+                reverse: true
+  not:
+    inside:
+      stopBy: end
+      matches: in-test

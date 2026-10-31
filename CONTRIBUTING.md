@@ -29,9 +29,9 @@ patches and threads, so those are skipped there.
 
 The hooks check formatting, spelling, Markdown and commit messages and
 compile nothing. A pull request title is a conventional commit,
-`<type>(<scope>): <subject>`, and becomes the squashed commit.
+`<type>(<scope>): <subject>`, and becomes the squashed commit; the scope
+is the mod's folder, or `mods` for the whole repository.
 
-Releases are cut by hand with the `release-plz` workflow: `release-pr` opens
-the release pull request with the next version and `CHANGELOG.md`, and
-`release` tags `v<version>` once it merged. The `dev-build` workflow replaces
-the rolling `dev` prerelease.
+Every mod has its own version. release-plz, configured in
+`release-plz.toml`, versions each mod from the commits that touch its folder
+and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.

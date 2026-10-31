@@ -2,7 +2,9 @@
 //!
 //! `cargo xtask check` runs the compiling checks a change needs before it
 //! merges; the git hooks run only the checks that compile nothing. First the
-//! code rules clippy cannot express (ast-grep, from `sgconfig.yml`). Clippy,
+//! crate rules ([`crate_rules`]), the code rules clippy cannot express
+//! (ast-grep, from `sgconfig.yml`) and the unused dependencies
+//! (cargo-machete). Clippy,
 //! the tests and the doctests run on the host, where the packages that build
 //! only for Windows (`[package.metadata.xtask] windows-only = true`) stay
 //! out; off Windows clippy also runs for Windows through `cargo xwin`,
@@ -16,6 +18,9 @@
 //! the PDB beside it, for every mod in the workspace, or with `--package`
 //! for the named ones only.
 
+#![forbid(unsafe_code)]
+
+mod crate_rules;
 mod wine;
 
 use std::io::{Cursor, Write as _};
@@ -67,7 +72,7 @@ fn run(args: &[String]) -> Result<bool, String> {
         return Err(USAGE.to_owned());
     }
     let packages = packages()?;
-    let mut ok = check(&packages, all);
+    let mut ok = check(&packages, all)?;
     if ok && wine && (all || windows) {
         let windows_only: Vec<&str> = packages
             .iter()
@@ -217,20 +222,26 @@ fn say(text: &str) {
     let _shown = writeln!(std::io::stderr(), "xtask: {text}");
 }
 
-/// The ast-grep rules' own tests, then the rules over the repository.
-fn code_rules() -> [Step; 2] {
+/// The ast-grep rules' own tests, the rules over the repository, then the
+/// dependencies no crate uses.
+fn source_checks() -> [Step; 3] {
     [
         Step::tool("ast-grep", &["test", "--skip-snapshot-tests"]),
         Step::tool("ast-grep", &["scan"]),
+        Step::tool("cargo-machete", &[]),
     ]
 }
 
-/// Runs the code rules, then the host steps one after another (they share
-/// the build lock) and the Windows lint beside them; the first failing host
-/// step ends the host checks.
-fn check(packages: &[Package], all: bool) -> bool {
-    if !code_rules().iter().all(|step| step.run(false)) {
-        return false;
+/// Runs the crate rules and the source checks, then the host steps one
+/// after another (they share the build lock) and the Windows lint beside
+/// them; the first failing host step ends the host checks.
+fn check(packages: &[Package], all: bool) -> Result<bool, String> {
+    let problems = crate_rules::check()?;
+    for problem in &problems {
+        say(problem);
+    }
+    if !problems.is_empty() || !source_checks().iter().all(|step| step.run(false)) {
+        return Ok(false);
     }
     let mut workspace = vec!["--workspace".to_owned()];
     if !cfg!(windows) {
@@ -273,12 +284,12 @@ fn check(packages: &[Package], all: bool) -> bool {
     if let Some(step) = &windows {
         say(&format!("> {} (beside the host checks)", step.line()));
     }
-    thread::scope(|scope| {
+    Ok(thread::scope(|scope| {
         let windows = windows.as_ref().map(|step| scope.spawn(|| step.run(true)));
         let host_passed = steps.iter().all(|step| step.run(false));
         let windows_passed = windows.is_none_or(|handle| handle.join().unwrap_or(false));
         host_passed && windows_passed
-    })
+    }))
 }
 
 /// Builds the release DLLs and writes each mod's archive and PDB into

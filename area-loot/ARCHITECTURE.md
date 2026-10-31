@@ -8,4 +8,3 @@ API, not here.
 | Path | What |
 | --- | --- |
 | `src/` | the mod |
-| `tools/xtask/` | `cargo xtask check`, the checks before a merge |

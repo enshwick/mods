@@ -1,9 +1,10 @@
 # Architecture
 
-Each top-level folder is one mod and a Cargo workspace of its own, with its
-own checks: `cargo xtask check` in that folder. Every mod is a Windows DLL
-the Enshwick loader loads from the game's `mods/` folder, built on the
-`enshwick` API from git at a commit of its `main` branch.
+Each top-level folder is one mod, a crate of the one Cargo workspace at the
+root. Every mod is a Windows DLL the Enshwick loader loads from the game's
+`mods/` folder, built on the `enshwick` API from git at one commit of its
+`main` branch, the same for every mod. `cargo xtask check` at the root
+checks every mod.
 
 - A mod never depends on another mod or reads its data or services. It may
   offer typed extension points that other mods link.
@@ -21,3 +22,5 @@ the Enshwick loader loads from the game's `mods/` folder, built on the
 | `shared-experience/` | Shared Experience |
 | `survivors-per-altar/` | Survivors per Altar |
 | `devtools/` | the developer mods: the API probe and the client research mod |
+| `tools/xtask/` | `cargo xtask check`, the checks before a merge, and `cargo xtask dist`, each mod's archive |
+| `tools/wine/` | the image `cargo xtask check --windows` runs Windows-only tests in off Windows |

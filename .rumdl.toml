@@ -1,0 +1,9 @@
+[global]
+disable = ["line-length"]
+exclude = ["target", "research", "**/CHANGELOG.md"]
+
+[MD024]
+siblings-only = true
+
+[MD041]
+front-matter-title-pattern = '^\s*name\s*[:=]'

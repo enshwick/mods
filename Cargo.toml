@@ -16,8 +16,8 @@ resolver = "3"
 
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.
-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "6408ffb016b7a9d7c63ceac19dbf121f95353b5f" }
-enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "6408ffb016b7a9d7c63ceac19dbf121f95353b5f" }
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "8d6558d2030c2873653f9ddf3babd2f95a160ea8" }
+enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "8d6558d2030c2873653f9ddf3babd2f95a160ea8" }
 
 [workspace.lints.rust]
 missing_docs = "deny"

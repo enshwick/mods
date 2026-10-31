@@ -1,4 +1,5 @@
 config:
+  first-line-heading: { front_matter_title: '^\s*name\s*[:=]' }
   line-length: false
   no-duplicate-heading: { siblings_only: true }
 globs: ['**/*.md']

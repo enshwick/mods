@@ -13,12 +13,12 @@
 //! cannot fault. Each site's first bytes are checked against the build the
 //! addresses were found on; a site that differs stays unhooked.
 
-use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use enshwick::abi::Registers;
 use enshwick::{Load, Off};
+use rustc_hash::FxHashMap;
 
 use crate::memory;
 use enshwick::Relock;
@@ -99,7 +99,7 @@ const MAX_KEPT: usize = 512;
 struct Seen {
     start: Instant,
     base: usize,
-    last: Mutex<HashMap<(usize, usize, Kind), String>>,
+    last: Mutex<FxHashMap<(usize, usize, Kind), String>>,
 }
 
 static SEEN: OnceLock<Seen> = OnceLock::new();
@@ -114,7 +114,7 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
     let _first = SEEN.set(Seen {
         start: Instant::now(),
         base: memory::image_base(),
-        last: Mutex::new(HashMap::new()),
+        last: Mutex::new(FxHashMap::default()),
     });
     let mut hooked = 0;
     for site in &SITES {

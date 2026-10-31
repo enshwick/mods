@@ -6,7 +6,6 @@
 //! The warnings come from the game's own log beside the game,
 //! `logs/<game>.log`, read from where the last minute stopped.
 
-use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -16,6 +15,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use enshwick::state::ModLocal;
+use rustc_hash::FxHashMap;
 
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
@@ -347,7 +347,7 @@ struct Meter {
     server: Option<Thread>,
     log: Option<(PathBuf, u64)>,
     mark: Mark,
-    threads: HashMap<u32, Followed>,
+    threads: FxHashMap<u32, Followed>,
 }
 
 /// The game's own log: `logs/<exe name>.log` beside the game.
@@ -405,7 +405,7 @@ impl Meter {
             main,
             server: None,
             log,
-            threads: HashMap::new(),
+            threads: FxHashMap::default(),
         };
         let _first = meter.thread_groups();
         meter

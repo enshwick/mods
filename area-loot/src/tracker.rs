@@ -3,12 +3,12 @@
 //! a take in flight holds. Times are the API's step clock
 //! ([`enshwick::time::StepClock`]).
 
-use std::collections::HashMap;
 use std::time::Duration;
 
 use enshwick::Entity;
 use enshwick::loot::Container;
 use enshwick::world::near;
+use rustc_hash::FxHashMap;
 
 /// How long a take holds a container: no one else takes from it, and its
 /// emptying starts nothing.
@@ -40,8 +40,8 @@ struct Held {
 /// The containers seen and the ones held.
 #[derive(Debug, Default)]
 pub(crate) struct Tracker {
-    seen: HashMap<Entity, Seen>,
-    held: HashMap<Entity, Held>,
+    seen: FxHashMap<Entity, Seen>,
+    held: FxHashMap<Entity, Held>,
 }
 
 impl Tracker {

@@ -103,7 +103,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 enshwick = { workspace = true, features = ["unstable"] }
-rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
+rustc-hash.workspace = true
 windows-sys = { version = "0.61.2", default-features = false, features = [
     "Win32_Foundation",
     "Win32_System_Diagnostics_Debug",

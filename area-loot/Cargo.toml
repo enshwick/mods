@@ -24,6 +24,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 enshwick = { workspace = true, features = ["unstable"] }
+rustc-hash.workspace = true
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test", "unstable"] }

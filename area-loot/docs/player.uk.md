@@ -63,5 +63,5 @@ Area Loot потрібен лише серверу або гравцеві, як
 `enabled` увімкнено, а інша здобич лежить у межах `radius` і `height`.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-area-loot/issues). Додайте
+[репозиторії модів](https://github.com/enshwick/mods/issues). Додайте
 файли з теки `logs/enshwick/` у теці гри.

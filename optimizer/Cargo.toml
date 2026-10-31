@@ -9,8 +9,8 @@ authors = ["themaiby"]
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/enshwick/mod-optimizer"
-homepage = "https://github.com/enshwick/mod-optimizer"
+repository = "https://github.com/enshwick/mods"
+homepage = "https://github.com/enshwick/mods/tree/main/optimizer"
 publish = false
 
 [lib]

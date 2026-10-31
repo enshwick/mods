@@ -61,5 +61,5 @@ server, the crafting menu shows the server's cost.
 moment after you arrive. Wait a moment and try again.
 
 **Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-personal-safes/issues).
+[mods repository](https://github.com/enshwick/mods/issues).
 Attach the files from the `logs/enshwick/` folder in your game folder.

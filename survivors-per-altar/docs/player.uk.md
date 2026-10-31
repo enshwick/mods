@@ -77,5 +77,5 @@ Survivors per Altar входить в enshwick.zip, а
 всіма зонами олтарів.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-survivors-per-altar/issues).
+[репозиторії модів](https://github.com/enshwick/mods/issues).
 Додайте файли з теки `logs/enshwick/` у теці гри.

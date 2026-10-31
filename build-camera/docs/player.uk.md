@@ -52,5 +52,5 @@ Build Camera входить в enshwick.zip, а
 можна змінювати оплот. Якщо ви летите на планері, спершу приземліться.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-build-camera/issues). Додайте
+[репозиторії модів](https://github.com/enshwick/mods/issues). Додайте
 файли з теки `logs/enshwick/` у теці гри.

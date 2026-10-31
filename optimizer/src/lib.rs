@@ -32,6 +32,7 @@ use crate::env::CpuLimit;
 use crate::platform::{Change, Platform, default_on};
 
 mod env;
+mod locks;
 mod measure;
 mod platform;
 mod sys;

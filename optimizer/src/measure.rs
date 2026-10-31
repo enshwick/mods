@@ -11,12 +11,13 @@ use std::fmt::Write as _;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::sync::{Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use enshwick::state::ModLocal;
 
+use crate::locks::Relock;
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
 
@@ -67,12 +68,6 @@ fn worker() -> &'static Worker {
     WORKER.get_or_init(Worker::default)
 }
 
-/// `value` locked, whether or not a thread panicked while it held it: a line
-/// is whole or stale, never torn, and a flag or a handle is never torn.
-fn relock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
-    value.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 /// Starts the measuring thread; `wine` as for [`run`].
 ///
 /// # Errors
@@ -82,7 +77,7 @@ pub(crate) fn start(wine: bool) -> std::io::Result<()> {
     let thread = std::thread::Builder::new()
         .name("enshwick-optimizer".into())
         .spawn(move || run(wine))?;
-    *relock(&worker().thread) = Some(thread);
+    *worker().thread.relock() = Some(thread);
     Ok(())
 }
 
@@ -90,9 +85,9 @@ pub(crate) fn start(wine: bool) -> std::io::Result<()> {
 /// never started.
 pub(crate) fn stop() {
     let worker = worker();
-    *relock(&worker.stop) = true;
+    *worker.stop.relock() = true;
     worker.wake.notify_all();
-    let thread = relock(&worker.thread).take();
+    let thread = worker.thread.relock().take();
     if let Some(thread) = thread
         && thread.join().is_err()
     {
@@ -103,7 +98,9 @@ pub(crate) fn stop() {
 /// Whether the measuring thread runs.
 #[cfg(test)]
 pub(crate) fn running() -> bool {
-    relock(&worker().thread)
+    worker()
+        .thread
+        .relock()
         .as_ref()
         .is_some_and(|thread| !thread.is_finished())
 }
@@ -113,7 +110,7 @@ fn stopped_within(period: Duration) -> bool {
     let worker = worker();
     let (stop, _timeout) = worker
         .wake
-        .wait_timeout_while(relock(&worker.stop), period, |stop| !*stop)
+        .wait_timeout_while(worker.stop.relock(), period, |stop| !*stop)
         .unwrap_or_else(PoisonError::into_inner);
     *stop
 }
@@ -123,19 +120,19 @@ pub(crate) fn set(on: bool, context: String) {
     let lines = lines();
     lines.on.store(on, Ordering::Relaxed);
     if !on {
-        relock(&lines.last).clear();
+        lines.last.relock().clear();
     }
-    *relock(&lines.context) = context;
+    *lines.context.relock() = context;
 }
 
 /// The platform and what runs on it.
 pub(crate) fn context() -> String {
-    relock(&lines().context).clone()
+    lines().context.relock().clone()
 }
 
 /// The last line written, empty before the first.
 pub(crate) fn last() -> String {
-    relock(&lines().last).clone()
+    lines().last.relock().clone()
 }
 
 /// The "Bad Performance" warnings in a piece of the game log: how many, and
@@ -548,7 +545,7 @@ fn run(wine: bool) {
         if lines().on.load(Ordering::Relaxed) {
             let text = format!("{}; {}", context(), line(&minute));
             enshwick::info!("measure: {text}");
-            *relock(&lines().last) = text;
+            *lines().last.relock() = text;
         }
     }
 }
@@ -577,7 +574,7 @@ mod tests {
 
     #[test]
     fn turning_measure_off_drops_the_last_line() {
-        relock(&lines().last).push_str("old");
+        lines().last.relock().push_str("old");
         set(false, String::new());
         assert!(last().is_empty());
     }

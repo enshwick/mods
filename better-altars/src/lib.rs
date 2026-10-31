@@ -7,6 +7,7 @@
 mod count;
 pub mod geometry;
 mod hold;
+mod locks;
 mod zones;
 
 use count::{AltarCount, Count};

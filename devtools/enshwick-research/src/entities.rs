@@ -216,11 +216,14 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
         // SAFETY: each address holds the engine function with this
         // signature on client build 1269579, its first bytes checked above.
         entities_with: unsafe { core::mem::transmute::<usize, EntitiesWith>(entities_with) },
-        // SAFETY: as above.
+        // SAFETY: `entity_slot` holds the engine function with this
+        // signature on client build 1269579, its first bytes checked above.
         entity_slot: unsafe { core::mem::transmute::<usize, EntitySlot>(entity_slot) },
-        // SAFETY: as above.
+        // SAFETY: `type_index` holds the engine function with this
+        // signature on client build 1269579, its first bytes checked above.
         type_index: unsafe { core::mem::transmute::<usize, TypeIndex>(type_index) },
-        // SAFETY: as above.
+        // SAFETY: `read_component` holds the engine function with this
+        // signature on client build 1269579, its first bytes checked above.
         read_component: unsafe { core::mem::transmute::<usize, ReadComponent>(read_component) },
         transform: world.transform_type().hash(),
         local_player: ComponentType::resolve(load, LOCAL_PLAYER)?.hash(),

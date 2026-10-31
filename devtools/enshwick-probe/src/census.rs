@@ -1,10 +1,12 @@
 //! Game events counted by type.
 
 use std::collections::BTreeMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use enshwick::Load;
 use enshwick::game_events::RawGameEvent;
+
+use crate::locks::Relock;
 
 /// Counts of game events by type hash, with the names the census knows.
 #[derive(Debug)]
@@ -32,7 +34,7 @@ impl Census {
 
     /// Counts `event`.
     pub(crate) fn count(&self, event: &RawGameEvent<'_>) {
-        let mut seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut seen = self.seen.relock();
         let entry = seen.entry(event.type_hash()).or_default();
         entry.0 += 1;
         entry.1 = u32::try_from(event.bytes().len()).unwrap_or(u32::MAX);
@@ -40,7 +42,7 @@ impl Census {
 
     /// One line per type seen: name or hash, count and size.
     pub(crate) fn lines(&self) -> Vec<String> {
-        let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        let seen = self.seen.relock();
         if seen.is_empty() {
             return vec!["no game events yet".to_owned()];
         }

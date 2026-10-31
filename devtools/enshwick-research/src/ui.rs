@@ -14,12 +14,13 @@
 //! addresses were found on; a site that differs stays unhooked.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use enshwick::abi::Registers;
 use enshwick::{Load, Off};
 
+use crate::locks::Relock;
 use crate::memory;
 
 /// What a site is and so what it logs.
@@ -236,7 +237,7 @@ fn seen(kind: Kind, registers: &mut Registers) {
     };
     let key = (caller, object, kind);
     {
-        let mut last = seen.last.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut last = seen.last.relock();
         if last.get(&key) == Some(&line) {
             return;
         }

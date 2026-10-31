@@ -8,6 +8,7 @@
 
 mod copies;
 mod cursor;
+mod locks;
 pub mod points;
 mod policy;
 mod renew;
@@ -21,6 +22,8 @@ use enshwick::config::ConfigError;
 use enshwick::loot::Drop;
 use enshwick::state::ModLocal;
 use enshwick::{ItemId, Load, Mod, Off};
+
+use crate::locks::Relock;
 
 /// The text refusing fewest charges above the full count, with `{min}` and
 /// `{full}`.
@@ -270,10 +273,7 @@ fn apply(settings: &Settings, loot: &Loot) {
     } else {
         Vec::new()
     };
-    let mut kept = in_force()
-        .drops
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut kept = in_force().drops.relock();
     if *kept == drops {
         return;
     }
@@ -301,10 +301,7 @@ fn copy_staffs(load: &mut Load<'_>, settings: &Settings) -> Result<Loot, Off> {
         items: staffs::copy_ids(),
         full: charges.full,
     };
-    let mut kept = in_force()
-        .drops
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut kept = in_force().drops.relock();
     for source in [Source::bosses(), Source::locked_chests()] {
         let drop =
             Drop::one_of(&loot.items, 0.0, source).meter(charges.full, charges.full, charges.full);

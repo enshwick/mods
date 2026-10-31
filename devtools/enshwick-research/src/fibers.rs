@@ -128,7 +128,8 @@ fn thread_ids() -> Vec<u32> {
         if entry.th32OwnerProcessID == process && entry.th32ThreadID != me {
             ids.push(entry.th32ThreadID);
         }
-        // SAFETY: as above.
+        // SAFETY: the snapshot is valid and `entry` keeps the size set
+        // before `Thread32First`.
         more = unsafe { Thread32Next(snapshot, &raw mut entry) } != 0;
     }
     // SAFETY: the snapshot is ours.

@@ -6,7 +6,7 @@
 //! clusters off gets the vanilla zones back.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
@@ -14,6 +14,7 @@ use enshwick::altars::{AltarZone, ZoneSizes};
 use enshwick::state::ModLocal;
 
 use crate::geometry::{Altar, Box3, clusters};
+use crate::locks::Relock;
 
 /// Per altar: its level and its vanilla zone at each level up to it.
 type Input = BTreeMap<u32, Vec<Box3>>;
@@ -128,10 +129,7 @@ fn publish(zones: ZoneSizes, sizes: Vec<Size>) {
 }
 
 fn locked() -> MutexGuard<'static, State> {
-    STATE
-        .get_or_init(|| Mutex::new(State::new()))
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    STATE.get_or_init(|| Mutex::new(State::new())).relock()
 }
 
 pub(crate) fn request(zones: ZoneSizes) {

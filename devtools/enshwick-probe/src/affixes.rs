@@ -98,6 +98,8 @@ impl AffixChecks {
     }
 
     pub(crate) fn run(&self) {
+        // The API's inventory reader, not a std lock.
+        // ast-grep-ignore: lock-through-relock
         let reader = self.inventories.read();
         let found = self
             .world
@@ -206,6 +208,8 @@ impl AffixChecks {
     /// The `affix` action: rolls every item the caller wears anew, one to three
     /// affixes each.
     pub(crate) fn reroll(&self, player: &Player) -> String {
+        // The API's inventory reader, not a std lock.
+        // ast-grep-ignore: lock-through-relock
         let reader = self.inventories.read();
         let worn: Vec<ItemInstance> = reader
             .slots(player.entity)

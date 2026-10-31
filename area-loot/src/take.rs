@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use enshwick::Entity;
@@ -19,6 +19,7 @@ use enshwick::world::{World, near};
 use enshwick::{Load, Off};
 
 use crate::Settings;
+use crate::locks::Relock;
 use crate::points::Eligible;
 use crate::tracker::Tracker;
 
@@ -111,10 +112,7 @@ fn now() -> Duration {
 }
 
 fn tracker() -> MutexGuard<'static, Option<Tracker>> {
-    TRACKER
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    TRACKER.get_or_init(Mutex::default).relock()
 }
 
 /// Links the pass.
@@ -166,10 +164,7 @@ fn pass(loot: &LootPass<'_>) {
                 emptied.push((*c, by));
             }
         });
-        let mut last = LAST_PRUNE
-            .get_or_init(Mutex::default)
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut last = LAST_PRUNE.get_or_init(Mutex::default).relock();
         if last.is_none_or(|at| now.saturating_sub(at) >= PRUNE_EVERY) {
             t.prune(now);
             *last = Some(now);

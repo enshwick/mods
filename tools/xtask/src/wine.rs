@@ -179,6 +179,8 @@ fn machine_lock() -> Option<File> {
     let started = Instant::now();
     let mut told = false;
     loop {
+        // A file lock across processes, which has no poison.
+        // ast-grep-ignore: lock-through-relock
         match file.try_lock() {
             Ok(()) => return Some(file),
             Err(TryLockError::WouldBlock) if started.elapsed() < LOCK_TIMEOUT => {

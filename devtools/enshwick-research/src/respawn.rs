@@ -12,6 +12,7 @@ use enshwick::world::World;
 use enshwick::{Load, Off};
 use rustc_hash::FxHashMap;
 
+use crate::locks::Relock;
 use crate::memory;
 
 /// The target slot of the spawn point; build 1269579.
@@ -56,9 +57,7 @@ pub(crate) fn link(load: &mut Load<'_>, world: World) -> Result<(), Off> {
 }
 
 fn sweep(world: &World, slot: Slot) {
-    let mut last = LAST
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut last = LAST.relock();
     let last = last.get_or_insert_with(FxHashMap::default);
     for player in world.players() {
         let Some(data) = world.component(player.entity, slot.ty) else {

@@ -16,11 +16,12 @@ pub mod access;
 pub mod actions;
 pub mod content;
 mod keys;
+mod locks;
 pub mod points;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use enshwick::abi::BuildingData;
@@ -38,6 +39,7 @@ use enshwick::{Entity, Load, Mod, Off, PlayerKey};
 
 use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
 use crate::actions::Phrases;
+use crate::locks::Relock;
 
 /// Safe settings.
 #[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
@@ -191,10 +193,7 @@ static REMOVED: ModLocal<Mutex<Vec<(Cell, Safe)>>> = ModLocal::new();
 static STORE: ModLocal<&'static WorldStore<Owners>> = ModLocal::new();
 
 fn removed() -> MutexGuard<'static, Vec<(Cell, Safe)>> {
-    REMOVED
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    REMOVED.get_or_init(Mutex::default).relock()
 }
 
 /// The owners as the file keeps them: the Safes in force and those removed

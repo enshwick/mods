@@ -1,7 +1,8 @@
 //! Repository tasks, run as `cargo xtask <task>`.
 //!
 //! `cargo xtask check` runs the compiling checks a change needs before it
-//! merges; the git hooks run only the checks that compile nothing. Clippy,
+//! merges; the git hooks run only the checks that compile nothing. First the
+//! code rules clippy cannot express (ast-grep, from `sgconfig.yml`). Clippy,
 //! the tests and the doctests run on the host, where the packages that build
 //! only for Windows (`[package.metadata.xtask] windows-only = true`) stay
 //! out; off Windows clippy also runs for Windows through `cargo xwin`,
@@ -130,9 +131,10 @@ fn cargo() -> String {
     std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned())
 }
 
-/// One cargo command line.
+/// One command line: cargo, or another tool of the checks.
 #[derive(Debug)]
 struct Step {
+    program: Option<&'static str>,
     args: Vec<String>,
     env: Vec<(&'static str, String)>,
 }
@@ -140,8 +142,17 @@ struct Step {
 impl Step {
     fn new(words: &[&str]) -> Self {
         Self {
+            program: None,
             args: words.iter().map(|w| (*w).to_owned()).collect(),
             env: Vec::new(),
+        }
+    }
+
+    /// A step that runs `program` instead of cargo.
+    fn tool(program: &'static str, words: &[&str]) -> Self {
+        Self {
+            program: Some(program),
+            ..Self::new(words)
         }
     }
 
@@ -161,14 +172,18 @@ impl Step {
     }
 
     fn line(&self) -> String {
-        format!("cargo {}", self.args.join(" "))
+        format!(
+            "{} {}",
+            self.program.unwrap_or("cargo"),
+            self.args.join(" ")
+        )
     }
 
     /// Runs the step with its output shown, or captured when `quiet` (for a
     /// step running beside others) and shown only when it fails.
     fn run(&self, quiet: bool) -> bool {
         let started = Instant::now();
-        let mut command = Command::new(cargo());
+        let mut command = Command::new(self.program.map_or_else(cargo, str::to_owned));
         command
             .args(&self.args)
             .envs(self.env.iter().map(|(name, value)| (name, value)));
@@ -202,10 +217,21 @@ fn say(text: &str) {
     let _shown = writeln!(std::io::stderr(), "xtask: {text}");
 }
 
-/// Runs the host steps one after another (they share the build lock) and
-/// the Windows lint beside them; the first failing host step ends the host
-/// checks.
+/// The ast-grep rules' own tests, then the rules over the repository.
+fn code_rules() -> [Step; 2] {
+    [
+        Step::tool("ast-grep", &["test", "--skip-snapshot-tests"]),
+        Step::tool("ast-grep", &["scan"]),
+    ]
+}
+
+/// Runs the code rules, then the host steps one after another (they share
+/// the build lock) and the Windows lint beside them; the first failing host
+/// step ends the host checks.
 fn check(packages: &[Package], all: bool) -> bool {
+    if !code_rules().iter().all(|step| step.run(false)) {
+        return false;
+    }
     let mut workspace = vec!["--workspace".to_owned()];
     if !cfg!(windows) {
         for package in packages.iter().filter(|p| p.windows_only) {

@@ -12,7 +12,7 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
-use std::sync::{Mutex, PoisonError, RwLock};
+use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use enshwick::abi::Side;
@@ -28,6 +28,7 @@ use enshwick::{Entity, ItemId, Load, Off};
 
 use crate::Charges;
 use crate::copies::{Copies, CopyStaff, Verdict, Zone};
+use crate::locks::{Relock, RelockRw};
 use crate::points::{ChargeCost, CopyLimit};
 
 /// How often the uniqueness pass lets go of copies it no longer sees.
@@ -199,9 +200,7 @@ pub(crate) fn link(load: &mut Load<'_>, staffs: Staffs) -> Result<(), Off> {
 static OWED: ModLocal<Mutex<Vec<(Entity, u16)>>> = ModLocal::new();
 
 fn owed() -> std::sync::MutexGuard<'static, Vec<(Entity, u16)>> {
-    OWED.get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    OWED.get_or_init(Mutex::default).relock()
 }
 
 /// Notes that `staff` owes `cost` charges.
@@ -230,16 +229,16 @@ fn shared() -> &'static RwLock<Option<Shared>> {
 }
 
 fn forget() {
-    *shared().write().unwrap_or_else(PoisonError::into_inner) = Some(Shared::new());
+    *shared().relock_write() = Some(Shared::new());
 }
 
 fn read<R>(f: impl FnOnce(&Shared) -> R) -> Option<R> {
-    let slot = shared().read().unwrap_or_else(PoisonError::into_inner);
+    let slot = shared().relock_read();
     slot.as_ref().map(f)
 }
 
 fn write<R>(f: impl FnOnce(&mut Shared) -> R) -> Option<R> {
-    let mut slot = shared().write().unwrap_or_else(PoisonError::into_inner);
+    let mut slot = shared().relock_write();
     slot.as_mut().map(f)
 }
 

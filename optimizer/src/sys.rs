@@ -184,7 +184,7 @@ pub(crate) fn wine_host() -> Option<(String, String)> {
     unsafe { host(&raw mut sysname, &raw mut release) };
     // SAFETY: Wine points them at static strings.
     let sysname = unsafe { owned(sysname) }?;
-    // SAFETY: as above.
+    // SAFETY: Wine points `release` at a static string, or leaves it null.
     let release = unsafe { owned(release) }.unwrap_or_default();
     Some((sysname, release))
 }
@@ -281,7 +281,8 @@ impl Thread {
         loop {
             // SAFETY: within the NUL-terminated string Windows returned.
             let at = unsafe { text.add(len) };
-            // SAFETY: as above; the NUL ends the loop.
+            // SAFETY: `at` lies within the NUL-terminated string Windows
+            // returned, since the loop stops at its NUL.
             if unsafe { at.read() } == 0 {
                 break;
             }
@@ -327,7 +328,8 @@ pub(crate) fn thread_ids() -> Vec<u32> {
         if entry.th32OwnerProcessID == process {
             ids.push(entry.th32ThreadID);
         }
-        // SAFETY: as above.
+        // SAFETY: the snapshot is open and `entry` keeps the size set
+        // before `Thread32First`.
         more = unsafe { Thread32Next(snapshot, &raw mut entry) } != 0;
     }
     // SAFETY: the snapshot opened above, closed once.

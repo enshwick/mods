@@ -120,16 +120,24 @@ fn rust_version(name: &str, package: &serde_json::Value, toolchain: &str) -> Opt
     })
 }
 
-/// A platform crate in `[workspace.dependencies]` of the root `manifest`
-/// not pinned to a full commit.
+/// A platform crate in `[workspace.dependencies]` or a `[patch]` table of
+/// the root `manifest` not pinned to a full commit.
 fn platform_pins(manifest: &toml::Table) -> Vec<String> {
-    manifest
+    let workspace = manifest
         .get("workspace")
         .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml::Value::as_table);
+    let patches = manifest
+        .get("patch")
         .and_then(toml::Value::as_table)
         .into_iter()
         .flatten()
-        .filter(|(_, spec)| spec.get("git").and_then(toml::Value::as_str) == Some(PLATFORM))
+        .filter_map(|(_, table)| table.as_table());
+    workspace
+        .into_iter()
+        .chain(patches)
+        .flatten()
+        .filter(|(_, spec)| from_the_platform(spec))
         .filter(|(_, spec)| {
             !spec
                 .get("rev")
@@ -140,6 +148,17 @@ fn platform_pins(manifest: &toml::Table) -> Vec<String> {
             format!("{crate_name}: the platform is pinned by `rev` to a full commit hash")
         })
         .collect()
+}
+
+/// Whether the dependency `spec` takes the platform from git, its URL
+/// written with or without `.git` and a trailing slash.
+fn from_the_platform(spec: &toml::Value) -> bool {
+    spec.get("git")
+        .and_then(toml::Value::as_str)
+        .is_some_and(|url| {
+            let url = url.trim_end_matches('/');
+            url.strip_suffix(".git").unwrap_or(url) == PLATFORM
+        })
 }
 
 /// A platform crate a member's `manifest` takes from git itself rather than
@@ -159,7 +178,7 @@ fn platform_outside_workspace(name: &str, manifest: &toml::Table) -> Vec<String>
                 .filter_map(|key| table.get(*key).and_then(toml::Value::as_table))
         })
         .flatten()
-        .filter(|(_, spec)| spec.get("git").and_then(toml::Value::as_str) == Some(PLATFORM))
+        .filter(|(_, spec)| from_the_platform(spec))
         .map(|(dependency, _)| {
             format!(
                 "{name}: {dependency} comes from [workspace.dependencies], the one platform pin"
@@ -192,7 +211,9 @@ fn other_mods(name: &str, package: &serde_json::Value, mods: &[&str]) -> Vec<Str
         .collect()
 }
 
-/// Whether a Rust file under `dir` names `FakeHost` outside a `//` comment.
+/// Whether a Rust file under `dir` names `FakeHost` outside comments and
+/// literals. A folder with a `Cargo.toml` of its own, and `target`, belong
+/// to no package here.
 fn installs_the_fake_host(dir: &Path) -> Result<bool, String> {
     let mut folders = vec![dir.to_path_buf()];
     while let Some(folder) = folders.pop() {
@@ -203,7 +224,8 @@ fn installs_the_fake_host(dir: &Path) -> Result<bool, String> {
                 .map_err(|e| format!("{}: {e}", folder.display()))?
                 .path();
             if path.is_dir() {
-                if !path.ends_with("target") {
+                let own = path.join("Cargo.toml").is_file() || path.ends_with("target");
+                if !own {
                     folders.push(path);
                 }
             } else if path.extension().is_some_and(|ext| ext == "rs") {
@@ -218,14 +240,11 @@ fn installs_the_fake_host(dir: &Path) -> Result<bool, String> {
     Ok(false)
 }
 
-/// Whether the Rust `text` names `FakeHost` outside a `//` comment.
+/// Whether the Rust `text` names `FakeHost` outside comments and literals.
 fn names_the_fake_host(text: &str) -> bool {
-    text.lines().any(|line| {
-        line.split_once("//")
-            .map_or(line, |(code, _)| code)
-            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
-            .any(|word| word == "FakeHost")
-    })
+    crate::crate_rules::code(text)
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .any(|word| word == "FakeHost")
 }
 
 /// The entries of a mod's `docs` folder other than its player pages and
@@ -306,6 +325,19 @@ mod tests {
         )
         .parse()
         .unwrap();
+        let suffixed: toml::Table = format!(
+            "[workspace.dependencies]\nenshwick = {{ git = \"{PLATFORM}.git\", rev = \"main\" }}\n\
+             [patch.\"{PLATFORM}/\"]\nenshwick = {{ git = \"{PLATFORM}\", branch = \"main\" }}\n"
+        )
+        .parse()
+        .unwrap();
+        assert_eq!(
+            platform_pins(&suffixed),
+            [
+                "enshwick: the platform is pinned by `rev` to a full commit hash",
+                "enshwick: the platform is pinned by `rev` to a full commit hash",
+            ]
+        );
         assert_eq!(
             platform_pins(&root),
             [
@@ -355,6 +387,11 @@ mod tests {
         ));
         assert!(!names_the_fake_host("// a FakeHost test would go here"));
         assert!(!names_the_fake_host("struct FakeHostish;"));
+        assert!(!names_the_fake_host("/* FakeHost */ fn f() {}"));
+        assert!(!names_the_fake_host("const S: &str = \"FakeHost\";"));
+        assert!(names_the_fake_host(
+            "let url = \"https://example.com\"; let loader = FakeHost::new();"
+        ));
     }
 
     #[test]

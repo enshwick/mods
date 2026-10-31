@@ -39,6 +39,7 @@ mod sys;
 mod waits;
 
 /// The labels and descriptions of the settings, a table per language.
+#[cfg(test)]
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Whether a change runs.
@@ -67,8 +68,8 @@ impl Switch {
 }
 
 /// Optimizer settings.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+#[enshwick::config]
+#[derive(Debug)]
 pub struct Settings {
     /// Exact short waits in the engine's event loop: "auto" on the dedicated
     /// server, on Windows and under Wine, where they were measured to help;
@@ -215,7 +216,7 @@ pub struct Optimizer;
 
 impl Mod for Optimizer {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let _texts = load.texts(TEXTS)?;
+        let _texts = load.texts()?;
         let settings: Settings = load.config()?;
         let environment = env::Environment::probe(&measure::game_log_text());
         let wine = environment.is_wine();

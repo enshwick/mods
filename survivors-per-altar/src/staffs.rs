@@ -17,6 +17,7 @@ use enshwick::survivors::{WORKSHOP_SURVIVORS, WorkshopSurvivor};
 use enshwick::{ItemId, Load, Off};
 
 /// The mod's texts, per language.
+#[cfg(test)]
 pub(crate) const TEXTS: &str = include_str!("texts.toml");
 
 /// The name every copy staff's ids derive from.

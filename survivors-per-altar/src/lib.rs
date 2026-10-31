@@ -80,8 +80,8 @@ const fn full_charges() -> u16 {
 }
 
 /// Survivors per altar settings, in `mod-configs/enshwick.survivors-per-altar.toml`.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+#[enshwick::config]
+#[derive(Debug)]
 #[config(validate = Settings::check)]
 struct Settings {
     /// A copy of each survivor at every altar, at most one per altar zone.
@@ -293,7 +293,7 @@ fn apply(settings: &Settings, loot: &Loot) {
 fn copy_staffs(load: &mut Load<'_>, settings: &Settings) -> Result<Loot, Off> {
     use enshwick::loot::Source;
 
-    let texts = load.texts(staffs::TEXTS)?;
+    let texts = load.texts()?;
     let charges = settings.charges();
     staffs::add(load, &texts, charges.full)?;
     staffs::file(load)?;

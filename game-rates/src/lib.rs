@@ -13,11 +13,12 @@ mod recipes;
 use crate::recipes::Category;
 
 /// The labels and descriptions of the settings, a table per language.
+#[cfg(test)]
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Game rates: building recipes, furniture comfort, then the game's rates.
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug, Default)]
 struct Settings {
     /// The building recipes: how much more they make, and of what.
     #[config(group)]
@@ -40,8 +41,8 @@ struct Settings {
 }
 
 /// How much more the building recipes make, and of what.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 struct Recipes {
     /// The building recipes make their output times this, for the
     /// same cost. A joined player runs with the server's value.
@@ -70,8 +71,8 @@ impl Default for Recipes {
 }
 
 /// How much comfort furniture gives.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 struct Comfort {
     /// Comfort each piece of furniture gives inside a base, times this, from
     /// 0 to 100: 1 is vanilla, 0 takes all comfort from furniture. The
@@ -88,8 +89,8 @@ impl Default for Comfort {
 
 /// Experience by where it comes from, each times its factor; the server's
 /// values decide.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 struct Experience {
     /// Experience from defeated enemies, times this.
     #[config(runtime, range = 0.0..=MAX_FACTOR)]
@@ -113,8 +114,8 @@ impl Default for Experience {
 }
 
 /// How fast timed workshops produce.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 struct Workshops {
     /// How fast timed workshops produce, from 0.1 to 100: 2 halves the
     /// time. A joined player runs with the server's value.
@@ -129,8 +130,8 @@ impl Default for Workshops {
 }
 
 /// How much resources and random loot hand out; the server's values decide.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 struct Drops {
     /// Resources from mining, chopping and harvesting, times this.
     #[config(runtime, range = 0.0..=MAX_FACTOR)]
@@ -151,8 +152,8 @@ impl Default for Drops {
 }
 
 /// How many skill points a level gives.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 struct Skills {
     /// Skill points each level gives, times this, rounded. A joined player
     /// runs with the server's value.
@@ -276,7 +277,7 @@ pub struct GameRates;
 
 impl Mod for GameRates {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        load.texts(TEXTS)?;
+        load.texts()?;
         let rates = Rates::declare(load);
         // The loader rebuilds the recipes when a recipe output rate changes.
         load.apply_config(move |settings: &Settings| settings.apply(&rates))?;

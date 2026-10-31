@@ -13,6 +13,7 @@ use enshwick::state::ModLocal;
 use enshwick::{Load, Mod, Off};
 
 /// The labels and descriptions of the settings, a table per language.
+#[cfg(test)]
 const TEXTS: &str = include_str!("texts.toml");
 
 /// Whether fly mode is open without the skill, for this mod life.
@@ -25,8 +26,8 @@ fn enabled() -> &'static AtomicBool {
 }
 
 /// Build Camera settings.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+#[enshwick::config]
+#[derive(Debug)]
 struct Settings {
     /// Every player may use the building fly mode near a base without the
     /// Airborne Architect skill. The vanilla limits stay: near a building
@@ -74,7 +75,7 @@ fn apply(settings: &Settings) {
 
 impl Mod for BuildCamera {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let _texts = load.texts(TEXTS)?;
+        let _texts = load.texts()?;
         load.apply_config(apply)?;
         load.on_skill(Skill::AirborneArchitect, |check| {
             lifts(check.gate, enabled().load(Ordering::Relaxed))

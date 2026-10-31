@@ -15,7 +15,7 @@ const SETTLE: Duration = Duration::from_secs(1);
 /// The extra maximum health the probe gives.
 const EXTRA: i16 = 100;
 /// The stat the probe defines.
-const LUCK: &str = "luck";
+const LUCK: enshwick::content::Id = enshwick::content::id!("luck");
 /// The probe's key for its modifiers.
 const KEY: &str = "probe";
 
@@ -33,7 +33,7 @@ pub(crate) struct StatChecks {
 impl StatChecks {
     pub(crate) fn new(load: &mut Load<'_>, scheduler: Scheduler) -> Result<Self, Off> {
         let world = load.world()?;
-        let luck = load.define_stat(LUCK, &StatDef::additive("probe.luck").range(0.0, 1.0))?;
+        let luck = load.define_stat(LUCK, &StatDef::additive().range(0.0, 1.0))?;
         load.on_stats_changed(|change| {
             enshwick::info!(
                 "stats: {:?} stat {} {} -> {}",
@@ -55,7 +55,7 @@ impl StatChecks {
 
     pub(crate) fn run(self) {
         match self.stats.info(self.fire) {
-            Some(info) if info.id == builtin::RESISTANCE_FIRE => {
+            Some(info) if info.id == builtin::RESISTANCE_FIRE.to_string() => {
                 enshwick::info!("PASS stats: built-in kind {info:?}");
             }
             other => enshwick::warn!("FAIL stats: built-in kind reads {other:?}"),

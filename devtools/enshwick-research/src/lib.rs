@@ -43,8 +43,8 @@ const fn max_dumps() -> u32 {
 }
 
 /// Research settings, read at start.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(deny_unknown_fields)]
+#[enshwick::config]
+#[derive(Debug)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "independent switches of a development mod's settings file"

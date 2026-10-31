@@ -27,8 +27,8 @@ fn seams() -> &'static AtomicBool {
 }
 
 /// How the zones of touching altars grow and join.
-#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
-#[serde(default, deny_unknown_fields)]
+#[enshwick::config(default)]
+#[derive(Debug)]
 pub(crate) struct Zones {
     /// Altars whose zones touch grow together and share their area. Each
     /// world's own value applies when it loads.

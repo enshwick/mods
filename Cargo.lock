@@ -177,7 +177,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=21fed9fb72f9f2f789f39f35565911980c74e00d#21fed9fb72f9f2f789f39f35565911980c74e00d"
+source = "git+https://github.com/enshwick/enshwick?rev=6408ffb016b7a9d7c63ceac19dbf121f95353b5f#6408ffb016b7a9d7c63ceac19dbf121f95353b5f"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -203,7 +203,6 @@ name = "enshwick-area-loot"
 version = "0.1.0"
 dependencies = [
  "enshwick",
- "serde",
  "toml",
 ]
 
@@ -215,7 +214,6 @@ dependencies = [
  "arrayvec",
  "enshwick",
  "proptest",
- "serde",
  "thiserror",
  "toml",
 ]
@@ -225,7 +223,6 @@ name = "enshwick-build-camera"
 version = "0.0.0-dev"
 dependencies = [
  "enshwick",
- "serde",
  "toml",
 ]
 
@@ -234,14 +231,13 @@ name = "enshwick-game-rates"
 version = "0.1.0"
 dependencies = [
  "enshwick",
- "serde",
  "toml",
 ]
 
 [[package]]
 name = "enshwick-gamedata"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=21fed9fb72f9f2f789f39f35565911980c74e00d#21fed9fb72f9f2f789f39f35565911980c74e00d"
+source = "git+https://github.com/enshwick/enshwick?rev=6408ffb016b7a9d7c63ceac19dbf121f95353b5f#6408ffb016b7a9d7c63ceac19dbf121f95353b5f"
 dependencies = [
  "enshwick",
  "rustc-hash",
@@ -255,7 +251,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=21fed9fb72f9f2f789f39f35565911980c74e00d#21fed9fb72f9f2f789f39f35565911980c74e00d"
+source = "git+https://github.com/enshwick/enshwick?rev=6408ffb016b7a9d7c63ceac19dbf121f95353b5f#6408ffb016b7a9d7c63ceac19dbf121f95353b5f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -299,7 +295,6 @@ dependencies = [
  "enshwick",
  "enshwick-gamedata",
  "rustc-hash",
- "serde",
  "windows-sys",
 ]
 
@@ -317,7 +312,6 @@ name = "enshwick-survivors-per-altar"
 version = "0.1.0"
 dependencies = [
  "enshwick",
- "serde",
  "toml",
 ]
 

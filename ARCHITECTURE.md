@@ -10,6 +10,10 @@ checks every mod.
   offer typed extension points that other mods link.
 - What another mod could use belongs in the `enshwick` API, not in a mod.
 - Each mod has its own version and release; no release bundles several mods.
+- A mod's `docs/player.md`, and `docs/player.<language>.md` for each
+  translation, is the source of its page on the
+  [site](https://github.com/enshwick/docs). CI checks every change to them
+  with the site's own checker.
 
 | Path | What |
 | --- | --- |

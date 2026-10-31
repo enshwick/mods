@@ -1,0 +1,104 @@
+[en]
+"mod.name" = "Shared Experience"
+"mod.description" = "Every character catches up with the one furthest ahead in experience."
+"config" = "Shared Experience"
+"config.enabled" = "Shared Experience"
+"config.enabled.doc" = "Every character catches up with the one furthest ahead in experience."
+
+[uk]
+"mod.name" = "Shared Experience"
+"mod.description" = "Кожен персонаж наздоганяє того, хто має найбільше досвіду."
+"config" = "Shared Experience"
+"config.enabled" = "Спільний досвід"
+"config.enabled.doc" = "Кожен персонаж наздоганяє того, хто має найбільше досвіду."
+
+[de]
+"mod.name" = "Shared Experience"
+"mod.description" = "Jeder Charakter holt den ein, der die meiste Erfahrung hat."
+"config" = "Shared Experience"
+"config.enabled" = "Geteilte Erfahrung"
+"config.enabled.doc" = "Jeder Charakter holt den ein, der die meiste Erfahrung hat."
+
+[fr]
+"mod.name" = "Shared Experience"
+"mod.description" = "Chaque personnage rattrape celui qui a le plus d'expérience."
+"config" = "Shared Experience"
+"config.enabled" = "Expérience partagée"
+"config.enabled.doc" = "Chaque personnage rattrape celui qui a le plus d'expérience."
+
+[it]
+"mod.name" = "Shared Experience"
+"mod.description" = "Ogni personaggio raggiunge quello con più esperienza."
+"config" = "Shared Experience"
+"config.enabled" = "Esperienza condivisa"
+"config.enabled.doc" = "Ogni personaggio raggiunge quello con più esperienza."
+
+[es]
+"mod.name" = "Shared Experience"
+"mod.description" = "Cada personaje alcanza al que tiene más experiencia."
+"config" = "Shared Experience"
+"config.enabled" = "Experiencia compartida"
+"config.enabled.doc" = "Cada personaje alcanza al que tiene más experiencia."
+
+[ru]
+"mod.name" = "Shared Experience"
+"mod.description" = "Каждый персонаж догоняет того, у кого больше всего опыта."
+"config" = "Shared Experience"
+"config.enabled" = "Общий опыт"
+"config.enabled.doc" = "Каждый персонаж догоняет того, у кого больше всего опыта."
+
+[pl]
+"mod.name" = "Shared Experience"
+"mod.description" = "Każda postać dogania tę, która ma najwięcej doświadczenia."
+"config" = "Shared Experience"
+"config.enabled" = "Wspólne doświadczenie"
+"config.enabled.doc" = "Każda postać dogania tę, która ma najwięcej doświadczenia."
+
+[ja]
+"mod.name" = "Shared Experience"
+"mod.description" = "すべてのキャラクターが、最も経験値の多いキャラクターに追いつきます。"
+"config" = "Shared Experience"
+"config.enabled" = "経験値共有"
+"config.enabled.doc" = "すべてのキャラクターが、最も経験値の多いキャラクターに追いつきます。"
+
+[ko]
+"mod.name" = "Shared Experience"
+"mod.description" = "모든 캐릭터가 경험치가 가장 많은 캐릭터를 따라잡습니다."
+"config" = "Shared Experience"
+"config.enabled" = "경험치 공유"
+"config.enabled.doc" = "모든 캐릭터가 경험치가 가장 많은 캐릭터를 따라잡습니다."
+
+[pt-br]
+"mod.name" = "Shared Experience"
+"mod.description" = "Cada personagem alcança quem tem mais experiência."
+"config" = "Shared Experience"
+"config.enabled" = "Experiência compartilhada"
+"config.enabled.doc" = "Cada personagem alcança quem tem mais experiência."
+
+[th]
+"mod.name" = "Shared Experience"
+"mod.description" = "ตัวละครทุกตัวจะตามทันตัวละครที่มีค่าประสบการณ์มากที่สุด"
+"config" = "Shared Experience"
+"config.enabled" = "แชร์ค่าประสบการณ์"
+"config.enabled.doc" = "ตัวละครทุกตัวจะตามทันตัวละครที่มีค่าประสบการณ์มากที่สุด"
+
+[tr]
+"mod.name" = "Shared Experience"
+"mod.description" = "Her karakter en çok deneyime sahip olana yetişir."
+"config" = "Shared Experience"
+"config.enabled" = "Ortak deneyim"
+"config.enabled.doc" = "Her karakter en çok deneyime sahip olana yetişir."
+
+[zh-cn]
+"mod.name" = "Shared Experience"
+"mod.description" = "每个角色都会追上经验最多的角色。"
+"config" = "Shared Experience"
+"config.enabled" = "共享经验"
+"config.enabled.doc" = "每个角色都会追上经验最多的角色。"
+
+[zh-tw]
+"mod.name" = "Shared Experience"
+"mod.description" = "每個角色都會追上經驗最多的角色。"
+"config" = "Shared Experience"
+"config.enabled" = "共享經驗"
+"config.enabled.doc" = "每個角色都會追上經驗最多的角色。"

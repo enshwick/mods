@@ -1,0 +1,17 @@
+id: engine-names-stay-in-loader
+valid:
+  - "fn f(world: &World) { let beds = world.beds(); }"
+  - "// Reads `keen::ecs::NpcBed` through the loader."
+  - "/// The loader resolves `keen::ecs::NpcBed` for [`World::beds`].\nfn f() {}"
+  - "const NAME: &str = \"better-altars:limit\";"
+invalid:
+  - "fn f(load: &Load) { let beds = ComponentType::resolve(load, \"keen::ecs::NpcBed\"); }"
+  - "const BED: &str = \"keen::ecs::NpcBed\";"
+  - "fn f() -> String { format!(\"{}\", \"keen::ItemInstance\") }"
+  - "const BED: &str = r\"keen::ecs::NpcBed\";"
+  - "const BED: &str = r#\"keen::ecs::NpcBed\"#;"
+  - |
+    #[cfg(test)]
+    mod tests {
+        const BED: &str = "keen::ecs::NpcBed";
+    }

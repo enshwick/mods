@@ -1,0 +1,18 @@
+id: engine-names-stay-in-loader
+language: rust
+severity: error
+message: a mod names game data through the API's ids and types, not an engine name
+note: >-
+  Engine names, offsets and addresses live in the loader and its build tables,
+  so a game update changes a table, not every mod. The rule reads string
+  literals that spell a `keen::` name in the mods and their tests; a developer
+  tool that needs one says why beside it. A reflected name without the
+  `keen::` prefix, and an offset or an address in a number, are not seen and
+  are left to review.
+ignores:
+  - "tools/**"
+rule:
+  any:
+    - kind: string_literal
+    - kind: raw_string_literal
+  regex: '\bkeen::'

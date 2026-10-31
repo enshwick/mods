@@ -41,12 +41,24 @@ pub(crate) fn link(load: &mut Load<'_>, world: World) -> Result<(), Off> {
             usize::try_from(o).map_err(|_| Off::new(format!("{ty}.{field}: out of range")))
         })
     };
+    // Research on the respawn target: the API has no id for a target's
+    // layout yet, so its size comes from reflection by engine name.
+    // ast-grep-ignore: engine-names-stay-in-loader
     let target = usize::try_from(load.type_size("keen::ecs::TargetInfo")?)
         .map_err(|_| Off::new("TargetInfo: out of range"))?;
+    // The list of targets the respawn picks from, which the API has no id
+    // for yet.
+    // ast-grep-ignore: engine-names-stay-in-loader
     let base = offset("keen::ecs::SelectedTargets", "targets")? + SPAWN_SLOT * target;
     let slot = Slot {
+        // The component that holds that list, read raw for the research.
+        // ast-grep-ignore: engine-names-stay-in-loader
         ty: ComponentType::resolve(load, "keen::ecs::SelectedTargets")?,
+        // Where the respawn target stands, a field the API does not name.
+        // ast-grep-ignore: engine-names-stay-in-loader
         position: base + offset("keen::ecs::TargetInfo", "targetTransform")?,
+        // Which entity the respawn targets, a field the API does not name.
+        // ast-grep-ignore: engine-names-stay-in-loader
         entity: base + offset("keen::ecs::TargetInfo", "targetEntityId")?,
     };
     load.scheduler()?.every(PERIOD, move || {

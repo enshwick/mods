@@ -78,16 +78,29 @@ impl Checks {
     pub(crate) fn new(load: &mut Load<'_>) -> Result<Self, Off> {
         let world = load.world()?;
         Ok(Self {
+            // The smoke test checks that the reflection API resolves a
+            // replicated component by its engine name.
+            // ast-grep-ignore: engine-names-stay-in-loader
             network_health: ComponentType::resolve(load, "keen::ecs::NetworkHealth")?,
             teleport_parts: [
+                // The teleport check resolves each part of a teleport by its
+                // engine name, as a mod's low-level code would.
+                // ast-grep-ignore: engine-names-stay-in-loader
                 ComponentType::resolve(load, "keen::ecs::Teleport")?,
+                // The counter the teleport check expects to rise.
+                // ast-grep-ignore: engine-names-stay-in-loader
                 ComponentType::resolve(load, "keen::ecs::TeleportCount")?,
+                // The position the teleport check expects to move.
+                // ast-grep-ignore: engine-names-stay-in-loader
                 ComponentType::resolve(load, "keen::ecs::LastTransform")?,
             ],
             store: load.world_store("visits")?,
             world,
             save_asked: AtomicBool::new(false),
             scheduler: load.scheduler()?,
+            // The smoke test checks that the API refuses write access to a
+            // replicated component, named as the engine names it.
+            // ast-grep-ignore: engine-names-stay-in-loader
             copies_refused: WritableType::resolve(load, "keen::ecs::NetworkHealth").is_err(),
             effects: load.effects(),
             died: load.game_event_type("entity_died_event")?,

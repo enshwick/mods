@@ -10,7 +10,7 @@ pre-commit:
       glob: '*.md'
       exclude:
         - '**/CHANGELOG.md'
-      run: bunx --no-install markdownlint-cli2 --no-globs {staged_files}
+      run: rumdl check {staged_files}
     typos:
       run: typos --force-exclude {staged_files}
 
@@ -40,7 +40,7 @@ pre-push:
       glob: '*.md'
       exclude:
         - '**/CHANGELOG.md'
-      run: bunx --no-install markdownlint-cli2 --no-globs {push_files}
+      run: rumdl check {push_files}
     typos:
       run: typos --force-exclude {push_files}
     commits:
@@ -60,5 +60,5 @@ pre-push:
         - 'Cargo.lock'
         - 'deny.toml'
       # Advisories need the network and change without any commit: CI's
-      # full suite checks them every night.
+      # full suite checks them on every push to main.
       run: cargo deny check bans licenses sources

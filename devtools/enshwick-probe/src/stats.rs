@@ -15,7 +15,7 @@ const SETTLE: Duration = Duration::from_secs(1);
 /// The extra maximum health the probe gives.
 const EXTRA: i16 = 100;
 /// The stat the probe defines.
-const LUCK: &str = "enshwick.probe:luck";
+const LUCK: &str = "luck";
 /// The probe's key for its modifiers.
 const KEY: &str = "probe";
 

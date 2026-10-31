@@ -13,6 +13,11 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/shared-experience"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.shared-experience"
+side = "server"
+name = "Shared Experience"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

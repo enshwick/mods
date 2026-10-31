@@ -213,14 +213,6 @@ fn status() -> String {
 pub struct Optimizer;
 
 impl Mod for Optimizer {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.optimizer",
-            side: BOTH,
-            name: "Optimizer",
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;

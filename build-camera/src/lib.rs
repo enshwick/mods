@@ -73,15 +73,6 @@ fn apply(settings: &Settings) {
 }
 
 impl Mod for BuildCamera {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.build-camera",
-            side: BOTH,
-            name: "Build Camera",
-            join: true,
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
         load.apply_config(apply)?;

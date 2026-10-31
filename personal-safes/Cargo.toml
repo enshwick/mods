@@ -13,6 +13,13 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/personal-safes"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.personal-safes"
+side = "both"
+name = "Personal Safes"
+join = true
+exports = ["access"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

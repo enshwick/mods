@@ -13,6 +13,12 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/game-rates"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.game-rates"
+side = "both"
+name = "Game Rates"
+join = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

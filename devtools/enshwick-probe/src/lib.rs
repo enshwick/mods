@@ -324,15 +324,6 @@ fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> 
 }
 
 impl Mod for Probe {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.probe",
-            side: SERVER,
-            name: "Probe",
-            developer: true,
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let settings: Settings = load.config()?;
         if !settings.enabled {
@@ -434,7 +425,9 @@ mod tests {
 
     #[test]
     fn the_probe_is_a_developer_tool() {
-        let flags = Probe::manifest().flags;
+        // SAFETY: `enshwick_mod_query` returns the `'static` manifest of
+        // `declare_mod!`, which no thread writes.
+        let flags = unsafe { &*enshwick_mod_query() }.flags;
         assert!(flags.contains(enshwick::abi::ManifestFlags::DEVELOPER));
     }
 

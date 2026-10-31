@@ -28,7 +28,7 @@ impl SafeAction {
 /// Asked on the server's worker threads, inside the game's systems: a link
 /// reads lock-free state only.
 #[enshwick::point(
-    name = "enshwick.personal-safes:access",
+    name = "access",
     mode = Override,
     output = bool,
     refusable

@@ -13,6 +13,12 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/area-loot"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.area-loot"
+side = "server"
+name = "Area Loot"
+exports = ["eligible"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

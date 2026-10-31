@@ -270,16 +270,6 @@ fn open_world(store: &WorldStore<Owners>, world: World) {
 pub struct PersonalSafes;
 
 impl Mod for PersonalSafes {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.personal-safes",
-            side: BOTH,
-            name: "Personal Safes",
-            join: true,
-            points: [points::Access],
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let settings: Settings = load.config()?;
         let cost = settings.cost_multiplier;
@@ -549,7 +539,7 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     Ok(())
 }
 
-enshwick::declare_mod!(PersonalSafes);
+enshwick::declare_mod!(PersonalSafes, points: [points::Access]);
 
 #[cfg(test)]
 mod tests {

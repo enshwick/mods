@@ -4,18 +4,18 @@
 use enshwick::ItemId;
 use enshwick::content::items::NewItem;
 use enshwick::content::recipes::NewRecipe;
-use enshwick::content::{Guid, Id};
+use enshwick::content::{Guid, Id, id};
 
 /// The vanilla wooden chest item.
 pub const CHEST: Guid = Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d");
 /// The Safe item.
-pub const SAFE: Id = Id::new("enshwick.personal-safes:safe");
+pub const SAFE: Id = id!("safe");
 /// The Safe's recipe.
-pub const SAFE_RECIPE: Id = Id::new("enshwick.personal-safes:safe.recipe");
+pub const SAFE_RECIPE: Id = SAFE.part("recipe");
 /// The Safe's name text.
-pub const SAFE_NAME: Id = Id::new("enshwick.personal-safes:safe.name");
+pub const SAFE_NAME: Id = SAFE.part("name");
 /// The Safe's description text.
-pub const SAFE_DESCRIPTION: Id = Id::new("enshwick.personal-safes:safe.description");
+pub const SAFE_DESCRIPTION: Id = SAFE.part("description");
 /// Whether `item` is a Safe.
 #[must_use]
 pub fn is_safe(item: ItemId) -> bool {
@@ -71,6 +71,17 @@ mod tests {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }
         Ok(())
+    }
+
+    #[test]
+    fn the_safe_keeps_the_ids_saved_worlds_hold() {
+        assert_eq!(SAFE, Id::new("enshwick.personal-safes:safe"));
+        assert_eq!(SAFE_RECIPE, Id::new("enshwick.personal-safes:safe.recipe"));
+        assert_eq!(SAFE_NAME, Id::new("enshwick.personal-safes:safe.name"));
+        assert_eq!(
+            SAFE_DESCRIPTION,
+            Id::new("enshwick.personal-safes:safe.description")
+        );
     }
 
     #[test]

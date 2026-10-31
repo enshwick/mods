@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use enshwick::Load;
 use enshwick::game_events::RawGameEvent;
 
-use crate::locks::Relock;
+use enshwick::Relock;
 
 /// Counts of game events by type hash, with the names the census knows.
 #[derive(Debug)]

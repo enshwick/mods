@@ -18,7 +18,6 @@ mod checks;
 mod clock;
 mod damage;
 mod knowledge;
-mod locks;
 mod raw_stats;
 mod settings;
 mod stats;

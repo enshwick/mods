@@ -30,8 +30,8 @@ crashes, detours, patches and threads, so those are skipped there.
 The code rules clippy cannot express are ast-grep rules, listed in
 [`sgconfig.yml`](sgconfig.yml) with their tests. A deliberate exception is
 `// ast-grep-ignore: <rule id>` on the line above, with its reason in the
-comment before it. A crate takes its locks through the `Relock` traits of
-its own `locks.rs`, the one poison policy. Before them, `cargo xtask check`
+comment before it. A mod takes its locks through the API's `Relock`,
+`RelockRw` and `RelockWait`, the one poison policy. Before them, `cargo xtask check`
 holds every crate to three rules: a crate whose package has no unsafe code
 declares `#![forbid(unsafe_code)]` at its root, only a dev-dependency turns
 on a crate's `test` feature, and a mod names its version in `[package]`.

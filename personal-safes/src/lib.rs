@@ -16,7 +16,6 @@ pub mod access;
 pub mod actions;
 pub mod content;
 mod keys;
-mod locks;
 pub mod points;
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -39,7 +38,7 @@ use enshwick::{Entity, Load, Mod, Off, PlayerKey};
 
 use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
 use crate::actions::Phrases;
-use crate::locks::Relock;
+use enshwick::Relock;
 
 /// Safe settings.
 #[enshwick::config(default)]

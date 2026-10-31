@@ -14,7 +14,7 @@ use enshwick::altars::{AltarZone, ZoneSizes};
 use enshwick::state::ModLocal;
 
 use crate::geometry::{Altar, Box3, clusters};
-use crate::locks::Relock;
+use enshwick::Relock;
 
 /// Per altar: its level and its vanilla zone at each level up to it.
 type Input = BTreeMap<u32, Vec<Box3>>;

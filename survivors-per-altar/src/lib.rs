@@ -8,7 +8,6 @@
 
 mod copies;
 mod cursor;
-mod locks;
 pub mod points;
 mod policy;
 mod renew;
@@ -23,7 +22,7 @@ use enshwick::loot::Drop;
 use enshwick::state::ModLocal;
 use enshwick::{ItemId, Load, Mod, Off};
 
-use crate::locks::Relock;
+use enshwick::Relock;
 
 /// The text refusing fewest charges above the full count, with `{min}` and
 /// `{full}`.

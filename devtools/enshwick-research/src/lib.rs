@@ -18,7 +18,6 @@ mod entities;
 mod fibers;
 mod health;
 mod join;
-mod locks;
 mod memory;
 mod respawn;
 mod skills;

@@ -17,9 +17,9 @@ use std::time::{Duration, Instant};
 
 use enshwick::state::ModLocal;
 
-use crate::locks::{Relock, RelockWait};
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
+use enshwick::{Relock, RelockWait};
 
 /// How often a line is written.
 pub(crate) const PERIOD: Duration = Duration::from_mins(1);

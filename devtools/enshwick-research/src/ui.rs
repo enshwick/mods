@@ -20,8 +20,8 @@ use std::time::Instant;
 use enshwick::abi::Registers;
 use enshwick::{Load, Off};
 
-use crate::locks::Relock;
 use crate::memory;
+use enshwick::Relock;
 
 /// What a site is and so what it logs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

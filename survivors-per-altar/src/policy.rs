@@ -28,8 +28,8 @@ use enshwick::{Entity, ItemId, Load, Off};
 
 use crate::Charges;
 use crate::copies::{Copies, CopyStaff, Verdict, Zone};
-use crate::locks::{Relock, RelockRw};
 use crate::points::{ChargeCost, CopyLimit};
+use enshwick::{Relock, RelockRw};
 
 /// How often the uniqueness pass lets go of copies it no longer sees.
 const SWEEP: Duration = Duration::from_secs(2);

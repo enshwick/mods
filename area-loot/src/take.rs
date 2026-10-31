@@ -19,9 +19,9 @@ use enshwick::world::{World, near};
 use enshwick::{Load, Off};
 
 use crate::Settings;
-use crate::locks::Relock;
 use crate::points::Eligible;
 use crate::tracker::Tracker;
+use enshwick::Relock;
 
 /// Another player's interaction keeps a container out for this long.
 const BUSY: Duration = Duration::from_secs(10);

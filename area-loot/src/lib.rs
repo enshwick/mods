@@ -4,7 +4,6 @@
 //! containers another player has open stay as they are. Items on the ground
 //! keep the game's own pickup.
 
-mod locks;
 pub mod points;
 mod take;
 mod tracker;

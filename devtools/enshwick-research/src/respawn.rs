@@ -12,8 +12,8 @@ use enshwick::world::World;
 use enshwick::{Load, Off};
 use rustc_hash::FxHashMap;
 
-use crate::locks::Relock;
 use crate::memory;
+use enshwick::Relock;
 
 /// The target slot of the spawn point; build 1269579.
 const SPAWN_SLOT: usize = 9;

@@ -122,11 +122,9 @@ keep the mod running and up to date.
 2. Extract it into the folder that holds `enshrouded.exe` or
    `enshrouded_server.exe`.
 
-The mod needs the Enshwick loader:
-[`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)
-alone, or
+The mod needs the Enshwick loader. Get
 [`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-with every mod. These are development builds of the newest commit. Until the
+and extract it into the same folder. These are development builds of the newest commit. Until the
 first release, 1.0.0, there are no other builds.
 
 ## Who needs it?

@@ -47,9 +47,10 @@ Wine з обмеженням CPU сервер запускає не більше
 
 ## Встановлення
 
-Optimizer входить в enshwick.zip.
+Optimizer постачається в окремому архіві, enshwick-optimizer.zip. Мод потребує
+Enshwick, який постачається в enshwick.zip.
 [Посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод потребує Enshwick.
+показує, куди покласти обидва архіви.
 
 ## Налаштування
 

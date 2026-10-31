@@ -43,9 +43,10 @@ in the base game.
 
 ## Install
 
-Area Loot comes in enshwick.zip, and the
+Area Loot comes in its own archive, enshwick-area-loot.zip. It needs Enshwick,
+which comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick.
+put both archives.
 
 ## Settings
 

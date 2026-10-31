@@ -103,11 +103,9 @@ world. A change applies when the game starts again.
 Download
 [`enshwick-survivors-per-altar.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-survivors-per-altar.zip)
 and extract it into the folder that holds `enshrouded.exe` or
-`enshrouded_server.exe`. It needs the Enshwick loader:
-[`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)
-alone, or
+`enshrouded_server.exe`. It needs the Enshwick loader. Get
 [`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-with every mod. These are development builds of the newest commit. Until the
+and extract it into the same folder. These are development builds of the newest commit. Until the
 first release, 1.0.0, there are no other builds.
 
 ## Who needs it

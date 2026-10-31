@@ -101,10 +101,8 @@ Download
 [`enshwick-personal-safes.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-personal-safes.zip).
 Extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. The mod needs the Enshwick loader. Get
-[`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)
-for the loader alone, or
 [`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-for the loader with every mod. These are development builds of the newest
+and extract it into the same folder. These are development builds of the newest
 commit. Until the first release, 1.0.0, these are the only builds.
 
 ## Who needs it

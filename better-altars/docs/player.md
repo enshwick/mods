@@ -43,9 +43,10 @@ zones work as bases.
 
 ## Install
 
-Better Altars comes in enshwick.zip, and the
+Better Altars comes in its own archive, enshwick-better-altars.zip. It needs
+Enshwick, which comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick.
+put both archives.
 
 ## Settings
 

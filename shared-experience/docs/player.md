@@ -32,9 +32,10 @@ character. The experience a character gains here goes with it to other worlds.
 
 ## Install
 
-Shared Experience comes in enshwick.zip. The
+Shared Experience comes in its own archive, enshwick-shared-experience.zip. It
+needs Enshwick, which comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick.
+put both archives.
 
 ## Settings
 

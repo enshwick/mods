@@ -49,7 +49,7 @@ jobs:
           reason=""
           pages=true
           if [ "$FULL" != true ]; then
-            git diff --name-only "$BASE...HEAD" | grep -qE '^[^/]+/docs/player[^/]*\.md$' || pages=false
+            git diff --name-only "$BASE...HEAD" | grep -qE '^([^/]+/docs/player[^/]*\.md|\.github/workflows/ci\.yml)$' || pages=false
             never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/(dev|release-plz)\.yml|actions/release-files/.*)$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
             if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
               reason="no file that builds changed"

@@ -56,15 +56,6 @@ fn describe(settings: &Settings) {
 pub struct AreaLoot;
 
 impl Mod for AreaLoot {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.area-loot",
-            side: SERVER,
-            name: "Area Loot",
-            points: [points::Eligible],
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
         load.apply_config(|settings: &Settings| {
@@ -76,7 +67,7 @@ impl Mod for AreaLoot {
     }
 }
 
-enshwick::declare_mod!(AreaLoot);
+enshwick::declare_mod!(AreaLoot, points: [points::Eligible]);
 
 #[cfg(test)]
 mod tests {

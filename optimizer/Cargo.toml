@@ -13,6 +13,14 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/optimizer"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.optimizer"
+side = "both"
+name = "Optimizer"
+
+[package.metadata.xtask]
+windows-only = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -31,9 +39,6 @@ windows-sys = { version = "0.61.2", default-features = false, features = [
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test"] }
 toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
-
-[package.metadata.enshwick]
-windows-only = true
 
 [lints]
 workspace = true

@@ -8,9 +8,9 @@
 //! charge as consuming, which makes the game take the staff in the same
 //! transaction as the spawn or move, and only when that works.
 
-use enshwick::content::Id;
 use enshwick::content::icons::{Icon, Pixels, Tint};
 use enshwick::content::items::{FuelSetup, ImpactUiValue, NewItem, StatFormat};
+use enshwick::content::{Id, id};
 use enshwick::i18n::{Language, Texts};
 use enshwick::state::ModLocal;
 use enshwick::survivors::{WORKSHOP_SURVIVORS, WorkshopSurvivor};
@@ -19,8 +19,10 @@ use enshwick::{ItemId, Load, Off};
 /// The mod's texts, per language.
 pub(crate) const TEXTS: &str = include_str!("texts.toml");
 
+/// The name every copy staff's ids derive from.
+const COPY_STAFF: Id = id!("copy-staff");
 /// The template of every copy staff's own entity, which keeps its charges.
-const STAFF_ENTITY: Id = Id::new("enshwick.survivors-per-altar:copy-staff.entity");
+const STAFF_ENTITY: Id = COPY_STAFF.part("entity");
 /// The colour copy staffs' icons take, so they stand apart from the
 /// survivors' own staffs.
 const ICON_TINT: Tint = Tint {
@@ -28,10 +30,7 @@ const ICON_TINT: Tint = Tint {
     amount: 55,
 };
 /// The tag of the tooltip line with a staff's full charges.
-const FULL_CHARGES: Id = Id::new("enshwick.survivors-per-altar:copy-staff.full-charges");
-
-/// The namespace and folder of every copy staff's ids.
-const STAFF_IDS: &str = "enshwick.survivors-per-altar:copy-staff/";
+const FULL_CHARGES: Id = COPY_STAFF.part("full-charges");
 
 /// A workshop survivor and its copy staff.
 #[derive(Debug)]
@@ -60,16 +59,14 @@ impl Staff {
     }
 
     fn of(survivor: &'static WorkshopSurvivor) -> Option<Self> {
-        let id = |suffix: &str| {
-            let name = format!("{STAFF_IDS}{}{suffix}", survivor.key());
-            Id::try_new(Box::leak(name.into_boxed_str()))
-        };
+        let name = format!("copy-staff/{}", survivor.key());
+        let copy = Id::try_of(COPY_STAFF.namespace(), Box::leak(name.into_boxed_str()))?;
         Some(Self {
             survivor,
-            copy: id("")?,
-            name: id(".name")?,
-            description: id(".description")?,
-            icon: id(".icon")?,
+            copy,
+            name: copy.try_part("name")?,
+            description: copy.try_part("description")?,
+            icon: copy.try_part("icon")?,
         })
     }
 }
@@ -184,6 +181,26 @@ mod tests {
             assert_eq!(copy_staff(vanilla).map(Staff::key), None);
         }
         assert_eq!(staffs().len(), WORKSHOP_SURVIVORS.len());
+    }
+
+    #[test]
+    fn copy_staffs_keep_the_ids_saved_worlds_hold() {
+        assert_eq!(
+            STAFF_ENTITY,
+            Id::new("enshwick.survivors-per-altar:copy-staff.entity")
+        );
+        assert_eq!(
+            FULL_CHARGES,
+            Id::new("enshwick.survivors-per-altar:copy-staff.full-charges")
+        );
+        let _loader = enshwick::test::FakeHost::new().install();
+        for staff in staffs() {
+            let copy = format!("enshwick.survivors-per-altar:copy-staff/{}", staff.key());
+            assert_eq!(staff.copy.to_string(), copy);
+            assert_eq!(staff.name.to_string(), format!("{copy}.name"));
+            assert_eq!(staff.description.to_string(), format!("{copy}.description"));
+            assert_eq!(staff.icon.to_string(), format!("{copy}.icon"));
+        }
     }
 
     #[test]

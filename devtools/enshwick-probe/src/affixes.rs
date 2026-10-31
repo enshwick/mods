@@ -15,10 +15,10 @@ use enshwick::{Load, Off};
 /// The probe's key for the modifiers its commands set.
 const KEY: &str = "probe-command";
 /// The stat the probe defines.
-const LUCKY: &str = "enshwick.probe:lucky";
+const LUCKY: enshwick::content::Id = enshwick::content::id!("lucky");
 /// The affixes the probe defines.
-const STURDY: &str = "enshwick.probe:sturdy";
-const FORTUNATE: &str = "enshwick.probe:fortunate";
+const STURDY: &str = "sturdy";
+const FORTUNATE: &str = "fortunate";
 /// The seed of the probe's check roll.
 const SEED: u64 = 0x5eed;
 
@@ -45,8 +45,11 @@ impl AffixChecks {
         for (id, _) in builtin::ALL {
             kinds.push((id.to_owned(), load.open_stat(id)?));
         }
-        let lucky = load.define_stat(LUCKY, &StatDef::additive("probe.lucky").range(0.0, 100.0))?;
-        kinds.push((LUCKY.to_owned(), lucky));
+        let lucky = load.define_stat(
+            &LUCKY.to_string(),
+            &StatDef::additive("probe.lucky").range(0.0, 100.0),
+        )?;
+        kinds.push((LUCKY.to_string(), lucky));
         let health = load.open_stat(builtin::HEALTH_MAX)?;
         load.define_affix(
             STURDY,

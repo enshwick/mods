@@ -275,15 +275,6 @@ impl Settings {
 pub struct GameRates;
 
 impl Mod for GameRates {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.game-rates",
-            side: BOTH,
-            name: "Game Rates",
-            join: true,
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         load.texts(TEXTS)?;
         let rates = Rates::declare(load);

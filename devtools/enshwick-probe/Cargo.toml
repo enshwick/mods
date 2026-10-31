@@ -13,6 +13,12 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/devtools/enshwick-probe"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.probe"
+side = "server"
+name = "Probe"
+developer = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -25,6 +31,3 @@ enshwick = { workspace = true, features = ["test", "unstable"] }
 
 [lints]
 workspace = true
-
-[package.metadata.enshwick]
-release = false

@@ -36,15 +36,6 @@ pub struct BetterAltars {
 }
 
 impl Mod for BetterAltars {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.better-altars",
-            side: BOTH,
-            name: "Better Altars",
-            join: true,
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts(TEXTS)?;
         let settings: Settings = load.config()?;

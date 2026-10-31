@@ -141,7 +141,7 @@ jobs:
         id: list
         run: |
           tests=$(cargo metadata --no-deps --format-version 1 | jq -r \
-            '.packages[] | select(.metadata.enshwick["windows-only"] == true) | .name' | tr -d '\r' | xargs)
+            '.packages[] | select(.metadata.xtask["windows-only"] == true) | .name' | tr -d '\r' | xargs)
           echo "Windows tests: ${tests:-none}"
           echo "tests=$tests" >> "$GITHUB_OUTPUT"
 

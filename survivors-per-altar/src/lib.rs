@@ -183,16 +183,6 @@ fn chance(name: &str, chance: f64) -> f64 {
 pub struct SurvivorsPerAltar;
 
 impl Mod for SurvivorsPerAltar {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.survivors-per-altar",
-            side: BOTH,
-            name: "Survivors per Altar",
-            join: true,
-            points: [points::CopyLimit, points::ChargeCost],
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let settings: Settings = load.config()?;
         // The staffs stay in the game when they are off, so a value that
@@ -334,7 +324,7 @@ fn copy_staffs(load: &mut Load<'_>, settings: &Settings) -> Result<Loot, Off> {
     Ok(loot)
 }
 
-enshwick::declare_mod!(SurvivorsPerAltar);
+enshwick::declare_mod!(SurvivorsPerAltar, points: [points::CopyLimit, points::ChargeCost]);
 
 #[cfg(test)]
 mod tests {

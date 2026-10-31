@@ -15,7 +15,7 @@ cargo xtask dist     # the player's archive of each mod, in target/dist
 ```
 
 A package that builds only for Windows sets `windows-only = true` under
-`[package.metadata.enshwick]`. Off Windows it stays out of the host checks,
+`[package.metadata.xtask]`. Off Windows it stays out of the host checks,
 and `cargo xtask check --windows` (or `--all`) runs its tests under Wine:
 directly on an amd64 Linux host that has Wine, otherwise in Docker, in an
 image built from `tools/wine/Dockerfile` on first use. On such a host, use

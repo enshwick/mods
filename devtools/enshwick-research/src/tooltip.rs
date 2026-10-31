@@ -536,17 +536,18 @@ pub(crate) mod tests {
 
     /// The client rows the manifest pins, by symbol.
     pub(crate) fn pinned() -> Vec<(String, u64, enshwick::abi::Fingerprint)> {
-        use enshwick::Mod as _;
-
-        let manifest = crate::Research::manifest();
-        // SAFETY: the manifest macro points at static rows of these counts.
+        // SAFETY: `enshwick_mod_query` returns the `'static` manifest of
+        // `declare_mod!`, which no thread writes.
+        let manifest = unsafe { &*crate::enshwick_mod_query() };
+        // SAFETY: `declare_mod!` points at static rows of these counts.
         let builds = unsafe { core::slice::from_raw_parts(manifest.builds, manifest.build_count) };
         let mut pinned = Vec::new();
         for build in builds
             .iter()
             .filter(|b| b.side == enshwick::abi::Side::CLIENT)
         {
-            // SAFETY: as above.
+            // SAFETY: `declare_mod!` points each build at static rows of
+            // this count.
             let symbols = unsafe { core::slice::from_raw_parts(build.symbols, build.symbol_count) };
             for symbol in symbols {
                 // SAFETY: a static string.

@@ -11,7 +11,7 @@ use enshwick::Entity;
 /// it out but never take in one the mod passed over. Asked on the server's
 /// game thread when a player empties a container, once per container
 /// around it.
-#[enshwick::point(name = "enshwick.area-loot:eligible", mode = Override, output = bool)]
+#[enshwick::point(name = "eligible", mode = Override, output = bool)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Eligible {
     /// The player who emptied a container.

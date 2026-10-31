@@ -13,6 +13,12 @@ repository = "https://github.com/enshwick/mods"
 homepage = "https://github.com/enshwick/mods/tree/main/build-camera"
 publish = false
 
+[package.metadata.enshwick]
+id = "enshwick.build-camera"
+side = "both"
+name = "Build Camera"
+join = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

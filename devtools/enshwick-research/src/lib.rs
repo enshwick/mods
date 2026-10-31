@@ -124,88 +124,6 @@ pub struct Research {
 }
 
 impl Mod for Research {
-    fn manifest() -> &'static enshwick::abi::Manifest {
-        enshwick::manifest!(
-            id: "enshwick.research",
-            side: BOTH,
-            name: "Research",
-            developer: true,
-            builds: [{
-                side: CLIENT,
-                guid: "69f0e9573b32c24a8838d3fff550824c",
-                age: 410,
-                symbols: [
-                    "research.tooltip" => 0xbf_ef20,
-                    "research.tooltip_body" => 0xbf_f750,
-                    "research.stat_rows" => 0xc9_dd10,
-                    "research.viewer_compare" => 0xb6_7e00,
-                    "research.viewer_b562c0" => 0xb5_62c0,
-                    "research.viewer_b56b80" => 0xb5_6b80,
-                    "research.viewer_beb220" => 0xbe_b220,
-                    "research.viewer_bebb60" => 0xbe_bb60,
-                    "research.viewer_c3da50" => 0xc3_da50,
-                    "research.viewer_b55140" => 0xb5_5140,
-                    "research.scroll_begin" => 0xa2_fb10,
-                    "research.scroll_end" => 0xa3_1c50,
-                    "research.tabs" => 0xcc_a5a0,
-                    "research.text_dialog" => 0xcc_8e30,
-                    "research.text_field" => 0xb1_2120,
-                    "research.client_cursor" => 0x28_fa70,
-                    "research.entities_with" => 0x9a_71d0,
-                    "research.entity_slot" => 0x9a_8070,
-                    "research.type_index" => 0x9a_5080,
-                    "research.component_read_raw" => 0x9a_5ec0,
-                    "research.impact_attribute" => 0x3e_2cc0,
-                    "research.skill_change" => 0xe5_f220,
-                ],
-            }, {
-                side: CLIENT,
-                guid: "69f0e9573b32c24a8838d3fff550824c",
-                age: 426,
-                symbols: [
-                    "research.tooltip" => 0xc0_0aa0,
-                    "research.tooltip_body" => 0xc0_12d0,
-                    "research.stat_rows" => 0xc9_f7a0,
-                    "research.viewer_compare" => 0xb6_98e0,
-                    "research.viewer_b562c0" => 0xb5_7da0,
-                    "research.viewer_b56b80" => 0xb5_8660,
-                    "research.viewer_beb220" => 0xbe_cda0,
-                    "research.viewer_bebb60" => 0xbe_d6e0,
-                    "research.viewer_c3da50" => 0xc3_f5d0,
-                    "research.viewer_b55140" => 0xb5_6c20,
-                    "research.scroll_begin" => 0xa3_1640,
-                    "research.scroll_end" => 0xa3_3780,
-                    "research.tabs" => 0xcc_c030,
-                    "research.text_dialog" => 0xcc_a8c0,
-                    "research.text_field" => 0xb1_3c30,
-                    "research.client_cursor" => 0x28_fc10,
-                    "research.entities_with" => 0x9a_85b0,
-                    "research.entity_slot" => 0x9a_9450,
-                    "research.type_index" => 0x9a_6460,
-                    "research.component_read_raw" => 0x9a_72a0,
-                    "research.impact_attribute" => 0x3e_3040,
-                    "research.skill_change" => 0xe6_1de0,
-                ],
-            }, {
-                side: SERVER,
-                guid: "1c129660cd6efc4f9f0b21652d5ff2bf",
-                age: 387,
-                symbols: [
-                    "research.impact_attribute" => 0x18_4b90,
-                    "research.skill_change" => 0x91_3960,
-                ],
-            }, {
-                side: SERVER,
-                guid: "1c129660cd6efc4f9f0b21652d5ff2bf",
-                age: 399,
-                symbols: [
-                    "research.impact_attribute" => 0x18_5a40,
-                    "research.skill_change" => 0x91_5fb0,
-                ],
-            }],
-        )
-    }
-
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let settings: Settings = load.config()?;
         if !settings.enabled {
@@ -291,7 +209,9 @@ mod tests {
 
     #[test]
     fn the_research_mod_is_a_developer_tool() {
-        let flags = Research::manifest().flags;
+        // SAFETY: `enshwick_mod_query` returns the `'static` manifest of
+        // `declare_mod!`, which no thread writes.
+        let flags = unsafe { &*enshwick_mod_query() }.flags;
         assert!(flags.contains(enshwick::abi::ManifestFlags::DEVELOPER));
     }
 

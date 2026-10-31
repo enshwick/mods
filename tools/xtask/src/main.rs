@@ -3,7 +3,7 @@
 //! `cargo xtask check` runs the compiling checks a change needs before it
 //! merges; the git hooks run only the checks that compile nothing. Clippy,
 //! the tests and the doctests run on the host, where the packages that build
-//! only for Windows (`[package.metadata.enshwick] windows-only = true`) stay
+//! only for Windows (`[package.metadata.xtask] windows-only = true`) stay
 //! out; off Windows clippy also runs for Windows through `cargo xwin`,
 //! beside the host checks. `--windows` runs the Windows-only packages' tests
 //! under Wine, and `--all` adds formatting, rustdoc, cargo-deny and those
@@ -118,8 +118,7 @@ fn packages() -> Result<Vec<Package>, String> {
             };
             Package {
                 name: package["name"].as_str().unwrap_or_default().to_owned(),
-                windows_only: package["metadata"]["enshwick"]["windows-only"].as_bool()
-                    == Some(true),
+                windows_only: package["metadata"]["xtask"]["windows-only"].as_bool() == Some(true),
                 cdylib: types(&["cdylib"]),
                 lib: types(&["lib", "rlib"]),
             }

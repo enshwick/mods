@@ -19,7 +19,6 @@ resolver = "3"
 enshwick = { git = "https://github.com/enshwick/enshwick", rev = "6b948b001c39265d8d115b8b06782f8a3d7f18af" }
 enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "6b948b001c39265d8d115b8b06782f8a3d7f18af" }
 
-
 [workspace.lints.rust]
 missing_docs = "deny"
 missing_debug_implementations = "deny"

@@ -53,13 +53,10 @@ pub fn centre(cell: Cell) -> [f64; 3] {
 /// at: a placement and the stored transform may round to adjacent cells.
 #[must_use]
 #[expect(
-    clippy::disallowed_types,
-    reason = "generic over the hasher, as `implicit_hasher` asks; callers pass an `FxHashMap`"
+    clippy::implicit_hasher,
+    reason = "the mod keeps every owner map as an `FxHashMap`"
 )]
-pub fn owner_near<V, S: std::hash::BuildHasher>(
-    owners: &std::collections::HashMap<Cell, V, S>,
-    at: Cell,
-) -> Option<(Cell, &V)> {
+pub fn owner_near<V>(owners: &FxHashMap<Cell, V>, at: Cell) -> Option<(Cell, &V)> {
     if let Some(found) = owners.get(&at) {
         return Some((at, found));
     }
@@ -72,11 +69,11 @@ pub fn owner_near<V, S: std::hash::BuildHasher>(
 /// The cell of `key`'s Safe nearest to `position`, within `max` metres.
 #[must_use]
 #[expect(
-    clippy::disallowed_types,
-    reason = "generic over the hasher, as `implicit_hasher` asks; callers pass an `FxHashMap`"
+    clippy::implicit_hasher,
+    reason = "the mod keeps every owner map as an `FxHashMap`"
 )]
-pub fn nearest_own<S: std::hash::BuildHasher>(
-    owners: &std::collections::HashMap<Cell, Safe, S>,
+pub fn nearest_own(
+    owners: &FxHashMap<Cell, Safe>,
     key: PlayerKey,
     position: [f64; 3],
     max: f64,

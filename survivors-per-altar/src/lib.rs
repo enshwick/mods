@@ -1,0 +1,1067 @@
+//! A copy of each survivor at every Flame Altar: a cluster of N altars holds at
+//! most N copies of a survivor, each copy stands inside a zone, works there and
+//! sleeps in a bed of its own altar.
+//!
+//! A copy staff places a copy at an altar without one and moves the copy an
+//! altar has; the survivor's own staff moves the original, as in vanilla, and
+//! a copy where it arrives gives way.
+
+mod copies;
+mod cursor;
+pub mod points;
+mod policy;
+mod renew;
+mod staffs;
+
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use enshwick::abi::Side;
+use enshwick::config::ConfigError;
+use enshwick::loot::Drop;
+use enshwick::state::ModLocal;
+use enshwick::{ItemId, Load, Mod, Off};
+
+/// The text refusing fewest charges above the full count, with `{min}` and
+/// `{full}`.
+const CHARGES_MIN_ABOVE_FULL: &str = "config.copy_staff_charges_min.above_full";
+
+/// The settings in force, as the game's hooks read them: the server's on a
+/// joined client.
+#[derive(Debug)]
+pub(crate) struct InForce {
+    /// Whether copy staffs work and drop.
+    pub(crate) copy_staffs: AtomicBool,
+    /// Whether the survivor's own staff places and moves copies.
+    pub(crate) vanilla_places: AtomicBool,
+    /// Whether the world keeps a copy of each survivor per altar; off, every
+    /// answer is vanilla.
+    pub(crate) per_altar: AtomicBool,
+    /// The copy staff drops: the ones the settings ask for while copy staffs
+    /// are on, none while they are off.
+    drops: Mutex<Vec<Drop>>,
+}
+
+impl Default for InForce {
+    fn default() -> Self {
+        Self {
+            copy_staffs: AtomicBool::new(true),
+            vanilla_places: AtomicBool::new(false),
+            per_altar: AtomicBool::new(true),
+            drops: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+static IN_FORCE: ModLocal<InForce> = ModLocal::new();
+
+/// The settings in force in this mod life.
+pub(crate) fn in_force() -> &'static InForce {
+    IN_FORCE.get_or_init(InForce::default)
+}
+
+const fn yes() -> bool {
+    true
+}
+
+const fn boss_chance() -> f64 {
+    0.10
+}
+
+const fn locked_chest_chance() -> f64 {
+    0.02
+}
+
+const fn full_charges() -> u16 {
+    3
+}
+
+/// Survivors per altar settings, in `mod-configs/enshwick.survivors-per-altar.toml`.
+#[derive(Debug, serde::Deserialize, serde::Serialize, enshwick::Config)]
+#[serde(deny_unknown_fields)]
+#[config(validate = Settings::check)]
+struct Settings {
+    /// A copy of each survivor at every altar, at most one per altar zone.
+    /// Off, survivors and staffs behave as in vanilla in that world. A
+    /// joined player runs with the server's value.
+    #[config(startup, sync)]
+    per_altar: bool,
+    /// Copy staffs: one per workshop survivor. Each new copy it places
+    /// spends a charge and the last charge uses the staff up; moving the
+    /// copy an altar has is free. Off, they neither drop nor work, and
+    /// staffs already held stay. A joined player runs with the server's
+    /// value.
+    #[serde(default = "yes")]
+    #[config(sync)]
+    copy_staffs: bool,
+    /// The chance a boss's corpse holds a copy staff, from 0 to 1.
+    #[serde(default = "boss_chance")]
+    #[config(runtime)]
+    copy_staff_boss_chance: f64,
+    /// The chance a chest that needs a key or a lockpick holds one.
+    #[serde(default = "locked_chest_chance")]
+    #[config(runtime)]
+    copy_staff_locked_chest_chance: f64,
+    /// The charges a copy staff holds when full.
+    #[serde(default = "full_charges")]
+    #[config(restart, range = 1..=100)]
+    copy_staff_charges: u16,
+    /// The fewest charges a dropped staff holds, at random up to
+    /// the full count; 0 drops every staff full.
+    #[serde(default)]
+    #[config(runtime, range = 0..=100)]
+    copy_staff_charges_min: u16,
+    /// Whether the survivor's own staff places a copy at an altar without
+    /// one and moves the copy an altar has, as before copy staffs; off, it
+    /// moves the survivor itself, as in vanilla.
+    #[serde(default)]
+    #[config(runtime)]
+    vanilla_staff_places_copies: bool,
+}
+
+/// How many charges a staff holds when full, and the fewest a dropped one
+/// holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Charges {
+    pub(crate) full: u16,
+    pub(crate) min: u16,
+}
+
+impl Settings {
+    /// Refuses a fewest count above the full one.
+    fn check(&self) -> Result<(), ConfigError> {
+        if self.copy_staff_charges_min > self.copy_staff_charges {
+            return Err(ConfigError::text(
+                CHARGES_MIN_ABOVE_FULL,
+                &[
+                    ("min", &self.copy_staff_charges_min.to_string()),
+                    ("full", &self.copy_staff_charges.to_string()),
+                ],
+            ));
+        }
+        Ok(())
+    }
+
+    /// The staffs' charges.
+    fn charges(&self) -> Charges {
+        let full = self.copy_staff_charges.max(1);
+        let min = match self.copy_staff_charges_min {
+            0 => full,
+            min => min.min(full),
+        };
+        Charges { full, min }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            per_altar: true,
+            copy_staffs: yes(),
+            copy_staff_boss_chance: boss_chance(),
+            copy_staff_locked_chest_chance: locked_chest_chance(),
+            copy_staff_charges: full_charges(),
+            copy_staff_charges_min: 0,
+            vanilla_staff_places_copies: false,
+        }
+    }
+}
+
+/// `chance` within 0 to 1, warning about a value outside, such as `10` typed
+/// for 10 %: a setting out of range never turns the copies off.
+fn chance(name: &str, chance: f64) -> f64 {
+    if (0.0..=1.0).contains(&chance) {
+        return chance;
+    }
+    let kept = if chance > 1.0 { 1.0 } else { 0.0 };
+    enshwick::warn!("{name} must be from 0 to 1, not {chance}: {kept} is used");
+    kept
+}
+
+/// The mod's state.
+#[derive(Debug)]
+pub struct SurvivorsPerAltar;
+
+impl Mod for SurvivorsPerAltar {
+    fn manifest() -> &'static enshwick::abi::Manifest {
+        enshwick::manifest!(
+            id: "enshwick.survivors-per-altar",
+            side: BOTH,
+            name: "Survivors per Altar",
+            join: true,
+            points: [points::CopyLimit, points::ChargeCost],
+        )
+    }
+
+    fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+        let settings: Settings = load.config()?;
+        // The staffs stay in the game when they are off, so a value that
+        // changes while it runs, or the server's on a joined client, finds
+        // them.
+        let loot = copy_staffs(load, &settings)?;
+        apply(&settings, &loot);
+        load.on_config_change(move |settings: Settings| apply(&settings, &loot))?;
+        let staffs = policy::Staffs {
+            charges: settings.charges(),
+        };
+        // Renewals act in the dedicated server and in the games a client
+        // hosts, solo play included: the scheduler and the world's events
+        // run only there.
+        let server = load.host().build().side == Side::SERVER;
+        if server {
+            policy::link(load, staffs)?;
+        }
+        if let Err(off) = renew::link(load) {
+            enshwick::warn!("copy staffs from before charges stay as they are: {off}");
+        }
+        if !server {
+            // The policy acts in the games this client hosts, and for its own
+            // cursor.
+            if let Err(off) = policy::link(load, staffs) {
+                enshwick::warn!("copies stay off in hosted games: {off}");
+            }
+            // The menu keeps one record per survivor, which every copy writes
+            // its status into in turn: show the bits every copy has, the
+            // worst status, so a copy without a bed shows "no bed".
+            load.on_survivor_status(|_, statuses| {
+                (in_force().per_altar.load(Ordering::Relaxed) && statuses.len() >= 2)
+                    .then(|| statuses.iter().fold(u8::MAX, |all, s| all & s))
+            })?;
+        }
+        Ok(Self)
+    }
+}
+
+/// The copy staffs' items and full charges, set as the game starts.
+#[derive(Clone, Debug)]
+struct Loot {
+    items: Vec<ItemId>,
+    full: u16,
+}
+
+impl Loot {
+    /// The drops `settings` ask for: one per source with a chance above 0.
+    fn drops(&self, settings: &Settings) -> Vec<Drop> {
+        use enshwick::loot::Source;
+
+        let min = settings.charges().min.min(self.full);
+        let boss = chance("copy_staff_boss_chance", settings.copy_staff_boss_chance);
+        let locked = chance(
+            "copy_staff_locked_chest_chance",
+            settings.copy_staff_locked_chest_chance,
+        );
+        [(boss, Source::bosses()), (locked, Source::locked_chests())]
+            .into_iter()
+            .filter(|(chance, _)| *chance > 0.0)
+            .map(|(chance, source)| {
+                Drop::one_of(&self.items, chance, source).meter(min, self.full, self.full)
+            })
+            .collect()
+    }
+}
+
+/// Puts the copy staff settings in force: whether they work, their drops
+/// and whether the survivor's own staff places copies.
+fn apply(settings: &Settings, loot: &Loot) {
+    let per_altar = settings.per_altar;
+    if in_force().per_altar.swap(per_altar, Ordering::Relaxed) != per_altar {
+        enshwick::info!("a copy of each survivor per altar: {per_altar}");
+    }
+    let on = settings.copy_staffs;
+    if in_force().copy_staffs.swap(on, Ordering::Relaxed) != on {
+        enshwick::info!("copy staffs {}", if on { "on" } else { "off" });
+    }
+    let vanilla = settings.vanilla_staff_places_copies;
+    if in_force().vanilla_places.swap(vanilla, Ordering::Relaxed) != vanilla {
+        enshwick::info!("the survivor's own staff places copies: {vanilla}");
+    }
+    let drops = if on && per_altar {
+        loot.drops(settings)
+    } else {
+        Vec::new()
+    };
+    let mut kept = in_force()
+        .drops
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *kept == drops {
+        return;
+    }
+    match enshwick::loot::replace_drops(drops.clone()) {
+        Ok(()) => {
+            let chances: Vec<f64> = drops.iter().map(|d| d.chance).collect();
+            enshwick::info!("copy staff drops at {chances:?}");
+            *kept = drops;
+        }
+        Err(off) => enshwick::warn!("copy staff drops stay: {off}"),
+    }
+}
+
+/// Adds the copy staffs, files them with their survivors and links a drop
+/// for each source, so a world whose settings turn one on finds it linked;
+/// [`apply`] then puts the drops the settings ask for in force.
+fn copy_staffs(load: &mut Load<'_>, settings: &Settings) -> Result<Loot, Off> {
+    use enshwick::loot::Source;
+
+    let texts = load.texts(staffs::TEXTS)?;
+    let charges = settings.charges();
+    staffs::add(load, &texts, charges.full)?;
+    staffs::file(load)?;
+    let loot = Loot {
+        items: staffs::copy_ids(),
+        full: charges.full,
+    };
+    let mut kept = in_force()
+        .drops
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    for source in [Source::bosses(), Source::locked_chests()] {
+        let drop =
+            Drop::one_of(&loot.items, 0.0, source).meter(charges.full, charges.full, charges.full);
+        if let Err(off) = load.add_loot(drop.clone()) {
+            enshwick::warn!("copy staffs drop from no loot: {off}");
+            break;
+        }
+        kept.push(drop);
+    }
+    drop(kept);
+    enshwick::info!(
+        "{} copy staffs of {} to {} charges",
+        loot.items.len(),
+        charges.min,
+        charges.full,
+    );
+    Ok(loot)
+}
+
+enshwick::declare_mod!(SurvivorsPerAltar);
+
+#[cfg(test)]
+mod tests {
+    use enshwick::Entity;
+    use enshwick::content::types;
+    use enshwick::survivors::{Answer, NpcId};
+
+    use super::*;
+
+    /// The type hash the fake loader gives item resources.
+    const ITEM_INFO: u32 = 20;
+
+    /// The survivor the lookups ask about.
+    const SURVIVOR: NpcId = NpcId(7);
+
+    /// The fake loader's survivor lookup, with entities by their numbers and
+    /// 0 for none.
+    fn lookup(
+        loader: &enshwick::test::Installed,
+        survivor: NpcId,
+        vanilla: u32,
+        purpose: u32,
+        entity: u32,
+        cell: [i64; 3],
+        beds: &[(u32, u32)],
+    ) -> Answer {
+        let beds: Vec<(Entity, Entity)> = beds
+            .iter()
+            .map(|&(survivor, bed)| (Entity(survivor), Entity(bed)))
+            .collect();
+        let some = |entity| (entity != 0).then_some(Entity(entity));
+        loader.survivor_lookup(survivor, some(vanilla), purpose, some(entity), cell, &beds)
+    }
+
+    /// The answer that names entity `entity`.
+    const fn found(entity: u32) -> Answer {
+        Answer::Entity(Entity(entity))
+    }
+
+    /// A loader that knows the item layout the copy staffs need, with
+    /// settings that turn copy staffs off and keep them out of loot.
+    fn host() -> enshwick::test::FakeHost {
+        let mut host = enshwick::test::FakeHost::new()
+            .type_size("item_stat", 0x28)
+            .type_size("fuel_setup", 8)
+            .type_hash("fuel_setup", 24)
+            .type_hash("current_transform", 1)
+            .type_hash("used_item", 2);
+        for (ty, hash) in [
+            (types::ITEM_INFO, ITEM_INFO),
+            (types::ITEM_REGISTRY_RESOURCE, 21),
+            (types::TEMPLATE_RESOURCE, 22),
+            (types::TEMPLATE_COLLECTION_RESOURCE, 23),
+        ] {
+            host = host.type_hash(ty.id(), hash);
+        }
+        for (id, at) in [
+            ("item_info.id", 0),
+            ("item_info.object", 4),
+            ("item_info.name", 0x48),
+            ("item_info.icon_image", 0x58),
+            ("item_info.description", 0x68),
+            ("item_info.flags", 0x78),
+            ("item_info.pid_entity", 0x80),
+            ("item_info.ui_values", 0x90),
+            ("item_stat.label", 0),
+            ("item_stat.format", 4),
+            ("item_stat.value", 8),
+            ("item_stat.signed", 0x24),
+            ("item_registry.refs", 0),
+            ("item_registry.names", 0x38),
+            ("template.components", 0x10),
+            ("template_collection.templates", 0),
+            ("fuel_setup.max", 0),
+            ("fuel_setup.start", 4),
+        ] {
+            host = host.constant(id, at);
+        }
+        host.settings(
+            "per_altar = true
+copy_staffs = false
+copy_staff_boss_chance = 0.0
+                 copy_staff_locked_chest_chance = 0.0
+",
+        )
+    }
+
+    #[test]
+    fn the_default_settings_parse() {
+        use enshwick::config::Config as _;
+
+        let settings: Settings = toml::from_str(&Settings::template()).unwrap();
+        assert!(settings.per_altar && settings.copy_staffs);
+        assert!((settings.copy_staff_boss_chance - 0.10).abs() < f64::EPSILON);
+        let old: Settings = toml::from_str("per_altar = true\n").unwrap();
+        assert!(old.copy_staffs);
+        assert!((old.copy_staff_locked_chest_chance - 0.02).abs() < f64::EPSILON);
+        assert_eq!(settings.charges(), Charges { full: 3, min: 3 });
+        assert_eq!(old.charges(), Charges { full: 3, min: 3 });
+    }
+
+    #[test]
+    fn every_text_exists_in_all_languages() {
+        use enshwick::config::Config as _;
+        use enshwick::i18n::{Language, MOD_DESCRIPTION, MOD_NAME, Texts};
+
+        let texts = Texts::parse(staffs::TEXTS).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(Language::OFFERED), []);
+        let schema = Settings::schema();
+        let keys = [
+            MOD_NAME.to_owned(),
+            MOD_DESCRIPTION.to_owned(),
+            CHARGES_MIN_ABOVE_FULL.to_owned(),
+            schema.text,
+        ]
+        .into_iter()
+        .chain(
+            schema
+                .fields
+                .into_iter()
+                .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+        );
+        for key in keys {
+            assert!(texts.get(&key, Language::FALLBACK).is_some(), "{key}");
+        }
+    }
+
+    #[test]
+    fn every_language_keeps_the_placeholders_of_each_text() {
+        let tables: toml::Table = toml::from_str(staffs::TEXTS).unwrap();
+        let placeholders = |text: &str| {
+            let mut names: Vec<String> = text
+                .split('{')
+                .skip(1)
+                .filter_map(|rest| rest.split_once('}').map(|(name, _)| name.to_owned()))
+                .collect();
+            names.sort_unstable();
+            names
+        };
+        let fallback = tables["en"].as_table().unwrap();
+        for (language, table) in &tables {
+            for (key, text) in table.as_table().unwrap() {
+                let english = fallback[key].as_str().unwrap();
+                assert_eq!(
+                    placeholders(text.as_str().unwrap()),
+                    placeholders(english),
+                    "{language} {key}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_world_s_chances_and_fewest_charges_make_its_drops() {
+        let loot = Loot {
+            items: vec![ItemId::new(7), ItemId::new(8)],
+            full: 3,
+        };
+        let settings = Settings {
+            copy_staff_boss_chance: 0.0,
+            copy_staff_locked_chest_chance: 0.5,
+            copy_staff_charges_min: 1,
+            ..Settings::default()
+        };
+        let drops = loot.drops(&settings);
+        assert_eq!(drops.len(), 1, "a chance of 0 drops nothing");
+        assert!((drops[0].chance - 0.5).abs() < f64::EPSILON);
+        let full = loot.drops(&Settings::default());
+        assert_eq!(full.len(), 2);
+        assert_ne!(drops[0].meter, full[1].meter, "the fewest charges differ");
+    }
+
+    #[test]
+    fn a_joined_player_takes_the_server_s_copy_staffs() {
+        use enshwick::config::Config as _;
+
+        let server = Settings {
+            copy_staffs: false,
+            ..Settings::default()
+        };
+        let synced = server.synced().unwrap();
+        assert_eq!(synced, "{ copy_staffs = false, per_altar = true }");
+        let mut joined = Settings {
+            per_altar: false,
+            ..Settings::default()
+        };
+        joined.merge_synced(&synced).unwrap();
+        assert!(!joined.copy_staffs);
+        assert!(joined.per_altar, "the server's world keeps copies");
+    }
+
+    #[test]
+    fn a_dropped_staff_holds_from_the_fewest_to_full_charges() {
+        let with = |full, min| Settings {
+            copy_staff_charges: full,
+            copy_staff_charges_min: min,
+            ..Settings::default()
+        };
+        assert_eq!(with(5, 0).charges(), Charges { full: 5, min: 5 });
+        assert_eq!(with(5, 2).charges(), Charges { full: 5, min: 2 });
+        assert!(with(5, 2).check().is_ok());
+        assert_eq!(
+            with(5, 6).check().map_err(|refused| refused.to_string()),
+            Err(format!("{CHARGES_MIN_ABOVE_FULL} (min = 6, full = 5)")),
+            "refused with a text of the mod's own"
+        );
+    }
+
+    #[test]
+    fn chances_stay_within_zero_to_one() {
+        assert!((chance("c", 0.25) - 0.25).abs() < f64::EPSILON);
+        assert!((chance("c", 10.0) - 1.0).abs() < f64::EPSILON);
+        assert!((chance("c", f64::INFINITY) - 1.0).abs() < f64::EPSILON);
+        assert!(chance("c", -0.5).abs() < f64::EPSILON);
+        assert!(chance("c", f64::NAN).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn copies_answer_the_game_per_altar() {
+        use enshwick::abi::{AltarInfo, BedCheck, Bounds, Header, Status, SurvivorLookup};
+
+        let loader = host().install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let altar = |entity, x| {
+            let mut info = AltarInfo::EMPTY;
+            info.entity = Entity(entity);
+            info.zone = Bounds {
+                min: [x, 0, 0],
+                max: [x + 80, 80, 80],
+            };
+            info
+        };
+        loader.set_altars(&[altar(1, 0), altar(2, 100)]);
+        policy::settle();
+        let ask = |vanilla, purpose, entity, cell, beds: &[(u32, u32)]| {
+            lookup(&loader, SURVIVOR, vanilla, purpose, entity, cell, beds)
+        };
+        let unique = SurvivorLookup::UNIQUENESS;
+        assert_eq!(
+            ask(10, unique, 10, [10, 0, 10], &[]),
+            found(10),
+            "the original stays"
+        );
+        assert_eq!(
+            ask(10, unique, 11, [120, 0, 10], &[]),
+            found(11),
+            "a copy at the other altar"
+        );
+        assert_eq!(
+            ask(10, unique, 12, [130, 0, 10], &[]),
+            found(11),
+            "a second copy goes"
+        );
+        assert_eq!(
+            ask(10, SurvivorLookup::SPAWN, 0, [20, 0, 20], &[]),
+            found(10)
+        );
+        assert_eq!(
+            ask(10, SurvivorLookup::BED_OWNER, 0, [150, 0, 10], &[]),
+            found(11)
+        );
+        assert_eq!(
+            ask(
+                10,
+                SurvivorLookup::PREVIOUS_OCCUPANT,
+                50,
+                [150, 0, 10],
+                &[(11, 50)]
+            ),
+            found(11)
+        );
+        assert_eq!(
+            ask(10, SurvivorLookup::CURSOR, 0, [0; 3], &[]),
+            Answer::Nobody
+        );
+        let check = BedCheck {
+            header: Header::of::<BedCheck>(),
+            npc_id: SURVIVOR,
+            entity: Entity(10),
+            bed_id: Entity(50),
+            home: [10, 0, 10],
+            bed_at: [150, 0, 10],
+        };
+        assert!(
+            !loader.survivor_bed_check(&check),
+            "a bed at another altar is cleared"
+        );
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn a_world_with_per_altar_off_answers_as_vanilla() {
+        use enshwick::abi::{AltarInfo, BedCheck, Bounds, Header, Status, SurvivorLookup};
+        use enshwick::events::SettingsReplaced;
+
+        let loader = host().install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let altar = |entity, x| {
+            let mut info = AltarInfo::EMPTY;
+            info.entity = Entity(entity);
+            info.zone = Bounds {
+                min: [x, 0, 0],
+                max: [x + 80, 80, 80],
+            };
+            info
+        };
+        loader.set_altars(&[altar(1, 0), altar(2, 100)]);
+        policy::settle();
+        let unique = SurvivorLookup::UNIQUENESS;
+        assert_eq!(
+            lookup(&loader, SURVIVOR, 10, unique, 11, [120, 0, 10], &[]),
+            found(11),
+            "per altar: a copy at the other altar"
+        );
+        loader.set_settings(
+            "per_altar = false
+copy_staffs = false
+copy_staff_boss_chance = 0.0
+copy_staff_locked_chest_chance = 0.0
+",
+        );
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        assert!(!in_force().per_altar.load(Ordering::Relaxed));
+        assert_eq!(
+            lookup(&loader, SURVIVOR, 10, unique, 11, [120, 0, 10], &[]),
+            Answer::Vanilla,
+            "the world's per_altar is off: the game's own answer"
+        );
+        let check = BedCheck {
+            header: Header::of::<BedCheck>(),
+            npc_id: SURVIVOR,
+            entity: Entity(10),
+            bed_id: Entity(50),
+            home: [10, 0, 10],
+            bed_at: [150, 0, 10],
+        };
+        assert!(loader.survivor_bed_check(&check), "vanilla keeps the bed");
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn old_staffs_are_renewed_in_a_hosted_game_too() {
+        use enshwick::abi::Status;
+        use enshwick::events::WorldLoaded;
+
+        // What the inventories need; no player and no container is
+        // read.
+        let loader = host()
+            .side(Side::CLIENT)
+            .symbol("ecs.type_index", 0x1_4064_5cc0)
+            .symbol("ecs.component_read_raw", 0x1_4064_6b00)
+            .symbol("ecs.slot_root", 0x1_4093_5420)
+            .symbol("inventory.skip_entity", 0x1_4000_0000)
+            .constant("ecs.context_entity_world", 0x30)
+            .constant("ecs.registry_type_map", 0x30)
+            .constant("ecs.registry_type_map_fallback", 0x88)
+            .type_hash("inventory_setup", 3)
+            .type_hash("inventory", 4)
+            .type_hash("durability", 5)
+            .type_hash("fuel", 6)
+            .type_hash("owner", 7)
+            .constant("inventory_setup.links", 0)
+            .constant("inventory_setup.categories", 0x40)
+            .constant("inventory_setup.initialized", 0x53)
+            .constant("item_stack.count", 4)
+            .constant("item_stack.pide", 8)
+            .constant("durability.max", 2)
+            .constant("fuel.max", 2)
+            .type_size("item_stack", 12)
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
+        use enshwick::abi::{InventoryOp, Status};
+        use enshwick::events::WorldLoaded;
+
+        const SETUP: u32 = 3;
+        const INVENTORY: u32 = 4;
+        const BUILT: u32 = 50;
+        const LOOT: u32 = 51;
+        const DROP: u32 = 52;
+        /// The entity the game's inventory reads skip: none here.
+        static NOBODY: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+        let staff = staffs::copy_ids()[0];
+        let mut setup = vec![0u8; 0x54];
+        setup[0x53] = 1;
+        let mut stacks = vec![0u8; 0x60];
+        stacks[..4].copy_from_slice(&staff.get().to_le_bytes());
+        stacks[4..8].copy_from_slice(&1u32.to_le_bytes());
+        let mut host = host()
+            .symbol("ecs.type_index", 0x1_4064_5cc0)
+            .symbol("ecs.component_read_raw", 0x1_4064_6b00)
+            .symbol("ecs.slot_root", 0x1_4093_5420)
+            .symbol("inventory.skip_entity", NOBODY.as_ptr().addr() as u64)
+            .constant("ecs.context_entity_world", 0x30)
+            .constant("ecs.registry_type_map", 0x30)
+            .constant("ecs.registry_type_map_fallback", 0x88)
+            .type_hash("inventory_setup", SETUP)
+            .type_hash("inventory", INVENTORY)
+            .type_hash("durability", 5)
+            .type_hash("fuel", 6)
+            .type_hash("owner", 7)
+            .constant("inventory_setup.links", 0)
+            .constant("inventory_setup.categories", 0x40)
+            .constant("inventory_setup.initialized", 0x53)
+            .constant("item_stack.count", 4)
+            .constant("item_stack.pide", 8)
+            .constant("durability.max", 2)
+            .constant("fuel.max", 2)
+            .type_size("item_stack", 12);
+        for (id, hash) in [
+            ("player_input", 8),
+            ("npc", 9),
+            ("animal", 10),
+            ("destroy_on_loot", 11),
+            ("loot_fill", 12),
+            ("resource_node", 13),
+        ] {
+            host = host.type_hash(id, hash);
+        }
+        for (root, markers) in [(BUILT, &[2][..]), (LOOT, &[12]), (DROP, &[11, 12])] {
+            let inventory = root + 100;
+            let mut links = setup.clone();
+            links[..4].copy_from_slice(&inventory.to_le_bytes());
+            host = markers
+                .iter()
+                .fold(
+                    host.placed(SETUP, Entity(root), [0.0; 3]),
+                    |host, &marker| host.component(Entity(root), marker, &[]),
+                )
+                .component(Entity(root), SETUP, &links)
+                .component(Entity(inventory), INVENTORY, &stacks);
+        }
+        let loader = host.install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
+        let mut renewed: Vec<u64> = loader
+            .inventory_requests()
+            .iter()
+            .flat_map(|request| request.ops.iter())
+            .filter(|op| op.kind == InventoryOp::RENEW)
+            .map(|op| op.target)
+            .collect();
+        renewed.sort_unstable();
+        let inventories = [BUILT + 100, LOOT + 100].map(u64::from);
+        assert_eq!(renewed, inventories, "the drop's staff stays");
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn copy_staffs_take_the_survivor_s_name_in_the_game_s_language() {
+        use enshwick::abi::Status;
+        use enshwick::content::Guid;
+        use enshwick::i18n::Language;
+        use enshwick::survivors::WorkshopSurvivor;
+
+        let tag = Guid::parse("ddda8053-f1f5-49fe-aab9-2a6cd460dc47");
+        let mut info = vec![0u8; 0x60];
+        info[0x48..0x58].copy_from_slice(&tag.0);
+        let alchemist = WorkshopSurvivor::find("alchemist").unwrap();
+        let loader = host()
+            .side(Side::CLIENT)
+            .settings(
+                "per_altar = true
+copy_staff_boss_chance = 0.0
+copy_staff_locked_chest_chance = 0.0
+",
+            )
+            .resource(alchemist.staff().key_by_hash(ITEM_INFO), info)
+            .game_text(tag.fnv1a(), Language::EN_US, "Balthazar")
+            .game_text(tag.fnv1a(), Language::UK_UA, "Бальтазар")
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let name = staffs::staffs()
+            .iter()
+            .find(|s| s.key() == "alchemist")
+            .unwrap()
+            .name
+            .guid()
+            .fnv1a();
+        let texts = loader.texts();
+        let text = |language: Language| {
+            texts
+                .iter()
+                .find(|(id, l, _)| *id == name && *l == language.0)
+                .map(|(_, _, text)| text.as_str())
+        };
+        assert_eq!(text(Language::UK_UA), Some("Посох копії: Бальтазар"));
+        assert_eq!(text(Language::FALLBACK), Some("Copy staff: Balthazar"));
+        assert_eq!(text(Language::DE_DE), Some("Kopiestab: Balthazar"));
+    }
+
+    #[test]
+    fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
+        use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
+        use enshwick::survivors::WORKSHOP_SURVIVORS;
+
+        let loader = host().install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let altar = |entity, x| {
+            let mut info = AltarInfo::EMPTY;
+            info.entity = Entity(entity);
+            info.zone = Bounds {
+                min: [x, 0, 0],
+                max: [x + 80, 80, 80],
+            };
+            info
+        };
+        loader.set_altars(&[altar(1, 0), altar(2, 100), altar(3, 200)]);
+        policy::settle();
+        let smith = &WORKSHOP_SURVIVORS[0];
+        let survivor = smith.id();
+        let ask = |purpose, entity, cell| lookup(&loader, survivor, 10, purpose, entity, cell, &[]);
+        let unique = SurvivorLookup::UNIQUENESS;
+        // The original at altar 1, copies at altars 2 and 3.
+        assert_eq!(ask(unique, 10, [10, 0, 10]), found(10));
+        assert_eq!(ask(unique, 11, [120, 0, 10]), found(11));
+        assert_eq!(ask(unique, 12, [220, 0, 10]), found(12));
+        // The survivor's own staff aimed at altar 2.
+        let summon = Summon {
+            header: Header::of::<Summon>(),
+            item: ItemId::from_guid(smith.staff()),
+            ammo: ItemId::new(0),
+            template: smith.template().0,
+            target: [130, 0, 10],
+            slot: 0,
+            pide: Entity(0),
+            meter: [0; 2],
+            consumed: 0,
+            reserved: [0; 3],
+        };
+        assert_eq!(loader.summon(&summon), 0, "allowed, nothing taken");
+        assert_eq!(
+            ask(SurvivorLookup::SPAWN, 0, [130, 0, 10]),
+            found(10),
+            "the original moves, not the copy there"
+        );
+        // The original now stands at altar 2: the copy there gives way, the
+        // one at altar 3 stays.
+        assert_eq!(ask(unique, 10, [130, 0, 10]), found(10));
+        assert_eq!(
+            ask(unique, 11, [120, 0, 10]),
+            found(10),
+            "copy 11 is removed"
+        );
+        assert_eq!(ask(unique, 12, [220, 0, 10]), found(12));
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn the_survivor_s_own_staff_placing_copies_keeps_the_copy_limit() {
+        use crate::points::CopyLimit;
+        use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
+        use enshwick::points::Verdict;
+        use enshwick::survivors::WORKSHOP_SURVIVORS;
+
+        let loader = host()
+            .settings(
+                "per_altar = true
+copy_staffs = false
+copy_staff_boss_chance = 0.0
+copy_staff_locked_chest_chance = 0.0
+vanilla_staff_places_copies = true
+",
+            )
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let altar = |entity, x| {
+            let mut info = AltarInfo::EMPTY;
+            info.entity = Entity(entity);
+            info.zone = Bounds {
+                min: [x, 0, 0],
+                max: [x + 80, 80, 80],
+            };
+            info
+        };
+        loader.set_altars(&[altar(1, 0), altar(2, 100)]);
+        policy::settle();
+        let smith = &WORKSHOP_SURVIVORS[0];
+        let survivor = smith.id();
+        let unique = SurvivorLookup::UNIQUENESS;
+        // The original out in the world, a copy at altar 1: two entities,
+        // two altars.
+        assert_eq!(
+            lookup(&loader, survivor, 10, unique, 10, [900, 0, 10], &[]),
+            found(10)
+        );
+        assert_eq!(
+            lookup(&loader, survivor, 10, unique, 11, [10, 0, 10], &[]),
+            found(11)
+        );
+        let summon = |x| Summon {
+            header: Header::of::<Summon>(),
+            item: ItemId::from_guid(smith.staff()),
+            ammo: ItemId::new(0),
+            template: smith.template().0,
+            target: [x, 0, 10],
+            slot: 0,
+            pide: Entity(0),
+            meter: [0; 2],
+            consumed: 0,
+            reserved: [0; 3],
+        };
+        assert_eq!(
+            loader.summon(&summon(130)),
+            Summon::REFUSE,
+            "a new copy at altar 2 would make three"
+        );
+        assert_eq!(loader.summon(&summon(20)), 0, "moving altar 1's copy");
+        assert!(loader.extend_point(|_: &CopyLimit, limit: &u32| Verdict::Set(limit + 1)));
+        assert_eq!(loader.summon(&summon(130)), 0, "a link raised the limit");
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn other_mods_set_the_copy_limit_and_the_charge_cost() {
+        use crate::points::{ChargeCost, CopyLimit};
+        use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
+        use enshwick::points::Verdict;
+        use enshwick::survivors::WORKSHOP_SURVIVORS;
+
+        let loader = host()
+            .settings(
+                "per_altar = true
+copy_staffs = true
+copy_staff_boss_chance = 0.0
+copy_staff_locked_chest_chance = 0.0
+",
+            )
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(
+            loader.defined_points(),
+            [
+                "enshwick.survivors-per-altar:copy-limit",
+                "enshwick.survivors-per-altar:charge-cost"
+            ]
+        );
+        let altar = |entity, x| {
+            let mut info = AltarInfo::EMPTY;
+            info.entity = Entity(entity);
+            info.zone = Bounds {
+                min: [x, 0, 0],
+                max: [x + 80, 80, 80],
+            };
+            info
+        };
+        loader.set_altars(&[altar(1, 0), altar(2, 100), altar(3, 200)]);
+        policy::settle();
+        let smith = &WORKSHOP_SURVIVORS[0];
+        let survivor = smith.id();
+        let original = lookup(
+            &loader,
+            survivor,
+            10,
+            SurvivorLookup::UNIQUENESS,
+            10,
+            [10, 0, 10],
+            &[],
+        );
+        assert_eq!(original, found(10));
+        let Some(staff) = staffs::staffs()
+            .iter()
+            .find(|s| s.survivor.id() == smith.id())
+        else {
+            panic!("no copy staff of the first survivor");
+        };
+        let summon = |current| Summon {
+            header: Header::of::<Summon>(),
+            item: staff.item(),
+            ammo: ItemId::new(0),
+            template: smith.template().0,
+            target: [130, 0, 10],
+            slot: 0,
+            pide: Entity(0),
+            meter: [current, 3],
+            consumed: 0,
+            reserved: [0; 3],
+        };
+        assert_eq!(loader.summon(&summon(3)), 0, "a new copy, one charge");
+        assert!(loader.extend_point(|cost: &ChargeCost, _: &u16| {
+            if cost.charges == 2 {
+                Verdict::Refuse
+            } else {
+                Verdict::Set(3)
+            }
+        }));
+        assert_eq!(
+            loader.summon(&summon(3)),
+            Summon::TAKE,
+            "three charges take it"
+        );
+        assert_eq!(
+            loader.summon(&summon(2)),
+            Summon::REFUSE,
+            "refused by the link"
+        );
+        assert!(loader.extend_point(|limit: &CopyLimit, _: &u32| {
+            assert_eq!((limit.altars, limit.copies), (3, 1));
+            Verdict::Set(1)
+        }));
+        assert_eq!(
+            loader.summon(&summon(3)),
+            Summon::REFUSE,
+            "one entity in all"
+        );
+        assert!(loader.faults().is_empty());
+    }
+}

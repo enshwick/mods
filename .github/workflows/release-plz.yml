@@ -5,7 +5,8 @@
 # `<package>-v<version>` and makes its own GitHub release; then one job per
 # released mod builds only that mod from its tag and attaches its zip, PDB,
 # SBOM, their sums and a build provenance attestation of each, which players
-# check with `gh attestation verify <file> --owner enshwick`.
+# check with `gh attestation verify <file> --owner enshwick`. Last, on
+# Windows, each attached DLL must report the version of its tag.
 name: release-plz
 
 on:
@@ -134,3 +135,50 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         working-directory: ${{ env.OUT }}
         run: gh release upload "$TAG" ./* --clobber --repo "$GITHUB_REPOSITORY"
+
+  # The DLL attached to each release reports its tag's version, read through
+  # its manifest as the loader reads it, which needs Windows.
+  version:
+    needs: [release-plz, assets]
+    if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJSON(needs.release-plz.outputs.releases) }}
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ matrix.release.tag }}
+      PACKAGE: ${{ matrix.release.package_name }}
+      VERSION: ${{ matrix.release.version }}
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.release.tag }}
+          persist-credentials: false
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install
+          rustc --version
+
+      # The CLI of the platform commit the mod was built on.
+      - name: Install cargo-enshwick
+        run: |
+          rev=$(sed -n 's/^enshwick = .*rev = "\([0-9a-f]\{40\}\)".*/\1/p' Cargo.toml)
+          test -n "$rev"
+          cargo install --locked --git https://github.com/enshwick/enshwick --rev "$rev" cargo-enshwick
+
+      - name: The released DLL's version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$PACKAGE.zip" --dir "$RUNNER_TEMP"
+          7z x -y -o"$RUNNER_TEMP/release" "$RUNNER_TEMP/$PACKAGE.zip" > /dev/null
+          cargo enshwick manifest "$RUNNER_TEMP/release/mods/$PACKAGE.dll" --expect-version "$VERSION"

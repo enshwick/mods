@@ -5,13 +5,15 @@ rustup), [lefthook](https://lefthook.dev),
 [rumdl](https://github.com/rvben/rumdl), cargo-nextest,
 [committed](https://github.com/crate-ci/committed) for commit messages,
 [typos](https://github.com/crate-ci/typos), cargo-deny,
-[ast-grep](https://ast-grep.github.io) for `cargo xtask check`, and off
-Windows [cargo-xwin](https://github.com/rust-cross/cargo-xwin).
+[ast-grep](https://ast-grep.github.io) and
+[cargo-machete](https://github.com/bnjbvr/cargo-machete) for
+`cargo xtask check`, and off Windows
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin).
 
 ```bash
 lefthook install     # the git hooks
 rumdl check .        # every document, as the hooks check it
-cargo xtask check    # code rules, clippy, tests and doctests; --all adds fmt, rustdoc, cargo-deny
+cargo xtask check    # crate and code rules, unused dependencies, clippy, tests and doctests; --all adds fmt, rustdoc, cargo-deny
 cargo xtask dist     # the player's archive of each mod, in target/dist
 ```
 
@@ -29,7 +31,10 @@ The code rules clippy cannot express are ast-grep rules, listed in
 [`sgconfig.yml`](sgconfig.yml) with their tests. A deliberate exception is
 `// ast-grep-ignore: <rule id>` on the line above, with its reason in the
 comment before it. A crate takes its locks through the `Relock` traits of
-its own `locks.rs`, the one poison policy.
+its own `locks.rs`, the one poison policy. Before them, `cargo xtask check`
+holds every crate to three rules: a crate whose package has no unsafe code
+declares `#![forbid(unsafe_code)]` at its root, only a dev-dependency turns
+on a crate's `test` feature, and a mod names its version in `[package]`.
 
 The hooks check formatting, spelling, Markdown and commit messages and
 compile nothing. A pull request title is a conventional commit,

@@ -1,0 +1,389 @@
+//! A background thread solves the clusters whenever the altars' vanilla
+//! zones change; the game thread never waits for it, and the zone filter
+//! only reads the last answers. What was solved belongs to one game: the
+//! answers are dropped when a hosted game stops, so the next game, the same
+//! world again included, is solved afresh. A world whose settings turn
+//! clusters off gets the vanilla zones back.
+
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Instant;
+
+use arc_swap::ArcSwap;
+use enshwick::altars::{AltarZone, ZoneSizes};
+use enshwick::state::ModLocal;
+
+use crate::geometry::{Altar, Box3, clusters};
+
+/// Per altar: its level and its vanilla zone at each level up to it.
+type Input = BTreeMap<u32, Vec<Box3>>;
+
+#[derive(Debug)]
+struct State {
+    /// Whether the settings in force cluster the zones.
+    on: bool,
+    solved: Option<Input>,
+    solving: bool,
+    /// Counts the games run, and the times clusters turned off, so a solve
+    /// of one never lands in the next.
+    game: u64,
+}
+
+impl State {
+    const fn new() -> Self {
+        Self {
+            on: false,
+            solved: None,
+            solving: false,
+            game: 0,
+        }
+    }
+
+    /// Whether `input` still needs solving: clusters are on and it differs
+    /// from what this game solved last.
+    fn wants(&self, input: &Input) -> bool {
+        self.on && self.solved.as_ref() != Some(input)
+    }
+
+    /// Turns clusters on or off; whether that changed anything.
+    fn switch(&mut self, on: bool) -> bool {
+        if self.on == on {
+            return false;
+        }
+        self.on = on;
+        if !on {
+            self.forget();
+        }
+        true
+    }
+
+    /// Forgets what was solved, for the next game.
+    fn forget(&mut self) {
+        self.solved = None;
+        self.game = self.game.wrapping_add(1);
+    }
+
+    /// Notes the end of a solve of `input` started in `game`; whether its
+    /// sizes still apply, as they do unless another game began meanwhile.
+    fn finish(&mut self, game: u64, input: Input) -> bool {
+        self.solving = false;
+        if game != self.game {
+            return false;
+        }
+        self.solved = Some(input);
+        true
+    }
+
+    /// Turns clusters off after a solve that could not start, so no later
+    /// change of the altars tries again in this world.
+    fn fail_start(&mut self) {
+        self.solving = false;
+        self.switch(false);
+    }
+}
+
+/// What the mod grows one altar's zone by while it stays at one level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Size {
+    pub(crate) altar: u32,
+    pub(crate) level: u8,
+    /// Cells added on every horizontal side.
+    pub(crate) grow: i64,
+    /// The cluster's height in cells.
+    pub(crate) height: i64,
+}
+
+static STATE: ModLocal<Mutex<State>> = ModLocal::new();
+
+/// The last answers, sorted by altar, for the zone filter on the game thread.
+static ANSWERS: ModLocal<ArcSwap<Vec<Size>>> = ModLocal::new();
+
+fn answers() -> &'static ArcSwap<Vec<Size>> {
+    ANSWERS.get_or_init(|| ArcSwap::from_pointee(Vec::new()))
+}
+
+/// The zone filter: grows an altar the last solve sized at its current
+/// level, on top of what mods before this one gave it, and never lowers it.
+pub(crate) fn resize(zone: &mut AltarZone) {
+    let answers = answers().load();
+    let Some(size) = answers
+        .binary_search_by_key(&zone.altar.0, |size| size.altar)
+        .ok()
+        .and_then(|i| answers.get(i))
+    else {
+        return;
+    };
+    if size.level == zone.level {
+        zone.grow += size.grow;
+        zone.height = zone.height.max(size.height);
+    }
+}
+
+/// Hands the filter `sizes` and has the loader size the zones again.
+fn publish(zones: ZoneSizes, sizes: Vec<Size>) {
+    answers().store(Arc::new(sizes));
+    if let Err(error) = zones.changed() {
+        enshwick::warn!("{error}");
+    }
+}
+
+fn locked() -> MutexGuard<'static, State> {
+    STATE
+        .get_or_init(|| Mutex::new(State::new()))
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
+pub(crate) fn request(zones: ZoneSizes) {
+    let mut state = locked();
+    maybe_solve(&mut state, zones);
+}
+
+/// Turns clusters on, solving the altars there are, or off, giving every
+/// altar its vanilla zone back.
+pub(crate) fn switch(zones: ZoneSizes, on: bool) {
+    let mut state = locked();
+    if !state.switch(on) {
+        return;
+    }
+    enshwick::info!("clusters {on}");
+    if on {
+        maybe_solve(&mut state, zones);
+    } else {
+        publish(zones, Vec::new());
+    }
+}
+
+/// Forgets the game that stopped: the next one solves its zones again.
+pub(crate) fn forget() {
+    locked().forget();
+    answers().store(Arc::new(Vec::new()));
+}
+
+fn input(zones: ZoneSizes) -> Input {
+    zones
+        .altars()
+        .list()
+        .into_iter()
+        .filter(|altar| {
+            if altar.tilted {
+                enshwick::warn!(
+                    "altar {} is tilted; it keeps its vanilla zone",
+                    altar.entity
+                );
+            }
+            !altar.tilted && !altar.levels.is_empty()
+        })
+        .map(|altar| {
+            let levels = altar
+                .levels
+                .iter()
+                .map(|zone| Box3::new(zone.min, zone.max))
+                .collect();
+            (altar.entity.0, levels)
+        })
+        .collect()
+}
+
+/// The log line for the placed altars: how many stand at each Flame level,
+/// since entity ids change with every load. Right after a load the game
+/// briefly lists every altar at level 1, so a list all at level 1 says so.
+fn placed(input: &Input) -> String {
+    let mut per_level = BTreeMap::<usize, usize>::new();
+    for levels in input.values() {
+        *per_level.entry(levels.len()).or_default() += 1;
+    }
+    if per_level.keys().eq([&1]) {
+        format!(
+            "{} altars placed, all at Flame level 1, as the game lists them right after a load",
+            input.len()
+        )
+    } else {
+        format!(
+            "{} altars placed, per Flame level {per_level:?}",
+            input.len()
+        )
+    }
+}
+
+fn maybe_solve(state: &mut State, zones: ZoneSizes) {
+    if state.solving || !state.on {
+        return;
+    }
+    let input = input(zones);
+    if !state.wants(&input) {
+        return;
+    }
+    enshwick::info!("{}", placed(&input));
+    state.solving = true;
+    let game = state.game;
+    let spawned = std::thread::Builder::new()
+        .name("altar-zones-solver".into())
+        .spawn(move || {
+            let solved = std::panic::catch_unwind(|| sizes(&input));
+            let mut state = locked();
+            let Ok(sizes) = solved else {
+                state.solving = false;
+                enshwick::warn!("the solver panicked; vanilla zones stay");
+                return;
+            };
+            if state.finish(game, input) {
+                publish(zones, sizes);
+            }
+            // The altars may have moved on while this ran.
+            maybe_solve(&mut state, zones);
+        });
+    if let Err(error) = spawned {
+        state.fail_start();
+        publish(zones, Vec::new());
+        enshwick::warn!(
+            "the solver thread did not start: {error}; clusters are off in this world and every altar keeps its vanilla zone"
+        );
+    }
+}
+
+#[must_use]
+pub(crate) fn sizes(input: &Input) -> Vec<Size> {
+    let started = Instant::now();
+    let altars: Vec<Altar> = input
+        .iter()
+        .map(|(&id, levels)| Altar {
+            key: u64::from(id),
+            levels: levels.clone(),
+        })
+        .collect();
+    let placements = match clusters(&altars) {
+        Ok(placements) => placements,
+        Err(error) => {
+            enshwick::warn!("cluster input rejected: {error}; altars keep vanilla zones");
+            return Vec::new();
+        }
+    };
+    let mut sizes = Vec::new();
+    for placement in &placements {
+        let Ok(id) = u32::try_from(placement.key) else {
+            continue;
+        };
+        let Some(level) = input.get(&id).and_then(|l| u8::try_from(l.len()).ok()) else {
+            continue;
+        };
+        let height = placement.zone.max[1] - placement.zone.min[1];
+        enshwick::info!(
+            "altar {id} level {level}: cluster {}, growth {} cells, height {height}",
+            placement.cluster,
+            placement.growth
+        );
+        sizes.push(Size {
+            altar: id,
+            level,
+            grow: placement.growth,
+            height,
+        });
+    }
+    sizes.sort_unstable_by_key(|size| size.altar);
+    enshwick::info!(
+        "solved {} altars in {:?}",
+        placements.len(),
+        started.elapsed()
+    );
+    sizes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at_levels(levels: &[usize]) -> Input {
+        levels
+            .iter()
+            .zip(1..)
+            .map(|(&level, id)| (id, vec![Box3::new([0, 0, 0], [8, 8, 8]); level]))
+            .collect()
+    }
+
+    #[test]
+    fn the_placed_altars_are_counted_per_flame_level_without_entity_ids() {
+        assert_eq!(
+            placed(&at_levels(&[3, 1, 3, 5])),
+            "4 altars placed, per Flame level {1: 1, 3: 2, 5: 1}"
+        );
+    }
+
+    #[test]
+    fn a_world_listed_all_at_level_1_is_marked_as_the_pass_after_a_load() {
+        assert_eq!(
+            placed(&at_levels(&[1, 1])),
+            "2 altars placed, all at Flame level 1, as the game lists them right after a load"
+        );
+    }
+
+    #[test]
+    fn the_next_game_solves_the_same_altars_again() {
+        let mut input = Input::new();
+        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        let mut state = State::new();
+        assert!(state.switch(true));
+        assert!(state.wants(&input));
+        state.solving = true;
+        assert!(state.finish(state.game, input.clone()));
+        assert!(!state.solving);
+        assert!(!state.wants(&input), "solved in this game");
+        // The host quits and loads the same world again.
+        state.forget();
+        assert!(state.wants(&input), "the loader dropped the sizes");
+        // A solve still running when its game stopped lands nowhere.
+        let started = state.game;
+        state.solving = true;
+        state.forget();
+        assert!(!state.finish(started, input.clone()));
+        assert!(!state.solving);
+        assert!(state.wants(&input));
+    }
+
+    #[test]
+    fn a_world_with_clusters_off_solves_nothing_and_drops_a_running_solve() {
+        let mut input = Input::new();
+        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        let mut state = State::new();
+        assert!(!state.wants(&input), "off until the settings turn it on");
+        assert!(state.switch(true));
+        assert!(!state.switch(true), "already on");
+        let started = state.game;
+        state.solving = true;
+        // The next world's settings turn clusters off mid-solve.
+        assert!(state.switch(false));
+        assert!(!state.finish(started, input.clone()));
+        assert!(!state.wants(&input));
+        // A world with clusters on again solves the same altars afresh.
+        assert!(state.switch(true));
+        assert!(state.wants(&input));
+    }
+
+    #[test]
+    fn a_solve_that_cannot_start_turns_clusters_off_until_the_next_world() {
+        let mut input = Input::new();
+        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        let mut state = State::new();
+        assert!(state.switch(true));
+        state.solving = true;
+        state.fail_start();
+        assert!(!state.solving);
+        assert!(!state.wants(&input), "no retry on the next altar change");
+        // The next world with clusters on solves its altars.
+        assert!(state.switch(true));
+        assert!(state.wants(&input));
+    }
+
+    #[test]
+    fn two_touching_altars_grow_alike_and_a_lone_one_keeps_its_zone() {
+        let mut input = Input::new();
+        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        input.insert(2, vec![Box3::new([80, 0, 0], [160, 80, 80])]);
+        input.insert(3, vec![Box3::new([1000, 0, 0], [1080, 80, 80])]);
+        let sizes = sizes(&input);
+        assert_eq!(sizes.len(), 3);
+        assert_eq!(sizes[0].grow, sizes[1].grow);
+        assert_eq!(sizes[2].grow, 0);
+        assert!(sizes.iter().all(|s| s.level == 1 && s.height == 80));
+    }
+}

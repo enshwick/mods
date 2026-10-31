@@ -1,0 +1,219 @@
+//! A world past the game's own altar zones or bases loses base features for
+//! the altars past them when it opens with the vanilla grouping, so the
+//! dedicated server holds the game on it while it has one.
+//!
+//! The hold is set as soon as a grouping counts more zones or bases than the
+//! game's own, and goes only once the loaded world has stayed within them
+//! for a while: a grouping that runs before the world loads, or before every
+//! altar of it is listed, counts too few and must not release a world that
+//! needs the hold.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+use enshwick::altars::{BaseLimit, Grouping};
+use enshwick::events::{AltarsChanged, ShutdownStarted, WorldLoaded};
+use enshwick::state::{Hold, StoreError};
+use enshwick::{Load, Off};
+
+/// The name of the hold's thread, which a crash report shows.
+const THREAD: &str = "better-altars-hold";
+/// How often the hold thread looks at the grouping without being woken.
+const EVERY: Duration = Duration::from_secs(5);
+/// How long the loaded world stays within the game's own zones and bases
+/// before the hold goes.
+const RELEASE_AFTER: Duration = Duration::from_secs(60);
+/// The text of the hold's reason in the mod's texts.
+pub(crate) const PAST_TEXT: &str = "hold.past";
+/// The text of the reason the mod turns off when the hold's thread does not
+/// start.
+pub(crate) const THREAD_TEXT: &str = "off.thread";
+
+/// Keeps the hold on a thread of its own, woken when the altars change.
+pub(crate) fn keep(load: &mut Load<'_>) -> Result<(), Off> {
+    let hold = Hold::new(&load.data_dir()?);
+    // Following the altars is what raises `AltarsChanged`.
+    let _altars = load.altars()?;
+    let loaded = Arc::new(AtomicBool::new(false));
+    let running = Arc::clone(&loaded);
+    let handle = std::thread::Builder::new()
+        .name(THREAD.into())
+        .spawn(move || run(&hold, &running))
+        .map_err(|e| Off::text(THREAD_TEXT, &[("error", &e.to_string())]))?;
+    let thread = handle.thread().clone();
+    let opened = Arc::clone(&loaded);
+    load.on::<WorldLoaded>(move |()| opened.store(true, Ordering::Release))?;
+    load.on::<ShutdownStarted>(move |()| loaded.store(false, Ordering::Release))?;
+    load.on::<AltarsChanged>(move |()| thread.unpark())
+}
+
+/// The reason a held world must not open with the vanilla grouping.
+pub(crate) fn reason(load: &Load<'_>) -> Result<Option<String>, Off> {
+    Ok(Hold::new(&load.data_dir()?).reason())
+}
+
+/// What the hold thread does after a look at the grouping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    Set,
+    Release,
+    Wait,
+}
+
+/// Whether the hold is set, and since when the loaded world has stayed
+/// within the game's own zones and bases.
+#[derive(Debug)]
+struct Watch {
+    set: bool,
+    below_since: Option<Instant>,
+}
+
+impl Watch {
+    const fn new(set: bool) -> Self {
+        Self {
+            set,
+            below_since: None,
+        }
+    }
+
+    /// The step for a grouping past the game's own or not, `past`, at
+    /// `now`, with the world `loaded` or not yet.
+    fn step(&mut self, past: bool, loaded: bool, now: Instant) -> Step {
+        if past {
+            self.below_since = None;
+            return if self.set { Step::Wait } else { Step::Set };
+        }
+        if !self.set {
+            return Step::Wait;
+        }
+        if !loaded {
+            self.below_since = None;
+            return Step::Wait;
+        }
+        let since = *self.below_since.get_or_insert(now);
+        if now.duration_since(since) >= RELEASE_AFTER {
+            Step::Release
+        } else {
+            Step::Wait
+        }
+    }
+
+    /// Notes that the hold was set or released.
+    fn done(&mut self, set: bool) {
+        self.set = set;
+        self.below_since = None;
+    }
+}
+
+/// Sets the hold for a world of `grouping` past the game's own `limit`, with
+/// [`PAST_TEXT`] for the reader and one line for a log without the mod.
+fn set_past(hold: &Hold, grouping: Grouping, limit: BaseLimit) -> Result<(), StoreError> {
+    let [zones, bases, vanilla_zones, vanilla_bases] = [
+        grouping.zones,
+        grouping.bases,
+        limit.vanilla_zones,
+        limit.vanilla_bases,
+    ]
+    .map(|n| n.to_string());
+    hold.set_text(
+        &format!(
+            "the world has {zones} altar zones in {bases} bases, past the game's own \
+             {vanilla_zones} zones in {vanilla_bases} bases; without the raised limit the \
+             altars past them lose their base features"
+        ),
+        PAST_TEXT,
+        &[
+            ("zones", &zones),
+            ("bases", &bases),
+            ("vanilla_zones", &vanilla_zones),
+            ("vanilla_bases", &vanilla_bases),
+        ],
+    )
+}
+
+/// Sets and releases the hold as the grouping and the loaded world say.
+fn run(hold: &Hold, loaded: &AtomicBool) {
+    let mut watch = Watch::new(hold.reason().is_some());
+    loop {
+        std::thread::park_timeout(EVERY);
+        let Some(grouping) = enshwick::altars::grouping() else {
+            continue;
+        };
+        let Some(limit) = enshwick::altars::base_limit() else {
+            continue;
+        };
+        let past = limit.past_vanilla(grouping);
+        let done = match watch.step(past, loaded.load(Ordering::Acquire), Instant::now()) {
+            Step::Wait => continue,
+            Step::Set => set_past(hold, grouping, limit),
+            Step::Release => hold.clear(),
+        };
+        match done {
+            Ok(()) => {
+                watch.done(past);
+                enshwick::info!(
+                    "hold {}: {} altar zones in {} bases",
+                    if past { "set" } else { "released" },
+                    grouping.zones,
+                    grouping.bases
+                );
+            }
+            Err(error) => {
+                enshwick::warn_every!(Duration::from_secs(600), "hold: {error}");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_hold_is_set_at_once_and_released_only_after_a_quiet_minute_in_the_world() {
+        let t0 = Instant::now();
+        let mut watch = Watch::new(false);
+        assert_eq!(watch.step(false, false, t0), Step::Wait);
+        assert_eq!(
+            watch.step(true, false, t0),
+            Step::Set,
+            "set before the load"
+        );
+        watch.done(true);
+        // A grouping before the world loaded counts too few.
+        assert_eq!(watch.step(false, false, t0 + RELEASE_AFTER * 2), Step::Wait);
+        // Loaded, but the altars arrive one batch at a time.
+        let loaded = t0 + RELEASE_AFTER * 3;
+        assert_eq!(watch.step(false, true, loaded), Step::Wait);
+        assert_eq!(
+            watch.step(true, true, loaded + EVERY),
+            Step::Wait,
+            "still set"
+        );
+        assert_eq!(
+            watch.step(false, true, loaded + EVERY * 2),
+            Step::Wait,
+            "the count starts over"
+        );
+        assert_eq!(
+            watch.step(false, true, loaded + EVERY * 2 + RELEASE_AFTER),
+            Step::Release,
+            "altars removed down to the game's own"
+        );
+        watch.done(false);
+        assert_eq!(
+            watch.step(false, true, loaded + RELEASE_AFTER * 5),
+            Step::Wait
+        );
+    }
+
+    #[test]
+    fn a_hold_from_the_last_run_stays_until_the_world_shows_it_is_not_needed() {
+        let t0 = Instant::now();
+        let mut watch = Watch::new(true);
+        assert_eq!(watch.step(false, false, t0), Step::Wait);
+        assert_eq!(watch.step(false, true, t0), Step::Wait);
+        assert_eq!(watch.step(false, true, t0 + RELEASE_AFTER), Step::Release);
+    }
+}

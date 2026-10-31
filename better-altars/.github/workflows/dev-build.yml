@@ -1,0 +1,56 @@
+# Replaces the mod's DLL on the rolling `dev` prerelease with its PDB, its
+# SBOM and a build provenance attestation of each file, then starts the docs
+# site's build and the platform's dev bundle, which carries the mod. Every push to main that changes what the DLL builds from
+# runs it, a bump of the platform's commit included, so `dev` always carries
+# main and matches the platform's `dev` loader; a run by hand rebuilds it.
+name: dev-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/src/**"
+      - "**/Cargo.toml"
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .cargo/**
+      - tools/xtask/**
+      - LICENSE
+      - .github/workflows/dev-build.yml
+  workflow_dispatch:
+
+permissions: {}
+
+# One build at a time, never cut off half way through replacing the files;
+# of the pushes that wait, only the newest is built.
+concurrency:
+  group: dev-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # main: the organization runners run only workflows from main.
+    uses: enshwick/.github/.github/workflows/mod-dev-build.yml@main # zizmor: ignore[unpinned-uses]
+    permissions:
+      contents: write
+      # The build provenance attestations.
+      id-token: write
+      attestations: write
+
+  # The docs site takes the mod's page from its newest release; start the
+  # site's build once the prerelease moved.
+  docs:
+    needs: build
+    uses: enshwick/.github/.github/workflows/docs-rebuild.yml@main # zizmor: ignore[unpinned-uses]
+    secrets:
+      ENSHWICK_CI_CLIENT_ID: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
+      ENSHWICK_CI_PRIVATE_KEY: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
+
+  # The platform's dev bundle takes the mod from its dev prerelease; start
+  # the bundle's build once the prerelease moved.
+  bundle:
+    needs: build
+    uses: enshwick/.github/.github/workflows/bundle-rebuild.yml@main # zizmor: ignore[unpinned-uses]
+    secrets:
+      ENSHWICK_CI_CLIENT_ID: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
+      ENSHWICK_CI_PRIVATE_KEY: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}

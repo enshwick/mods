@@ -9,8 +9,8 @@ authors = ["themaiby"]
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/enshwick/mod-area-loot"
-homepage = "https://github.com/enshwick/mod-area-loot"
+repository = "https://github.com/enshwick/mods"
+homepage = "https://github.com/enshwick/mods/tree/main/area-loot"
 publish = false
 
 [lib]

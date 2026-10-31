@@ -64,5 +64,5 @@ without it get the loot too.
 and that the other loot is within `radius` and `height`.
 
 **Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-area-loot/issues). Attach the
+[mods repository](https://github.com/enshwick/mods/issues). Attach the
 files from the `logs/enshwick/` folder in your game folder.

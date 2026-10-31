@@ -51,5 +51,5 @@ every player runs with the server's value of `enabled`.
 the base. Land first if you are gliding.
 
 **Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-build-camera/issues). Attach
+[mods repository](https://github.com/enshwick/mods/issues). Attach
 the files from the `logs/enshwick/` folder in your game folder.

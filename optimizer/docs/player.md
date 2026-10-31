@@ -67,5 +67,5 @@ stays off unless a setting turns it on.
 `server_wait_cap_ms`, set it back to 1.
 
 **Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-optimizer/issues). Attach the
+[mods repository](https://github.com/enshwick/mods/issues). Attach the
 files from the `logs/enshwick/` folder in your game folder.

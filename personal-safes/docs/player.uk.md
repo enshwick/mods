@@ -61,5 +61,5 @@ Personal Safes потрібен серверу й кожному гравцев�
 за мить після прибуття. Зачекайте трохи й спробуйте знову.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-personal-safes/issues).
+[репозиторії модів](https://github.com/enshwick/mods/issues).
 Додайте файли з теки `logs/enshwick/` у теці гри.

@@ -54,5 +54,5 @@ Shared Experience потрібен лише серверу або гравцев
 персонаж знову входить у світ. Увійдіть і зачекайте кілька секунд.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-shared-experience/issues).
+[репозиторії модів](https://github.com/enshwick/mods/issues).
 Додайте файли з теки `logs/enshwick/` у теці гри.

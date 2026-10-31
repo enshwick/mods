@@ -101,5 +101,5 @@ values again.
 recipes while it runs. Restart the game to see the new counts.
 
 **Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-game-rates/issues). Attach
+[mods repository](https://github.com/enshwick/mods/issues). Attach
 the files from the `logs/enshwick/` folder in your game folder.

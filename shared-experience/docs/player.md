@@ -53,5 +53,5 @@ Players without it also see their experience bar fill and their level rise.
 character joins the world again. Join and wait a few seconds.
 
 **Something else goes wrong.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-shared-experience/issues).
+[mods repository](https://github.com/enshwick/mods/issues).
 Attach the files from the `logs/enshwick/` folder in your game folder.

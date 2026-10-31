@@ -64,5 +64,5 @@ Better Altars входить в enshwick.zip, а
 Оновіть Enshwick і мод. `logs/enshwick/loader.log` пояснює чому.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-better-altars/issues).
+[репозиторії модів](https://github.com/enshwick/mods/issues).
 Додайте файли з теки `logs/enshwick/` у теці гри.

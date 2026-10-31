@@ -64,5 +64,5 @@ your bases.
 Update Enshwick and the mod. `logs/enshwick/loader.log` says why.
 
 **Anything else.** Open an issue in the
-[mod's repository](https://github.com/enshwick/mod-better-altars/issues). Attach
+[mods repository](https://github.com/enshwick/mods/issues). Attach
 the files from the `logs/enshwick/` folder in your game folder.

@@ -67,5 +67,5 @@ Optimizer потрібен лише виділеному серверу. У гр
 `server_wait_cap_ms`, поверніть 1.
 
 **Щось інше пішло не так.** Відкрийте звернення в
-[репозиторії мода](https://github.com/enshwick/mod-optimizer/issues). Додайте
+[репозиторії модів](https://github.com/enshwick/mods/issues). Додайте
 файли з теки `logs/enshwick/` у теці гри.

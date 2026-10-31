@@ -25,6 +25,9 @@ concurrency:
 
 jobs:
   dev:
+    # Only main moves the public tag and saves the Windows SDK; a run by hand
+    # from another branch does nothing.
+    if: github.ref == 'refs/heads/main'
     # A fresh machine: what ships is built and published without the caches
     # that branch builds write to.
     runs-on: ubuntu-26.04
@@ -112,7 +115,7 @@ jobs:
           title="Dev $short"
           notes="Development build of every mod at $GITHUB_SHA: $(git -C "$GITHUB_WORKSPACE" log -1 --format=%s).
 
-          Until the first public release, 1.0.0, this prerelease is the build to download; every night that main changed replaces it. Extract a mod's zip into the folder that holds the Enshwick loader."
+          Until the first public release, 1.0.0, this prerelease is the build to download; every night that main changed replaces it. Extract a mod's zip into the folder that holds enshrouded.exe or enshrouded_server.exe. Each mod needs the Enshwick loader from enshwick.zip in the same folder."
           assets=(*.zip *.pdb *.cdx.json)
           if gh release view dev --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true > /dev/null

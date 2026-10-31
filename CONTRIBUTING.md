@@ -51,6 +51,8 @@ tag and attaches its zip, PDB, SBOM, `SHA256SUMS` and build provenance.
 
 Every night `dev.yml` builds every mod and replaces the files of the `dev`
 prerelease, one `<package>.zip` per mod, when `main` moved since the last
-build. A run by hand builds it at once.
+build. A run by hand from `main` builds it at once; from any other branch it
+does nothing.
+
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.

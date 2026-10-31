@@ -22,10 +22,10 @@ A package that builds only for Windows sets `windows-only = true` under
 and `cargo xtask check --windows` (or `--all`) runs its tests under Wine:
 directly on an amd64 Linux host that has Wine, otherwise in Docker, in an
 image built from `tools/wine/Dockerfile` on first use. On such a host, use
-the Wine of [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom),
-as CI does: unpack a release and put its `files/bin` first on `PATH`. On Apple silicon the
-container runs through Rosetta, which cannot run tests of crashes, detours,
-patches and threads, so those are skipped there.
+the Wine of [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom):
+unpack a release and put its `files/bin` first on `PATH`. On Apple
+silicon the container runs through Rosetta, which cannot run tests of
+crashes, detours, patches and threads, so those are skipped there.
 
 The hooks check formatting, spelling, Markdown and commit messages and
 compile nothing. A pull request title is a conventional commit,
@@ -35,3 +35,5 @@ is the mod's folder, or `mods` for the whole repository.
 Every mod has its own version. release-plz, configured in
 `release-plz.toml`, versions each mod from the commits that touch its folder
 and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.
+A new mod is added in two places: the `members` list of the root
+`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.

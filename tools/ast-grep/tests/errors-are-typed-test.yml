@@ -5,6 +5,8 @@ valid:
   - "fn name() -> Result<String, Error> { todo() }"
   - "fn run() -> anyhow::Result<String> { todo() }"
   - "fn name() -> Result<Value, MyString> { todo() }"
+  - "fn pairs() -> Result<(String, String), Error> { todo() }"
+  - "fn undo() -> Result<(), (Status, u32)> { todo() }"
   - |
     #[cfg(test)]
     #[expect(clippy::unwrap_used, reason = "tests")]
@@ -20,6 +22,8 @@ invalid:
   - "fn get(key: &str) -> std::result::Result<String, String> { todo() }"
   - "fn get(key: &str) -> Result<Value, std::string::String> { todo() }"
   - "struct Safes { owner: OnceLock<Result<Owner, String>> }"
+  - "fn find() -> Result<Found, (Status, String)> { todo() }"
+  - "fn run() -> Result<Option<String>, (String, String)> { todo() }"
   - |
     #[cfg(test)]
     fn helper() {}

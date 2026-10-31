@@ -11,13 +11,13 @@ use std::fmt::Write as _;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex, PoisonError};
+use std::sync::{Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use enshwick::state::ModLocal;
 
-use crate::locks::Relock;
+use crate::locks::{Relock, RelockWait};
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
 
@@ -108,10 +108,10 @@ pub(crate) fn running() -> bool {
 /// Waits `period`, or less when the thread is asked to end; whether it is.
 fn stopped_within(period: Duration) -> bool {
     let worker = worker();
-    let (stop, _timeout) = worker
-        .wake
-        .wait_timeout_while(worker.stop.relock(), period, |stop| !*stop)
-        .unwrap_or_else(PoisonError::into_inner);
+    let (stop, _timeout) =
+        worker
+            .wake
+            .relock_wait_timeout_while(worker.stop.relock(), period, |stop| !*stop);
     *stop
 }
 

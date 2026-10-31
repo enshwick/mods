@@ -2,7 +2,7 @@
 //!
 //! `cargo xtask check` runs the compiling checks a change needs before it
 //! merges; the git hooks run only the checks that compile nothing. First the
-//! crate rules ([`crate_rules`]), the code rules clippy cannot express
+//! crate rules ([`crate_rules`]) and the mod rules ([`mod_rules`]), the code rules clippy cannot express
 //! (ast-grep, from `sgconfig.yml`) and the unused dependencies
 //! (cargo-machete). Clippy,
 //! the tests and the doctests run on the host, where the packages that build
@@ -21,6 +21,7 @@
 #![forbid(unsafe_code)]
 
 mod crate_rules;
+mod mod_rules;
 mod wine;
 
 use std::io::{Cursor, Write as _};
@@ -236,7 +237,8 @@ fn source_checks() -> [Step; 3] {
 /// after another (they share the build lock) and the Windows lint beside
 /// them; the first failing host step ends the host checks.
 fn check(packages: &[Package], all: bool) -> Result<bool, String> {
-    let problems = crate_rules::check()?;
+    let mut problems = crate_rules::check()?;
+    problems.extend(mod_rules::check()?);
     for problem in &problems {
         say(problem);
     }

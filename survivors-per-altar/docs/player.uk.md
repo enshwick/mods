@@ -57,9 +57,11 @@ settings:
 
 ## Встановлення
 
-Survivors per Altar входить в enshwick.zip, а
-[посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод потребує Enshwick.
+Survivors per Altar постачається в окремому архіві,
+enshwick-survivors-per-altar.zip. Мод потребує Enshwick, який постачається в
+enshwick.zip.
+[Посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
+показує, куди покласти обидва архіви.
 
 ## Налаштування
 

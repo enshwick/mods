@@ -79,9 +79,10 @@ tooltips show the usual comfort numbers. Your rested time uses the new ones.
 
 ## Install
 
-Game Rates comes in enshwick.zip. The
+Game Rates comes in its own archive, enshwick-game-rates.zip. It needs
+Enshwick, which comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick.
+put both archives.
 
 ## Settings
 

@@ -12,7 +12,8 @@
 //!
 //! `cargo xtask dist` builds the release DLLs and writes what a player
 //! downloads: `<package>.zip` with `mods/<package>.dll` and the license, and
-//! the PDB beside it, for every mod in the workspace.
+//! the PDB beside it, for every mod in the workspace, or with `--package`
+//! for the named ones only.
 
 mod wine;
 
@@ -22,7 +23,7 @@ use std::process::{Command, ExitCode};
 use std::thread;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--out <dir>]";
+const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--package <name>]... [--out <dir>]";
 const WINDOWS_TARGET: &str = "x86_64-pc-windows-msvc";
 
 fn main() -> ExitCode {
@@ -256,47 +257,52 @@ fn check(packages: &[Package], all: bool) -> bool {
 }
 
 /// Builds the release DLLs and writes each mod's archive and PDB into
-/// `--out` (`target/dist` by default).
+/// `--out` (`target/dist` by default); with `--package`, only those mods.
 fn dist(args: &[String]) -> Result<bool, String> {
-    let out = match args {
-        [] => PathBuf::from("target/dist"),
-        [flag, dir] if flag == "--out" => PathBuf::from(dir),
-        _ => return Err(USAGE.to_owned()),
-    };
-    let command: &[&str] = if cfg!(windows) {
-        &[
-            "build",
-            "--workspace",
-            "--release",
-            "--locked",
-            "--target",
-            WINDOWS_TARGET,
-        ]
-    } else {
-        &[
-            "xwin",
-            "build",
-            "--workspace",
-            "--release",
-            "--locked",
-            "--target",
-            WINDOWS_TARGET,
-        ]
-    };
+    let mut out = PathBuf::from("target/dist");
+    let mut chosen: Vec<&str> = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let value = args.next().ok_or(USAGE)?;
+        match arg.as_str() {
+            "--out" => out = PathBuf::from(value),
+            "--package" => chosen.push(value),
+            _ => return Err(USAGE.to_owned()),
+        }
+    }
+    let mods: Vec<Package> = packages()?
+        .into_iter()
+        .filter(|p| p.cdylib && (chosen.is_empty() || chosen.contains(&p.name.as_str())))
+        .collect();
+    if let Some(missing) = chosen
+        .iter()
+        .find(|name| !mods.iter().any(|p| p.name == **name))
+    {
+        return Err(format!("{missing} is not a mod of this workspace"));
+    }
+    let mut command: Vec<&str> = Vec::new();
     // CI's dev builds embed the dependency tree in each DLL, for
     // `cargo audit bin` and other scanners.
-    let auditable = std::env::var_os("ENSHWICK_AUDITABLE").is_some_and(|value| value == "1");
-    let command: Vec<&str> = auditable
-        .then_some("auditable")
-        .into_iter()
-        .chain(command.iter().copied())
-        .collect();
+    if std::env::var_os("ENSHWICK_AUDITABLE").is_some_and(|value| value == "1") {
+        command.push("auditable");
+    }
+    if !cfg!(windows) {
+        command.push("xwin");
+    }
+    command.extend(["build", "--release", "--locked", "--target", WINDOWS_TARGET]);
+    if chosen.is_empty() {
+        command.push("--workspace");
+    } else {
+        for name in &chosen {
+            command.extend(["--package", name]);
+        }
+    }
     if !Step::new(&command).run(false) {
         return Ok(false);
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     let license = read(Path::new("LICENSE"))?;
-    for package in packages()?.iter().filter(|p| p.cdylib) {
+    for package in &mods {
         let name = &package.name;
         let built = Path::new("target")
             .join(WINDOWS_TARGET)

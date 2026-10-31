@@ -43,9 +43,10 @@ settings:
 
 ## Встановлення
 
-Area Loot входить в enshwick.zip, а
-[посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод потребує Enshwick.
+Area Loot постачається в окремому архіві, enshwick-area-loot.zip. Мод потребує
+Enshwick, який постачається в enshwick.zip.
+[Посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
+показує, куди покласти обидва архіви.
 
 ## Налаштування
 

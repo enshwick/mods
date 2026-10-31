@@ -9,5 +9,5 @@ loader, never shipped to players:
   client does where the platform still needs engine facts.
 
 Development builds are on the
-[`dev` prerelease](https://github.com/enshwick/devtools-mods/releases/tag/dev),
+[`dev` prerelease](https://github.com/enshwick/mods/releases/tag/dev),
 one archive per mod.

@@ -98,7 +98,7 @@ restore it, then restart the server.
 ## Install
 
 Download
-[`enshwick-personal-safes.zip`](https://github.com/enshwick/mod-personal-safes/releases/download/dev/enshwick-personal-safes.zip).
+[`enshwick-personal-safes.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-personal-safes.zip).
 Extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. The mod needs the Enshwick loader. Get
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)

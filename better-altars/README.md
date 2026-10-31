@@ -118,7 +118,7 @@ keep the mod running and up to date.
 ## How do I install it?
 
 1. Download
-   [`enshwick-better-altars.zip`](https://github.com/enshwick/mod-better-altars/releases/download/dev/enshwick-better-altars.zip).
+   [`enshwick-better-altars.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-better-altars.zip).
 2. Extract it into the folder that holds `enshrouded.exe` or
    `enshrouded_server.exe`.
 

@@ -101,7 +101,7 @@ world. A change applies when the game starts again.
 ## Install
 
 Download
-[`enshwick-survivors-per-altar.zip`](https://github.com/enshwick/mod-survivors-per-altar/releases/download/dev/enshwick-survivors-per-altar.zip)
+[`enshwick-survivors-per-altar.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-survivors-per-altar.zip)
 and extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. It needs the Enshwick loader:
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)

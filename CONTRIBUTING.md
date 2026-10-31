@@ -44,5 +44,13 @@ pull request needs to pass.
 Every mod has its own version. release-plz, configured in
 `release-plz.toml`, versions each mod from the commits that touch its folder
 and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.
+`release-plz.yml` runs by hand: `release-pr` opens the release pull request
+for the mods that changed, and `release`, once it merged, makes one GitHub
+release per mod. A job per released mod then builds only that mod from its
+tag and attaches its zip, PDB, SBOM, `SHA256SUMS` and build provenance.
+
+Every night `dev.yml` builds every mod and replaces the files of the `dev`
+prerelease, one `<package>.zip` per mod, when `main` moved since the last
+build. A run by hand builds it at once.
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.

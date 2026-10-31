@@ -42,7 +42,7 @@ A change applies at once, without a restart.
 ## Install
 
 Download
-[`enshwick-shared-experience.zip`](https://github.com/enshwick/mod-shared-experience/releases/download/dev/enshwick-shared-experience.zip)
+[`enshwick-shared-experience.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-shared-experience.zip)
 and extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. The mod needs the Enshwick loader. Get
 [`enshwick-loader.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick-loader.zip)

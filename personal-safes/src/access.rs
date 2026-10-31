@@ -9,8 +9,6 @@
 //! locked away for good. Other mods change the rule at the extension point
 //! `enshwick.personal-safes:access`.
 
-use std::collections::HashMap;
-
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -54,8 +52,12 @@ pub fn centre(cell: Cell) -> [f64; 3] {
 /// The record at `cell` or a neighbouring one, with the cell it is kept
 /// at: a placement and the stored transform may round to adjacent cells.
 #[must_use]
+#[expect(
+    clippy::disallowed_types,
+    reason = "generic over the hasher, as `implicit_hasher` asks; callers pass an `FxHashMap`"
+)]
 pub fn owner_near<V, S: std::hash::BuildHasher>(
-    owners: &HashMap<Cell, V, S>,
+    owners: &std::collections::HashMap<Cell, V, S>,
     at: Cell,
 ) -> Option<(Cell, &V)> {
     if let Some(found) = owners.get(&at) {
@@ -69,8 +71,12 @@ pub fn owner_near<V, S: std::hash::BuildHasher>(
 
 /// The cell of `key`'s Safe nearest to `position`, within `max` metres.
 #[must_use]
+#[expect(
+    clippy::disallowed_types,
+    reason = "generic over the hasher, as `implicit_hasher` asks; callers pass an `FxHashMap`"
+)]
 pub fn nearest_own<S: std::hash::BuildHasher>(
-    owners: &HashMap<Cell, Safe, S>,
+    owners: &std::collections::HashMap<Cell, Safe, S>,
     key: PlayerKey,
     position: [f64; 3],
     max: f64,

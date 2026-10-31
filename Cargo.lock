@@ -203,6 +203,7 @@ name = "enshwick-area-loot"
 version = "0.1.0"
 dependencies = [
  "enshwick",
+ "rustc-hash",
  "toml",
 ]
 
@@ -264,6 +265,7 @@ name = "enshwick-optimizer"
 version = "0.1.0"
 dependencies = [
  "enshwick",
+ "rustc-hash",
  "serde",
  "toml",
  "windows-sys",

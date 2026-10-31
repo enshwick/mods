@@ -40,9 +40,10 @@ with every item still in it. You cannot upgrade a Safe.
 
 ## Install
 
-Personal Safes comes in enshwick.zip. The
+Personal Safes comes in its own archive, enshwick-personal-safes.zip. It needs
+Enshwick, which comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick.
+put both archives.
 
 ## Settings
 

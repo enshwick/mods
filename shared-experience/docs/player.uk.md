@@ -34,9 +34,10 @@ settings:
 
 ## Встановлення
 
-Shared Experience входить в enshwick.zip.
+Shared Experience постачається в окремому архіві, enshwick-shared-experience.zip.
+Мод потребує Enshwick, який постачається в enshwick.zip.
 [Посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод потребує Enshwick.
+показує, куди покласти обидва архіви.
 
 ## Налаштування
 

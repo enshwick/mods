@@ -30,9 +30,10 @@ spent on it stay spent. Other skills and what they need stay the same.
 
 ## Install
 
-Build Camera comes in enshwick.zip, and the
+Build Camera comes in its own archive, enshwick-build-camera.zip. It needs
+Enshwick, which comes in enshwick.zip. The
 [install guide](https://enshwick.github.io/docs/guides/install/) shows where to
-put it. It needs Enshwick.
+put both archives.
 
 ## Settings
 

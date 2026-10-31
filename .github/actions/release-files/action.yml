@@ -1,0 +1,56 @@
+name: Release files
+description: >-
+  Builds the mods' archives reproducibly with `cargo xtask dist`, each DLL
+  carrying its dependency tree, and puts the PDB and a CycloneDX SBOM of
+  every DLL beside them. Needs setup-rust with cargo-cyclonedx and
+  cargo-auditable.
+
+inputs:
+  packages:
+    description: The mods to build, space-separated; every mod when empty.
+    default: ""
+  out:
+    description: The directory the archives, PDBs and SBOMs go to.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Reproducible builds: no machine paths in the DLLs and PDBs, no
+    # timestamps from the linker, and the PDB named without its path. The
+    # variable can take the place of the target's rustflags in
+    # .cargo/config.toml, so it repeats them.
+    - name: Reproducible build flags
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        {
+          echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=--remap-path-prefix=$GITHUB_WORKSPACE=/build --remap-path-prefix=$CARGO_HOME=/cargo --remap-path-prefix=$RUSTUP_HOME=/rustup -C target-feature=+crt-static -C target-cpu=x86-64-v2 -C link-arg=/Brepro -C link-arg=/PDBALTPATH:%_PDB%"
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)"
+        } >> "$GITHUB_ENV"
+
+    - name: cargo xtask dist
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        OUT: ${{ inputs.out }}
+        # Each DLL carries its dependency tree, for `cargo audit bin`.
+        ENSHWICK_AUDITABLE: "1"
+      run: |
+        args=(--out "$OUT")
+        for package in $PACKAGES; do args+=(--package "$package"); done
+        cargo xtask dist "${args[@]}"
+
+    # A CycloneDX SBOM and the PDB of every DLL this build wrote an archive of.
+    - name: SBOMs and PDBs
+      shell: bash
+      env:
+        OUT: ${{ inputs.out }}
+      run: |
+        cargo cyclonedx --format json --target x86_64-pc-windows-msvc --no-build-deps
+        cargo metadata --no-deps --format-version 1 | jq -r '
+          .packages[] | select(.targets | any(.kind | index("cdylib")))
+          | [(.manifest_path | sub("/Cargo.toml$"; "")), .name] | @tsv' |
+          while IFS=$'\t' read -r dir package; do
+            [ -f "$OUT/$package.zip" ] || continue
+            cp "$dir/$package.cdx.json" "$OUT/"
+          done

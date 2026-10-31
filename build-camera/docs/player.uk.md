@@ -32,9 +32,10 @@ settings:
 
 ## Встановлення
 
-Build Camera входить в enshwick.zip, а
-[посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
-показує, куди його покласти. Мод потребує Enshwick.
+Build Camera постачається в окремому архіві, enshwick-build-camera.zip. Мод
+потребує Enshwick, який постачається в enshwick.zip.
+[Посібник зі встановлення](https://enshwick.github.io/docs/uk/guides/install/)
+показує, куди покласти обидва архіви.
 
 ## Налаштування
 

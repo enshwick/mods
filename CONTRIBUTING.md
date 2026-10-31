@@ -29,8 +29,27 @@ compile nothing. A pull request title is a conventional commit,
 `<type>(<scope>): <subject>`, and becomes the squashed commit; the scope
 is the mod's folder, or `mods` for the whole repository.
 
+CI runs on GitHub-hosted runners. On every pull request, `ci.yml` runs
+`cargo fmt --all --check` and `cargo xtask check` over every mod in one
+build, so the shared dependencies compile once. A push to `main` runs
+`cargo xtask check --all --no-wine` instead. In both, the tests of the
+Windows-only packages run natively on a Windows runner rather than under
+Wine. A pull request that changes only documents or repository settings
+compiles nothing. The job `check` sums up the others and is the check a
+pull request needs to pass.
+
 Every mod has its own version. release-plz, configured in
 `release-plz.toml`, versions each mod from the commits that touch its folder
 and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.
+`release-plz.yml` runs by hand: `release-pr` opens the release pull request
+for the mods that changed, and `release`, once it merged, makes one GitHub
+release per mod. A job per released mod then builds only that mod from its
+tag and attaches its zip, PDB, SBOM, `SHA256SUMS` and build provenance.
+
+Every night `dev.yml` builds every mod and replaces the files of the `dev`
+prerelease, one `<package>.zip` per mod, when `main` moved since the last
+build. A run by hand from `main` builds it at once; from any other branch it
+does nothing.
+
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.

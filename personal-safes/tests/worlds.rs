@@ -4,78 +4,39 @@
 #[cfg(test)]
 mod tests {
     use enshwick::abi::Status;
+    use enshwick::content::EngineFacts;
     use enshwick::events::{ShutdownStarted, WorldLoaded};
     use enshwick::test::FakeHost;
+    use enshwick::test::facts::{self, Fact};
     use enshwick::{Entity, ItemId, PlayerKey};
     use enshwick_personal_safes::access::snapshots;
 
     /// A loader that knows the item and recipe layouts the Safe needs.
     fn host() -> FakeHost {
-        let mut host = FakeHost::new()
-            .type_hash("current_transform", 1)
-            .type_hash("used_item", 2);
-        for (ty, hash) in [
-            (enshwick::content::types::ITEM_INFO, 10),
-            (enshwick::content::types::ITEM_REGISTRY_RESOURCE, 11),
-            (enshwick::content::types::RECIPE_REGISTRY_RESOURCE, 12),
-        ] {
-            host = host.type_hash(ty.id(), hash);
-        }
-        for (id, size) in [
-            ("item_stat", 0x28),
-            ("recipe", 0xa8),
-            ("recipe_ingredient", 0x18),
-            ("recipe_stack", 0x18),
-        ] {
-            host = host.type_size(id, size);
-        }
-        for (id, at) in [
-            ("item_info.id", 0),
-            ("item_info.object", 4),
-            ("item_info.name", 0x48),
-            ("item_info.icon_image", 0x58),
-            ("item_info.description", 0x68),
-            ("item_info.flags", 0x78),
-            ("item_info.pid_entity", 0x80),
-            ("item_info.ui_values", 0x90),
-            ("item_stat.label", 0),
-            ("item_stat.format", 4),
-            ("item_stat.value", 8),
-            ("item_stat.signed", 0x24),
-            ("recipe.guid", 0),
-            ("recipe.id", 0x10),
-            ("recipe.workshop_guid", 0x14),
-            ("recipe.workshop", 0x24),
-            ("recipe.input", 0x28),
-            ("recipe.output", 0x30),
-            ("recipe.completion", 0x5c),
-            ("recipe.required_props", 0x38),
-            ("recipe.debug_name", 0x40),
-            ("recipe_registry.recipes", 0),
-            ("recipe_stack.item", 0x10),
-            ("recipe_stack.count", 0x14),
-            ("item_registry.refs", 0),
-            ("item_registry.names", 0x38),
-        ] {
-            host = host.constant(id, at);
-        }
-        host
+        FakeHost::new().world().items().recipes()
     }
 
-    /// The component every container has, with each kind's marker, so a
-    /// Safe with its item counts as placed.
+    /// The hash `ty` has on `host`.
+    fn hash(host: &FakeHost, ty: Fact) -> u32 {
+        host.hash(ty.id()).unwrap()
+    }
+
+    /// A current transform `x` metres along, laid out as `host` places it.
+    fn at(host: &FakeHost, x: f64) -> Vec<u8> {
+        let offset = |fact: Fact| host.offset(fact.id()).unwrap();
+        let place =
+            offset(facts::CURRENT_TRANSFORM_TRANSFORM) + offset(facts::WORLD_TRANSFORM_POSITION);
+        let mut bytes = vec![0u8; place + 24];
+        for (axis, value) in enshwick::ecs::fixed([x, 0.0, 0.0]).iter().enumerate() {
+            bytes[place + 8 * axis..][..8].copy_from_slice(&value.to_le_bytes());
+        }
+        bytes
+    }
+
+    /// The component every container has and each kind's marker, so a Safe
+    /// with its item counts as placed.
     fn containers(host: FakeHost) -> FakeHost {
-        [
-            ("inventory_setup", 3),
-            ("player_input", 4),
-            ("npc", 5),
-            ("animal", 6),
-            ("destroy_on_loot", 7),
-            ("loot_fill", 8),
-            ("resource_node", 9),
-        ]
-        .into_iter()
-        .fold(host, |host, (id, hash)| host.type_hash(id, hash))
+        host.inventory().container_kinds()
     }
 
     #[test]
@@ -222,9 +183,14 @@ mod tests {
         let item = ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid())
             .get()
             .to_le_bytes();
-        let loader = containers(host())
-            .placed(3, Entity(700), [20.0, 1.0, 20.0])
-            .component(Entity(700), 2, &item)
+        let host = containers(host());
+        let (setup, used) = (
+            hash(&host, facts::INVENTORY_SETUP),
+            hash(&host, facts::USED_ITEM),
+        );
+        let loader = host
+            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
+            .component(Entity(700), used, &item)
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -422,24 +388,21 @@ label_language = \"en\"
         ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let at = |x: f64| -> Vec<u8> {
-            enshwick::ecs::fixed([x, 0.0, 0.0])
-                .iter()
-                .flat_map(|axis| axis.to_le_bytes())
-                .collect()
-        };
         let (ann, bob, cat) = (
             player(10, 1, "Ann"),
             player(11, 2, "Bob"),
             player(12, 3, "Cat"),
         );
-        let loader = host()
+        let host = host();
+        let transform = hash(&host, facts::CURRENT_TRANSFORM);
+        let places = [0.0, 100.0, 20.0].map(|x| at(&host, x));
+        let loader = host
             .player(ann)
             .player(bob)
             .player(cat)
-            .component(Entity(10), 1, &at(0.0))
-            .component(Entity(11), 1, &at(100.0))
-            .component(Entity(12), 1, &at(20.0))
+            .component(Entity(10), transform, &places[0])
+            .component(Entity(11), transform, &places[1])
+            .component(Entity(12), transform, &places[2])
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -517,22 +480,19 @@ label_language = \"en\"
         ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let at = |x: f64| -> Vec<u8> {
-            enshwick::ecs::fixed([x, 0.0, 0.0])
-                .iter()
-                .flat_map(|axis| axis.to_le_bytes())
-                .collect()
-        };
         let mut root = player(10, 1, "Root");
         root.permissions |= PlayerInfo::CAN_KICK_BAN;
         let (bob, cat) = (player(11, 2, "Bob"), player(12, 3, "Cat"));
-        let loader = host()
+        let host = host();
+        let transform = hash(&host, facts::CURRENT_TRANSFORM);
+        let places = [0.0, 100.0, 200.0].map(|x| at(&host, x));
+        let loader = host
             .player(root)
             .player(bob)
             .player(cat)
-            .component(Entity(10), 1, &at(0.0))
-            .component(Entity(11), 1, &at(100.0))
-            .component(Entity(12), 1, &at(200.0))
+            .component(Entity(10), transform, &places[0])
+            .component(Entity(11), transform, &places[1])
+            .component(Entity(12), transform, &places[2])
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -615,9 +575,14 @@ label_language = \"en\"
         let damaged = "[[safes]]\ncell = [2, 0, 2]\nowner = \"00000000000000ff\"\nname = ";
         std::fs::write(&file, damaged).unwrap();
         let safe = ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid());
-        let loader = containers(host())
-            .placed(3, Entity(700), [20.0, 1.0, 20.0])
-            .component(Entity(700), 2, &safe.get().to_le_bytes())
+        let host = containers(host());
+        let (setup, used) = (
+            hash(&host, facts::INVENTORY_SETUP),
+            hash(&host, facts::USED_ITEM),
+        );
+        let loader = host
+            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
+            .component(Entity(700), used, &safe.get().to_le_bytes())
             .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
             .data_dir(dir.to_str().unwrap())
             .world_key("world0-dd")

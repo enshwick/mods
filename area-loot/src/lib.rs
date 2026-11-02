@@ -65,7 +65,7 @@ impl Mod for AreaLoot {
     }
 }
 
-enshwick::declare_mod!(AreaLoot, points: [points::Eligible]);
+enshwick::declare_mod!(AreaLoot);
 
 #[cfg(test)]
 mod tests {

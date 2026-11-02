@@ -21,9 +21,7 @@ use enshwick::{Load, Mod, Off};
 
 pub use share::{Character, Levels, high_water};
 
-/// The labels and descriptions of the settings, a table per language.
-#[cfg(test)]
-const TEXTS: &str = include_str!("texts.toml");
+enshwick::texts!();
 
 /// Shared Experience settings.
 #[enshwick::config]
@@ -220,7 +218,7 @@ mod tests {
     fn every_text_exists_in_all_languages() {
         use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
 
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         assert_eq!(texts.untranslated(), []);
         let schema = Settings::schema();
         let keys = [MOD_NAME.to_owned(), MOD_DESCRIPTION.to_owned(), schema.text]

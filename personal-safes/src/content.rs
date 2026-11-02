@@ -22,9 +22,6 @@ pub fn is_safe(item: ItemId) -> bool {
     item == ItemId::from_guid(SAFE.guid())
 }
 
-/// The mod's texts, per language.
-pub const TEXTS: &str = include_str!("texts.toml");
-
 /// The Safe item.
 #[must_use]
 pub fn item() -> NewItem {
@@ -59,14 +56,14 @@ mod tests {
     fn every_text_exists_in_all_languages() -> Result<(), Off> {
         use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
 
-        let texts = Texts::parse(TEXTS)?;
+        let texts = Texts::parse(crate::texts::TOML)?;
         assert_eq!(texts.untranslated(), []);
         assert_eq!(texts.missing_in(Language::OFFERED), []);
         for key in [
             MOD_NAME,
             MOD_DESCRIPTION,
-            crate::keys::SAFE_NAME,
-            crate::keys::SAFE_DESCRIPTION,
+            crate::texts::SAFE_NAME,
+            crate::texts::SAFE_DESCRIPTION,
         ] {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }

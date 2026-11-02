@@ -15,8 +15,9 @@
 pub mod access;
 pub mod actions;
 pub mod content;
-mod keys;
 pub mod points;
+
+enshwick::texts!();
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -71,8 +72,8 @@ impl Settings {
     fn check(&self) -> Result<(), ConfigError> {
         self.language().map(|_| ()).ok_or_else(|| {
             ConfigError::text(
-                keys::UNKNOWN_LANGUAGE,
-                &[(keys::value::CODE, &self.label_language)],
+                texts::CONFIG_LABEL_LANGUAGE_UNKNOWN,
+                &[(texts::value::CODE, &self.label_language)],
             )
         })
     }
@@ -283,8 +284,8 @@ impl Mod for PersonalSafes {
         load.add_texts(
             &texts,
             &[
-                (keys::SAFE_NAME, content::SAFE_NAME),
-                (keys::SAFE_DESCRIPTION, content::SAFE_DESCRIPTION),
+                (texts::SAFE_NAME, content::SAFE_NAME),
+                (texts::SAFE_DESCRIPTION, content::SAFE_DESCRIPTION),
             ],
         )?;
         load.add_item(content::item())?;
@@ -376,7 +377,7 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
     let position = placed.position.map(f64::from);
     snapshots().placed(placed.entity, access::cell(position), key, &name);
     if !name.is_empty() {
-        let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
+        let label = phrases.say(texts::SAFE_LABEL, &[(texts::value::OWNER, &name)]);
         if !world.set_label(placed.entity, &label) {
             enshwick::warn!("Safe {} not labelled", placed.entity);
         }
@@ -474,7 +475,7 @@ fn label_seen(
             if name.is_empty() {
                 continue;
             }
-            let label = phrases.say(keys::LABEL, &[(keys::value::OWNER, &name)]);
+            let label = phrases.say(texts::SAFE_LABEL, &[(texts::value::OWNER, &name)]);
             if world.set_label(entity, &label) {
                 done.insert(entity);
             }
@@ -569,7 +570,10 @@ mod tests {
         };
         assert_eq!(
             unknown.check().map_err(|refused| refused.to_string()),
-            Err(format!("{} (code = xx)", keys::UNKNOWN_LANGUAGE)),
+            Err(format!(
+                "{} (code = xx)",
+                texts::CONFIG_LABEL_LANGUAGE_UNKNOWN
+            )),
             "refused with a text of the mod's own"
         );
         assert!(unknown.validate().is_err());

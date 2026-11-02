@@ -27,10 +27,6 @@ const VANILLA_BASES: u8 = 16;
 /// The most bases the settings take: the most the loader holds.
 const MOST_BASES: u8 = 179;
 
-/// The text of the reason the mod turns off on a held world whose game
-/// build groups altar zones in a way the platform does not know.
-pub(crate) const GROUPING_TEXT: &str = "off.grouping";
-
 /// The most altars the game's own grouping takes, from the loader; the
 /// settings' cap when the loader does not say.
 fn vanilla_cap() -> u8 {
@@ -152,7 +148,7 @@ impl AltarCount {
             // grouping: off, the loader stops the server for the hold.
             if server && let Some(reason) = hold::reason(load)? {
                 enshwick::warn!("held: {reason}");
-                return Err(Off::text(GROUPING_TEXT, &[]));
+                return Err(Off::text(crate::texts::OFF_GROUPING, &[]));
             }
             let cap = vanilla_cap();
             enshwick::warn!("the game keeps {cap} altar zones in bases");

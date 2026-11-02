@@ -10,10 +10,7 @@ mod tracker;
 
 use enshwick::{Load, Mod, Off};
 
-/// The labels and descriptions of the settings and the mod, a table per
-/// language.
-#[cfg(test)]
-const TEXTS: &str = include_str!("texts.toml");
+enshwick::texts!();
 
 /// Area Loot settings.
 #[enshwick::config]
@@ -87,7 +84,7 @@ mod tests {
 
     #[test]
     fn every_text_exists_in_all_languages() {
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         assert_eq!(texts.untranslated(), []);
     }
 
@@ -100,7 +97,7 @@ mod tests {
             .filter(|key| key != "config.doc")
             .chain([enshwick::i18n::MOD_NAME, enshwick::i18n::MOD_DESCRIPTION].map(str::to_owned))
             .collect();
-        let tables: toml::Table = toml::from_str(TEXTS).unwrap();
+        let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
         for (language, table) in &tables {
             let table = table.as_table().unwrap();
             for key in &keys {

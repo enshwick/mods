@@ -26,9 +26,7 @@ use enshwick::{ItemId, Load, Mod, Off};
 
 use enshwick::Relock;
 
-/// The text refusing fewest charges above the full count, with `{min}` and
-/// `{full}`.
-const CHARGES_MIN_ABOVE_FULL: &str = "config.copy_staff_charges_min.above_full";
+enshwick::texts!();
 
 /// The settings in force, as the game's hooks read them: the server's on a
 /// joined client.
@@ -136,10 +134,10 @@ impl Settings {
     fn check(&self) -> Result<(), ConfigError> {
         if self.copy_staff_charges_min > self.copy_staff_charges {
             return Err(ConfigError::text(
-                CHARGES_MIN_ABOVE_FULL,
+                texts::CONFIG_COPY_STAFF_CHARGES_MIN_ABOVE_FULL,
                 &[
-                    ("min", &self.copy_staff_charges_min.to_string()),
-                    ("full", &self.copy_staff_charges.to_string()),
+                    (texts::value::MIN, &self.copy_staff_charges_min.to_string()),
+                    (texts::value::FULL, &self.copy_staff_charges.to_string()),
                 ],
             ));
         }

@@ -101,14 +101,14 @@ fn every_text_exists_in_all_languages() {
     use enshwick::config::Config as _;
     use enshwick::i18n::{Language, MOD_DESCRIPTION, MOD_NAME, Texts};
 
-    let texts = Texts::parse(staffs::TEXTS).unwrap();
+    let texts = Texts::parse(texts::TOML).unwrap();
     assert_eq!(texts.untranslated(), []);
     assert_eq!(texts.missing_in(Language::OFFERED), []);
     let schema = Settings::schema();
     let keys = [
         MOD_NAME.to_owned(),
         MOD_DESCRIPTION.to_owned(),
-        CHARGES_MIN_ABOVE_FULL.to_owned(),
+        texts::CONFIG_COPY_STAFF_CHARGES_MIN_ABOVE_FULL.to_owned(),
         schema.text,
     ]
     .into_iter()
@@ -125,7 +125,7 @@ fn every_text_exists_in_all_languages() {
 
 #[test]
 fn every_language_keeps_the_placeholders_of_each_text() {
-    let tables: toml::Table = toml::from_str(staffs::TEXTS).unwrap();
+    let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
     let placeholders = |text: &str| {
         let mut names: Vec<String> = text
             .split('{')
@@ -199,7 +199,10 @@ fn a_dropped_staff_holds_from_the_fewest_to_full_charges() {
     assert!(with(5, 2).check().is_ok());
     assert_eq!(
         with(5, 6).check().map_err(|refused| refused.to_string()),
-        Err(format!("{CHARGES_MIN_ABOVE_FULL} (min = 6, full = 5)")),
+        Err(format!(
+            "{} (min = 6, full = 5)",
+            texts::CONFIG_COPY_STAFF_CHARGES_MIN_ABOVE_FULL
+        )),
         "refused with a text of the mod's own"
     );
 }

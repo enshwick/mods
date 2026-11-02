@@ -12,7 +12,7 @@
 /// game thread when a staff would place a new copy: a copy staff, or the
 /// survivor's own with `vanilla_staff_places_copies`.
 #[enshwick::point(
-    name = "copy-limit",
+    name = "copy-limit", export,
     mode = Override,
     output = u32
 )]
@@ -35,7 +35,7 @@ pub struct CopyLimit {
 /// the charges left takes the staff. Moving a copy is always free. Asked
 /// on the server's game thread when a copy staff would place a new copy.
 #[enshwick::point(
-    name = "charge-cost",
+    name = "charge-cost", export,
     mode = Override,
     output = u16,
     refusable

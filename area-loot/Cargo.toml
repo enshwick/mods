@@ -17,7 +17,6 @@ publish = false
 id = "enshwick.area-loot"
 side = "server"
 name = "Area Loot"
-exports = ["eligible"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

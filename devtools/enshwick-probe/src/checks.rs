@@ -54,8 +54,9 @@ pub(crate) struct Checks {
     store: WorldStore<Visits>,
     save_asked: AtomicBool,
     scheduler: Scheduler,
-    /// Whether the world refused the replicated health as a writable type.
-    copies_refused: bool,
+    /// The replicated health as a writable type, whose writes the world
+    /// refuses.
+    copy: WritableType,
     effects: Effects,
     died: EventType,
     /// Set from the ping the probe raised until the game hands it back.
@@ -98,10 +99,10 @@ impl Checks {
             world,
             save_asked: AtomicBool::new(false),
             scheduler: load.scheduler()?,
-            // The smoke test checks that the API refuses write access to a
+            // The smoke test checks that the API refuses writes to a
             // replicated component, named as the engine names it.
             // ast-grep-ignore: engine-names-stay-in-loader
-            copies_refused: WritableType::resolve(load, "keen::ecs::NetworkHealth").is_err(),
+            copy: WritableType::resolve(load, "keen::ecs::NetworkHealth")?,
             effects: load.effects(),
             died: load.game_event_type("entity_died_event")?,
             ping_sent: AtomicBool::new(false),
@@ -208,13 +209,16 @@ impl Checks {
         }
     }
 
-    /// Checks that the replicated health is refused as a writable type, and
-    /// writes the health of an actor in the world, if there is one.
+    /// Checks that a write to the replicated health is refused, and writes
+    /// the health of an actor in the world, if there is one.
     fn writes(&self) {
-        if self.copies_refused {
-            pass("writes: the replicated health is refused as a writable type");
-        } else {
-            fail("writes: the replicated health is writable");
+        // The world refuses a copy by its type, so any entity shows it when
+        // no actor has one.
+        let first = |ty| self.world.entities(ty).first().map(|placed| placed.entity);
+        let any = first(self.network_health).or_else(|| first(self.world.transform_type()));
+        match any {
+            Some(entity) => Self::copy_write(self.world, self.copy, entity),
+            None => enshwick::info!("SKIP writes: no entity in the loaded world"),
         }
         let actor = self
             .world
@@ -233,6 +237,17 @@ impl Checks {
             None => enshwick::info!(
                 "SKIP writes: no living actor with replicated health; the spawn check tries its own"
             ),
+        }
+    }
+
+    /// Checks that a write to `entity`'s replicated health, `copy`, is
+    /// refused; the write would put back the bytes it read.
+    fn copy_write(world: World, copy: WritableType, entity: Entity) {
+        match world.update(entity, copy, |_| ()) {
+            Err(WorldError::Refused) => pass("writes: a write to the replicated health is refused"),
+            other => fail(&format!(
+                "writes: a write to the replicated health of entity {entity}: {other:?}, expected Refused"
+            )),
         }
     }
 
@@ -649,4 +664,63 @@ fn destroy_marked(world: World, scheduler: Scheduler, marks: EntityData<u32>, en
             "entity data: destroyed entity {entity} keeps its mark {mark}"
         )),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::OnceLock;
+
+    use enshwick::abi::Status;
+    use enshwick::world::{World, WritableType};
+    use enshwick::{Entity, Load, Mod, Off};
+
+    use super::Checks;
+
+    // The replicated health, by the engine name the probe resolves it with.
+    // ast-grep-ignore: engine-names-stay-in-loader
+    const NETWORK_HEALTH: &str = "keen::ecs::NetworkHealth";
+
+    static RESOLVED: OnceLock<(World, WritableType)> = OnceLock::new();
+
+    struct Copies;
+
+    impl Mod for Copies {
+        fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+            let world = load.world()?;
+            let copy = WritableType::resolve(load, NETWORK_HEALTH)?;
+            let _first = RESOLVED.set((world, copy));
+            Ok(Self)
+        }
+    }
+
+    enshwick::test::declare_mod!(
+        Copies,
+        r#"
+        id = "probe.copies"
+        side = "server"
+        "#
+    );
+
+    #[test]
+    fn a_refused_write_to_the_replicated_health_passes() {
+        let loader = enshwick::test::FakeHost::new()
+            .world()
+            .type_hash(NETWORK_HEALTH, 7)
+            .type_size(NETWORK_HEALTH, 8)
+            .component(Entity(3), 7, &[0; 8])
+            .refuse_write(7)
+            .install();
+        // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
+        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        let (world, copy) = RESOLVED.get().unwrap();
+        Checks::copy_write(*world, *copy, Entity(3));
+        let logs = loader.logs();
+        assert!(
+            logs.iter()
+                .any(|(_, line)| line == "PASS writes: a write to the replicated health is refused"),
+            "{logs:?}"
+        );
+        assert_eq!(loader.component_bytes(Entity(3), 7), Some(vec![0; 8]));
+    }
 }

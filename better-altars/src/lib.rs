@@ -81,7 +81,8 @@ mod tests {
             .settings(settings)
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         loader
     }
@@ -193,7 +194,8 @@ mod tests {
             .without_bases_past_16()
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(enshwick::altars::base_limit().unwrap().bases, 16);
         assert_eq!(loader.altar_limit(11, 16), 32);
@@ -231,7 +233,8 @@ mod tests {
             .data_dir(dir.to_str().unwrap())
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         loader.set_grouping(zones, bases);
         let hold = enshwick::state::Hold::new(&dir);
@@ -298,7 +301,8 @@ mod tests {
             .without_base_limit()
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(status, Status::REFUSED);
         assert_eq!(loader.faults(), [texts::OFF_GROUPING]);

@@ -431,7 +431,8 @@ mod tests {
             .install();
         // SAFETY: the exports of `declare_mod!` above, `ready` after `init`
         // returned OK.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert!(measure::running(), "{:?}", loader.logs());
 

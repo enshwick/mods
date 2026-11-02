@@ -251,7 +251,8 @@ mod tests {
             .world_key(key)
             .install();
         // SAFETY: the exports of `declare_mod!`.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK);
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "{:?}", loader.logs());
         loader
@@ -357,7 +358,8 @@ mod tests {
             .data_dir(dir.to_str().unwrap())
             .install();
         // SAFETY: the exports of `declare_mod!`.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK);
         let row = |entity, progress, gained| Experience {
             entity: enshwick::Entity(entity),

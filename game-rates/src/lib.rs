@@ -344,7 +344,8 @@ mod tests {
             .settings("[experience]\ncombat = 3.0\n[drops]\nloot = 2.0\n[skills]\npoints = 1.5\n")
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         let combat = Rate::Experience(ExperienceGroup::Combat);
         assert_eq!(loader.rate(combat), Some(3.0));
@@ -375,7 +376,8 @@ mod tests {
             )
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         for &kind in RecipeKind::ALL {
             let expected = match recipes::category(kind) {
@@ -397,7 +399,8 @@ mod tests {
             .without_rate(Rate::Loot)
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.rate(Rate::Loot), None);
         assert_eq!(loader.rate(Rate::Comfort), Some(2.0));
@@ -417,7 +420,8 @@ mod tests {
             .settings("[recipes]\nmultiplier = 2\nblocks = true\novergrowth = true\ndecor = true\n")
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         loader.set_server_synced(Some("{ recipes = { multiplier = 5, decor = false } }"));
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
@@ -443,7 +447,8 @@ mod tests {
             .side(enshwick::abi::Side::SERVER)
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.comfort(&comfort(3)), 6, "twice by default");
         let rebuilds = loader.rebuilds().len();

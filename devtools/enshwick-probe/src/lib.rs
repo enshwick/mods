@@ -417,9 +417,13 @@ mod tests {
     /// Starts the probe on a fake host with `settings`; the status and the
     /// host to look at.
     fn start(settings: &str) -> (Status, enshwick::test::Installed) {
-        let loader = enshwick::test::FakeHost::new().settings(settings).install();
+        let loader = enshwick::test::FakeHost::new()
+            .developer_tools(true)
+            .settings(settings)
+            .install();
         // SAFETY: the exports of the `declare_mod!` below.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         (status, loader)
     }
 

@@ -550,7 +550,7 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     Ok(())
 }
 
-enshwick::declare_mod!(PersonalSafes, points: [points::Access]);
+enshwick::declare_mod!(PersonalSafes);
 
 #[cfg(test)]
 mod tests {

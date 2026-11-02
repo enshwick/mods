@@ -210,11 +210,18 @@ fn on_disk() -> Owners {
 }
 
 /// Hands the owners to the running world's store, which writes them when
-/// the world saves; false while no world is open.
+/// the world saves; false while no world is open or its owners do not read.
 fn hand_over(store: &WorldStore<Owners>) -> bool {
     let owners = on_disk();
     if store.update(|kept| *kept = owners).is_none() {
-        enshwick::warn!("owners not saved: no world is open");
+        match store.shut_reason() {
+            Some(why) => {
+                enshwick::warn_once!(
+                    "owners not saved until the world's owners file is fixed: {why}"
+                );
+            }
+            None => enshwick::warn!("owners not saved: no world is open"),
+        }
         return false;
     }
     true

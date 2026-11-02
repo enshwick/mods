@@ -16,7 +16,7 @@ Ten seconds after the world has loaded, and again on the `check` action:
   and the entities near it;
 - the vitals of actors with replicated health, against that health, and the
   progress of a character;
-- component writes: the replicated health is refused as a writable type; an
+- component writes: a write to the replicated health is refused; an
   actor's health is set one lower, healed by the most negative amount (it
   stays at 1), its replicated copy checked a second later, and put back;
 - spawns: a copy of an entity in the world, one with health if there is one,

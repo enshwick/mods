@@ -179,4 +179,7 @@ jobs:
         run: |
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$PACKAGE.zip" --dir "$RUNNER_TEMP"
           7z x -y -o"$RUNNER_TEMP/release" "$RUNNER_TEMP/$PACKAGE.zip" > /dev/null
-          cargo enshwick manifest "$RUNNER_TEMP/release/mods/$PACKAGE.dll" --expect-version "$VERSION"
+          # The archive holds one mod folder, mods/<id>/, named by the mod's id.
+          dlls=("$RUNNER_TEMP"/release/mods/*/"$PACKAGE.dll")
+          test "${#dlls[@]}" -eq 1 && test -f "${dlls[0]}"
+          cargo enshwick manifest "${dlls[0]}" --expect-version "$VERSION"

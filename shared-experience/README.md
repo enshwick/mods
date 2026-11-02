@@ -20,7 +20,7 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
   normal play.
 - A character who is already ahead, such as one brought from another world,
   raises the mark for everyone.
-- No character goes past the level cap. Flame level is shared in the base game
+- No character goes past the level cap. Flame Level is shared in the base game
   already. Skill points from knowledge stay with each character.
 
 The experience a character gains is part of that character. It goes with the

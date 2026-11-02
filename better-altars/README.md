@@ -1,17 +1,17 @@
 # Better Altars
 
-More Flame Altars at each Flame level. Altar zones that touch grow together, so
+More Flame Altars at each Flame Level. Altar zones that touch grow together, so
 you can build big or build next to friends.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
-- **More altars.** Each Flame level allows its own number of altars, up to 255,
+- **More altars.** Each Flame Level allows its own number of altars, up to 255,
   in up to 179 bases. The default is twice the vanilla count, in 16 bases.
 - **Zones that grow together.** Altars whose zones touch form a group. Each
   altar grows until the group covers as much ground as its altars would cover
   apart. A piece may stand across the seam between two zones of a group.
 
-| Flame level | 0 | 1 | 2 | 3  | 4  | 5  | 6  | 7  | 8  | 9  | 10 | 11 and above |
+| Flame Level | 0 | 1 | 2 | 3  | 4  | 5  | 6  | 7  | 8  | 9  | 10 | 11 and above |
 | ----------- | - | - | - | -- | -- | -- | -- | -- | -- | -- | -- | ------------ |
 | Vanilla     | 1 | 2 | 4 | 6  | 8  | 10 | 11 | 12 | 13 | 14 | 15 | 16           |
 | Default     | 2 | 4 | 8 | 12 | 16 | 20 | 22 | 24 | 26 | 28 | 30 | 32           |
@@ -35,8 +35,8 @@ building_across_seams = true
 
 ### Altar count
 
-The first entry of `altars_per_flame_level` is Flame level 0. Level 0 comes
-before Flame level 1, where a new world starts. Levels past the end of the list
+The first entry of `altars_per_flame_level` is Flame Level 0. Level 0 comes
+before Flame Level 1, where a new world starts. Levels past the end of the list
 use its last entry. An empty list is the vanilla table.
 
 Each level takes 1 to 255 altars. The mod moves a value outside that range to
@@ -59,7 +59,7 @@ cluster:
   It grows until the cluster covers as much ground as its altars would cover
   apart, to the nearest grid cell. Overlap loses no ground. Clusters that grow
   into each other become one cluster.
-- No zone shrinks. This holds when an altar is placed, when a Flame level rises
+- No zone shrinks. This holds when an altar is placed, when a Flame Level rises
   and when the server stalls for a moment.
 - Every altar of the cluster takes the height of the tallest one.
 - With `building_across_seams`, a piece may stand across the seam between two
@@ -142,9 +142,9 @@ whatever their own file says.
 
 ## How do other mods change the limit?
 
-Other mods change how many altars a Flame level allows with the platform's
+Other mods change how many altars a Flame Level allows with the platform's
 altar-limit chain. `load.on_altar_limit` adds a filter. The filter sees the
-Flame level, the game's own count and the count so far. A filter of a mod loaded
+Flame Level, the game's own count and the count so far. A filter of a mod loaded
 after Better Altars sees this mod's table. The loader keeps the answer within
 the zones that the game groups. See
 [Altars per level and bases past 16](https://github.com/enshwick/enshwick/blob/main/book/src/altars.md#altars-per-level-and-bases-past-16).

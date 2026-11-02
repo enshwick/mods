@@ -1,7 +1,7 @@
 ---
 id: enshwick.build-camera
 name: Build Camera
-summary: Every player may use the building fly mode of the Airborne Architect skill near a base, with no skill points spent.
+summary: Every player may use the building fly mode of the Flying Architect skill near a base, with no skill points spent.
 needs: everyone
 settings:
   - key: enabled
@@ -11,7 +11,7 @@ settings:
 ---
 
 - Every player may use the building fly mode near a base.
-- No skill points go into Airborne Architect for it.
+- No skill points go into Flying Architect for it.
 - Your character stays in place while a flying spark carries the camera.
 - You place and remove blocks and props from the spark.
 
@@ -27,7 +27,7 @@ Build reach is the usual one, measured from the spark.
 
 ## What happens to the skill tree?
 
-The skill tree still shows Airborne Architect as locked. Points you already
+The skill tree still shows Flying Architect as locked. Points you already
 spent on it stay spent. Other skills and what they need stay the same.
 
 ## Install

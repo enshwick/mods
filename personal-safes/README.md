@@ -5,8 +5,8 @@ allow can open. Only the owner picks it up.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
-- You craft the Safe at the same workshop as the wooden chest. By default it
-  costs twice the ingredients of the wooden chest.
+- You craft the Safe at the same workshop as the Wooden Chest. By default it
+  costs twice the ingredients of the Wooden Chest.
 - Only the player who placed a Safe can open, empty, pick up or dismantle it.
 - Crafting and building do not take items from another player's Safe.
 - The server's administrators can open every Safe, unless the settings turn this
@@ -50,7 +50,7 @@ until the server registers them. This takes a moment after they arrive.
 
 ## What happens without the mod?
 
-A Safe is the vanilla wooden chest underneath. Without the mod it is an ordinary
+A Safe is the vanilla Wooden Chest underneath. Without the mod it is an ordinary
 chest, and every item stays in it. You cannot upgrade a Safe, because an upgrade
 would replace it with an ordinary chest.
 
@@ -68,7 +68,7 @@ label_language = "en"
 
 | Key               | Default | Range                                       | Meaning                                                       |
 | ----------------- | ------- | ------------------------------------------- | ------------------------------------------------------------- |
-| `cost_multiplier` | 2       | 1 to 100                                    | the Safe costs the ingredients of the wooden chest times this |
+| `cost_multiplier` | 2       | 1 to 100                                    | the Safe costs the ingredients of the Wooden Chest times this |
 | `admins_can_open` | true    |                                             | administrators can open, remove and rename every Safe         |
 | `label_language`  | `en`    | a language code, such as `en`, `uk` or `de` | the language of the owner's name on a Safe                    |
 

@@ -1,13 +1,13 @@
 ---
 id: enshwick.better-altars
 name: Better Altars
-summary: More Flame Altars at each Flame level, up to 255, in up to 179 bases, and altar zones that touch grow together so friends can build side by side.
+summary: More Flame Altars at each Flame Level, up to 255, in up to 179 bases, and altar zones that touch grow together so friends can build side by side.
 needs: everyone
 settings:
   - key: count.altars_per_flame_level
     default: "[2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]"
     range: 1 to 255 for each level
-    meaning: How many altars each Flame level allows. The first number is level 0, which comes before the Flame level 1 a new world starts at. Later levels use the last number. An empty list keeps the usual counts.
+    meaning: How many altars each Flame Level allows. The first number is level 0, which comes before the Flame Level 1 a new world starts at. Later levels use the last number. An empty list keeps the usual counts.
     applies: at-once
   - key: count.bases
     default: 16
@@ -24,7 +24,7 @@ settings:
     applies: at-once
 ---
 
-- Each Flame level allows twice as many Flame Altars as in the base game: 4 at
+- Each Flame Level allows twice as many Flame Altars as in the base game: 4 at
   level 1, up to 32 from level 11 on. You choose the count.
 - Flame Altar zones that touch form a group. Each altar of the group grows, so
   the group covers as much ground as its altars would apart. No zone shrinks.

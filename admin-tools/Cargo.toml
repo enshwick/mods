@@ -1,0 +1,31 @@
+[package]
+name = "enshwick-admin-tools"
+version = "0.0.0-dev"
+description = "Lets a server's administrators mute players in chat from the game's interface"
+keywords = ["enshrouded", "mod", "admin", "chat"]
+categories = ["game-development"]
+readme = "README.md"
+authors = ["themaiby"]
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/enshwick/mods"
+homepage = "https://github.com/enshwick/mods/tree/main/admin-tools"
+publish = false
+
+[package.metadata.enshwick]
+id = "enshwick.admin-tools"
+side = "server"
+name = "Admin Tools"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+enshwick = { workspace = true, features = ["unstable"] }
+
+[dev-dependencies]
+enshwick = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true

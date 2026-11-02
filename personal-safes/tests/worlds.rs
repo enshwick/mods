@@ -666,11 +666,23 @@ label_language = \"en\"
             "lends no stock either"
         );
         assert!(loader.raise::<WorldSaved>(&()) >= 1);
+        assert!(loader.raise::<WorldSaved>(&()) >= 1);
         assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
         assert_eq!(
             std::fs::read_to_string(&file).unwrap(),
             damaged,
             "kept for a fix"
+        );
+        let unsaved: Vec<String> = loader
+            .logs()
+            .into_iter()
+            .map(|(_, line)| line)
+            .filter(|line| line.starts_with("owners not saved"))
+            .collect();
+        assert_eq!(unsaved.len(), 1, "said once: {unsaved:?}");
+        assert!(
+            unsaved[0].starts_with("owners not saved until the world's owners file is fixed: "),
+            "{unsaved:?}"
         );
         let _gone = std::fs::remove_dir_all(&dir);
     }

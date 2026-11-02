@@ -320,4 +320,4 @@ fn copy_staffs(load: &mut Load<'_>, settings: &Settings) -> Result<Loot, Off> {
     Ok(loot)
 }
 
-enshwick::declare_mod!(SurvivorsPerAltar, points: [points::CopyLimit, points::ChargeCost]);
+enshwick::declare_mod!(SurvivorsPerAltar);

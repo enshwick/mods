@@ -17,11 +17,13 @@ pre-commit:
 # committed checks the header against committed.toml. Messages git writes
 # itself (merges, reverts, fixups) pass as they are. A subject starts in
 # lower case, and angle brackets would read as HTML in the release notes.
+# No double quote in these hooks' patterns: lefthook on Windows hands a
+# command to sh inside double quotes, and one ends it early.
 commit-msg:
   commands:
     conventional:
       run: >-
-        head -n1 {1} | grep -qE '^(Merge |Revert "|fixup! |squash! |amend! )' ||
+        head -n1 {1} | grep -qE '^(Merge |Revert [^a-z]|fixup! |squash! |amend! )' ||
         { committed --commit-file {1} &&
         ! head -n1 {1} | grep -E '^[a-z]+(\([^)]*\))?!?: [A-Z]|[<>]'; }
 
@@ -49,7 +51,7 @@ pre-push:
       run: |
         for commit in $(git rev-list --no-merges HEAD --not --remotes); do
           header=$(git log -1 --format=%s "$commit")
-          case "$header" in 'Revert "'* | 'fixup! '* | 'squash! '* | 'amend! '*) continue ;; esac
+          case "$header" in 'Revert '[!a-z]* | 'fixup! '* | 'squash! '* | 'amend! '*) continue ;; esac
           git log -1 --format=%B "$commit" | committed --commit-file - || exit 1
           if printf '%s\n' "$header" | grep -E '^[a-z]+(\([^)]*\))?!?: [A-Z]|[<>]'; then exit 1; fi
         done

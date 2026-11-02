@@ -9,8 +9,8 @@
 use std::fmt::Write as _;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -19,7 +19,7 @@ use rustc_hash::FxHashMap;
 
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
-use enshwick::{Relock, RelockWait};
+use enshwick::Relock;
 
 /// How often a line is written.
 pub(crate) const PERIOD: Duration = Duration::from_mins(1);
@@ -49,14 +49,10 @@ fn lines() -> &'static Lines {
     LINES.get_or_init(Lines::default)
 }
 
-/// The measuring thread and the signal that ends it.
+/// The measuring thread, which runs for the rest of the process.
 #[derive(Debug, Default)]
 struct Worker {
-    /// Whether the thread is asked to end.
-    stop: Mutex<bool>,
-    /// Wakes the thread from its wait between lines.
-    wake: Condvar,
-    /// The running thread, until it is stopped.
+    /// The running thread, once started.
     thread: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -81,20 +77,6 @@ pub(crate) fn start(wine: bool) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Ends the measuring thread and waits until it has ended; nothing when it
-/// never started.
-pub(crate) fn stop() {
-    let worker = worker();
-    *worker.stop.relock() = true;
-    worker.wake.notify_all();
-    let thread = worker.thread.relock().take();
-    if let Some(thread) = thread
-        && thread.join().is_err()
-    {
-        enshwick::warn!("measure mode ended with a panic");
-    }
-}
-
 /// Whether the measuring thread runs.
 #[cfg(test)]
 pub(crate) fn running() -> bool {
@@ -103,16 +85,6 @@ pub(crate) fn running() -> bool {
         .relock()
         .as_ref()
         .is_some_and(|thread| !thread.is_finished())
-}
-
-/// Waits `period`, or less when the thread is asked to end; whether it is.
-fn stopped_within(period: Duration) -> bool {
-    let worker = worker();
-    let (stop, _timeout) =
-        worker
-            .wake
-            .relock_wait_timeout_while(worker.stop.relock(), period, |stop| !*stop);
-    *stop
 }
 
 /// Turns measure mode on or off; `context` names the platform and what runs.
@@ -521,8 +493,8 @@ impl Meter {
     }
 }
 
-/// Measures until [`stop`]: one line every [`PERIOD`] while measure mode is
-/// on. On Windows (`wine` false) it also keeps the exact waits' slack at the
+/// Measures for the rest of the process: one line every [`PERIOD`] while
+/// measure mode is on. On Windows (`wine` false) it also keeps the exact waits' slack at the
 /// timer resolution the game set.
 fn run(wine: bool) {
     let mut meter = Meter::new();
@@ -531,9 +503,7 @@ fn run(wine: bool) {
         if !wine {
             waits::tune_for_windows();
         }
-        if stopped_within(PERIOD) {
-            return;
-        }
+        std::thread::sleep(PERIOD);
         let minute = meter.minute();
         if !workers_told {
             let game = crate::env::parse_game_log(&game_log_text());

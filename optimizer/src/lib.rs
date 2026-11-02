@@ -274,10 +274,6 @@ impl Mod for Optimizer {
             enshwick::warn!("measure mode does not run: {e}");
         }
     }
-
-    fn shutdown(&'static self) {
-        measure::stop();
-    }
 }
 
 enshwick::declare_mod!(Optimizer);
@@ -422,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn ready_starts_measuring_and_shutdown_ends_it_at_once() {
+    fn ready_starts_measuring() {
         let loader = enshwick::test::FakeHost::new()
             .side(Side::SERVER)
             .settings(
@@ -435,12 +431,6 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert!(measure::running(), "{:?}", loader.logs());
-
-        // The thread waits a minute between lines; shutdown wakes it at once.
-        let asked = std::time::Instant::now();
-        enshwick_mod_shutdown();
-        assert!(!measure::running());
-        assert!(asked.elapsed() < measure::PERIOD / 2);
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
     }
 }

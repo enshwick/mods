@@ -28,6 +28,8 @@ jobs:
     # Only main moves the public tag and saves the Windows SDK; a run by hand
     # from another branch does nothing.
     if: github.ref == 'refs/heads/main'
+    # The release environment admits main only.
+    environment: release
     # A fresh machine: what ships is built and published without the caches
     # that branch builds write to.
     runs-on: ubuntu-26.04

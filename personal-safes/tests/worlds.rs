@@ -5,15 +5,48 @@
 mod tests {
     use enshwick::abi::Status;
     use enshwick::content::EngineFacts;
+    use enshwick::content::Guid;
     use enshwick::events::{ShutdownStarted, WorldLoaded};
     use enshwick::test::FakeHost;
     use enshwick::test::facts::{self, Fact};
     use enshwick::{Entity, ItemId, PlayerKey};
     use enshwick_personal_safes::access::snapshots;
+    use enshwick_personal_safes::content;
 
     /// A loader that knows the item and recipe layouts the Safe needs.
     fn host() -> FakeHost {
+        bare()
+            .workshops()
+            .vanilla_items(&[(Guid([9; 16]), content::CHEST)])
+    }
+
+    /// The same without the vanilla chest in the item registry.
+    fn bare() -> FakeHost {
         FakeHost::new().world().items().recipes()
+    }
+
+    #[test]
+    fn without_the_wooden_chest_the_mod_turns_off_naming_it() {
+        let loader = bare()
+            .workshops()
+            .vanilla_items(&[(Guid([7; 16]), "Prop_Storage_24_T1_Box")])
+            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_ne!(status, Status::OK);
+        let faults = loader.faults();
+        assert!(
+            faults
+                .iter()
+                .any(|fault| fault.contains("the wooden chest") && fault.contains(content::CHEST)),
+            "{faults:?}"
+        );
     }
 
     /// The hash `ty` has on `host`.
@@ -137,7 +170,7 @@ mod tests {
         let placed = BuildingData {
             kind: BuildingData::PLACED,
             entity: Entity(901),
-            item: ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid()),
+            item: ItemId::from_guid(content::SAFE.guid()),
             position: [10.0, 0.0, 10.0],
             ..removed
         };
@@ -180,9 +213,7 @@ mod tests {
         ));
         let _gone = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let item = ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid())
-            .get()
-            .to_le_bytes();
+        let item = ItemId::from_guid(content::SAFE.guid()).get().to_le_bytes();
         let host = containers(host());
         let (setup, used) = (
             hash(&host, facts::INVENTORY_SETUP),
@@ -574,7 +605,7 @@ label_language = \"en\"
         let file = world.join("owners.toml");
         let damaged = "[[safes]]\ncell = [2, 0, 2]\nowner = \"00000000000000ff\"\nname = ";
         std::fs::write(&file, damaged).unwrap();
-        let safe = ItemId::from_guid(enshwick_personal_safes::content::SAFE.guid());
+        let safe = ItemId::from_guid(content::SAFE.guid());
         let host = containers(host());
         let (setup, used) = (
             hash(&host, facts::INVENTORY_SETUP),

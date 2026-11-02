@@ -6,8 +6,9 @@ use enshwick::content::items::NewItem;
 use enshwick::content::recipes::NewRecipe;
 use enshwick::content::{Guid, Id, id};
 
-/// The vanilla wooden chest item.
-pub const CHEST: Guid = Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d");
+/// The debug name of the vanilla wooden chest the Safe clones, as the item
+/// registry of server 399 and client 426 lists it.
+pub const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
 /// The Safe item.
 pub const SAFE: Id = id!("safe");
 /// The Safe's recipe.
@@ -22,22 +23,22 @@ pub fn is_safe(item: ItemId) -> bool {
     item == ItemId::from_guid(SAFE.guid())
 }
 
-/// The Safe item.
+/// The Safe item, a clone of `chest`.
 #[must_use]
-pub fn item() -> NewItem {
+pub fn item(chest: Guid) -> NewItem {
     NewItem {
         name: Some(SAFE_NAME.guid()),
         description: Some(SAFE_DESCRIPTION.guid()),
-        ..NewItem::new(SAFE, CHEST)
+        ..NewItem::new(SAFE, chest)
     }
 }
 
-/// The Safe's recipe: the chest's, its ingredients times `cost`.
+/// The Safe's recipe: `chest`'s, its ingredients times `cost`.
 #[must_use]
-pub const fn recipe(cost: u32) -> NewRecipe {
+pub const fn recipe(cost: u32, chest: Guid) -> NewRecipe {
     NewRecipe {
         id: SAFE_RECIPE,
-        like: CHEST,
+        like: chest,
         output: SAFE.guid(),
         output_count: 1,
         cost,
@@ -83,9 +84,11 @@ mod tests {
 
     #[test]
     fn the_safe_is_a_chest_with_its_own_identity() {
-        assert_ne!(SAFE.guid(), CHEST);
-        assert_eq!(item().like, CHEST);
-        assert_eq!(recipe(3).cost, 3);
-        assert_eq!(recipe(3).output, SAFE.guid());
+        let chest = Guid([9; 16]);
+        assert_ne!(SAFE.guid(), chest);
+        assert_eq!(item(chest).like, chest);
+        assert_eq!(recipe(3, chest).like, chest);
+        assert_eq!(recipe(3, chest).cost, 3);
+        assert_eq!(recipe(3, chest).output, SAFE.guid());
     }
 }

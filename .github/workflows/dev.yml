@@ -91,8 +91,8 @@ jobs:
           subject-path: ${{ runner.temp }}/dev/*
 
       # GITHUB_TOKEN cannot move a tag past a commit that changes a workflow:
-      # the enshwick-ci app can. It also starts the docs site's build.
-      - name: Token for the release and the docs site
+      # the enshwick-ci app can.
+      - name: Token for the release
         if: steps.behind.outputs.build == 'true'
         id: token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -100,10 +100,9 @@ jobs:
           client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
           private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }},docs
+          repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-workflows: write
-          permission-actions: write
 
       - name: Publish
         if: steps.behind.outputs.build == 'true'
@@ -139,9 +138,10 @@ jobs:
               --title "$title" --notes "$notes" --prerelease --latest=false
           fi
 
-      # The site shows each mod's page and its dev download.
+      # The site shows each mod's page and its dev download. It builds on
+      # Cloudflare Workers Builds, whose deploy hook builds its main again.
       - name: Start the docs site build
         if: steps.behind.outputs.build == 'true'
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: gh workflow run site.yml --repo "$GITHUB_REPOSITORY_OWNER/docs" --ref main
+          DOCS_DEPLOY_HOOK: ${{ secrets.DOCS_DEPLOY_HOOK }}
+        run: curl --fail-with-body --silent --show-error --retry 3 -X POST "$DOCS_DEPLOY_HOOK"

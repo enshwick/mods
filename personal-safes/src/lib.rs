@@ -17,6 +17,7 @@ pub mod actions;
 pub mod content;
 pub mod points;
 
+enshwick::deps!();
 enshwick::texts!();
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -288,8 +289,12 @@ impl Mod for PersonalSafes {
                 (texts::SAFE_DESCRIPTION, content::SAFE_DESCRIPTION),
             ],
         )?;
-        load.add_item(content::item())?;
-        load.add_recipe_with(|| content::recipe(cost_in_force().load(Ordering::Relaxed)))?;
+        let chest = deps::vanilla::item(content::CHEST)
+            .map_err(|e| Off::new(format!("the wooden chest: {e}")))?;
+        load.add_item(content::item(chest))?;
+        load.add_recipe_with(move || {
+            content::recipe(cost_in_force().load(Ordering::Relaxed), chest)
+        })?;
         snapshots()
             .admins_open
             .store(settings.admins_can_open, Ordering::Relaxed);
@@ -588,6 +593,8 @@ mod tests {
             .world()
             .items()
             .recipes()
+            .workshops()
+            .vanilla_items(&[(enshwick::content::Guid([9; 16]), content::CHEST)])
             .settings(
                 "cost_multiplier = 2
 label_language = \"en\"

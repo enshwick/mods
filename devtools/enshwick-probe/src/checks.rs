@@ -217,7 +217,7 @@ impl Checks {
         let first = |ty| self.world.entities(ty).first().map(|placed| placed.entity);
         let any = first(self.network_health).or_else(|| first(self.world.transform_type()));
         match any {
-            Some(entity) => Self::copy_write(&self.world, self.copy, entity),
+            Some(entity) => Self::copy_write(self.world, self.copy, entity),
             None => enshwick::info!("SKIP writes: no entity in the loaded world"),
         }
         let actor = self
@@ -242,7 +242,7 @@ impl Checks {
 
     /// Checks that a write to `entity`'s replicated health, `copy`, is
     /// refused; the write would put back the bytes it read.
-    fn copy_write(world: &World, copy: WritableType, entity: Entity) {
+    fn copy_write(world: World, copy: WritableType, entity: Entity) {
         match world.update(entity, copy, |_| ()) {
             Err(WorldError::Refused) => pass("writes: a write to the replicated health is refused"),
             other => fail(&format!(
@@ -676,6 +676,10 @@ mod tests {
 
     use super::Checks;
 
+    // The replicated health, by the engine name the probe resolves it with.
+    // ast-grep-ignore: engine-names-stay-in-loader
+    const NETWORK_HEALTH: &str = "keen::ecs::NetworkHealth";
+
     static RESOLVED: OnceLock<(World, WritableType)> = OnceLock::new();
 
     struct Copies;
@@ -683,8 +687,7 @@ mod tests {
     impl Mod for Copies {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
             let world = load.world()?;
-            // ast-grep-ignore: engine-names-stay-in-loader
-            let copy = WritableType::resolve(load, "keen::ecs::NetworkHealth")?;
+            let copy = WritableType::resolve(load, NETWORK_HEALTH)?;
             let _first = RESOLVED.set((world, copy));
             Ok(Self)
         }
@@ -702,8 +705,8 @@ mod tests {
     fn a_refused_write_to_the_replicated_health_passes() {
         let loader = enshwick::test::FakeHost::new()
             .world()
-            .type_hash("keen::ecs::NetworkHealth", 7)
-            .type_size("keen::ecs::NetworkHealth", 8)
+            .type_hash(NETWORK_HEALTH, 7)
+            .type_size(NETWORK_HEALTH, 8)
             .component(Entity(3), 7, &[0; 8])
             .refuse_write(7)
             .install();
@@ -711,7 +714,7 @@ mod tests {
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, copy) = RESOLVED.get().unwrap();
-        Checks::copy_write(world, *copy, Entity(3));
+        Checks::copy_write(*world, *copy, Entity(3));
         let logs = loader.logs();
         assert!(
             logs.iter()

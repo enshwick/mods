@@ -18,7 +18,6 @@ id = "enshwick.personal-safes"
 side = "both"
 name = "Personal Safes"
 join = true
-exports = ["access"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

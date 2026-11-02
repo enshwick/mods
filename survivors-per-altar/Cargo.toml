@@ -18,7 +18,6 @@ id = "enshwick.survivors-per-altar"
 side = "both"
 name = "Survivors per Altar"
 join = true
-exports = ["copy-limit", "charge-cost"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

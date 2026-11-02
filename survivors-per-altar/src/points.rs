@@ -1,5 +1,5 @@
 //! The extension points the mod defines; other mods write their definitions
-//! of them with `cargo enshwick point`.
+//! of them with `cargo enshwick deps`.
 
 /// How many copies of a survivor its altars hold,
 /// `enshwick.survivors-per-altar:copy-limit`: the answer is the most

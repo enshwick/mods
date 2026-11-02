@@ -1,5 +1,5 @@
 //! The extension points the mod defines; other mods write their definitions
-//! of them with `cargo enshwick point`.
+//! of them with `cargo enshwick deps`.
 
 use enshwick::{Entity, PlayerKey};
 

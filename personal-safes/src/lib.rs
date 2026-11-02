@@ -584,55 +584,10 @@ mod tests {
         use enshwick::abi::Status;
         use enshwick::events::SettingsReplaced;
 
-        let mut host = enshwick::test::FakeHost::new()
-            .type_hash("current_transform", 1)
-            .type_hash("used_item", 2);
-        for (ty, hash) in [
-            (enshwick::content::types::ITEM_INFO, 10),
-            (enshwick::content::types::ITEM_REGISTRY_RESOURCE, 11),
-            (enshwick::content::types::RECIPE_REGISTRY_RESOURCE, 12),
-        ] {
-            host = host.type_hash(ty.id(), hash);
-        }
-        for (id, size) in [
-            ("item_stat", 0x28),
-            ("recipe", 0xa8),
-            ("recipe_ingredient", 48),
-            ("recipe_stack", 24),
-        ] {
-            host = host.type_size(id, size);
-        }
-        for (id, at) in [
-            ("recipe_registry.recipes", 8),
-            ("recipe.guid", 0),
-            ("recipe.id", 0x10),
-            ("recipe.workshop_guid", 0x14),
-            ("recipe.workshop", 0x24),
-            ("recipe.input", 0x28),
-            ("recipe.output", 0x30),
-            ("recipe.required_props", 0x40),
-            ("recipe.completion", 0x5c),
-            ("recipe.debug_name", 0x78),
-            ("recipe_stack.item", 0x10),
-            ("recipe_stack.count", 0x14),
-            ("item_info.id", 0),
-            ("item_info.object", 4),
-            ("item_info.name", 0x48),
-            ("item_info.icon_image", 0x58),
-            ("item_info.description", 0x68),
-            ("item_info.flags", 0x78),
-            ("item_info.pid_entity", 0x80),
-            ("item_info.ui_values", 0x90),
-            ("item_stat.label", 0),
-            ("item_stat.format", 4),
-            ("item_stat.value", 8),
-            ("item_stat.signed", 0x24),
-            ("item_registry.refs", 0),
-            ("item_registry.names", 0x38),
-        ] {
-            host = host.constant(id, at);
-        }
-        let loader = host
+        let loader = enshwick::test::FakeHost::new()
+            .world()
+            .items()
+            .recipes()
             .settings(
                 "cost_multiplier = 2
 label_language = \"en\"

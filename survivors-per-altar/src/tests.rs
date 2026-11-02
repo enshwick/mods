@@ -1,11 +1,10 @@
 use enshwick::Entity;
-use enshwick::content::types;
+use enshwick::content::items::ItemLayout;
+use enshwick::content::{EngineFacts, types};
 use enshwick::survivors::{Answer, NpcId};
+use enshwick::test::facts::{self, Fact};
 
 use super::*;
-
-/// The type hash the fake loader gives item resources.
-const ITEM_INFO: u32 = 20;
 
 /// The survivor the lookups ask about.
 const SURVIVOR: NpcId = NpcId(7);
@@ -37,49 +36,17 @@ const fn found(entity: u32) -> Answer {
 /// A loader that knows the item layout the copy staffs need, with
 /// settings that turn copy staffs off and keep them out of loot.
 fn host() -> enshwick::test::FakeHost {
-    let mut host = enshwick::test::FakeHost::new()
-        .type_size("item_stat", 0x28)
-        .type_size("fuel_setup", 8)
-        .type_hash("fuel_setup", 24)
-        .type_hash("current_transform", 1)
-        .type_hash("used_item", 2);
-    for (ty, hash) in [
-        (types::ITEM_INFO, ITEM_INFO),
-        (types::ITEM_REGISTRY_RESOURCE, 21),
-        (types::TEMPLATE_RESOURCE, 22),
-        (types::TEMPLATE_COLLECTION_RESOURCE, 23),
-    ] {
-        host = host.type_hash(ty.id(), hash);
-    }
-    for (id, at) in [
-        ("item_info.id", 0),
-        ("item_info.object", 4),
-        ("item_info.name", 0x48),
-        ("item_info.icon_image", 0x58),
-        ("item_info.description", 0x68),
-        ("item_info.flags", 0x78),
-        ("item_info.pid_entity", 0x80),
-        ("item_info.ui_values", 0x90),
-        ("item_stat.label", 0),
-        ("item_stat.format", 4),
-        ("item_stat.value", 8),
-        ("item_stat.signed", 0x24),
-        ("item_registry.refs", 0),
-        ("item_registry.names", 0x38),
-        ("template.components", 0x10),
-        ("template_collection.templates", 0),
-        ("fuel_setup.max", 0),
-        ("fuel_setup.start", 4),
-    ] {
-        host = host.constant(id, at);
-    }
-    host.settings(
-        "per_altar = true
+    enshwick::test::FakeHost::new()
+        .world()
+        .items()
+        .meters()
+        .settings(
+            "per_altar = true
 copy_staffs = false
 copy_staff_boss_chance = 0.0
                  copy_staff_locked_chest_chance = 0.0
 ",
-    )
+        )
 }
 
 #[test]
@@ -359,19 +326,7 @@ fn old_staffs_are_renewed_in_a_hosted_game_too() {
         .constant("ecs.context_entity_world", 0x30)
         .constant("ecs.registry_type_map", 0x30)
         .constant("ecs.registry_type_map_fallback", 0x88)
-        .type_hash("inventory_setup", 3)
-        .type_hash("inventory", 4)
-        .type_hash("durability", 5)
-        .type_hash("fuel", 6)
-        .type_hash("owner", 7)
-        .constant("inventory_setup.links", 0)
-        .constant("inventory_setup.categories", 0x40)
-        .constant("inventory_setup.initialized", 0x53)
-        .constant("item_stack.count", 4)
-        .constant("item_stack.pide", 8)
-        .constant("durability.max", 2)
-        .constant("fuel.max", 2)
-        .type_size("item_stack", 12)
+        .inventory()
         .install();
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
@@ -385,19 +340,11 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
     use enshwick::abi::{InventoryOp, Status};
     use enshwick::events::WorldLoaded;
 
-    const SETUP: u32 = 3;
-    const INVENTORY: u32 = 4;
     const BUILT: u32 = 50;
     const LOOT: u32 = 51;
     const DROP: u32 = 52;
     /// The entity the game's inventory reads skip: none here.
     static NOBODY: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    let staff = staffs::copy_ids()[0];
-    let mut setup = vec![0u8; 0x54];
-    setup[0x53] = 1;
-    let mut stacks = vec![0u8; 0x60];
-    stacks[..4].copy_from_slice(&staff.get().to_le_bytes());
-    stacks[4..8].copy_from_slice(&1u32.to_le_bytes());
     let mut host = host()
         .symbol("ecs.type_index", 0x1_4064_5cc0)
         .symbol("ecs.component_read_raw", 0x1_4064_6b00)
@@ -406,41 +353,44 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
         .constant("ecs.context_entity_world", 0x30)
         .constant("ecs.registry_type_map", 0x30)
         .constant("ecs.registry_type_map_fallback", 0x88)
-        .type_hash("inventory_setup", SETUP)
-        .type_hash("inventory", INVENTORY)
-        .type_hash("durability", 5)
-        .type_hash("fuel", 6)
-        .type_hash("owner", 7)
-        .constant("inventory_setup.links", 0)
-        .constant("inventory_setup.categories", 0x40)
-        .constant("inventory_setup.initialized", 0x53)
-        .constant("item_stack.count", 4)
-        .constant("item_stack.pide", 8)
-        .constant("durability.max", 2)
-        .constant("fuel.max", 2)
-        .type_size("item_stack", 12);
-    for (id, hash) in [
-        ("player_input", 8),
-        ("npc", 9),
-        ("animal", 10),
-        ("destroy_on_loot", 11),
-        ("loot_fill", 12),
-        ("resource_node", 13),
+        .inventory()
+        .container_kinds();
+    let offset = |fact: Fact| host.offset(fact.id()).unwrap();
+    let hash = |fact: Fact| host.hash(fact.id()).unwrap();
+    let (links_at, initialized, count) = (
+        offset(facts::INVENTORY_SETUP_LINKS),
+        offset(facts::INVENTORY_SETUP_INITIALIZED),
+        offset(facts::ITEM_STACK_COUNT),
+    );
+    let (setup_type, inventory_type, used) = (
+        hash(facts::INVENTORY_SETUP),
+        hash(facts::INVENTORY),
+        hash(facts::USED_ITEM),
+    );
+    let (drop, loot_fill) = (hash(facts::DESTROY_ON_LOOT), hash(facts::LOOT_FILL));
+    let stack = host.size(facts::ITEM_STACK.id()).unwrap();
+    let staff = staffs::copy_ids()[0];
+    let mut setup = vec![0u8; (initialized + 1).max(links_at + 4)];
+    setup[initialized] = 1;
+    let mut stacks = vec![0u8; stack * 8];
+    stacks[..4].copy_from_slice(&staff.get().to_le_bytes());
+    stacks[count..count + 4].copy_from_slice(&1u32.to_le_bytes());
+    for (root, markers) in [
+        (BUILT, &[used][..]),
+        (LOOT, &[loot_fill]),
+        (DROP, &[drop, loot_fill]),
     ] {
-        host = host.type_hash(id, hash);
-    }
-    for (root, markers) in [(BUILT, &[2][..]), (LOOT, &[12]), (DROP, &[11, 12])] {
         let inventory = root + 100;
         let mut links = setup.clone();
-        links[..4].copy_from_slice(&inventory.to_le_bytes());
+        links[links_at..links_at + 4].copy_from_slice(&inventory.to_le_bytes());
         host = markers
             .iter()
             .fold(
-                host.placed(SETUP, Entity(root), [0.0; 3]),
+                host.placed(setup_type, Entity(root), [0.0; 3]),
                 |host, &marker| host.component(Entity(root), marker, &[]),
             )
-            .component(Entity(root), SETUP, &links)
-            .component(Entity(inventory), INVENTORY, &stacks);
+            .component(Entity(root), setup_type, &links)
+            .component(Entity(inventory), inventory_type, &stacks);
     }
     let loader = host.install();
     // SAFETY: the exports of `declare_mod!` above.
@@ -468,10 +418,13 @@ fn copy_staffs_take_the_survivor_s_name_in_the_game_s_language() {
     use enshwick::survivors::WorkshopSurvivor;
 
     let tag = Guid::parse("ddda8053-f1f5-49fe-aab9-2a6cd460dc47");
-    let mut info = vec![0u8; 0x60];
-    info[0x48..0x58].copy_from_slice(&tag.0);
+    let host = host();
+    let name_at = ItemLayout::resolve(&host).unwrap().name;
+    let item_info = host.hash(types::ITEM_INFO.id()).unwrap();
+    let mut info = vec![0u8; host.size(types::ITEM_INFO.id()).unwrap()];
+    info[name_at..name_at + 16].copy_from_slice(&tag.0);
     let alchemist = WorkshopSurvivor::find("alchemist").unwrap();
-    let loader = host()
+    let loader = host
         .side(Side::CLIENT)
         .settings(
             "per_altar = true
@@ -479,7 +432,7 @@ copy_staff_boss_chance = 0.0
 copy_staff_locked_chest_chance = 0.0
 ",
         )
-        .resource(alchemist.staff().key_by_hash(ITEM_INFO), info)
+        .resource(alchemist.staff().key_by_hash(item_info), info)
         .game_text(tag.fnv1a(), Language::EN_US, "Balthazar")
         .game_text(tag.fnv1a(), Language::UK_UA, "Бальтазар")
         .install();

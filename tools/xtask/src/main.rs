@@ -14,7 +14,7 @@
 //! Windows.
 //!
 //! `cargo xtask dist` builds the release DLLs and writes what a player
-//! downloads: `<package>.zip` with `mods/<package>.dll` and the license, and
+//! downloads: `<package>.zip` with `mods/<id>/<package>.dll` and the license, and
 //! the PDB beside it, for every mod in the workspace, or with `--package`
 //! for the named ones only.
 
@@ -89,6 +89,9 @@ fn run(args: &[String]) -> Result<bool, String> {
 #[derive(Debug)]
 struct Package {
     name: String,
+    /// The mod id from `[package.metadata.enshwick]`, else the name: the
+    /// folder in `mods/` its release installs into.
+    id: String,
     windows_only: bool,
     /// Whether it builds a DLL: a mod.
     cdylib: bool,
@@ -123,8 +126,12 @@ fn packages() -> Result<Vec<Package>, String> {
                         })
                     })
             };
+            let name = package["name"].as_str().unwrap_or_default().to_owned();
             Package {
-                name: package["name"].as_str().unwrap_or_default().to_owned(),
+                id: package["metadata"]["enshwick"]["id"]
+                    .as_str()
+                    .map_or_else(|| name.clone(), str::to_owned),
+                name,
                 windows_only: package["metadata"]["xtask"]["windows-only"].as_bool() == Some(true),
                 cdylib: types(&["cdylib"]),
                 lib: types(&["lib", "rlib"]),
@@ -348,7 +355,7 @@ fn dist(args: &[String]) -> Result<bool, String> {
             .join(name.replace('-', "_"));
         let entries = [
             (
-                format!("mods/{name}.dll"),
+                format!("mods/{}/{name}.dll", package.id),
                 read(&built.with_extension("dll"))?,
             ),
             ("LICENSE".to_owned(), license.clone()),

@@ -1,6 +1,6 @@
 # Build Camera
 
-Build Camera gives every player the building fly mode of the Airborne Architect
+Build Camera gives every player the building fly mode of the Flying Architect
 skill. The player needs no skill points for it.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
@@ -16,11 +16,11 @@ Everything else works as in vanilla:
   the base, be alive and not glide. Fly mode ends when one of these conditions
   stops being true.
 - Build reach is the vanilla reach, measured from the spark.
-- The skill tree still shows Airborne Architect as locked, and the mod does not
+- The skill tree still shows Flying Architect as locked, and the mod does not
   refund points spent on it.
 - Other skills and their prerequisites do not change.
 
-If a game version does not have the Airborne Architect skill where the mod
+If a game version does not have the Flying Architect skill where the mod
 expects it, the mod turns off and the Mods screen shows the reason. Fly mode
 then needs the skill, as in vanilla.
 

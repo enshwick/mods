@@ -7,7 +7,7 @@ settings:
   - key: cost_multiplier
     default: 2
     range: 1 to 100
-    meaning: The Safe costs the ingredients of the wooden chest times this.
+    meaning: The Safe costs the ingredients of the Wooden Chest times this.
     applies: at-once
   - key: admins_can_open
     default: true
@@ -20,7 +20,7 @@ settings:
     applies: at-once
 ---
 
-- The Safe is a chest you craft at the same workshop as the wooden chest.
+- The Safe is a chest you craft at the same workshop as the Wooden Chest.
 - Only you and the players you allow may open your Safe.
 - Only you pick it up or take it apart.
 - Hover over a Safe to see its owner, such as "Safe · Ann".
@@ -35,7 +35,7 @@ can switch the player off at any time, also while the player is away.
 
 ## What happens without the mod?
 
-A Safe is a wooden chest underneath. Without the mod, it is an ordinary chest
+A Safe is a Wooden Chest underneath. Without the mod, it is an ordinary chest
 with every item still in it. You cannot upgrade a Safe.
 
 ## Install

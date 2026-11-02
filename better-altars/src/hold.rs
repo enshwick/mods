@@ -17,6 +17,8 @@ use enshwick::events::{AltarsChanged, ShutdownStarted, WorldLoaded};
 use enshwick::state::{Hold, StoreError};
 use enshwick::{Load, Off};
 
+use crate::texts;
+
 /// The name of the hold's thread, which a crash report shows.
 const THREAD: &str = "better-altars-hold";
 /// How often the hold thread looks at the grouping without being woken.
@@ -24,11 +26,6 @@ const EVERY: Duration = Duration::from_secs(5);
 /// How long the loaded world stays within the game's own zones and bases
 /// before the hold goes.
 const RELEASE_AFTER: Duration = Duration::from_secs(60);
-/// The text of the hold's reason in the mod's texts.
-pub(crate) const PAST_TEXT: &str = "hold.past";
-/// The text of the reason the mod turns off when the hold's thread does not
-/// start.
-pub(crate) const THREAD_TEXT: &str = "off.thread";
 
 /// Keeps the hold on a thread of its own, woken when the altars change.
 pub(crate) fn keep(load: &mut Load<'_>) -> Result<(), Off> {
@@ -40,7 +37,7 @@ pub(crate) fn keep(load: &mut Load<'_>) -> Result<(), Off> {
     let handle = std::thread::Builder::new()
         .name(THREAD.into())
         .spawn(move || run(&hold, &running))
-        .map_err(|e| Off::text(THREAD_TEXT, &[("error", &e.to_string())]))?;
+        .map_err(|e| Off::text(texts::OFF_THREAD, &[(texts::value::ERROR, &e.to_string())]))?;
     let thread = handle.thread().clone();
     let opened = Arc::clone(&loaded);
     load.on::<WorldLoaded>(move |()| opened.store(true, Ordering::Release))?;
@@ -107,7 +104,8 @@ impl Watch {
 }
 
 /// Sets the hold for a world of `grouping` past the game's own `limit`, with
-/// [`PAST_TEXT`] for the reader and one line for a log without the mod.
+/// [`texts::HOLD_PAST`] for the reader and one line for a log without the
+/// mod.
 fn set_past(hold: &Hold, grouping: Grouping, limit: BaseLimit) -> Result<(), StoreError> {
     let [zones, bases, vanilla_zones, vanilla_bases] = [
         grouping.zones,
@@ -122,12 +120,12 @@ fn set_past(hold: &Hold, grouping: Grouping, limit: BaseLimit) -> Result<(), Sto
              {vanilla_zones} zones in {vanilla_bases} bases; without the raised limit the \
              altars past them lose their base features"
         ),
-        PAST_TEXT,
+        texts::HOLD_PAST,
         &[
-            ("zones", &zones),
-            ("bases", &bases),
-            ("vanilla_zones", &vanilla_zones),
-            ("vanilla_bases", &vanilla_bases),
+            (texts::value::ZONES, &zones),
+            (texts::value::BASES, &bases),
+            (texts::value::VANILLA_ZONES, &vanilla_zones),
+            (texts::value::VANILLA_BASES, &vanilla_bases),
         ],
     )
 }

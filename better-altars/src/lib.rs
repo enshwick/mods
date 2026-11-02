@@ -13,9 +13,7 @@ use count::{AltarCount, Count};
 use enshwick::{Load, Mod, Off};
 use zones::{AltarZones, Zones};
 
-/// The labels of the settings on the Mods screen, per language.
-#[cfg(test)]
-const TEXTS: &str = include_str!("texts.toml");
+enshwick::texts!();
 
 /// Better Altars: how many altars, then how their zones grow.
 #[enshwick::config(default)]
@@ -127,7 +125,7 @@ mod tests {
 
     #[test]
     fn every_text_exists_in_all_languages() {
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         assert_eq!(texts.untranslated(), []);
         assert_eq!(texts.missing_in(enshwick::i18n::Language::OFFERED), []);
     }
@@ -146,9 +144,9 @@ mod tests {
             .filter(|key| key != "config.doc")
             .chain(lists.map(|field| format!("{}.element", field.text)))
             .chain([enshwick::i18n::MOD_NAME, enshwick::i18n::MOD_DESCRIPTION].map(str::to_owned))
-            .chain([hold::PAST_TEXT, hold::THREAD_TEXT, count::GROUPING_TEXT].map(str::to_owned))
+            .chain([texts::HOLD_PAST, texts::OFF_THREAD, texts::OFF_GROUPING].map(str::to_owned))
             .collect();
-        let tables: toml::Table = toml::from_str(TEXTS).unwrap();
+        let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
         for (language, table) in &tables {
             let table = table.as_table().unwrap();
             for key in &keys {
@@ -251,7 +249,7 @@ mod tests {
 
     /// A reason's `text` in every offered language, its values filled in.
     fn in_every_language(text: &str) -> Vec<String> {
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         let mut parts = text.split('\t');
         let key = parts.next().unwrap();
         let args: Vec<(&str, &str)> = parts.filter_map(|arg| arg.split_once('=')).collect();
@@ -266,7 +264,7 @@ mod tests {
         let (reason, text) = held(16, 17, Duration::from_secs(10)).expect("held");
         assert!(reason.contains("16 altar zones in 17 bases"), "{reason}");
         assert!(reason.contains("lose their base features"), "{reason}");
-        assert!(text.starts_with(hold::PAST_TEXT), "{text}");
+        assert!(text.starts_with(texts::HOLD_PAST), "{text}");
     }
 
     #[test]
@@ -303,7 +301,7 @@ mod tests {
         let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(status, Status::REFUSED);
-        assert_eq!(loader.faults(), [count::GROUPING_TEXT]);
+        assert_eq!(loader.faults(), [texts::OFF_GROUPING]);
     }
 
     #[test]

@@ -12,9 +12,7 @@ use enshwick::progress::{Skill, SkillGate};
 use enshwick::state::ModLocal;
 use enshwick::{Load, Mod, Off};
 
-/// The labels and descriptions of the settings, a table per language.
-#[cfg(test)]
-const TEXTS: &str = include_str!("texts.toml");
+enshwick::texts!();
 
 /// Whether fly mode is open without the skill, for this mod life.
 static ENABLED: ModLocal<AtomicBool> = ModLocal::new();
@@ -110,13 +108,13 @@ mod tests {
 
     #[test]
     fn every_text_exists_in_all_languages() {
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         assert_eq!(texts.untranslated(), []);
     }
 
     #[test]
     fn the_mod_and_every_setting_have_their_texts() {
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         let schema = Settings::schema();
         let keys = std::iter::once(schema.text)
             .chain(

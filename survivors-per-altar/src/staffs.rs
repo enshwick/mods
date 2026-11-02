@@ -16,9 +16,7 @@ use enshwick::state::ModLocal;
 use enshwick::survivors::{WORKSHOP_SURVIVORS, WorkshopSurvivor};
 use enshwick::{ItemId, Load, Off};
 
-/// The mod's texts, per language.
-#[cfg(test)]
-pub(crate) const TEXTS: &str = include_str!("texts.toml");
+use crate::texts;
 
 /// The name every copy staff's ids derive from.
 const COPY_STAFF: Id = id!("copy-staff");
@@ -110,7 +108,7 @@ fn survivor_name(staff: &Staff, language: Language) -> String {
 
 /// Adds every copy staff and its texts; a full staff holds `charges`.
 pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<(), Off> {
-    load.add_texts(texts, &[("copy.full_charges", FULL_CHARGES)])?;
+    load.add_texts(texts, &[(texts::COPY_FULL_CHARGES, FULL_CHARGES)])?;
     let meter = FuelSetup {
         template: STAFF_ENTITY,
         max_fuel_charges: charges,
@@ -124,8 +122,8 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
     for staff in staffs() {
         let vanilla = staff.survivor.staff();
         for (template_key, tag) in [
-            ("copy.name", staff.name),
-            ("copy.description", staff.description),
+            (texts::COPY_NAME, staff.name),
+            (texts::COPY_DESCRIPTION, staff.description),
         ] {
             let tag = load.declare(tag)?;
             let translations: Vec<_> = texts.translations(template_key).collect();
@@ -219,10 +217,10 @@ mod tests {
 
     #[test]
     fn names_fill_in_the_survivor_in_all_languages() -> Result<(), Off> {
-        let texts = Texts::parse(TEXTS)?;
+        let texts = Texts::parse(texts::TOML)?;
         assert_eq!(texts.untranslated(), []);
         for language in texts.languages() {
-            for key in ["copy.name", "copy.description"] {
+            for key in [texts::COPY_NAME, texts::COPY_DESCRIPTION] {
                 let template = texts
                     .get(key, language)
                     .ok_or_else(|| Off::new(format!("{key} has no {}", language.code())))?;

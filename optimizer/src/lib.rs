@@ -37,9 +37,7 @@ mod platform;
 mod sys;
 mod waits;
 
-/// The labels and descriptions of the settings, a table per language.
-#[cfg(test)]
-const TEXTS: &str = include_str!("texts.toml");
+enshwick::texts!();
 
 /// Whether a change runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -296,7 +294,7 @@ mod tests {
     fn every_text_exists_in_all_languages() {
         use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
 
-        let texts = enshwick::i18n::Texts::parse(TEXTS).unwrap();
+        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         assert_eq!(texts.untranslated(), []);
         let schema = Settings::schema();
         let mut keys = vec![

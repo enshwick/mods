@@ -7,7 +7,8 @@
 //! its current level. The game then applies it and sends it to the player.
 //!
 //! The mark is kept per world, in
-//! `mod-data/enshwick.shared-experience/worlds/<world>/experience.toml`.
+//! `<save>-mod-data/enshwick.shared-experience/experience.toml` beside the
+//! world's save.
 
 mod share;
 
@@ -247,7 +248,7 @@ mod tests {
                 "enabled = true
 ",
             )
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds").join(key).to_str().unwrap())
             .world_key(key)
             .install();
         // SAFETY: the exports of `declare_mod!`.

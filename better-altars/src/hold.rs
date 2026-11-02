@@ -29,7 +29,7 @@ const RELEASE_AFTER: Duration = Duration::from_secs(60);
 
 /// Keeps the hold on a thread of its own, woken when the altars change.
 pub(crate) fn keep(load: &mut Load<'_>) -> Result<(), Off> {
-    let hold = Hold::new(&load.data_dir()?);
+    let hold = Hold::new(&load.mod_dir()?);
     // Following the altars is what raises `AltarsChanged`.
     let _altars = load.altars()?;
     let loaded = Arc::new(AtomicBool::new(false));
@@ -47,7 +47,7 @@ pub(crate) fn keep(load: &mut Load<'_>) -> Result<(), Off> {
 
 /// The reason a held world must not open with the vanilla grouping.
 pub(crate) fn reason(load: &Load<'_>) -> Result<Option<String>, Off> {
-    Ok(Hold::new(&load.data_dir()?).reason())
+    Ok(Hold::new(&load.mod_dir()?).reason())
 }
 
 /// What the hold thread does after a look at the grouping.

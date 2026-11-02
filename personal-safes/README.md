@@ -87,9 +87,9 @@ The texts come in every language of [texts.toml](src/texts.toml). A server can
 change or add texts in `mod-configs/enshwick.personal-safes.texts.toml`, in the
 same form.
 
-The mod keeps owners and allowed players per world, in
-`mod-data/enshwick.personal-safes/worlds/<world>/owners.toml`. Each world a
-player hosts has its own file.
+The mod keeps owners and allowed players per world, beside the world's save, in
+`<save>-mod-data/enshwick.personal-safes/owners.toml`. Each world a player
+hosts has its own file, and copying the save folder takes it along.
 
 If this file cannot be read, the mod leaves it as it is and keeps every Safe
 without a known owner locked for everyone. The log names the file. Fix or

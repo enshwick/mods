@@ -88,7 +88,7 @@ mod tests {
         .unwrap();
         let loader = host()
             .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-aa").to_str().unwrap())
             .world_key("world0-aa")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -134,7 +134,7 @@ mod tests {
         .unwrap();
         let loader = host()
             .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-cc").to_str().unwrap())
             .world_key("world0-cc")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -231,7 +231,7 @@ admins_can_open = true
 label_language = \"en\"
 ",
             )
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-bb").to_str().unwrap())
             .world_key("world0-bb")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -329,7 +329,7 @@ admins_can_open = true
 label_language = \"en\"
 ",
             )
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-dd").to_str().unwrap())
             .world_key("world0-dd")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -446,7 +446,7 @@ admins_can_open = true
 label_language = \"en\"
 ",
             )
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-ee").to_str().unwrap())
             .world_key("world0-ee")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -537,7 +537,7 @@ admins_can_open = true
 label_language = \"en\"
 ",
             )
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-ff").to_str().unwrap())
             .world_key("world0-ff")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -623,7 +623,7 @@ label_language = \"en\"
             .placed(setup, Entity(700), [20.0, 1.0, 20.0])
             .component(Entity(700), used, &safe.get().to_le_bytes())
             .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
-            .data_dir(dir.to_str().unwrap())
+            .data_dir(dir.join("worlds/world0-dd").to_str().unwrap())
             .world_key("world0-dd")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.

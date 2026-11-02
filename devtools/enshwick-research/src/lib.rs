@@ -199,11 +199,13 @@ mod tests {
     /// the status and the host to look at.
     fn start(side: Side, settings: &str) -> (Status, enshwick::test::Installed) {
         let loader = enshwick::test::FakeHost::new()
+            .developer_tools(true)
             .side(side)
             .settings(settings)
             .install();
         // SAFETY: the exports of the `declare_mod!` below.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         (status, loader)
     }
 

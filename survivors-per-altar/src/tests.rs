@@ -189,7 +189,7 @@ fn copies_answer_the_game_per_altar() {
 
     let loader = host().install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
@@ -265,7 +265,7 @@ fn a_world_with_per_altar_off_answers_as_vanilla() {
 
     let loader = host().install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
@@ -329,7 +329,7 @@ fn old_staffs_are_renewed_in_a_hosted_game_too() {
         .inventory()
         .install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
     assert!(loader.faults().is_empty());
@@ -394,7 +394,7 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
     }
     let loader = host.install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
     let mut renewed: Vec<u64> = loader
@@ -437,7 +437,7 @@ copy_staff_locked_chest_chance = 0.0
         .game_text(tag.fnv1a(), Language::UK_UA, "Бальтазар")
         .install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     let name = staffs::staffs()
         .iter()
@@ -465,7 +465,7 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
 
     let loader = host().install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
@@ -535,7 +535,7 @@ vanilla_staff_places_copies = true
         )
         .install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
@@ -601,7 +601,7 @@ copy_staff_locked_chest_chance = 0.0
         )
         .install();
     // SAFETY: the exports of `declare_mod!` above.
-    let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+    let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     assert_eq!(
         loader.defined_points(),

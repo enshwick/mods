@@ -6,7 +6,7 @@ mod tests {
     use enshwick::PlayerKey;
     use enshwick::abi::{ActionCall, Header, PlayerInfo, Status};
     use enshwick::actions::sheet::decode;
-    use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_ready};
+    use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
 
     fn player(entity: u32, key: u64, name: &str, permissions: u8) -> PlayerInfo {
         let mut info = PlayerInfo {
@@ -32,7 +32,8 @@ mod tests {
             .player(bob)
             .install();
         // SAFETY: both functions are the exports of the mod under test.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK);
         let ask = |kind, who: &PlayerInfo, action: &str, args: &str| {
             loader.ask_actions(kind, who, 0, action, args).unwrap()

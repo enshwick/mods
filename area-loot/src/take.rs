@@ -362,7 +362,13 @@ mod tests {
         // The fake lacks the inventories, which the mod links after its
         // point: it turns off, and the point stays defined.
         // SAFETY: the exports of the mod's `declare_mod!`.
-        let status = unsafe { loader.start(crate::enshwick_mod_init, crate::enshwick_mod_ready) };
+        let status = unsafe {
+            loader.start(
+                crate::enshwick_mod_query,
+                crate::enshwick_mod_init,
+                crate::enshwick_mod_ready,
+            )
+        };
         assert_ne!(status, Status::OK);
         assert_eq!(loader.defined_points(), ["enshwick.area-loot:eligible"]);
         assert!(eligible(Entity(1), Entity(2), Entity(3), 4.0));

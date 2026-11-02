@@ -137,7 +137,8 @@ mod tests {
             .constant("skill.airborne_architect", NODE.0.into())
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK);
         let ask = |node, gate| {
             loader.skill(&RawCheck {
@@ -187,7 +188,8 @@ mod tests {
             .settings("enabled = true\n")
             .install();
         // SAFETY: the exports of `declare_mod!` above.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_ne!(status, Status::OK);
         let faults = loader.faults();
         assert_eq!(faults.len(), 1, "{faults:?}");

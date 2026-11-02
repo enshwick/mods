@@ -35,6 +35,7 @@ mod tests {
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -93,6 +94,7 @@ mod tests {
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -138,6 +140,7 @@ mod tests {
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -234,6 +237,7 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -288,6 +292,7 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -330,6 +335,7 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -446,6 +452,7 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -536,6 +543,7 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )
@@ -621,6 +629,7 @@ label_language = \"en\"
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
             loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
                 enshwick_personal_safes::enshwick_mod_init,
                 enshwick_personal_safes::enshwick_mod_ready,
             )

@@ -704,6 +704,7 @@ mod tests {
     #[test]
     fn a_refused_write_to_the_replicated_health_passes() {
         let loader = enshwick::test::FakeHost::new()
+            .developer_tools(true)
             .world()
             .type_hash(NETWORK_HEALTH, 7)
             .type_size(NETWORK_HEALTH, 8)
@@ -711,7 +712,8 @@ mod tests {
             .refuse_write(7)
             .install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
-        let status = unsafe { loader.start(enshwick_mod_init, enshwick_mod_ready) };
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, copy) = RESOLVED.get().unwrap();
         Checks::copy_write(*world, *copy, Entity(3));

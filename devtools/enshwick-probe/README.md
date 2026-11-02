@@ -77,7 +77,7 @@ typed event whose fields this game build lacks shows as `FAIL typed <type>`.
 ## Actions
 
 On the mod's page of the Mods screen, for administrators, or through the
-admin tools' command file (`mod-data/enshwick.admin-tools/commands.txt`) as
+admin tools' command file (`mods/enshwick.admin-tools/commands.txt`) as
 `enshwick.probe <action> <values>`, such as `enshwick.probe vitals 4096`. The
 console has no character, so the actions on your own character work from the
 Mods screen only.

@@ -24,7 +24,7 @@ The reply under the list says what changed. Other players never see this list.
 ## How long does a mute last?
 
 A mute lasts until an administrator lifts it. It stays after the server
-restarts. The server keeps the mutes in `mod-data/enshwick/muted.txt`.
+restarts. The server keeps the mutes in `mods/enshwick/muted.txt`.
 
 ## Install
 

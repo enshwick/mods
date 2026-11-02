@@ -103,14 +103,15 @@ bases.
 The server stops before the world loads when:
 
 - a game update makes the build unknown to Enshwick;
-- the mod is missing or off;
+- the mod is off;
 - the mod cannot find its places in the game.
 
 `logs/enshwick/loader.log` says why. Update Enshwick and the mod, or remove
 altars down to 16 while the mod runs. The stop ends once the loaded world has
 had 16 altar zones or fewer, in 16 bases or fewer, for a minute. To open the
-world anyway, delete `mod-data/enshwick.better-altars/hold.txt`. The altars past
-16 then lose their base features.
+world anyway, delete `hold.txt` in the mod's folder,
+`mods/enshwick.better-altars/`; removing that folder removes it too. The
+altars past 16 then lose their base features.
 
 Only a dedicated server stops the world. A player who hosts such a world must
 keep the mod running and up to date.

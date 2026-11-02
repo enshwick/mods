@@ -230,7 +230,7 @@ mod tests {
         ));
         let loader = enshwick::test::FakeHost::new()
             .side(Side::SERVER)
-            .data_dir(dir.to_str().unwrap())
+            .mod_dir(dir.to_str().unwrap())
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status =
@@ -297,7 +297,7 @@ mod tests {
         hold.set("held").unwrap();
         let loader = enshwick::test::FakeHost::new()
             .side(Side::SERVER)
-            .data_dir(dir.to_str().unwrap())
+            .mod_dir(dir.to_str().unwrap())
             .without_base_limit()
             .install();
         // SAFETY: the exports of `declare_mod!` above.

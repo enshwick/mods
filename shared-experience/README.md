@@ -55,8 +55,8 @@ Only the server, or the player who hosts the game, needs the mod. Players
 without the mod see their experience bar fill and their level rise. The mod does
 not count in the join check.
 
-The mark of each world is saved in
-`mod-data/enshwick.shared-experience/worlds/<world>/experience.toml`. It stays
-across restarts, on a dedicated server and in a hosted game.
+The mark of each world is saved beside the world's save, in
+`<save>-mod-data/enshwick.shared-experience/experience.toml`. It stays across
+restarts, on a dedicated server and in a hosted game.
 
 Licensed under [MIT](LICENSE).

@@ -7,7 +7,8 @@
 //! an ordinary chest with every item still in it. The placed chest keeps the
 //! Safe's item id in the save, which tells the mod which chests are Safes;
 //! owners and the players they allowed are kept per world, in
-//! `mod-data/enshwick.personal-safes/worlds/<world>/owners.toml`, by position.
+//! `<save>-mod-data/enshwick.personal-safes/owners.toml` beside the world's
+//! save, by position.
 //!
 //! The refusals run on the dedicated server and, on a client, in the built-in
 //! server while it hosts a game; the client's own world is left alone.

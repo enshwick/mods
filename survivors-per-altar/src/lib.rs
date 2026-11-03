@@ -19,7 +19,6 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use enshwick::abi::Side;
-use enshwick::config::ConfigError;
 use enshwick::loot::Drop;
 use enshwick::state::ModLocal;
 use enshwick::{ItemId, Load, Mod, Off};
@@ -74,14 +73,13 @@ const fn locked_chest_chance() -> f64 {
     0.02
 }
 
-const fn full_charges() -> u16 {
-    3
-}
+/// The charges a full copy staff holds. The game takes an item's meter
+/// maximum as the item is added at init, before any world's settings.
+const FULL_CHARGES: u16 = 3;
 
-/// Survivors per altar settings, in `mod-configs/enshwick.survivors-per-altar.toml`.
+/// Survivors per altar settings, each world's own.
 #[enshwick::config]
 #[derive(Debug)]
-#[config(validate = Settings::check)]
 struct Settings {
     /// A copy of each survivor at every altar, at most one per altar zone.
     /// Off, survivors and staffs behave as in vanilla in that world. A
@@ -100,14 +98,10 @@ struct Settings {
     /// The chance a chest that needs a key or a lockpick holds one.
     #[serde(default = "locked_chest_chance")]
     copy_staff_locked_chest_chance: f64,
-    /// The charges a copy staff holds when full.
-    #[serde(default = "full_charges")]
-    #[config(range = 1..=100)]
-    copy_staff_charges: u16,
     /// The fewest charges a dropped staff holds, at random up to
-    /// the full count; 0 drops every staff full.
+    /// the full count of 3; 0 drops every staff full.
     #[serde(default)]
-    #[config(range = 0..=100)]
+    #[config(range = 0..=FULL_CHARGES)]
     copy_staff_charges_min: u16,
     /// Whether the survivor's own staff places a copy at an altar without
     /// one and moves the copy an altar has, as before copy staffs; off, it
@@ -125,23 +119,9 @@ pub(crate) struct Charges {
 }
 
 impl Settings {
-    /// Refuses a fewest count above the full one.
-    fn check(&self) -> Result<(), ConfigError> {
-        if self.copy_staff_charges_min > self.copy_staff_charges {
-            return Err(ConfigError::text(
-                texts::CONFIG_COPY_STAFF_CHARGES_MIN_ABOVE_FULL,
-                &[
-                    (texts::value::MIN, &self.copy_staff_charges_min.to_string()),
-                    (texts::value::FULL, &self.copy_staff_charges.to_string()),
-                ],
-            ));
-        }
-        Ok(())
-    }
-
     /// The staffs' charges.
     fn charges(&self) -> Charges {
-        let full = self.copy_staff_charges.max(1);
+        let full = FULL_CHARGES;
         let min = match self.copy_staff_charges_min {
             0 => full,
             min => min.min(full),
@@ -157,7 +137,6 @@ impl Default for Settings {
             copy_staffs: yes(),
             copy_staff_boss_chance: boss_chance(),
             copy_staff_locked_chest_chance: locked_chest_chance(),
-            copy_staff_charges: full_charges(),
             copy_staff_charges_min: 0,
             vanilla_staff_places_copies: false,
         }
@@ -181,9 +160,6 @@ pub struct SurvivorsPerAltar;
 
 impl Mod for SurvivorsPerAltar {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        // shortcut: the staffs and their charges come from the defaults, and
-        // each world's values apply through `apply`; charges per item instance
-        // come with the rework of settings that shape init.
         let settings = Settings::default();
         // The staffs stay in the game when they are off, so a value that
         // changes while it runs, or the server's on a joined client, finds

@@ -1,6 +1,6 @@
 //! Better Altars: how many Flame Altars each Flame level allows, up to 255 in
-//! up to 179 bases, and Flame Altar zones that touch grow together and can be
-//! built across.
+//! the game's 16 bases, and Flame Altar zones that touch grow together and can
+//! be built across.
 //!
 //! The two parts keep their settings in the groups `[count]` and `[zones]`.
 
@@ -37,12 +37,8 @@ pub struct BetterAltars {
 impl Mod for BetterAltars {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        // shortcut: init starts on the defaults and each world's values apply
-        // through `apply`; what `start` fixes from them waits for the rework of
-        // the settings that shape init.
-        let defaults = Settings::default();
-        let count = AltarCount::start(load, &defaults.count)?;
-        let zones = AltarZones::start(load, &defaults.zones)?;
+        let count = AltarCount::start(load)?;
+        let zones = AltarZones::start(load, &Zones::default())?;
         load.on_altar_limit(|limit| {
             if let Some(altars) = BetterAltars::instance() {
                 limit.allowed = altars.count.limit(limit.flame_level, limit.vanilla);
@@ -58,7 +54,6 @@ impl Mod for BetterAltars {
     }
 
     fn ready(&'static self, _host: enshwick::Host) {
-        self.count.ready();
         AltarZones::ready();
     }
 }
@@ -184,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn the_bases_asked_for_at_init_are_the_default_until_settings_shape_it_no_more() {
+    fn the_bases_asked_for_at_init_stay_the_game_s_own_whatever_a_world_s_file_holds() {
         let loader = started(Side::SERVER, "[count]\nbases = 40\n");
         assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 16)));
         assert!(loader.faults().is_empty());

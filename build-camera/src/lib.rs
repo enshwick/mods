@@ -3,8 +3,8 @@
 //! The game opens fly mode near a building zone to a character that may edit
 //! the base, is alive, not gliding, and unlocked the Airborne Architect node.
 //! This mod answers "unlocked" at the fly mode gate alone, so skill points,
-//! prerequisites and the skill tree stay vanilla. `enabled` is a join value: a
-//! joined player predicts with the server's.
+//! prerequisites and the skill tree stay vanilla. A joined player predicts with
+//! the world's `enabled`, which its server sends.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 

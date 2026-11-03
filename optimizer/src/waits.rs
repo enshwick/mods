@@ -49,7 +49,7 @@ static SLACK_NS: AtomicU64 = AtomicU64::new(0);
 /// resolution on Windows, a millisecond under Wine.
 static WAKE_NS: AtomicU64 = AtomicU64::new(MILLISECOND_NS);
 /// The longest server wait with players online, in ns.
-static CAP_NS: AtomicU64 = AtomicU64::new(VANILLA_SERVER_WAIT_NS);
+pub(crate) static CAP_NS: AtomicU64 = AtomicU64::new(VANILLA_SERVER_WAIT_NS);
 /// The clock the hooks read.
 static EPOCH: OnceLock<Instant> = OnceLock::new();
 /// When the last simulation step ran, ns after [`EPOCH`]; 0 before one.
@@ -237,37 +237,28 @@ pub(crate) fn set_cap(ms: u32) {
     CAP_NS.store(u64::from(ms.max(1)) * MILLISECOND_NS, Ordering::Relaxed);
 }
 
-/// Hooks the waits: the exact waits when `exact_waits` asks for them, the
-/// server wait when `server_loop` does. A site this build lacks is logged
-/// and left alone.
+/// Hooks the exact waits and the server wait, each idle until a world's
+/// settings turn it on. A site this build lacks is logged and left alone.
 ///
 /// # Errors
 ///
-/// [`Off`] when the loader refuses a hook it was asked for.
-pub(crate) fn link(
-    load: &mut Load<'_>,
-    exact_waits: bool,
-    server_loop: bool,
-) -> Result<Linked, Off> {
+/// [`Off`] when the loader refuses a hook.
+pub(crate) fn link(load: &mut Load<'_>) -> Result<Linked, Off> {
     let _epoch = EPOCH.get_or_init(Instant::now);
     let mut linked = Linked::default();
-    if exact_waits {
-        if sys::init() {
-            let found = load.on_loop_wait(exact)?;
-            linked.exact = found.handles;
-            linked.message = found.messages;
-            if !found.handles {
-                enshwick::warn!("exact waits: the event loop's wait was not found");
-            }
-        } else {
-            enshwick::warn!("exact waits: ntdll has no NtDelayExecution");
+    if sys::init() {
+        let found = load.on_loop_wait(exact)?;
+        linked.exact = found.handles;
+        linked.message = found.messages;
+        if !found.handles {
+            enshwick::warn!("exact waits: the event loop's wait was not found");
         }
+    } else {
+        enshwick::warn!("exact waits: ntdll has no NtDelayExecution");
     }
-    if server_loop {
-        linked.server = load.on_server_wait(server)?;
-        if !linked.server {
-            enshwick::warn!("the server loop's wait was not found");
-        }
+    linked.server = load.on_server_wait(server)?;
+    if !linked.server {
+        enshwick::warn!("the server loop's wait was not found");
     }
     Ok(linked)
 }

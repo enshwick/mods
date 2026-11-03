@@ -80,39 +80,34 @@ info  [enshwick.optimizer] measure: Wine server: exact waits on, task workers at
 
 ## Settings
 
-The settings file is `mod-configs/enshwick.optimizer.toml`. The mod writes it on
-the first start. Each world keeps its own copy (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.optimizer/settings.toml` beside its save. The
+loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
-the Mods screen shows the settings in the player's game language.
+the Mods screen shows the settings in the player's game language. The mod hooks
+every wait at start and leaves each hook idle until a world's settings turn it
+on, so every value applies when a world loads and when it changes while the
+world runs.
 
 ```toml
 exact_waits = "auto"
-task_workers = 0
 server_wait_cap_ms = 1
 measure = true
 ```
 
 - `exact_waits`: `"auto"` turns them on where the table above says on. `"on"`
-  turns them on everywhere, the game included. `"off"` turns them off. Turning
-  them off takes effect at once. Turning them on takes effect at the next start
-  if they were off at start.
-- `task_workers`: the most workers each task group of the dedicated server
-  starts, from 1 to 64. The server starts its workers once. So the mod reads
-  this value from `mod-configs/enshwick.optimizer.toml` for every world, and a
-  change takes effect at the next server start. 0 means automatic: under Wine,
-  the container's CPU limit rounded up and at least 2; otherwise as many as the
-  game picks.
+  turns them on everywhere, the game included. `"off"` turns them off.
 - `server_wait_cap_ms`: from 1 to 8. 1 is the base game. Before you keep a
   higher value, check in the game that gliding, joining, respawning and combat
-  feel the same. A change applies at once, with one exception. The mod hooks the
-  server loop's wait only at start. If the game started with the cap at 1 and
-  `measure = false`, a higher cap takes effect at the next start, and the log
-  says so.
+  feel the same.
 - `measure`: the line a minute. It costs a few atomic counters and a look at the
   threads once a minute.
 
-When a setting forces exact waits or a task worker cap where the table says off,
-the log says so.
+The task worker cap has no setting. The game starts its task workers once, before
+any world loads, so a world's settings could never change them. The mod caps them
+where the table says on.
+
+When a setting forces exact waits on where the table says off, the log says so.
 
 ## On the host
 
@@ -169,8 +164,8 @@ forced to its online wait. Each setup ran once. Under Proton the process used
 10.9 % with the defaults. The server wait cap at 4 ms took the Proton server
 from 29.6 % to 20.3 %. On Windows it changed nothing measurable, so it stays off
 until a check with real players. On a server without a CPU limit, a task worker
-cap halves idle CPU again. Its cost with players was not measured, so there it
-stays a setting.
+cap halves idle CPU again. Its cost with players was not measured, so there the
+mod leaves the game's own count.
 
 ## How to measure your own server
 
@@ -180,7 +175,7 @@ server, never the server people play on:
 1. Copy the server and its save to a test instance with the same image and tag.
 2. Start it with the change off and let it load. Keep it running a few minutes
    idle, then a few minutes with one player standing still. Note the `measure:`
-   lines in `logs/enshwick/mods/enshwick.optimizer.log`.
+   lines in `logs/enshwick.optimizer_<date>_<time>.log`.
 3. Turn the change on, restart and repeat.
 4. Compare the process and thread CPU and the Bad Performance count. On a Linux
    host, `pidstat -t -p <pid> 5` shows each thread, and
@@ -200,7 +195,7 @@ commit. Until the first release, 1.0.0, there are no other builds.
 
 The dedicated server needs it. In the game, hosted or not, every change is off
 by default, as the table shows, because none was measured there. A setting can
-force a change on. The task workers stay as the game picks them, because only
+force the exact waits or the server wait cap on. The task workers stay as the game picks them, because only
 the dedicated server lets the mod change them. Measure mode and the environment
 line run in the game too. Players need nothing, and the mod does not count in
 the join check.

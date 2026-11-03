@@ -22,15 +22,10 @@ settings:
     range: від 0 до 1
     meaning: Шанс, що скриня, яка потребує ключа чи відмички, містить посох копії. 0 вимикає це джерело.
     applies: at-once
-  - key: copy_staff_charges
-    default: 3
-    range: від 1 до 100
-    meaning: Скільки зарядів має повний посох копії.
-    applies: restart
   - key: copy_staff_charges_min
     default: 0
-    range: від 0 до 100, не більше copy_staff_charges
-    meaning: Найменше зарядів у знайденому пососі, випадково аж до повного. 0 дає кожен посох повним.
+    range: від 0 до 3
+    meaning: Найменше зарядів у знайденому пососі, випадково аж до повного. Повний посох має 3 заряди. 0 дає кожен посох повним.
     applies: at-once
   - key: vanilla_staff_places_copies
     default: false
@@ -80,4 +75,4 @@ enshwick.zip.
 
 **Щось інше пішло не так.** Відкрийте звернення в
 [репозиторії модів](https://github.com/enshwick/mods/issues).
-Додайте файли з теки `logs/enshwick/` у теці гри.
+Додайте файли з теки `logs/` у теці гри.

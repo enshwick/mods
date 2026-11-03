@@ -177,7 +177,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=818b32c847b7c2317ae953e4bd16127c58e3d7dd#818b32c847b7c2317ae953e4bd16127c58e3d7dd"
+source = "git+https://github.com/enshwick/enshwick?rev=db677aadc162c86c4492a457853dbc4212b5b09c#db677aadc162c86c4492a457853dbc4212b5b09c"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -245,7 +245,7 @@ dependencies = [
 [[package]]
 name = "enshwick-gamedata"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=818b32c847b7c2317ae953e4bd16127c58e3d7dd#818b32c847b7c2317ae953e4bd16127c58e3d7dd"
+source = "git+https://github.com/enshwick/enshwick?rev=db677aadc162c86c4492a457853dbc4212b5b09c#db677aadc162c86c4492a457853dbc4212b5b09c"
 dependencies = [
  "enshwick",
  "iced-x86",
@@ -261,7 +261,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=818b32c847b7c2317ae953e4bd16127c58e3d7dd#818b32c847b7c2317ae953e4bd16127c58e3d7dd"
+source = "git+https://github.com/enshwick/enshwick?rev=db677aadc162c86c4492a457853dbc4212b5b09c#db677aadc162c86c4492a457853dbc4212b5b09c"
 dependencies = [
  "proc-macro2",
  "quote",

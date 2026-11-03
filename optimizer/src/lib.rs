@@ -70,22 +70,13 @@ impl Switch {
 pub struct Settings {
     /// Exact short waits in the engine's event loop: "auto" on the dedicated
     /// server, on Windows and under Wine, where they were measured to help;
-    /// "on" in the game too; "off" never. Turning them off takes effect at
-    /// once; turning them on takes effect at the next start when they were
-    /// off at start.
+    /// "on" in the game too; "off" never.
     #[config(choices = [Switch::Auto, Switch::On, Switch::Off])]
     pub exact_waits: Switch,
-    /// The most worker threads each task group of the dedicated server
-    /// starts, 1 to 64. 0 is automatic: under Wine in a container with a CPU
-    /// limit, that limit rounded up and at least 2; elsewhere as many as the
-    /// game picks.
-    #[config(range = 0..=64)]
-    pub task_workers: u32,
     /// The longest the server's game loop waits between its passes while
     /// players are online, in milliseconds, 1 to 8, never past the next
     /// simulation step. 1 is vanilla. Check gliding, joining and combat
-    /// before keeping more. Raising it from 1 takes effect at the next start
-    /// when the game started with it at 1 and measure mode off.
+    /// before keeping more.
     #[config(range = 1..=8)]
     pub server_wait_cap_ms: u32,
     /// A line a minute in the log and the status summary: CPU, by thread
@@ -98,20 +89,17 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             exact_waits: Switch::Auto,
-            task_workers: 0,
             server_wait_cap_ms: 1,
             measure: true,
         }
     }
 }
 
-/// The task worker cap for the `task_workers` setting on `platform` under
-/// `limit`: `None` leaves the game's own count.
+/// The task worker cap on `platform` under `limit`: `None` leaves the game's
+/// own count. The game starts its task groups once, before any world, so no
+/// setting can choose it.
 #[must_use]
-pub(crate) fn worker_cap(setting: u32, platform: Platform, limit: Option<CpuLimit>) -> Option<u8> {
-    if setting > 0 {
-        return u8::try_from(setting).ok();
-    }
+pub(crate) fn worker_cap(platform: Platform, limit: Option<CpuLimit>) -> Option<u8> {
     if !default_on(Change::TaskWorkers, platform) {
         return None;
     }
@@ -177,13 +165,12 @@ fn apply(settings: &Settings) {
     let exact = settings
         .exact_waits
         .applies(default_on(Change::ExactWaits, found.platform));
-    if exact && !found.linked.exact {
-        enshwick::info!("exact waits: on at the next start");
-    }
+    note_forced(
+        Change::ExactWaits,
+        settings.exact_waits == Switch::On,
+        found.platform,
+    );
     waits::set_exact(exact && found.linked.exact);
-    if settings.server_wait_cap_ms > 1 && !found.linked.server {
-        enshwick::info!("server wait cap: from the next start");
-    }
     waits::set_cap(settings.server_wait_cap_ms);
     let running = running(found, settings);
     enshwick::info!(
@@ -213,10 +200,6 @@ pub struct Optimizer;
 impl Mod for Optimizer {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        // shortcut: the hooks and workers are chosen from the defaults, and each
-        // world's values apply through `apply`; installing every hook and gating
-        // it by the settings comes with the rework of settings that shape init.
-        let settings = Settings::default();
         let environment = env::Environment::probe(&measure::game_log_text());
         let wine = environment.is_wine();
         let platform = Platform::of(load.host().build().side == Side::SERVER, wine);
@@ -228,16 +211,7 @@ impl Mod for Optimizer {
         if !wine {
             waits::tune_for_windows();
         }
-        let exact = settings
-            .exact_waits
-            .applies(default_on(Change::ExactWaits, platform));
-        note_forced(
-            Change::ExactWaits,
-            settings.exact_waits == Switch::On,
-            platform,
-        );
-        note_forced(Change::TaskWorkers, settings.task_workers > 0, platform);
-        let mut workers = worker_cap(settings.task_workers, platform, environment.cpu_limit);
+        let mut workers = worker_cap(platform, environment.cpu_limit);
         if let Some(cap) = workers
             && !load.cap_task_workers(TaskWorkers::at_most(cap))?
         {
@@ -246,8 +220,7 @@ impl Mod for Optimizer {
             );
             workers = None;
         }
-        let server_loop = settings.measure || settings.server_wait_cap_ms > 1;
-        let linked = waits::link(load, exact, server_loop)?;
+        let linked = waits::link(load)?;
         enshwick::info!(
             "hooked: exact waits {}, message wait {}, server loop wait {}, task workers {}",
             linked.exact,
@@ -326,36 +299,33 @@ mod tests {
     #[test]
     fn task_workers_follow_the_cpu_limit_under_wine_only() {
         let four = Some(CpuLimit::Cpus(3.5));
-        assert_eq!(worker_cap(0, Platform::WineServer, four), Some(4));
+        assert_eq!(worker_cap(Platform::WineServer, four), Some(4));
         assert_eq!(
-            worker_cap(0, Platform::WineServer, Some(CpuLimit::Cpus(0.5))),
+            worker_cap(Platform::WineServer, Some(CpuLimit::Cpus(0.5))),
             Some(2)
         );
         assert_eq!(
-            worker_cap(0, Platform::WineServer, Some(CpuLimit::Unlimited)),
+            worker_cap(Platform::WineServer, Some(CpuLimit::Unlimited)),
             None
         );
-        assert_eq!(worker_cap(0, Platform::WineServer, None), None);
-        assert_eq!(worker_cap(0, Platform::WindowsServer, four), None);
-        assert_eq!(worker_cap(6, Platform::WindowsServer, None), Some(6));
+        assert_eq!(worker_cap(Platform::WineServer, None), None);
+        assert_eq!(worker_cap(Platform::WindowsServer, four), None);
     }
 
     #[test]
     fn the_defaults_parse_and_ranges_hold() {
         let settings: Settings = toml::from_str(&Settings::template()).unwrap();
         assert_eq!(settings.exact_waits, Switch::Auto);
-        assert_eq!(settings.task_workers, 0);
         assert_eq!(settings.server_wait_cap_ms, 1);
         assert!(settings.measure);
         assert!(settings.validate().is_ok());
-        let wide: Settings = toml::from_str(
-            "exact_waits = \"on\"\ntask_workers = 0\nserver_wait_cap_ms = 9\nmeasure = false",
-        )
-        .unwrap();
+        let wide: Settings =
+            toml::from_str("exact_waits = \"on\"\nserver_wait_cap_ms = 9\nmeasure = false")
+                .unwrap();
         assert!(wide.validate().is_err());
         assert!(
             toml::from_str::<Settings>(
-                "exact_waits = \"maybe\"\ntask_workers = 0\nserver_wait_cap_ms = 1\nmeasure = true"
+                "exact_waits = \"maybe\"\nserver_wait_cap_ms = 1\nmeasure = true"
             )
             .is_err()
         );
@@ -367,9 +337,7 @@ mod tests {
 
         let loader = enshwick::test::FakeHost::new()
             .side(Side::SERVER)
-            .settings(
-                "exact_waits = \"on\"\ntask_workers = 0\nserver_wait_cap_ms = 4\nmeasure = true\n",
-            )
+            .settings("exact_waits = \"on\"\nserver_wait_cap_ms = 4\nmeasure = true\n")
             .install();
         // SAFETY: the export of `declare_mod!` above. Without `ready` no
         // measuring thread sets the slack to the timer resolution.
@@ -406,7 +374,7 @@ mod tests {
         // Off at once.
         loader.set_settings(
             "settings",
-            "exact_waits = \"off\"\ntask_workers = 0\nserver_wait_cap_ms = 1\nmeasure = true\n",
+            "exact_waits = \"off\"\nserver_wait_cap_ms = 1\nmeasure = true\n",
         );
         assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);
         assert_eq!(loader.server_wait(online), online);
@@ -422,12 +390,45 @@ mod tests {
     }
 
     #[test]
+    fn a_world_that_turns_the_waits_on_gets_them_at_its_load_without_a_restart() {
+        use core::sync::atomic::Ordering;
+
+        let off = "exact_waits = \"off\"\nserver_wait_cap_ms = 1\nmeasure = false\n";
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::SERVER)
+            .settings(off)
+            .install();
+        // SAFETY: the export of `declare_mod!` above.
+        let status = unsafe { loader.init(enshwick_mod_init) };
+        waits::set_slack(0);
+        waits::set_wake(0);
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<events::SettingsReplaced>(&()), 1);
+        let slept = waits::SLEEPS.load(Ordering::Relaxed);
+        loader.loop_wait(0, 300_000);
+        assert_eq!(
+            waits::SLEEPS.load(Ordering::Relaxed),
+            slept,
+            "off: no sleep"
+        );
+
+        loader.set_settings(
+            "settings",
+            "exact_waits = \"on\"\nserver_wait_cap_ms = 4\nmeasure = false\n",
+        );
+        assert_eq!(loader.raise::<events::SettingsReplaced>(&()), 1);
+        loader.loop_wait(0, 300_000);
+        assert_eq!(waits::SLEEPS.load(Ordering::Relaxed), slept + 1);
+        // No step here: a later test in this process needs none to have run.
+        assert_eq!(waits::CAP_NS.load(Ordering::Relaxed), 4_000_000);
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
     fn ready_starts_measuring() {
         let loader = enshwick::test::FakeHost::new()
             .side(Side::SERVER)
-            .settings(
-                "exact_waits = \"auto\"\ntask_workers = 0\nserver_wait_cap_ms = 1\nmeasure = true\n",
-            )
+            .settings("exact_waits = \"auto\"\nserver_wait_cap_ms = 1\nmeasure = true\n")
             .install();
         // SAFETY: the exports of `declare_mod!` above, `ready` after `init`
         // returned OK.

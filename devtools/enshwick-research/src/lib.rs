@@ -1,6 +1,6 @@
 //! Development only, never shipped: logs what a running client does where
 //! the platform still needs engine facts, to
-//! `logs/enshwick/mods/enshwick.research.log`.
+//! `logs/enshwick.research_<date>_<time>.log`.
 //!
 //! Off until `enabled = true` in `settings.toml` in its own folder in `mods/`;
 //! read at start. On a client it looks at the item tooltip (which argument names the

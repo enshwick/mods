@@ -28,8 +28,9 @@ character to other worlds.
 
 ## Settings
 
-The settings file is `mod-configs/enshwick.shared-experience.toml`. The mod
-writes it on the first start. Each world keeps its own copy (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.shared-experience/settings.toml` beside its save.
+The loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
 the Mods screen shows the setting in the player's game language.
 

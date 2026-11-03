@@ -1,7 +1,7 @@
 ---
 id: enshwick.better-altars
 name: Better Altars
-summary: More Flame Altars at each Flame Level, up to 255, in up to 179 bases, and altar zones that touch grow together so friends can build side by side.
+summary: More Flame Altars at each Flame Level, up to 255, and altar zones that touch grow together so friends can build side by side.
 needs: everyone
 settings:
   - key: count.altars_per_flame_level
@@ -9,11 +9,6 @@ settings:
     range: 1 to 255 for each level
     meaning: How many altars each Flame Level allows. The first number is level 0, which comes before the Flame Level 1 a new world starts at. Later levels use the last number. An empty list keeps the usual counts.
     applies: at-once
-  - key: count.bases
-    default: 16
-    range: 16 to 179
-    meaning: How many bases a world holds. Altars whose zones touch share a base. The game refuses an altar that would start one base more.
-    applies: restart
   - key: zones.clusters
     default: true
     meaning: Altars whose zones touch grow together and share their area.
@@ -37,10 +32,7 @@ The server and every player need it.
 ## What happens past 16 altars?
 
 Up to 255 altars fit in 16 bases: altars whose zones touch share one. The game
-refuses an altar that would start a 17th base.
-
-Set `count.bases` to allow up to
-179 bases, then start the game again. Without the mod, only the first 16 altar
+refuses an altar that would start a 17th base. Without the mod, only the first 16 altar
 zones work as bases.
 
 ## Install
@@ -64,8 +56,8 @@ your bases.
 **The zones did not grow after you changed `clusters`.** Load the world again.
 
 **A dedicated server stops before a world with more than 16 altars loads.**
-Update Enshwick and the mod. `logs/enshwick/loader.log` says why.
+Update Enshwick and the mod. `logs/enshwick_<date>_<time>.log` says why.
 
 **Anything else.** Open an issue in the
 [mods repository](https://github.com/enshwick/mods/issues). Attach
-the files from the `logs/enshwick/` folder in your game folder.
+the files from the `logs/` folder in your game folder.

@@ -27,7 +27,7 @@ fn seams() -> &'static AtomicBool {
 }
 
 /// How the zones of touching altars grow and join.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 pub(crate) struct Zones {
     /// Altars whose zones touch grow together and share their area. Each

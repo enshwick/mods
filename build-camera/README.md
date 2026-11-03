@@ -26,11 +26,11 @@ then needs the skill, as in vanilla.
 
 ## Settings
 
-The settings file is `mod-configs/enshwick.build-camera.toml`. The mod writes it
-on the first start. Each world keeps its own copy (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.build-camera/settings.toml` beside its save. The
+loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The mod's gear on
-the Mods screen shows the setting in the language of the game. On the first
-start, the mod copies its settings from its old id, `build-camera`:
+the Mods screen shows the setting in the language of the game:
 
 ```toml
 enabled = true
@@ -53,7 +53,7 @@ commit. Until the first release, 1.0.0, there are no other builds.
 
 The server and every player need it. The server decides about fly mode, and the
 player's game predicts the same decision, so both must agree. The join check
-counts the mod. `enabled` is a join value: a player who joins uses the server's
-value, whatever their own file says.
+counts the mod. A player who joins uses the world's `enabled`, which the server
+sends.
 
 Licensed under [MIT](LICENSE).

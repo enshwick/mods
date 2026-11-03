@@ -56,8 +56,8 @@ your bases.
 **The zones did not grow after you changed `clusters`.** Load the world again.
 
 **A dedicated server stops before a world with more than 16 altars loads.**
-Update Enshwick and the mod. `logs/enshwick/loader.log` says why.
+Update Enshwick and the mod. `logs/enshwick_<date>_<time>.log` says why.
 
 **Anything else.** Open an issue in the
 [mods repository](https://github.com/enshwick/mods/issues). Attach
-the files from the `logs/enshwick/` folder in your game folder.
+the files from the `logs/` folder in your game folder.

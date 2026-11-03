@@ -39,7 +39,7 @@ struct Settings {
 }
 
 /// How much more the building recipes make, and of what.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 struct Recipes {
     /// The building recipes make their output times this, for the
@@ -66,7 +66,7 @@ impl Default for Recipes {
 }
 
 /// How much comfort furniture gives.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 struct Comfort {
     /// Comfort each piece of furniture gives inside a base, times this, from
@@ -84,7 +84,7 @@ impl Default for Comfort {
 
 /// Experience by where it comes from, each times its factor; the server's
 /// values decide.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 struct Experience {
     /// Experience from defeated enemies, times this.
@@ -109,7 +109,7 @@ impl Default for Experience {
 }
 
 /// How fast timed workshops produce.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 struct Workshops {
     /// How fast timed workshops produce, from 0.1 to 100: 2 halves the
@@ -125,7 +125,7 @@ impl Default for Workshops {
 }
 
 /// How much resources and random loot hand out; the server's values decide.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 struct Drops {
     /// Resources from mining, chopping and harvesting, times this.
@@ -147,7 +147,7 @@ impl Default for Drops {
 }
 
 /// How many skill points a level gives.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 struct Skills {
     /// Skill points each level gives, times this, rounded. A joined player

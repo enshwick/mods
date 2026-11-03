@@ -23,8 +23,9 @@ The reply under the list says what changed. Other players never see this list.
 
 ## How long does a mute last?
 
-A mute lasts until an administrator lifts it. It stays after the server
-restarts. The server keeps the mutes in `mods/enshwick/muted.txt`.
+A mute lasts in its world until an administrator lifts it. It stays after the
+server restarts. Each world keeps its own mutes in
+`<save>-mod-data/enshwick/muted.txt` beside its save.
 
 ## Install
 
@@ -43,4 +44,4 @@ Only the server needs Admin Tools. Players need Enshwick to see the list.
 
 **Something else goes wrong.** Open an issue in the
 [mods repository](https://github.com/enshwick/mods/issues). Attach
-the files from the `logs/enshwick/` folder in the server folder.
+the files from the `logs/` folder in the server folder.

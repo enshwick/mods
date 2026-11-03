@@ -26,8 +26,10 @@ mod tests {
     fn administrators_mute_and_unmute_a_player_and_no_one_else_may() {
         let admin = player(10, 1, "Ann", PlayerInfo::CAN_KICK_BAN);
         let bob = player(11, 2, "Bob", 0);
+        // A mute is the running world's, so the server runs one.
         let loader = enshwick::test::FakeHost::new()
             .world()
+            .world_key("world0")
             .player(admin)
             .player(bob)
             .install();

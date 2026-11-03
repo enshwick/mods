@@ -38,7 +38,7 @@ fn requested_cap() -> u8 {
 }
 
 /// How many altars each Flame level allows.
-#[enshwick::config]
+#[enshwick::config(group)]
 #[derive(Debug)]
 pub(crate) struct Count {
     /// Altars this Flame level allows, from 1 to 255; the list starts at level

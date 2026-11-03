@@ -175,7 +175,7 @@ server, never the server people play on:
 1. Copy the server and its save to a test instance with the same image and tag.
 2. Start it with the change off and let it load. Keep it running a few minutes
    idle, then a few minutes with one player standing still. Note the `measure:`
-   lines in `logs/enshwick/mods/enshwick.optimizer.log`.
+   lines in `logs/enshwick.optimizer_<date>_<time>.log`.
 3. Turn the change on, restart and repeat.
 4. Compare the process and thread CPU and the Bad Performance count. On a Linux
    host, `pidstat -t -p <pid> 5` shows each thread, and

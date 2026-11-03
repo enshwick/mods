@@ -10,8 +10,8 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 An administrator opens the pause menu, **Mods**, **Actions** and **Muted in
 chat**: a list of the players online with a switch each. A muted player's chat
 lines reach no other player, and the muted player sees a notice that says so.
-Administrators and the host are never muted, and a mute lasts across restarts
-until it is lifted. Other players never see the list, and the server checks
+Administrators and the host are never muted, and a mute lasts in its world
+across restarts until it is lifted. Other players never see the list, and the server checks
 every switch again.
 
 ## Install

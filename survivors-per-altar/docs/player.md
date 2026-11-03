@@ -76,4 +76,4 @@ or you aim outside every altar zone.
 
 **Something else goes wrong.** Open an issue in the
 [mods repository](https://github.com/enshwick/mods/issues).
-Attach the files from the `logs/enshwick/` folder in your game folder.
+Attach the files from the `logs/` folder in your game folder.

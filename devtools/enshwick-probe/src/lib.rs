@@ -1,6 +1,6 @@
 //! Development only, never shipped: exercises the platform API on a test
 //! server without a player and logs what it sees to
-//! `logs/enshwick/mods/enshwick.probe.log`, each check as a `PASS`, `FAIL`
+//! `logs/enshwick.probe_<date>_<time>.log`, each check as a `PASS`, `FAIL`
 //! or `SKIP` line.
 //!
 //! Off until `enabled = true` in `settings.toml` in its own folder in `mods/`;

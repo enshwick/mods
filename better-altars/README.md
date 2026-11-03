@@ -6,7 +6,7 @@ you can build big or build next to friends.
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 - **More altars.** Each Flame Level allows its own number of altars, up to 255,
-  in up to 179 bases. The default is twice the vanilla count, in 16 bases.
+  in the game's 16 bases. The default is twice the vanilla count.
 - **Zones that grow together.** Altars whose zones touch form a group. Each
   altar grows until the group covers as much ground as its altars would cover
   apart. A piece may stand across the seam between two zones of a group.
@@ -18,15 +18,14 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 ## How do I change the settings?
 
-Open the mod's gear on the Mods screen. The settings are in
-`mod-configs/enshwick.better-altars.toml`. The mod writes this file on first
-start, and each world keeps its own copy of it (see
+Open the mod's gear on the Mods screen. Each world keeps its settings in
+`<save>-mod-settings/enshwick.better-altars/settings.toml` beside its save. The
+loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)).
 
 ```toml
 [count]
 altars_per_flame_level = [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]
-bases = 16
 
 [zones]
 clusters = true
@@ -43,12 +42,6 @@ Each level takes 1 to 255 altars. The mod moves a value outside that range to
 the nearest limit and writes a warning in the log. Where the mod keeps the
 game's limit of 16, it lowers larger values to 16. A change applies while the
 game runs. You change the number of levels in the list in the file only.
-
-`bases` is how many bases a world holds, from 16 to 179. Each world keeps this
-value in its own settings file. The server does not send it to joined players.
-The value applies when the game starts again. A joined
-player groups the bases that the server holds. Where the game cannot hold more
-than 16 bases, the mod keeps 16 and says so in its log.
 
 ### Altar zones
 
@@ -78,11 +71,11 @@ its vanilla zone.
 
 The vanilla game puts the zones of only its first 16 altars into bases, and it
 holds 16 bases. The mod changes this grouping on the server and in every
-player's game. The game then takes up to 255 altars in up to 179 bases:
+player's game. The game then takes up to 255 altars in its 16 bases:
 
 - Altars whose zones touch, directly or through other altars, share one base, as
   in vanilla.
-- A world holds at most `bases` bases, 16 by default. An altar whose zone
+- A world holds at most 16 bases, as in vanilla. An altar whose zone
   touches no base would start one more base. The game refuses such an altar as
   "too many altars". Place it so its zone touches one of your bases.
 - One more base can still come about. Its zone allows building, but it is not a
@@ -138,8 +131,7 @@ The server and every player:
 - The server sizes the zones.
 
 The mod counts in the join check, so a player with another version cannot join.
-A player who joins runs with the server's table and its `building_across_seams`,
-whatever their own file says.
+A player who joins runs with the world's settings, which the server sends.
 
 ## How do other mods change the limit?
 

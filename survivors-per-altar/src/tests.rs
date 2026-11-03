@@ -136,25 +136,6 @@ fn a_world_s_chances_and_fewest_charges_make_its_drops() {
 }
 
 #[test]
-fn a_joined_player_takes_the_server_s_copy_staffs() {
-    use enshwick::config::Config as _;
-
-    let server = Settings {
-        copy_staffs: false,
-        ..Settings::default()
-    };
-    let synced = server.synced().unwrap();
-    assert_eq!(synced, "{ copy_staffs = false, per_altar = true }");
-    let mut joined = Settings {
-        per_altar: false,
-        ..Settings::default()
-    };
-    joined.merge_synced(&synced).unwrap();
-    assert!(!joined.copy_staffs);
-    assert!(joined.per_altar, "the server's world keeps copies");
-}
-
-#[test]
 fn a_dropped_staff_holds_from_the_fewest_to_full_charges() {
     let with = |full, min| Settings {
         copy_staff_charges: full,
@@ -191,6 +172,8 @@ fn copies_answer_the_game_per_altar() {
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
         info.entity = Entity(entity);
@@ -267,6 +250,8 @@ fn a_world_with_per_altar_off_answers_as_vanilla() {
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
         info.entity = Entity(entity);
@@ -285,6 +270,7 @@ fn a_world_with_per_altar_off_answers_as_vanilla() {
         "per altar: a copy at the other altar"
     );
     loader.set_settings(
+        "settings",
         "per_altar = false
 copy_staffs = false
 copy_staff_boss_chance = 0.0
@@ -331,6 +317,8 @@ fn old_staffs_are_renewed_in_a_hosted_game_too() {
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
     assert!(loader.faults().is_empty());
 }
@@ -396,6 +384,8 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     assert_eq!(loader.raise::<WorldLoaded>(&()), 1, "{:?}", loader.logs());
     let mut renewed: Vec<u64> = loader
         .inventory_requests()
@@ -439,6 +429,8 @@ copy_staff_locked_chest_chance = 0.0
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let name = staffs::staffs()
         .iter()
         .find(|s| s.key() == "alchemist")
@@ -467,6 +459,8 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
         info.entity = Entity(entity);
@@ -537,6 +531,8 @@ vanilla_staff_places_copies = true
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
         info.entity = Entity(entity);
@@ -603,6 +599,8 @@ copy_staff_locked_chest_chance = 0.0
     // SAFETY: the exports of `declare_mod!` above.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
+    // The world loads, and its settings apply.
+    let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     assert_eq!(
         loader.defined_points(),
         [

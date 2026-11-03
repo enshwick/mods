@@ -86,7 +86,6 @@ struct Settings {
     /// A copy of each survivor at every altar, at most one per altar zone.
     /// Off, survivors and staffs behave as in vanilla in that world. A
     /// joined player runs with the server's value.
-    #[config(startup, sync)]
     per_altar: bool,
     /// Copy staffs: one per workshop survivor. Each new copy it places
     /// spends a charge and the last charge uses the staff up; moving the
@@ -94,30 +93,26 @@ struct Settings {
     /// staffs already held stay. A joined player runs with the server's
     /// value.
     #[serde(default = "yes")]
-    #[config(sync)]
     copy_staffs: bool,
     /// The chance a boss's corpse holds a copy staff, from 0 to 1.
     #[serde(default = "boss_chance")]
-    #[config(runtime)]
     copy_staff_boss_chance: f64,
     /// The chance a chest that needs a key or a lockpick holds one.
     #[serde(default = "locked_chest_chance")]
-    #[config(runtime)]
     copy_staff_locked_chest_chance: f64,
     /// The charges a copy staff holds when full.
     #[serde(default = "full_charges")]
-    #[config(restart, range = 1..=100)]
+    #[config(range = 1..=100)]
     copy_staff_charges: u16,
     /// The fewest charges a dropped staff holds, at random up to
     /// the full count; 0 drops every staff full.
     #[serde(default)]
-    #[config(runtime, range = 0..=100)]
+    #[config(range = 0..=100)]
     copy_staff_charges_min: u16,
     /// Whether the survivor's own staff places a copy at an altar without
     /// one and moves the copy an altar has, as before copy staffs; off, it
     /// moves the survivor itself, as in vanilla.
     #[serde(default)]
-    #[config(runtime)]
     vanilla_staff_places_copies: bool,
 }
 
@@ -186,13 +181,15 @@ pub struct SurvivorsPerAltar;
 
 impl Mod for SurvivorsPerAltar {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let settings: Settings = load.config()?;
+        // shortcut: the staffs and their charges come from the defaults, and
+        // each world's values apply through `apply`; charges per item instance
+        // come with the rework of settings that shape init.
+        let settings = Settings::default();
         // The staffs stay in the game when they are off, so a value that
         // changes while it runs, or the server's on a joined client, finds
         // them.
         let loot = copy_staffs(load, &settings)?;
-        apply(&settings, &loot);
-        load.on_config_change(move |settings: Settings| apply(&settings, &loot))?;
+        load.on_settings_change(move |settings: &Settings| apply(settings, &loot))?;
         let staffs = policy::Staffs {
             charges: settings.charges(),
         };

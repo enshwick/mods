@@ -44,19 +44,17 @@ use crate::actions::Phrases;
 use enshwick::Relock;
 
 /// Safe settings.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 #[config(validate = Settings::check)]
 struct Settings {
     /// The Safe costs the wooden chest's ingredients times this. A joined
     /// player's crafting menu shows the server's value.
-    #[config(sync, range = 1..=100)]
+    #[config(range = 1..=100)]
     cost_multiplier: u32,
     /// Whether the server's administrators may open, remove and rename every Safe.
-    #[config(runtime)]
     admins_can_open: bool,
     /// The language of the owner's name on a Safe: "en", "uk", "de", ...
-    #[config(runtime)]
     label_language: String,
 }
 
@@ -279,7 +277,8 @@ pub struct PersonalSafes;
 
 impl Mod for PersonalSafes {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let settings: Settings = load.config()?;
+        // Each world's values follow through `guard`'s settings handler.
+        let settings = Settings::default();
         let cost = settings.cost_multiplier;
         cost_in_force().store(cost, Ordering::Relaxed);
         let texts = load.texts()?;
@@ -354,7 +353,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         })?;
         enshwick::info!("the Safe's checks act while this client hosts a game");
     }
-    load.on_config_change(move |settings: Settings| {
+    load.on_settings_change(move |settings: &Settings| {
         snapshots()
             .admins_open
             .store(settings.admins_can_open, Ordering::Relaxed);
@@ -606,9 +605,16 @@ label_language = \"en\"
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.rebuilds().len(), 1, "the registry may be rebuilt");
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        assert_eq!(
+            cost_in_force().load(Ordering::Relaxed),
+            2,
+            "the world's cost"
+        );
         let allowed = loader.rebuilds().len();
-        assert_eq!(allowed, 1, "the registry may be rebuilt");
         loader.set_settings(
+            "settings",
             "cost_multiplier = 2
 label_language = \"en\"
 ",
@@ -620,6 +626,7 @@ label_language = \"en\"
             "the same cost: no rebuild"
         );
         loader.set_settings(
+            "settings",
             "cost_multiplier = 5
 label_language = \"uk\"
 ",

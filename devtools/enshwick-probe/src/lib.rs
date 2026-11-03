@@ -3,8 +3,8 @@
 //! `logs/enshwick/mods/enshwick.probe.log`, each check as a `PASS`, `FAIL`
 //! or `SKIP` line.
 //!
-//! Off until `enabled = true` in `mod-configs/enshwick.probe.toml`; read at
-//! start. While on, it counts every game event by type and logs the counts
+//! Off until `enabled = true` in `settings.toml` in its own folder in `mods/`;
+//! read at start. While on, it counts every game event by type and logs the counts
 //! every minute, logs each typed game event it receives, and runs its checks
 //! once the world has loaded: world key, entity queries, stats, component
 //! writes, actions, spawns, a per-world store and a save on demand. Its
@@ -55,7 +55,7 @@ const CHECK_DELAY: Duration = Duration::from_secs(10);
 const NOTICE: &str = "Probe notice";
 
 /// Probe settings, read at start.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug, Default)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -63,21 +63,16 @@ const NOTICE: &str = "Probe notice";
 )]
 struct Settings {
     /// Exercise the platform API and log what it sees; development only.
-    #[config(restart)]
     enabled: bool,
     /// Refuse every craft request, to see the craft filter in game.
-    #[config(restart)]
     refuse_crafting: bool,
     /// Refuse every placement, to see the build filter in game.
-    #[config(restart)]
     refuse_building: bool,
     /// Halve every damage, to see the damage filter in game.
-    #[config(restart)]
     soften_damage: bool,
     /// Keep the bosses' health at 1.25 for the next start, to see a kept
     /// game setting come back with the world; the next run with this on
     /// forgets it. Off, a run keeps and forgets it at once.
-    #[config(restart)]
     keep_across_restart: bool,
 }
 
@@ -323,9 +318,25 @@ fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> 
     })
 }
 
+/// This machine's switches, `settings.toml` in the mod's own folder, which the
+/// mod reads itself: a developer mod keeps no world settings. The defaults
+/// without the file, or with a file that does not read.
+fn own_settings<T: enshwick::config::Config>(load: &Load<'_>) -> T {
+    let Ok(path) = load.mod_dir().map(|dir| dir.join("settings.toml")) else {
+        return T::default();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return T::default();
+    };
+    toml::from_str(&text).unwrap_or_else(|e| {
+        enshwick::warn!("{}: {e}; the defaults apply", path.display());
+        T::default()
+    })
+}
+
 impl Mod for Probe {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let settings: Settings = load.config()?;
+        let settings: Settings = own_settings(load);
         if !settings.enabled {
             return Ok(Self);
         }
@@ -416,10 +427,14 @@ mod tests {
 
     /// Starts the probe on a fake host with `settings`; the status and the
     /// host to look at.
+    /// The mod started with `settings` as the file in its own folder.
     fn start(settings: &str) -> (Status, enshwick::test::Installed) {
+        let dir = std::env::temp_dir().join(format!("enshwick-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("settings.toml"), settings).unwrap();
         let loader = enshwick::test::FakeHost::new()
             .developer_tools(true)
-            .settings(settings)
+            .mod_dir(dir.to_str().unwrap())
             .install();
         // SAFETY: the exports of the `declare_mod!` below.
         let status =

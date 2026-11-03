@@ -31,7 +31,6 @@ struct Settings {
     /// Airborne Architect skill. The vanilla limits stay: near a building
     /// zone, allowed to edit the base, alive and not gliding.
     /// A joined player runs with the server's value.
-    #[config(sync)]
     enabled: bool,
 }
 
@@ -74,7 +73,7 @@ fn apply(settings: &Settings) {
 impl Mod for BuildCamera {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        load.apply_config(apply)?;
+        load.on_settings_change(apply)?;
         load.on_skill(Skill::AirborneArchitect, |check| {
             lifts(check.gate, enabled().load(Ordering::Relaxed))
         })?;
@@ -96,14 +95,9 @@ mod tests {
     const NODE: SkillNode = SkillNode(0x51);
 
     #[test]
-    fn enabled_is_the_join_value_and_on_by_default() {
+    fn enabled_is_on_by_default() {
         let settings: Settings = toml::from_str(&Settings::template()).unwrap();
         assert!(settings.enabled);
-        let synced = settings.synced().unwrap();
-        assert_eq!(synced, "{ enabled = true }");
-        let mut local: Settings = toml::from_str("enabled = true").unwrap();
-        local.merge_synced("{ enabled = false }").unwrap();
-        assert!(!local.enabled);
     }
 
     #[test]
@@ -131,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn the_gate_follows_the_settings_and_the_servers_join_value() {
+    fn the_gate_follows_the_world_s_settings() {
         let loader = enshwick::test::FakeHost::new()
             .settings("enabled = true\n")
             .constant("skill.airborne_architect", NODE.0.into())
@@ -162,20 +156,20 @@ mod tests {
             "another node stays vanilla"
         );
 
-        loader.set_server_synced(Some("{ enabled = false }"));
-        assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);
+        loader.set_settings("settings", "enabled = false\n");
+        assert_eq!(loader.raise::<events::SettingsReplaced>(&()), 1);
         assert_eq!(
             ask(NODE, RawCheck::FLY_MODE),
             RawCheck::VANILLA,
-            "the server turned it off"
+            "the world turned it off"
         );
 
-        loader.set_server_synced(None);
+        loader.set_settings("settings", "enabled = true\n");
         assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);
         assert_eq!(
             ask(NODE, RawCheck::FLY_MODE),
             RawCheck::UNLOCKED,
-            "the file's value again"
+            "a change while the world runs"
         );
         assert!(loader.faults().is_empty());
     }

@@ -17,13 +17,12 @@ enshwick::texts!();
 #[derive(Debug)]
 struct Settings {
     /// Metres across the ground from the emptied container.
-    #[config(runtime, range = 0.1..=50.0)]
+    #[config(range = 0.1..=50.0)]
     radius: f32,
     /// Metres above or below the emptied container.
-    #[config(runtime, range = 0.1..=20.0)]
+    #[config(range = 0.1..=20.0)]
     height: f32,
     /// Take the loot around; false leaves looting vanilla.
-    #[config(runtime)]
     enabled: bool,
 }
 
@@ -56,7 +55,7 @@ pub struct AreaLoot;
 impl Mod for AreaLoot {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        load.apply_config(|settings: &Settings| {
+        load.on_settings_change(|settings: &Settings| {
             take::apply(settings);
             describe(settings);
         })?;

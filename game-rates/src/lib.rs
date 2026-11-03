@@ -15,7 +15,7 @@ use crate::recipes::Category;
 enshwick::texts!();
 
 /// Game rates: building recipes, furniture comfort, then the game's rates.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug, Default)]
 struct Settings {
     /// The building recipes: how much more they make, and of what.
@@ -39,21 +39,18 @@ struct Settings {
 }
 
 /// How much more the building recipes make, and of what.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 struct Recipes {
     /// The building recipes make their output times this, for the
     /// same cost. A joined player runs with the server's value.
-    #[config(sync, range = 2..=100)]
+    #[config(range = 2..=100)]
     multiplier: u32,
     /// Building blocks and roofs make more.
-    #[config(sync)]
     blocks: bool,
     /// Overgrowth materials make more.
-    #[config(sync)]
     overgrowth: bool,
     /// Decor and furniture make more.
-    #[config(sync)]
     decor: bool,
 }
 
@@ -69,13 +66,13 @@ impl Default for Recipes {
 }
 
 /// How much comfort furniture gives.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 struct Comfort {
     /// Comfort each piece of furniture gives inside a base, times this, from
     /// 0 to 100: 1 is vanilla, 0 takes all comfort from furniture. The
     /// server's value decides.
-    #[config(runtime, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     multiplier: f32,
 }
 
@@ -87,17 +84,17 @@ impl Default for Comfort {
 
 /// Experience by where it comes from, each times its factor; the server's
 /// values decide.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 struct Experience {
     /// Experience from defeated enemies, times this.
-    #[config(runtime, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     combat: f32,
     /// Experience from mining, times this.
-    #[config(runtime, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     mining: f32,
     /// Experience from exploration, lore, quests and item sets, times this.
-    #[config(runtime, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     exploration: f32,
 }
 
@@ -112,12 +109,12 @@ impl Default for Experience {
 }
 
 /// How fast timed workshops produce.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 struct Workshops {
     /// How fast timed workshops produce, from 0.1 to 100: 2 halves the
     /// time. A joined player runs with the server's value.
-    #[config(sync, range = 0.1..=MAX_FACTOR)]
+    #[config(range = 0.1..=MAX_FACTOR)]
     speed: f32,
 }
 
@@ -128,15 +125,15 @@ impl Default for Workshops {
 }
 
 /// How much resources and random loot hand out; the server's values decide.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 struct Drops {
     /// Resources from mining, chopping and harvesting, times this.
-    #[config(runtime, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     resources: f32,
     /// Each stack of random loot in chests, corpses and animals, times
     /// this, up to the item's stack size.
-    #[config(runtime, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     loot: f32,
 }
 
@@ -150,12 +147,12 @@ impl Default for Drops {
 }
 
 /// How many skill points a level gives.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 struct Skills {
     /// Skill points each level gives, times this, rounded. A joined player
     /// runs with the server's value.
-    #[config(sync, range = 0.0..=MAX_FACTOR)]
+    #[config(range = 0.0..=MAX_FACTOR)]
     points: f32,
 }
 
@@ -278,7 +275,7 @@ impl Mod for GameRates {
         load.texts()?;
         let rates = Rates::declare(load);
         // The loader rebuilds the recipes when a recipe output rate changes.
-        load.apply_config(move |settings: &Settings| settings.apply(&rates))?;
+        load.on_settings_change(move |settings: &Settings| settings.apply(&rates))?;
         Ok(Self)
     }
 }
@@ -301,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn the_default_settings_parse_and_only_what_clients_count_syncs() {
+    fn the_default_settings_parse() {
         let settings: Settings = toml::from_str(&Settings::template()).unwrap();
         assert_eq!(settings.recipes.multiplier, 2);
         assert!(settings.recipes.blocks && settings.recipes.overgrowth && settings.recipes.decor);
@@ -310,27 +307,6 @@ mod tests {
         assert!((settings.workshops.speed - 1.0).abs() < f32::EPSILON);
         assert!((settings.skills.points - 1.0).abs() < f32::EPSILON);
         assert!(settings.validate().is_ok());
-        let synced = settings.synced().unwrap();
-        for key in [
-            "multiplier",
-            "blocks",
-            "overgrowth",
-            "decor",
-            "speed",
-            "points",
-        ] {
-            assert!(synced.contains(key), "{key} in {synced}");
-        }
-        for key in [
-            "comfort",
-            "combat",
-            "mining",
-            "exploration",
-            "resources",
-            "loot",
-        ] {
-            assert!(!synced.contains(key), "{key} in {synced}");
-        }
     }
 
     #[test]
@@ -347,6 +323,8 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        // The world loads, and its settings apply.
+        let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
         let combat = Rate::Experience(ExperienceGroup::Combat);
         assert_eq!(loader.rate(combat), Some(3.0));
         assert_eq!(
@@ -357,7 +335,7 @@ mod tests {
         assert_eq!(loader.rate(Rate::SkillPoints), Some(1.5));
         assert_eq!(loader.rate(Rate::FactoryProductionSpeed), Some(1.0));
         assert_eq!(loader.rate(Rate::Comfort), Some(2.0));
-        loader.set_settings("[experience]\ncombat = 0.5\n");
+        loader.set_settings("settings", "[experience]\ncombat = 0.5\n");
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
         assert_eq!(loader.rate(combat), Some(0.5));
         assert_eq!(loader.rate(Rate::Loot), Some(1.0));
@@ -379,6 +357,8 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        // The world loads, and its settings apply.
+        let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
         for &kind in RecipeKind::ALL {
             let expected = match recipes::category(kind) {
                 Some(Category::Blocks) => Some(4.0),
@@ -402,12 +382,14 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        // The world loads, and its settings apply.
+        let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
         assert_eq!(loader.rate(Rate::Loot), None);
         assert_eq!(loader.rate(Rate::Comfort), Some(2.0));
     }
 
     #[test]
-    fn a_joined_server_s_values_and_leaving_set_the_recipe_rates() {
+    fn the_values_of_the_world_that_loads_set_the_recipe_rates() {
         use enshwick::abi::Status;
         use enshwick::events::SettingsChanged;
         use enshwick::rates::Rate;
@@ -423,18 +405,17 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
-        loader.set_server_synced(Some("{ recipes = { multiplier = 5, decor = false } }"));
+        // The world loads, and its settings apply.
+        let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
+        assert_eq!(loader.rate(BLOCKS), Some(2.0));
+        loader.set_settings("settings", "[recipes]\nmultiplier = 5\ndecor = false\n");
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
         assert_eq!(loader.rate(BLOCKS), Some(5.0));
         assert_eq!(
             loader.rate(DECOR),
             Some(1.0),
-            "the server keeps decor vanilla"
+            "the world keeps decor vanilla"
         );
-        loader.set_server_synced(None);
-        assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
-        assert_eq!(loader.rate(BLOCKS), Some(2.0));
-        assert_eq!(loader.rate(DECOR), Some(2.0));
         assert!(loader.faults().is_empty());
     }
 
@@ -450,9 +431,11 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        // The world loads, and its settings apply.
+        let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
         assert_eq!(loader.comfort(&comfort(3)), 6, "twice by default");
         let rebuilds = loader.rebuilds().len();
-        loader.set_settings("[comfort]\nmultiplier = 1.5\n");
+        loader.set_settings("settings", "[comfort]\nmultiplier = 1.5\n");
         assert_eq!(loader.raise::<SettingsChanged>(&()), 1);
         assert_eq!(loader.comfort(&comfort(3)), 5);
         assert_eq!(loader.rebuilds().len(), rebuilds, "no recipe changed");

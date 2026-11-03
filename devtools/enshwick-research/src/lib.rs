@@ -2,8 +2,8 @@
 //! the platform still needs engine facts, to
 //! `logs/enshwick/mods/enshwick.research.log`.
 //!
-//! Off until `enabled = true` in `mod-configs/enshwick.research.toml`; read
-//! at start. On a client it looks at the item tooltip (which argument names the
+//! Off until `enabled = true` in `settings.toml` in its own folder in `mods/`;
+//! read at start. On a client it looks at the item tooltip (which argument names the
 //! hovered item), at the interface (scroll areas, tab bars, text input) and
 //! at join attempts (what a refused join leaves behind). On both sides it
 //! logs the entities near each player, so a client's and a server's log can
@@ -52,50 +52,41 @@ struct Settings {
     /// Log what the client does where the platform needs engine facts;
     /// development only.
     #[serde(default)]
-    #[config(client)]
     enabled: bool,
     /// Look at the item tooltip: what each of its functions is handed.
     #[serde(default = "yes")]
-    #[config(client)]
     tooltip: bool,
     /// Look at the interface: scroll areas, tab bars and text input.
     #[serde(default = "yes")]
-    #[config(client)]
     ui: bool,
     /// Look at join attempts and the menus after them.
     #[serde(default = "yes")]
-    #[config(client)]
     join: bool,
     /// Log the entities near each player every five seconds, on the client
     /// and on the server, with their ids, templates and positions.
     #[serde(default = "yes")]
-    #[config(client)]
     entities: bool,
     /// Log the health the game's impact programs set, outside hits: heals,
     /// revives, scripted kills; on the client and on the server.
     #[serde(default = "yes")]
-    #[config(client)]
     impact_health: bool,
     /// Look for threads on fibers for five minutes after the start.
     #[serde(default = "yes")]
-    #[config(client)]
     fibers: bool,
     /// Log every unlock and refund of a skill node.
     #[serde(default = "yes")]
-    #[config(client)]
     skills: bool,
     /// Log each player's spawn target when it changes; on the server.
     #[serde(default = "yes")]
-    #[config(client)]
     respawn: bool,
     /// The least time between two dumps of one tooltip function, in
     /// milliseconds, unless a mark comes between.
     #[serde(default = "interval_ms")]
-    #[config(client, range = 0..=60_000)]
+    #[config(range = 0..=60_000)]
     dump_interval_ms: u64,
     /// The most tooltip dumps between two marks.
     #[serde(default = "max_dumps")]
-    #[config(client, range = 1..=100_000)]
+    #[config(range = 1..=100_000)]
     max_dumps: u32,
 }
 
@@ -117,6 +108,22 @@ impl Default for Settings {
     }
 }
 
+/// This machine's switches, `settings.toml` in the mod's own folder, which the
+/// mod reads itself: a developer mod keeps no world settings. The defaults
+/// without the file, or with a file that does not read.
+fn own_settings<T: enshwick::config::Config>(load: &Load<'_>) -> T {
+    let Ok(path) = load.mod_dir().map(|dir| dir.join("settings.toml")) else {
+        return T::default();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return T::default();
+    };
+    toml::from_str(&text).unwrap_or_else(|e| {
+        enshwick::warn!("{}: {e}; the defaults apply", path.display());
+        T::default()
+    })
+}
+
 /// The research mod: whether it looks for fibers once ready.
 #[derive(Debug)]
 pub struct Research {
@@ -125,7 +132,7 @@ pub struct Research {
 
 impl Mod for Research {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-        let settings: Settings = load.config()?;
+        let settings: Settings = own_settings(load);
         if !settings.enabled {
             return Ok(Self { fibers: false });
         }
@@ -197,11 +204,15 @@ mod tests {
 
     /// Starts the research mod on a fake host of `side` with `settings`;
     /// the status and the host to look at.
+    /// The mod started on `side` with `settings` as the file in its own folder.
     fn start(side: Side, settings: &str) -> (Status, enshwick::test::Installed) {
+        let dir = std::env::temp_dir().join(format!("enshwick-research-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("settings.toml"), settings).unwrap();
         let loader = enshwick::test::FakeHost::new()
             .developer_tools(true)
             .side(side)
-            .settings(settings)
+            .mod_dir(dir.to_str().unwrap())
             .install();
         // SAFETY: the exports of the `declare_mod!` below.
         let status =

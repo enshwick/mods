@@ -29,7 +29,6 @@ enshwick::texts!();
 #[derive(Debug)]
 struct Settings {
     /// Every character catches up with the one furthest ahead in experience.
-    #[config(runtime)]
     enabled: bool,
 }
 
@@ -162,7 +161,7 @@ pub struct SharedExperience;
 impl Mod for SharedExperience {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        load.apply_config(|settings: &Settings| {
+        load.on_settings_change(|settings: &Settings| {
             shared().enabled.store(settings.enabled, Ordering::Relaxed);
             enshwick::info!("shared experience {}", on_off(settings.enabled));
         })?;

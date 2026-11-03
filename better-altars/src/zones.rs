@@ -27,16 +27,14 @@ fn seams() -> &'static AtomicBool {
 }
 
 /// How the zones of touching altars grow and join.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 pub(crate) struct Zones {
     /// Altars whose zones touch grow together and share their area. Each
     /// world's own value applies when it loads.
-    #[config(startup)]
     pub(crate) clusters: bool,
     /// Pieces may be placed across the seams between the zones of one cluster.
     /// A joined player runs with the server's value.
-    #[config(sync)]
     pub(crate) building_across_seams: bool,
 }
 

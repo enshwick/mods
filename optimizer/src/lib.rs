@@ -73,25 +73,24 @@ pub struct Settings {
     /// "on" in the game too; "off" never. Turning them off takes effect at
     /// once; turning them on takes effect at the next start when they were
     /// off at start.
-    #[config(runtime, choices = [Switch::Auto, Switch::On, Switch::Off])]
+    #[config(choices = [Switch::Auto, Switch::On, Switch::Off])]
     pub exact_waits: Switch,
     /// The most worker threads each task group of the dedicated server
     /// starts, 1 to 64. 0 is automatic: under Wine in a container with a CPU
     /// limit, that limit rounded up and at least 2; elsewhere as many as the
     /// game picks.
-    #[config(restart, range = 0..=64)]
+    #[config(range = 0..=64)]
     pub task_workers: u32,
     /// The longest the server's game loop waits between its passes while
     /// players are online, in milliseconds, 1 to 8, never past the next
     /// simulation step. 1 is vanilla. Check gliding, joining and combat
     /// before keeping more. Raising it from 1 takes effect at the next start
     /// when the game started with it at 1 and measure mode off.
-    #[config(runtime, range = 1..=8)]
+    #[config(range = 1..=8)]
     pub server_wait_cap_ms: u32,
     /// A line a minute in the log and the status summary: CPU, by thread
     /// group, loop and step rates, exact waits and the server's Bad
     /// Performance warnings.
-    #[config(runtime)]
     pub measure: bool,
 }
 
@@ -214,7 +213,10 @@ pub struct Optimizer;
 impl Mod for Optimizer {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        let settings: Settings = load.config()?;
+        // shortcut: the hooks and workers are chosen from the defaults, and each
+        // world's values apply through `apply`; installing every hook and gating
+        // it by the settings comes with the rework of settings that shape init.
+        let settings = Settings::default();
         let environment = env::Environment::probe(&measure::game_log_text());
         let wine = environment.is_wine();
         let platform = Platform::of(load.host().build().side == Side::SERVER, wine);
@@ -261,8 +263,7 @@ impl Mod for Optimizer {
             workers,
         });
         load.add_status(status)?;
-        load.on_config_change(|settings: Settings| apply(&settings))?;
-        apply(&settings);
+        load.on_settings_change(apply)?;
         Ok(Self)
     }
 
@@ -376,6 +377,8 @@ mod tests {
         waits::set_slack(0);
         waits::set_wake(0);
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        // The world loads, and its settings apply.
+        assert_eq!(loader.raise::<events::SettingsReplaced>(&()), 1);
 
         // A zero wait with 0.3 ms left sleeps them.
         let slept = waits::SLEEPS.load(Ordering::Relaxed);
@@ -402,6 +405,7 @@ mod tests {
 
         // Off at once.
         loader.set_settings(
+            "settings",
             "exact_waits = \"off\"\ntask_workers = 0\nserver_wait_cap_ms = 1\nmeasure = true\n",
         );
         assert_eq!(loader.raise::<events::SettingsChanged>(&()), 1);

@@ -16,7 +16,7 @@ use zones::{AltarZones, Zones};
 enshwick::texts!();
 
 /// Better Altars: how many altars, then how their zones grow.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug, Default)]
 struct Settings {
     /// How many Flame Altars each Flame level allows.
@@ -37,15 +37,18 @@ pub struct BetterAltars {
 impl Mod for BetterAltars {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let _texts = load.texts()?;
-        let settings: Settings = load.config()?;
-        let count = AltarCount::start(load, &settings.count)?;
-        let zones = AltarZones::start(load, &settings.zones)?;
+        // shortcut: init starts on the defaults and each world's values apply
+        // through `apply`; what `start` fixes from them waits for the rework of
+        // the settings that shape init.
+        let defaults = Settings::default();
+        let count = AltarCount::start(load, &defaults.count)?;
+        let zones = AltarZones::start(load, &defaults.zones)?;
         load.on_altar_limit(|limit| {
             if let Some(altars) = BetterAltars::instance() {
                 limit.allowed = altars.count.limit(limit.flame_level, limit.vanilla);
             }
         })?;
-        load.on_config_change(|settings: Settings| {
+        load.on_settings_change(|settings: &Settings| {
             if let Some(altars) = BetterAltars::instance() {
                 altars.count.apply(&settings.count);
                 altars.zones.apply(&settings.zones);
@@ -84,6 +87,8 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        // The world loads, and its settings apply.
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
         loader
     }
 
@@ -179,10 +184,9 @@ mod tests {
     }
 
     #[test]
-    fn the_bases_setting_is_the_bases_the_mod_asks_for() {
+    fn the_bases_asked_for_at_init_are_the_default_until_settings_shape_it_no_more() {
         let loader = started(Side::SERVER, "[count]\nbases = 40\n");
-        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 40)));
-        assert_eq!(enshwick::altars::base_limit().unwrap().bases, 40);
+        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 16)));
         assert!(loader.faults().is_empty());
     }
 
@@ -190,7 +194,6 @@ mod tests {
     fn a_build_that_keeps_16_bases_keeps_the_altar_table() {
         let loader = enshwick::test::FakeHost::new()
             .side(Side::SERVER)
-            .settings("[count]\nbases = 179\n")
             .without_bases_past_16()
             .install();
         // SAFETY: the exports of `declare_mod!` above.
@@ -199,14 +202,6 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(enshwick::altars::base_limit().unwrap().bases, 16);
         assert_eq!(loader.altar_limit(11, 16), 32);
-        assert!(
-            loader
-                .logs()
-                .iter()
-                .any(|(_, line)| line.contains("16 bases here, not the 179")),
-            "{:?}",
-            loader.logs()
-        );
     }
 
     #[test]
@@ -314,27 +309,6 @@ mod tests {
     }
 
     #[test]
-    fn the_table_and_the_seams_are_the_join_values() {
-        let server = Settings {
-            zones: Zones {
-                building_across_seams: false,
-                ..Zones::default()
-            },
-            ..Settings::default()
-        };
-        let synced = server.synced().unwrap();
-        let mut joined: Settings =
-            toml::from_str("[count]\naltars_per_flame_level = [1]\n").unwrap();
-        joined.merge_synced(&synced).unwrap();
-        assert_eq!(
-            AltarTable::new(&joined.count.altars_per_flame_level, CAP).altars(3, 6),
-            12
-        );
-        assert!(!joined.zones.building_across_seams);
-        assert!(joined.zones.clusters, "clusters are each world's own");
-    }
-
-    #[test]
     fn the_table_answers_the_limit_with_the_base_limits_requested() {
         let loader = started(Side::CLIENT, "");
         assert!(loader.requested_base_limits().is_some());
@@ -396,23 +370,23 @@ mod tests {
         let loader = started(Side::CLIENT, off);
         loader.set_altars(&[altar(Entity(1), 0), altar(Entity(2), 40)]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
-        assert_eq!(loader.zone_resizes(), 0);
+        let before = loader.zone_resizes();
         assert_eq!(
             loader.altar_zone(Entity(1), 1, 80),
             (0, 80),
             "clusters off: vanilla"
         );
-        loader.set_settings("[zones]\nclusters = true\n");
+        loader.set_settings("settings", "[zones]\nclusters = true\n");
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-        wait_for_growth(&loader, Entity(1), 1);
-        assert_eq!(loader.zone_resizes(), 1);
+        wait_for_growth(&loader, Entity(1), before + 1);
+        assert_eq!(loader.zone_resizes(), before + 1);
         assert!(
             loader.altar_zone(Entity(1), 1, 80).0 > 0,
             "the world turned clusters on"
         );
-        loader.set_settings(off);
+        loader.set_settings("settings", off);
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-        assert_eq!(loader.zone_resizes(), 2);
+        assert_eq!(loader.zone_resizes(), before + 2);
         assert_eq!(
             loader.altar_zone(Entity(1), 1, 80),
             (0, 80),

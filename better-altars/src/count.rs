@@ -49,7 +49,7 @@ fn requested_bases(bases: u8) -> u32 {
 }
 
 /// How many altars each Flame level allows.
-#[enshwick::config(default)]
+#[enshwick::config]
 #[derive(Debug)]
 pub(crate) struct Count {
     /// Altars this Flame level allows, from 1 to 255; the list starts at level
@@ -57,12 +57,12 @@ pub(crate) struct Count {
     /// its last entry.
     /// Vanilla: [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]
     /// A joined player runs with the server's table.
-    #[config(sync, range = 1..=CAP, first = 0)]
+    #[config(range = 1..=CAP, first = 0)]
     pub(crate) altars_per_flame_level: Vec<u16>,
     /// Bases a world holds, from 16 to 179: altars whose zones touch share a
     /// base, and an altar that would start one base more is refused.
     /// A change applies when the game starts again.
-    #[config(restart, range = VANILLA_BASES..=MOST_BASES)]
+    #[config(range = VANILLA_BASES..=MOST_BASES)]
     pub(crate) bases: u8,
 }
 

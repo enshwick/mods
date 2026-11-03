@@ -17,7 +17,6 @@ publish = false
 id = "enshwick.build-camera"
 side = "both"
 name = "Build Camera"
-join = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

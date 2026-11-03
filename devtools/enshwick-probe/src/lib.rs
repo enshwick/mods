@@ -359,13 +359,13 @@ impl Mod for Probe {
         log_typed::<RevivedPlayerEvent>(load);
 
         vetoes(load, &settings);
-        // The probe is no join mod, so the loader refuses it a channel.
+        // The probe is a server mod, so the loader refuses it a channel.
         match load.channel::<u32, _>("probe", 1, |_, _| ()) {
             Err(off) => {
-                enshwick::info!("PASS a channel is refused to a mod that is no join mod: {off}");
+                enshwick::info!("PASS a channel is refused to a server mod: {off}");
             }
             Ok(_) => {
-                enshwick::warn!("FAIL a channel opened for a mod that is no join mod");
+                enshwick::warn!("FAIL a channel opened for a server mod");
             }
         }
         let checks = Arc::new(Checks::new(load)?);

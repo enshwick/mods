@@ -17,7 +17,6 @@ publish = false
 id = "enshwick.survivors-per-altar"
 side = "both"
 name = "Survivors per Altar"
-join = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

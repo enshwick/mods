@@ -50,14 +50,14 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 ## Settings
 
-`mod-configs/enshwick.survivors-per-altar.toml`, written on first start. Each
-world keeps its own copy of it (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.survivors-per-altar/settings.toml` beside its
+save. The loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)):
 
 ```toml
 per_altar = true
 copy_staffs = true
-copy_staff_charges = 3
 copy_staff_charges_min = 0
 copy_staff_boss_chance = 0.10
 copy_staff_locked_chest_chance = 0.02
@@ -67,11 +67,8 @@ vanilla_staff_places_copies = false
 - `per_altar`: `false` keeps survivors and staffs as in vanilla in that world.
   Copy staffs neither drop nor work there.
 - `copy_staffs`: whether copy staffs drop and work.
-- `copy_staff_charges`: the charges of a full copy staff, 1 to 100.
 - `copy_staff_charges_min`: a dropped staff holds a random count from this value
-  up to `copy_staff_charges`. 0 drops every staff full. It may not be above
-  `copy_staff_charges`. The Mods screen refuses such a value and says why in the
-  player's language.
+  up to the full 3 charges, from 0 to 3. 0 drops every staff full.
 - `copy_staff_boss_chance`: the chance that a boss's corpse holds a staff, from
   0 to 1. 0 turns this source off.
 - `copy_staff_locked_chest_chance`: the chance that a chest which needs a key or
@@ -84,19 +81,18 @@ vanilla_staff_places_copies = false
   the same limit as with a copy staff: the staff is refused when the copy would
   give the survivor more entities than there are altars.
 
-`copy_staffs` belongs to the server, and a joined player runs with the server's
-value. A change applies while the game runs. When it is off, copy staffs neither
+A joined player runs with the world's settings, which the server sends. A change
+of `copy_staffs` applies while the game runs. When it is off, copy staffs neither
 drop nor work. Players keep the staffs they hold.
 
 The chances, `copy_staff_charges_min` and `vanilla_staff_places_copies` also
 apply while the game runs. Each world's own values apply when it loads.
 
-`per_altar` applies when the world loads. A joined player runs with the server's
-value, so the bed cursor and the survivor menu follow the server's world.
+`per_altar` applies when the world loads, so the bed cursor and the survivor
+menu follow the server's world.
 
-`copy_staff_charges` is part of the staff item that the game builds at start.
-The mod reads it from `mod-configs/enshwick.survivors-per-altar.toml` for every
-world. A change applies when the game starts again.
+A full copy staff holds 3 charges. The game builds the staff item as it starts,
+before any world loads, so no setting changes the full count.
 
 ## Install
 

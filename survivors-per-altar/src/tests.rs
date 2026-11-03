@@ -72,19 +72,14 @@ fn every_text_exists_in_all_languages() {
     assert_eq!(texts.untranslated(), []);
     assert_eq!(texts.missing_in(Language::OFFERED), []);
     let schema = Settings::schema();
-    let keys = [
-        MOD_NAME.to_owned(),
-        MOD_DESCRIPTION.to_owned(),
-        texts::CONFIG_COPY_STAFF_CHARGES_MIN_ABOVE_FULL.to_owned(),
-        schema.text,
-    ]
-    .into_iter()
-    .chain(
-        schema
-            .fields
-            .into_iter()
-            .flat_map(|field| [format!("{}.doc", field.text), field.text]),
-    );
+    let keys = [MOD_NAME.to_owned(), MOD_DESCRIPTION.to_owned(), schema.text]
+        .into_iter()
+        .chain(
+            schema
+                .fields
+                .into_iter()
+                .flat_map(|field| [format!("{}.doc", field.text), field.text]),
+        );
     for key in keys {
         assert!(texts.get(&key, Language::FALLBACK).is_some(), "{key}");
     }
@@ -137,22 +132,16 @@ fn a_world_s_chances_and_fewest_charges_make_its_drops() {
 
 #[test]
 fn a_dropped_staff_holds_from_the_fewest_to_full_charges() {
-    let with = |full, min| Settings {
-        copy_staff_charges: full,
+    use enshwick::config::Config as _;
+
+    let with = |min| Settings {
         copy_staff_charges_min: min,
         ..Settings::default()
     };
-    assert_eq!(with(5, 0).charges(), Charges { full: 5, min: 5 });
-    assert_eq!(with(5, 2).charges(), Charges { full: 5, min: 2 });
-    assert!(with(5, 2).check().is_ok());
-    assert_eq!(
-        with(5, 6).check().map_err(|refused| refused.to_string()),
-        Err(format!(
-            "{} (min = 6, full = 5)",
-            texts::CONFIG_COPY_STAFF_CHARGES_MIN_ABOVE_FULL
-        )),
-        "refused with a text of the mod's own"
-    );
+    assert_eq!(with(0).charges(), Charges { full: 3, min: 3 });
+    assert_eq!(with(2).charges(), Charges { full: 3, min: 2 });
+    assert!(with(2).validate().is_ok());
+    assert!(with(4).validate().is_err(), "above the full count");
 }
 
 #[test]

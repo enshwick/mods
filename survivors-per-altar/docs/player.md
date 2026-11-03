@@ -22,15 +22,10 @@ settings:
     range: 0 to 1
     meaning: The chance that a chest which needs a key or a lockpick holds a copy staff. 0 turns this off.
     applies: at-once
-  - key: copy_staff_charges
-    default: 3
-    range: 1 to 100
-    meaning: The charges a full copy staff holds.
-    applies: restart
   - key: copy_staff_charges_min
     default: 0
-    range: 0 to 100, at most copy_staff_charges
-    meaning: The fewest charges a dropped staff holds, at random up to full. 0 drops every staff full.
+    range: 0 to 3
+    meaning: The fewest charges a dropped staff holds, at random up to full. A full staff holds 3. 0 drops every staff full.
     applies: at-once
   - key: vanilla_staff_places_copies
     default: false

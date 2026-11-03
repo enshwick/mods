@@ -17,7 +17,6 @@ publish = false
 id = "enshwick.better-altars"
 side = "both"
 name = "Better Altars"
-join = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

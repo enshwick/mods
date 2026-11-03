@@ -17,7 +17,6 @@ publish = false
 id = "enshwick.game-rates"
 side = "both"
 name = "Game Rates"
-join = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -15,7 +15,7 @@ publish = false
 
 [package.metadata.enshwick]
 id = "enshwick.research"
-side = "both"
+side = "server"
 name = "Research"
 developer = true
 

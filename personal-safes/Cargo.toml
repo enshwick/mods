@@ -17,7 +17,6 @@ publish = false
 id = "enshwick.personal-safes"
 side = "both"
 name = "Personal Safes"
-join = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -6,7 +6,7 @@ you can build big or build next to friends.
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 - **More altars.** Each Flame Level allows its own number of altars, up to 255,
-  in the game's 16 bases. The default is twice the vanilla count.
+  in up to 179 bases. The default is twice the vanilla count, in 16 bases.
 - **Zones that grow together.** Altars whose zones touch form a group. Each
   altar grows until the group covers as much ground as its altars would cover
   apart. A piece may stand across the seam between two zones of a group.
@@ -26,6 +26,7 @@ loader writes the file as the world first loads (see
 ```toml
 [count]
 altars_per_flame_level = [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32]
+bases = 16
 
 [zones]
 clusters = true
@@ -42,6 +43,11 @@ Each level takes 1 to 255 altars. The mod moves a value outside that range to
 the nearest limit and writes a warning in the log. Where the mod keeps the
 game's limit of 16, it lowers larger values to 16. A change applies while the
 game runs. You change the number of levels in the list in the file only.
+
+`bases` is how many bases a world holds, from 16 to 179. It applies when the
+world loads again. A joined player groups the bases that the server holds.
+Where the game cannot hold more than 16 bases, the mod keeps 16 and says so in
+its log.
 
 ### Altar zones
 
@@ -71,11 +77,11 @@ its vanilla zone.
 
 The vanilla game puts the zones of only its first 16 altars into bases, and it
 holds 16 bases. The mod changes this grouping on the server and in every
-player's game. The game then takes up to 255 altars in its 16 bases:
+player's game. The game then takes up to 255 altars in up to 179 bases:
 
 - Altars whose zones touch, directly or through other altars, share one base, as
   in vanilla.
-- A world holds at most 16 bases, as in vanilla. An altar whose zone
+- A world holds at most `bases` bases, 16 by default. An altar whose zone
   touches no base would start one more base. The game refuses such an altar as
   "too many altars". Place it so its zone touches one of your bases.
 - One more base can still come about. Its zone allows building, but it is not a

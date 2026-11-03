@@ -177,7 +177,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=3f9e6f66c49e299956406d5409b02712e5cc07e0#3f9e6f66c49e299956406d5409b02712e5cc07e0"
+source = "git+https://github.com/enshwick/enshwick?rev=f45b38274d712fbd83b4e55b9270efb8696ce32a#f45b38274d712fbd83b4e55b9270efb8696ce32a"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -245,9 +245,11 @@ dependencies = [
 [[package]]
 name = "enshwick-gamedata"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=3f9e6f66c49e299956406d5409b02712e5cc07e0#3f9e6f66c49e299956406d5409b02712e5cc07e0"
+source = "git+https://github.com/enshwick/enshwick?rev=f45b38274d712fbd83b4e55b9270efb8696ce32a#f45b38274d712fbd83b4e55b9270efb8696ce32a"
 dependencies = [
  "enshwick",
+ "iced-x86",
+ "memchr",
  "rustc-hash",
  "ruzstd",
  "serde",
@@ -259,7 +261,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.11"
-source = "git+https://github.com/enshwick/enshwick?rev=3f9e6f66c49e299956406d5409b02712e5cc07e0#3f9e6f66c49e299956406d5409b02712e5cc07e0"
+source = "git+https://github.com/enshwick/enshwick?rev=f45b38274d712fbd83b4e55b9270efb8696ce32a#f45b38274d712fbd83b4e55b9270efb8696ce32a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -368,6 +370,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
+name = "iced-x86"
+version = "1.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c23ad4d19dca41180e835ef6fbd2c1ee655777eca086ad80dd517e0513322879"
+dependencies = [
+ "lazy_static",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -407,6 +418,12 @@ name = "konst_macro_rules"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
+
+[[package]]
+name = "lazy_static"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "libc"

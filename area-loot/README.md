@@ -26,8 +26,9 @@ pickup messages. The emptied corpses dissolve as in vanilla.
 
 ## Settings
 
-The settings file is `mod-configs/enshwick.area-loot.toml`. The mod writes it on
-the first start. Each world keeps its own copy (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.area-loot/settings.toml` beside its save. The
+loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)):
 
 ```toml

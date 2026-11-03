@@ -56,8 +56,9 @@ would replace it with an ordinary chest.
 
 ## Settings
 
-The settings are in `mod-configs/enshwick.personal-safes.toml`. The mod writes
-the file on first start. Each world keeps its own copy (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.personal-safes/settings.toml` beside its save.
+The loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)):
 
 ```toml
@@ -83,9 +84,7 @@ then shows the reason in the player's language. A change applies while the game
 runs, to Safes named after the change. The window and the hint use each player's
 own language.
 
-The texts come in every language of [texts.toml](src/texts.toml). A server can
-change or add texts in `mod-configs/enshwick.personal-safes.texts.toml`, in the
-same form.
+The texts come in every language of [texts.toml](src/texts.toml).
 
 The mod keeps owners and allowed players per world, beside the world's save, in
 `<save>-mod-data/enshwick.personal-safes/owners.toml`. Each world a player

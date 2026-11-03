@@ -103,8 +103,9 @@ Mods screen only.
 
 ## Settings
 
-`mod-configs/enshwick.probe.toml`, read as the game starts, for every world;
-a change takes effect when the game starts again:
+`settings.toml` in the mod's own folder in `mods/`, this machine's switches for
+every world. The probe reads the file itself as the game starts, so a change
+takes effect when the game starts again. Without the file, the defaults apply:
 
 ```toml
 enabled = false

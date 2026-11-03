@@ -24,8 +24,9 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 ## Settings
 
-The settings are in `mod-configs/enshwick.game-rates.toml`. The mod writes the
-file on first start. Each world keeps its own copy (see
+Each world keeps its settings in
+`<save>-mod-settings/enshwick.game-rates/settings.toml` beside its save. The
+loader writes the file as the world first loads (see
 [Settings](https://github.com/enshwick/enshwick#settings)). The Mods screen
 shows the groups under the mod's gear:
 

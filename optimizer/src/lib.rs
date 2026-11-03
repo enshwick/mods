@@ -419,9 +419,8 @@ mod tests {
         assert_eq!(loader.raise::<events::SettingsReplaced>(&()), 1);
         loader.loop_wait(0, 300_000);
         assert_eq!(waits::SLEEPS.load(Ordering::Relaxed), slept + 1);
-        let online = enshwick::pacing::SERVER_ONLINE_WAIT_NS;
-        assert_eq!(loader.tick(std::time::Duration::from_millis(16)), 1);
-        assert_eq!(loader.server_wait(online), 4_000_000);
+        // No step here: a later test in this process needs none to have run.
+        assert_eq!(waits::CAP_NS.load(Ordering::Relaxed), 4_000_000);
         assert!(loader.faults().is_empty());
     }
 

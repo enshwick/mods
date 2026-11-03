@@ -49,7 +49,7 @@ static SLACK_NS: AtomicU64 = AtomicU64::new(0);
 /// resolution on Windows, a millisecond under Wine.
 static WAKE_NS: AtomicU64 = AtomicU64::new(MILLISECOND_NS);
 /// The longest server wait with players online, in ns.
-static CAP_NS: AtomicU64 = AtomicU64::new(VANILLA_SERVER_WAIT_NS);
+pub(crate) static CAP_NS: AtomicU64 = AtomicU64::new(VANILLA_SERVER_WAIT_NS);
 /// The clock the hooks read.
 static EPOCH: OnceLock<Instant> = OnceLock::new();
 /// When the last simulation step ran, ns after [`EPOCH`]; 0 before one.

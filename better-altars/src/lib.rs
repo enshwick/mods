@@ -1,6 +1,6 @@
 //! Better Altars: how many Flame Altars each Flame level allows, up to 255 in
-//! the game's 16 bases, and Flame Altar zones that touch grow together and can
-//! be built across.
+//! up to 179 bases, and Flame Altar zones that touch grow together and can be
+//! built across.
 //!
 //! The two parts keep their settings in the groups `[count]` and `[zones]`.
 
@@ -171,17 +171,18 @@ mod tests {
     }
 
     #[test]
-    fn the_mod_asks_for_every_altar_zone_the_table_takes_in_the_game_s_own_bases() {
+    fn the_mod_asks_for_the_most_bases_at_init_and_a_world_keeps_the_game_s_16_by_default() {
         let loader = started(Side::CLIENT, "");
-        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 16)));
+        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 179)));
         let limit = enshwick::altars::base_limit().unwrap();
         assert_eq!((limit.zones, limit.bases), (u32::from(CAP), 16));
     }
 
     #[test]
-    fn the_bases_asked_for_at_init_stay_the_game_s_own_whatever_a_world_s_file_holds() {
+    fn a_world_s_bases_apply_at_its_load_below_the_request() {
         let loader = started(Side::SERVER, "[count]\nbases = 40\n");
-        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 16)));
+        assert_eq!(loader.requested_base_limits(), Some((u32::from(CAP), 179)));
+        assert_eq!(enshwick::altars::base_limit().unwrap().bases, 40);
         assert!(loader.faults().is_empty());
     }
 

@@ -1,8 +1,10 @@
-//! How many Flame Altars each Flame level allows, up to 255.
+//! How many Flame Altars each Flame level allows, up to 255, and in how many
+//! bases, up to 179.
 //!
-//! The platform lets the game group up to 255 altar zones into its own 16
-//! bases; where it cannot, the table stays capped at the
-//! game's own count. Other mods change the limit by joining the loader's
+//! The mod asks the platform at init for up to 255 altar zones in the most
+//! bases it holds, and caps each world's bases at that world's load; where
+//! the platform cannot raise them, the table stays capped at the game's own
+//! count. Other mods change the limit by joining the loader's
 //! altar-limit chain with `on_altar_limit`.
 
 use std::sync::Arc;
@@ -19,9 +21,18 @@ use crate::hold;
 /// groups.
 pub(crate) const CAP: u8 = u8::MAX;
 
-/// The bases to ask for: the game's own. A world's own count waits for the
-/// platform to take it as the world loads.
-const BASES: u32 = 16;
+/// The fewest bases the settings take: the game's own.
+const VANILLA_BASES: u8 = 16;
+
+/// The most bases the settings take: the most the loader holds.
+const MOST_BASES: u8 = 179;
+
+/// The bases to ask the platform for at init: [`MOST_BASES`], or less where
+/// the loader takes less; each world caps them at its load.
+fn requested_bases() -> u32 {
+    let most = u32::from(MOST_BASES);
+    base_limit().map_or(most, |limit| most.min(limit.max_bases))
+}
 
 /// The most altars the game's own grouping takes, from the loader; the
 /// settings' cap when the loader does not say.
@@ -47,12 +58,17 @@ pub(crate) struct Count {
     /// Vanilla: [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]
     #[config(range = 1..=CAP, first = 0)]
     pub(crate) altars_per_flame_level: Vec<u16>,
+    /// Bases a world holds, from 16 to 179: altars whose zones touch share a
+    /// base, and an altar that would start one base more is refused.
+    #[config(range = VANILLA_BASES..=MOST_BASES)]
+    pub(crate) bases: u8,
 }
 
 impl Default for Count {
     fn default() -> Self {
         Self {
             altars_per_flame_level: vec![2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32],
+            bases: VANILLA_BASES,
         }
     }
 }
@@ -112,13 +128,13 @@ pub(crate) struct AltarCount {
 }
 
 impl AltarCount {
-    /// Asks for the altar zones the table takes in the game's bases, keeps
-    /// the hold on a server and starts on the default table; the game's
-    /// limit is linked by the mod.
+    /// Asks for the altar zones the table takes in the most bases, keeps the
+    /// hold on a server and starts on the default table; the game's limit is
+    /// linked by the mod.
     pub(crate) fn start(load: &mut Load<'_>) -> Result<Self, Off> {
         let server = load.host().build().side == Side::SERVER;
         let requested = requested_cap();
-        let cap = if load.request_base_limits(u32::from(requested), BASES)? {
+        let cap = if load.request_base_limits(u32::from(requested), requested_bases())? {
             if server {
                 hold::keep(load)?;
             }
@@ -151,10 +167,23 @@ impl AltarCount {
             .clamp(1, self.cap)
     }
 
-    /// Takes the table of `count`, the settings now in force.
+    /// Takes the table and the bases of `count`, the settings now in force.
     pub(crate) fn apply(&self, count: &Count) {
         self.table
             .store(Arc::new(AltarTable::from_settings(count, self.cap)));
+        match enshwick::altars::set_base_cap(u32::from(count.bases)) {
+            Ok(()) => enshwick::info!("bases: {}", count.bases),
+            Err(off) => enshwick::warn!("bases stay as asked at start: {off}"),
+        }
+        if let Some(limit) = base_limit()
+            && limit.bases < u32::from(count.bases)
+        {
+            enshwick::warn!(
+                "the game holds {} bases here, not the {} asked for",
+                limit.bases,
+                count.bases
+            );
+        }
     }
 }
 

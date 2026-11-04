@@ -1,7 +1,6 @@
 //! Who may open a Safe, as the owner manages it: a list of the server's
-//! players with a switch each, for the Safe at hand, on the Mods screen and
-//! in a window a HUD hint opens beside the Safe, and a list action that
-//! names them.
+//! players with a switch each, for the Safe at hand, on the Mods screen,
+//! and a list action that names them.
 //!
 //! The Safe at hand is the one within reach the player may manage: their
 //! own nearest one first, else the nearest other they may manage, as an
@@ -212,8 +211,7 @@ fn list(request: &Request<'_>) -> Outcome {
     })
 }
 
-/// Declares who may open a Safe: the list with its hint, and the list as
-/// text; saves through `save` when it changed who may.
+/// Declares who may open a Safe: the list, and the list as text; saves through `save` when it changed who may.
 ///
 /// # Errors
 ///
@@ -242,8 +240,7 @@ pub fn declare(
                 })
         })
         .help(texts::ACTION_ACCESS_HELP)
-        .at(move |ask| at_hand(world, ask))
-        .hint(),
+        .at(move |ask| at_hand(world, ask)),
         move |request| access(request, &save),
     )?;
     actions.add(

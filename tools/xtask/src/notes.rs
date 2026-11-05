@@ -62,7 +62,7 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
         .map_err(|e| format!("{}: {e}", config.display()))?;
     let shipped: Vec<Package> = packages()?
         .into_iter()
-        .filter(|p| p.cdylib && p.dir.join(PLAYER_PAGE).is_file() && !held.contains(&p.name))
+        .filter(|p| ships(p, &held))
         .collect();
     if let Some(missing) = chosen
         .iter()
@@ -124,6 +124,12 @@ fn released(tag: &str) -> Result<bool, String> {
             .trim()
             .is_empty(),
     )
+}
+
+/// Whether players get the package: a mod with a player page that
+/// `release-plz.toml` does not hold back.
+fn ships(package: &Package, held: &[String]) -> bool {
+    package.cdylib && !held.contains(&package.name) && package.dir.join(PLAYER_PAGE).is_file()
 }
 
 /// The packages `release-plz.toml` never releases (`release = false`), so a
@@ -316,6 +322,24 @@ mod tests {
         assert_eq!(held_back(config), Ok(vec!["b".to_owned()]));
         assert_eq!(held_back("[workspace]\n"), Ok(Vec::new()));
         assert!(held_back("[[package]\n").is_err());
+    }
+
+    #[test]
+    fn only_a_mod_with_a_player_page_that_is_not_held_back_ships() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let package = |dir: &str, cdylib: bool| Package {
+            name: "m".to_owned(),
+            version: "0.1.0".to_owned(),
+            dir: root.join(dir),
+            id: "m".to_owned(),
+            windows_only: false,
+            cdylib,
+            lib: true,
+        };
+        assert!(ships(&package("area-loot", true), &[]));
+        assert!(!ships(&package("area-loot", true), &["m".to_owned()]));
+        assert!(!ships(&package("area-loot", false), &[]));
+        assert!(!ships(&package("tools/xtask", true), &[]));
     }
 
     #[test]

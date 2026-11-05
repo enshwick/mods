@@ -8,8 +8,8 @@
 //! every minute, logs each typed game event it receives, and runs its checks
 //! once the world has loaded: world key, entity queries, stats, component
 //! writes, actions, spawns, a per-world store and a save on demand. Its
-//! actions, for administrators on the Mods screen or from the admin tools'
-//! command file, run them again and try single calls.
+//! actions, for administrators on Shift and F1 to F7 in a game the client
+//! hosts or as console lines, run them again and try single calls.
 
 mod affixes;
 mod buffs;
@@ -34,7 +34,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use enshwick::Entity;
+use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Arg, Outcome, Value};
+use enshwick::controls::{Control, Key};
 use enshwick::events::{Kind, WorldLoaded, WorldSaved};
 use enshwick::game_events::{
     AcceptOfferedInteractionEvent, BuildingPickUpEvent, BuildingPlaceEvent, BuildingTearDownEvent,
@@ -43,7 +45,6 @@ use enshwick::game_events::{
     RevivedPlayerEvent, XpGainedEvent,
 };
 use enshwick::i18n::Texts;
-use enshwick::knowledge::KnowledgeId;
 use enshwick::schedule::Scheduler;
 use enshwick::{Load, Mod, Off};
 
@@ -188,24 +189,35 @@ const fn id(value: f64) -> u32 {
     value as u32
 }
 
-/// Declares the probe's actions, for administrators.
+/// The keys of the actions, as action, label and default key: Shift with
+/// F1 and up, clear of the research mod's F7 and F8. The last two need the
+/// affix checks.
+const CONTROLS: [(&str, &str, &str); 7] = [
+    ("census", "Game events counted", "Shift+F1"),
+    ("check", "Run the checks again", "Shift+F2"),
+    ("key", "Your account key", "Shift+F3"),
+    ("my-vitals", "Your raw stats", "Shift+F4"),
+    ("notice", "Show yourself a notice", "Shift+F5"),
+    ("stats", "Your changed stats", "Shift+F6"),
+    ("affix", "Roll affixes again", "Shift+F7"),
+];
+
+/// Declares the probe's actions, for administrators: those without arguments
+/// on the keys of [`CONTROLS`] in a game the client hosts, those with an
+/// entity as console lines.
 fn actions(
     load: &mut Load<'_>,
     census: Arc<Census>,
     checks: &Arc<Checks>,
     run_all: Arc<dyn Fn() + Send + Sync>,
     affix_checks: Option<Arc<affixes::AffixChecks>>,
-) -> Result<(), Off> {
-    let knowledge = load.knowledge();
+) -> Result<Actions, Off> {
     let raw_stats = raw_stats::RawStats::new(load)
         .inspect_err(|off| enshwick::warn!("FAIL raw stats: {off}"))
         .ok();
     let actions = load.actions(Texts::default())?;
     let admin = |id: &str, label: &str| Action::new(id, label).admins();
     let entity = || Arg::number("Entity", 0.0..=f64::from(u32::MAX), 1.0);
-    let knowledge_id = || Arg::number("Id", 0.0..=f64::from(u32::MAX), 1.0);
-    let bit = || Arg::number("Bit or amount", 0.0..=1_000_000.0, 1.0);
-    let metres = |axis: &str| Arg::number(axis, -1000.0..=1000.0, 0.0);
 
     actions.add(admin("census", "Game events counted"), move |_| {
         Outcome::done(census.lines().join("\n"))
@@ -233,19 +245,6 @@ fn actions(
             _ => Outcome::refused(""),
         },
     )?;
-    let moving = Arc::clone(checks);
-    actions.add(
-        admin("teleport", "Move yourself by")
-            .arg(metres("x"))
-            .arg(metres("y"))
-            .arg(metres("z")),
-        move |request| match request.args {
-            [Value::Number(x), Value::Number(y), Value::Number(z)] => {
-                Outcome::done(moving.teleport_self(request.player.entity, [*x, *y, *z]))
-            }
-            _ => Outcome::refused(""),
-        },
-    )?;
     let destroying = Arc::clone(checks);
     actions.add(
         admin("destroy", "Destroy an entity").arg(entity()),
@@ -266,66 +265,38 @@ fn actions(
     actions.add(admin("notice", "Show yourself a notice"), move |request| {
         Outcome::done(noticing.notice(request.player, NOTICE))
     })?;
-    for (kind, label, with_bit) in [
-        ("knowledge", "Read a knowledge value", false),
-        ("learn", "Learn a knowledge value", true),
-        ("unlearn", "Unlearn a knowledge value", true),
-    ] {
-        let action = admin(kind, label).arg(knowledge_id());
-        let action = if with_bit { action.arg(bit()) } else { action };
-        actions.add(action, move |request| {
-            let (known, bit) = match request.args {
-                [Value::Number(known)] => (KnowledgeId::new(id(*known)), None),
-                [Value::Number(known), Value::Number(bit)] => {
-                    (KnowledgeId::new(id(*known)), Some(id(*bit)))
-                }
-                _ => return Outcome::refused(""),
-            };
-            let me = request.player.entity;
-            Outcome::done(knowledge::command(knowledge, me, kind, known, bit))
+    if let Some(affix_checks) = affix_checks {
+        let rolling = Arc::clone(&affix_checks);
+        actions.add(admin("stats", "Your changed stats"), move |request| {
+            Outcome::done(affix_checks.stats_of(request.player))
+        })?;
+        actions.add(admin("affix", "Roll affixes again"), move |request| {
+            Outcome::done(rolling.reroll(request.player))
         })?;
     }
-    match affix_checks {
-        Some(affix_checks) => stat_actions(&actions, &affix_checks),
-        None => Ok(()),
-    }
+    Ok(actions)
 }
 
-/// Declares the probe's actions on stats and affixes.
-fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> Result<(), Off> {
-    let admin = |id: &str, label: &str| Action::new(id, label).admins();
-    let ids: Vec<String> = affix_checks.kind_ids();
-    let kinds: Vec<(&str, &str)> = ids.iter().map(|id| (id.as_str(), id.as_str())).collect();
-    let (setting, ids_set) = (Arc::clone(affix_checks), ids.clone());
-    actions.add(
-        admin("stat", "Add to one of your stats")
-            .arg(Arg::choice("Stat", &kinds))
-            .arg(Arg::number("Value", -1000.0..=1000.0, 0.0)),
-        move |request| match request.args {
-            [Value::Choice(kind), Value::Number(value)] => {
-                Outcome::done(setting.stat(request.player, &ids_set[*kind], &value.to_string()))
-            }
-            _ => Outcome::refused(""),
-        },
-    )?;
-    let (removing, ids_off) = (Arc::clone(affix_checks), ids.clone());
-    actions.add(
-        admin("stat-off", "Remove the probe's change to a stat").arg(Arg::choice("Stat", &kinds)),
-        move |request| match request.args {
-            [Value::Choice(kind)] => {
-                Outcome::done(removing.stat(request.player, &ids_off[*kind], "off"))
-            }
-            _ => Outcome::refused(""),
-        },
-    )?;
-    let reading = Arc::clone(affix_checks);
-    let rolling = Arc::clone(affix_checks);
-    actions.add(admin("stats", "Your changed stats"), move |request| {
-        Outcome::done(reading.stats_of(request.player))
-    })?;
-    actions.add(admin("affix", "Roll affixes again"), move |request| {
-        Outcome::done(rolling.reroll(request.player))
-    })
+/// Puts the actions of [`CONTROLS`] on their keys, the affix ones only with
+/// `affixes`; each key is a feature of its own, so a refused one leaves the
+/// rest.
+fn controls(load: &mut Load<'_>, actions: &Actions, affixes: bool) {
+    let count = if affixes {
+        CONTROLS.len()
+    } else {
+        CONTROLS.len() - 2
+    };
+    for (name, label, key) in &CONTROLS[..count] {
+        let running = actions.clone();
+        let _keyed = load.feature(name, |load| {
+            let control = Control::new(name, label).key(Key::parse(key)?);
+            load.control(control, move |_| {
+                if let Err(off) = running.run(name, &[]) {
+                    enshwick::warn!("probe {name} not sent: {off}");
+                }
+            })
+        });
+    }
 }
 
 /// This machine's switches, `settings.toml` in the mod's own folder, which the
@@ -430,7 +401,11 @@ impl Mod for Probe {
         }
         let saved = Arc::clone(&checks);
         load.on::<WorldSaved>(move |()| saved.saved())?;
-        actions(load, census, &checks, run_all, affix_checks)?;
+        let affixes = affix_checks.is_some();
+        let actions = actions(load, census, &checks, run_all, affix_checks)?;
+        if load.host().build().side == Side::CLIENT {
+            controls(load, &actions, affixes);
+        }
         enshwick::info!("probe on");
         Ok(Self)
     }
@@ -494,6 +469,73 @@ mod tests {
             assert!(!on);
             assert_eq!(faults.len(), 1, "{faults:?}");
             assert!(!faults[0].contains("panic"), "{faults:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod keys {
+    use std::time::Duration;
+
+    use enshwick::abi::{Side, Status};
+    use enshwick::actions::{Action, Outcome};
+    use enshwick::controls::Key;
+    use enshwick::i18n::Texts;
+    use enshwick::{Load, Mod, Off};
+
+    use super::CONTROLS;
+
+    /// The probe's actions as stubs, on the probe's keys.
+    struct Keys;
+
+    impl Mod for Keys {
+        fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+            let actions = load.actions(Texts::default())?;
+            for (name, label, _) in CONTROLS {
+                actions.add(Action::new(name, label).admins(), |_| Outcome::done(""))?;
+            }
+            super::controls(load, &actions, true);
+            Ok(Self)
+        }
+    }
+
+    enshwick::test::declare_mod!(
+        Keys,
+        r#"
+        id = "enshwick.probe"
+        side = "server"
+        "#
+    );
+
+    #[test]
+    fn on_a_hosting_client_each_key_runs_its_action() {
+        let loader = enshwick::test::FakeHost::new().side(Side::CLIENT).install();
+        // SAFETY: the exports of this module's `declare_mod!(Keys)`.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        assert_eq!(
+            loader.controls().len(),
+            CONTROLS.len(),
+            "{:?}",
+            loader.controls()
+        );
+        for (name, _, key) in CONTROLS {
+            let key = Key::parse(key).unwrap();
+            assert!(
+                loader
+                    .controls()
+                    .iter()
+                    .any(|(declared, _, keys)| declared == name && keys[0] == Some(key)),
+                "{name}: {:?}",
+                loader.controls()
+            );
+            assert_eq!(loader.keys(&[key], Duration::from_millis(16)), 1, "{name}");
+            assert_eq!(loader.keys(&[], Duration::from_millis(16)), 0, "{name}");
+            assert_eq!(
+                loader.action_runs().last(),
+                Some(&(name.to_owned(), String::new()))
+            );
         }
     }
 }

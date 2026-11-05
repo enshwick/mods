@@ -4,9 +4,8 @@
 
 use std::time::Duration;
 
-use enshwick::Entity;
 use enshwick::events::{KnowledgeChanged, PlayerDied, QuestCompleted};
-use enshwick::knowledge::{Grant, Knowledge, KnowledgeId, KnowledgeType, Revoke};
+use enshwick::knowledge::{Grant, Knowledge, KnowledgeId, Revoke};
 use enshwick::schedule::Scheduler;
 use enshwick::{Load, Off, PlayerKey};
 
@@ -147,41 +146,4 @@ impl KnowledgeChecks {
             Ok(()) => enshwick::warn!("FAIL a bool revoke of a counter was taken"),
         }
     }
-}
-
-/// The `knowledge`, `learn` and `unlearn` actions: read, grant and take back
-/// knowledge `id` of the caller; the kind comes from the id, `bit` is the
-/// flag or the amount (1, the crafted bit of a recipe, when `None`).
-pub(crate) fn command(
-    knowledge: Knowledge,
-    me: Entity,
-    word: &str,
-    id: KnowledgeId,
-    bit: Option<u32>,
-) -> String {
-    let bit = bit.unwrap_or(1);
-    let Some(known) = knowledge.get(me, id) else {
-        return format!("knowledge {id} does not read: unknown id, or no world");
-    };
-    let grant = match known.r#type {
-        KnowledgeType::Bool => Grant::Set,
-        KnowledgeType::Counter => Grant::Add(bit),
-        _ => Grant::Flag(bit),
-    };
-    let revoke = match known.r#type {
-        KnowledgeType::Bool => Revoke::Clear,
-        KnowledgeType::Counter => Revoke::Sub(bit),
-        _ => Revoke::Unflag(bit),
-    };
-    let done = match word {
-        "learn" => knowledge.grant(me, id, grant),
-        "unlearn" => knowledge.revoke(me, id, revoke),
-        _ => return format!("knowledge {id}: {known:?}"),
-    };
-    let line = format!(
-        "{word} {id} ({:?}): {done:?}; before {known:?}",
-        known.r#type
-    );
-    enshwick::info!("{line}");
-    line
 }

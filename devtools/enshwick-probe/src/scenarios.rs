@@ -19,7 +19,7 @@ const INDEX: &str = "index.luau";
 
 /// Every scenario, by the name the setting takes, with its source; a test
 /// holds this list to the files in `scenarios/`.
-pub(crate) const SCENARIOS: [(&str, &str); 6] = [
+pub(crate) const SCENARIOS: [(&str, &str); 9] = [
     ("chat", include_str!("../scenarios/chat.luau")),
     ("saves", include_str!("../scenarios/saves.luau")),
     ("weather", include_str!("../scenarios/weather.luau")),
@@ -32,6 +32,9 @@ pub(crate) const SCENARIOS: [(&str, &str); 6] = [
         include_str!("../scenarios/craft-rewards.luau"),
     ),
     ("join-throw", include_str!("../scenarios/join-throw.luau")),
+    ("teleport", include_str!("../scenarios/teleport.luau")),
+    ("stats", include_str!("../scenarios/stats.luau")),
+    ("knowledge", include_str!("../scenarios/knowledge.luau")),
 ];
 
 /// The scripts: the runner, each scenario of `list` under `scenarios/`, and

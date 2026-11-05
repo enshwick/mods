@@ -19,7 +19,17 @@ pub(crate) fn verdict(text: &str) -> ChatVerdict {
 /// Registers the filter and the log of lines heard, each logged as `PASS`
 /// or `FAIL`.
 pub(crate) fn register(load: &mut Load<'_>) {
-    let filter = load.on_chat(|line| verdict(&line.text));
+    let filter = load.on_chat(|line| {
+        let verdict = verdict(&line.text);
+        if verdict == ChatVerdict::Drop {
+            let sender = line.player.map(|key| format!("{key:016x}"));
+            enshwick::info!(
+                "chat filter dropped a line from {}",
+                sender.as_deref().unwrap_or("none")
+            );
+        }
+        verdict
+    });
     log("chat filter registered: it drops \"drop me\"", filter);
     let said = load.on_chat_said(|line| {
         let sender = line.player.map(|key| format!("{key:016x}"));

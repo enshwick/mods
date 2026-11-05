@@ -71,7 +71,7 @@ Ten seconds after the world has loaded, and again on the `check` action:
   meanwhile refused, and the saves let go.
 
 Its spawns stay out of the world's save. From start, its chat filter drops a
-line of exactly `drop me` and keeps every other line, and it logs each line
+line of exactly `drop me`, logging its sender, and keeps every other line, and it logs each line
 that reaches the chat with its sender's account, its kind and its length,
 never its text.
 

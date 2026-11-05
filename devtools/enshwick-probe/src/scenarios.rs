@@ -308,6 +308,7 @@ mod tests {
         assert_logged(&loader, "PASS chat lines heard");
         assert_logged(&loader, "scenario chat: start");
         assert_eq!(loader.say(ANN, "drop me"), None);
+        assert_logged(&loader, "chat filter dropped a line from 0000000000000007");
         assert_eq!(
             loader.say(ANN, "hello probe").as_deref(),
             Some("hello probe")

@@ -88,18 +88,18 @@ argument has a key, which `mod-controls.toml` can change. The actions on an
 entity run as console lines, such as `enshwick.probe vitals 1234`. The
 scenarios `teleport`, `stats` and `knowledge` check the rest on a player.
 
-| Action      | Key        | What it does                                                                                                |
-| ----------- | ---------- | ----------------------------------------------------------------------------------------------------------- |
-| `census`    | `Shift+F1` | the game events counted so far, by type                                                                     |
-| `check`     | `Shift+F2` | runs the checks again                                                                                       |
-| `key`       | `Shift+F3` | your account key                                                                                            |
-| `my-vitals` | `Shift+F4` | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
-| `notice`    | `Shift+F5` | shows a notice on your screen, or in chat without Enshwick                                                  |
-| `stats`     | `Shift+F6` | your stats that differ from the defaults, and their sources                                                 |
-| `affix`     | `Shift+F7` | rolls one to three affixes anew on everything you wear                                                      |
-| `vitals`    | console    | an entity's vitals and progress, against its replicated health                                              |
-| `destroy`   | console    | asks the world to destroy an entity; on a copy of a world only                                              |
-| `spawn`     | console    | spawns a copy of an entity above it and follows it as the checks do                                         |
+| Action      | Key         | What it does                                                                                                |
+| ----------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `census`    | `Shift+F2`  | the game events counted so far, by type                                                                     |
+| `check`     | `Shift+F3`  | runs the checks again                                                                                       |
+| `key`       | `Shift+F4`  | your account key                                                                                            |
+| `my-vitals` | `Shift+F5`  | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
+| `notice`    | `Shift+F6`  | shows a notice on your screen, or in chat without Enshwick                                                  |
+| `stats`     | `Shift+F9`  | your stats that differ from the defaults, and their sources                                                 |
+| `affix`     | `Shift+F11` | rolls one to three affixes anew on everything you wear                                                      |
+| `vitals`    | console     | an entity's vitals and progress, against its replicated health                                              |
+| `destroy`   | console     | asks the world to destroy an entity; on a copy of a world only                                              |
+| `spawn`     | console     | spawns a copy of an entity above it and follows it as the checks do                                         |
 
 ## Settings
 

@@ -8,8 +8,8 @@
 //! every minute, logs each typed game event it receives, and runs its checks
 //! once the world has loaded: world key, entity queries, stats, component
 //! writes, actions, spawns, a per-world store and a save on demand. Its
-//! actions, for administrators on Shift and F1 to F7 in a game the client
-//! hosts or as console lines, run them again and try single calls.
+//! actions, for administrators on Shift and F2 to F6, F9 and F11 in a game
+//! the client hosts or as console lines, run them again and try single calls.
 
 mod affixes;
 mod buffs;
@@ -190,16 +190,16 @@ const fn id(value: f64) -> u32 {
 }
 
 /// The keys of the actions, as action, label and default key: Shift with
-/// F1 and up, clear of the research mod's F7 and F8. The last two need the
-/// affix checks.
+/// F2 to F6, F9 and F11, clear of the game's F1 (its tutorial) and the
+/// research mod's F7 and F8. The last two need the affix checks.
 const CONTROLS: [(&str, &str, &str); 7] = [
-    ("census", "Game events counted", "Shift+F1"),
-    ("check", "Run the checks again", "Shift+F2"),
-    ("key", "Your account key", "Shift+F3"),
-    ("my-vitals", "Your raw stats", "Shift+F4"),
-    ("notice", "Show yourself a notice", "Shift+F5"),
-    ("stats", "Your changed stats", "Shift+F6"),
-    ("affix", "Roll affixes again", "Shift+F7"),
+    ("census", "Game events counted", "Shift+F2"),
+    ("check", "Run the checks again", "Shift+F3"),
+    ("key", "Your account key", "Shift+F4"),
+    ("my-vitals", "Your raw stats", "Shift+F5"),
+    ("notice", "Show yourself a notice", "Shift+F6"),
+    ("stats", "Your changed stats", "Shift+F9"),
+    ("affix", "Roll affixes again", "Shift+F11"),
 ];
 
 /// Declares the probe's actions, for administrators: those without arguments
@@ -518,6 +518,21 @@ mod keys {
         let names: Vec<&str> = super::keyed(false).iter().map(|c| c.0).collect();
         assert_eq!(names, ["census", "check", "key", "my-vitals", "notice"]);
         assert_eq!(super::keyed(true), CONTROLS);
+    }
+
+    #[test]
+    fn no_key_shares_a_key_with_the_game_tutorial_or_the_research_mod() {
+        // F1 opens the game's tutorial, which a mod key never takes from the
+        // game; F7 and F8 are the research mod's, which a Shift chord on the
+        // same key would beat while the player sprints.
+        let taken: Vec<u32> = ["F1", "F7", "F8"]
+            .iter()
+            .map(|key| Key::parse(key).unwrap().code())
+            .collect();
+        for (name, _, key) in CONTROLS {
+            let code = Key::parse(key).unwrap().code();
+            assert!(!taken.contains(&code), "{name} on {key}");
+        }
     }
 
     #[test]

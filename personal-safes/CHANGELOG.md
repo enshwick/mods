@@ -6,6 +6,12 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Added
+
+- A panel beside a Safe's chest screen lists the players online, each with a
+  switch, so the owner lets players in or out without the Mods screen. Other
+  chests show no panel.
+
 ## [0.1.0] - 2026-11-05
 
 ### Added

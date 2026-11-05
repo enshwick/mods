@@ -1,7 +1,7 @@
 ---
 id: enshwick.personal-safes
 name: Personal Safes
-summary: Adds the Safe, a chest that only its owner and the players they allow can open. Only the owner picks it up. You craft it where you craft the Wooden Chest.
+summary: Adds the Safe, a chest that only its owner, the players they allow and the server's administrators can open. You craft it where you craft the Wooden Chest.
 needs: everyone
 settings:
   - key: cost_multiplier
@@ -23,6 +23,8 @@ settings:
 - The Safe is a chest you craft at the same workshop as the Wooden Chest.
 - Only you and the players you allow may open your Safe.
 - Only you pick it up or take it apart.
+- The server's administrators may also open and remove every Safe, unless the
+  server turns that off.
 - Hover over a Safe to see its owner, such as "Safe · Ann".
 
 ## How do I let another player in?

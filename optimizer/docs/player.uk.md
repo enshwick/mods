@@ -1,7 +1,7 @@
 ---
 id: enshwick.optimizer
 name: Optimizer
-summary: Виділений сервер витрачає менше CPU, на Windows і під Wine чи Proton. Сервер Windows без гравців витрачав 7,9 % ядра замість 19,9 %. Гравці нічого не помічають.
+summary: Виділений сервер витрачає менше CPU, на Windows і під Wine чи Proton. Сервер на Windows без гравців витрачав 7,9 % одного ядра замість 19,9 %.
 needs: server
 settings:
   - key: exact_waits

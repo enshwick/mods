@@ -1,6 +1,6 @@
 [package]
 name = "enshwick-personal-safes"
-version = "0.0.0-dev"
+version = "0.1.0"
 description = "Adds the Safe, a chest that only its owner and the players they allow can open"
 keywords = ["enshrouded", "mod", "chest", "safe"]
 categories = ["game-development"]

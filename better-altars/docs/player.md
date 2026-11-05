@@ -37,8 +37,9 @@ The server and every player need it.
 ## What happens past 16 altars?
 
 Up to 255 altars fit in 16 bases: altars whose zones touch share one. The game
-refuses an altar that would start a 17th base. Set `count.bases` to allow up to
-179 bases in a world, then load the world again. Without the mod, only the
+refuses an altar that would start a 17th base.
+
+Set `count.bases` to allow up to 179 bases in a world, then load the world again. Without the mod, only the
 first 16 altar zones work as bases.
 
 ## Install

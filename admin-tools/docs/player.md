@@ -1,7 +1,7 @@
 ---
 id: enshwick.admin-tools
 name: Admin Tools
-summary: A server's administrators mute players in chat from the game's interface, with a switch per player.
+summary: A server's administrators mute players in chat from the game's interface, with a switch per player. A muted player's lines reach no other player.
 needs: server
 settings: []
 ---

@@ -1,7 +1,7 @@
 ---
 id: enshwick.area-loot
 name: Area Loot
-summary: Empty one enemy corpse, and the mod also gives you the loot of the enemy corpses and loot bags nearby.
+summary: Empty one enemy corpse or loot bag, and the mod also gives you the enemy loot nearby, within 12 metres by default. You get the nearest loot first.
 needs: server
 settings:
   - key: radius

@@ -277,16 +277,22 @@ fn actions(
     Ok(actions)
 }
 
-/// Puts the actions of [`CONTROLS`] on their keys, the affix ones only with
-/// `affixes`; each key is a feature of its own, so a refused one leaves the
-/// rest.
-fn controls(load: &mut Load<'_>, actions: &Actions, affixes: bool) {
+/// The controls the probe declares: every one of [`CONTROLS`] with the affix
+/// checks, else all but the last two.
+fn keyed(affixes: bool) -> &'static [(&'static str, &'static str, &'static str)] {
     let count = if affixes {
         CONTROLS.len()
     } else {
         CONTROLS.len() - 2
     };
-    for (name, label, key) in &CONTROLS[..count] {
+    &CONTROLS[..count]
+}
+
+/// Puts the actions of [`CONTROLS`] on their keys, the affix ones only with
+/// `affixes`; each key is a feature of its own, so a refused one leaves the
+/// rest.
+fn controls(load: &mut Load<'_>, actions: &Actions, affixes: bool) {
+    for (name, label, key) in keyed(affixes) {
         let running = actions.clone();
         let _keyed = load.feature(name, |load| {
             let control = Control::new(name, label).key(Key::parse(key)?);
@@ -506,6 +512,13 @@ mod keys {
         side = "server"
         "#
     );
+
+    #[test]
+    fn without_the_affix_checks_the_stats_and_affix_keys_are_left_out() {
+        let names: Vec<&str> = super::keyed(false).iter().map(|c| c.0).collect();
+        assert_eq!(names, ["census", "check", "key", "my-vitals", "notice"]);
+        assert_eq!(super::keyed(true), CONTROLS);
+    }
 
     #[test]
     fn on_a_hosting_client_each_key_runs_its_action() {

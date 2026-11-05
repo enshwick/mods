@@ -14,11 +14,14 @@
 mod affixes;
 mod buffs;
 mod census;
+mod chat;
 mod checks;
 mod clock;
 mod damage;
 mod knowledge;
 mod raw_stats;
+mod saves;
+mod scenarios;
 mod settings;
 mod stats;
 mod terrain;
@@ -74,6 +77,9 @@ struct Settings {
     /// game setting come back with the world; the next run with this on
     /// forgets it. Off, a run keeps and forgets it at once.
     keep_across_restart: bool,
+    /// Run none of the checks when the world loads, only the scenario the
+    /// world's settings name, so the checks' weather and clock leave it be.
+    scenario_only: bool,
 }
 
 /// A check of a single feature, run after the general ones.
@@ -113,6 +119,10 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
     match terrain::TerrainChecks::new(load) {
         Ok(terrain) => extras.push(Box::new(move || terrain.run())),
         Err(off) => enshwick::warn!("FAIL terrain: {off}"),
+    }
+    match saves::SaveChecks::new(load, scheduler) {
+        Ok(saves) => extras.push(Box::new(move || saves.run())),
+        Err(off) => enshwick::warn!("FAIL saves: {off}"),
     }
     extras
 }
@@ -319,7 +329,7 @@ fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> 
 }
 
 /// This machine's switches, `settings.toml` in the mod's own folder, which the
-/// mod reads itself: a developer mod keeps no world settings. The defaults
+/// mod reads itself, beside the world setting of its scenarios. The defaults
 /// without the file, or with a file that does not read.
 fn own_settings<T: enshwick::config::Config>(load: &Load<'_>) -> T {
     let Ok(path) = load.mod_dir().map(|dir| dir.join("settings.toml")) else {
@@ -359,6 +369,11 @@ impl Mod for Probe {
         log_typed::<RevivedPlayerEvent>(load);
 
         vetoes(load, &settings);
+        // Before the chat filter, so the scenarios see the lines it drops.
+        if let Err(off) = scenarios::start(load) {
+            enshwick::warn!("FAIL scenarios: {off}");
+        }
+        chat::register(load);
         // The probe is a server mod, so the loader refuses it a channel.
         match load.channel::<u32, _>("probe", 1, |_, _| ()) {
             Err(off) => {
@@ -406,11 +421,13 @@ impl Mod for Probe {
             }
         };
         let run_all: Arc<dyn Fn() + Send + Sync> = Arc::new(run_all);
-        let first = Arc::clone(&run_all);
-        load.on::<WorldLoaded>(move |()| {
-            let run = Arc::clone(&first);
-            scheduler.after(CHECK_DELAY, move || run());
-        })?;
+        if !settings.scenario_only {
+            let first = Arc::clone(&run_all);
+            load.on::<WorldLoaded>(move |()| {
+                let run = Arc::clone(&first);
+                scheduler.after(CHECK_DELAY, move || run());
+            })?;
+        }
         let saved = Arc::clone(&checks);
         load.on::<WorldSaved>(move |()| saved.saved())?;
         actions(load, census, &checks, run_all, affix_checks)?;

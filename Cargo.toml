@@ -11,14 +11,16 @@ members = [
     "survivors-per-altar",
     "devtools/enshwick-probe",
     "devtools/enshwick-research",
+    "devtools/enshwick-test-content",
     "tools/xtask",
 ]
 resolver = "3"
 
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.
-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "696cc43f6f945d34ce58be2c6b0d43e246d2ec63" }
-enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "696cc43f6f945d34ce58be2c6b0d43e246d2ec63" }
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "265a58d162fd7a9778940ec6bd53126c2f74e7ea" }
+enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "265a58d162fd7a9778940ec6bd53126c2f74e7ea" }
+enshwick-luau = { git = "https://github.com/enshwick/enshwick", rev = "265a58d162fd7a9778940ec6bd53126c2f74e7ea" }
 
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 

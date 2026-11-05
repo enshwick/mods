@@ -1,14 +1,14 @@
 # Release pull requests and releases with release-plz (release-plz.toml), run
 # by hand. Until 1.0 each release is an alpha, a GitHub prerelease.
 # `release-pr`, on main, opens or updates the release pull request, which
-# bumps only the mods whose folders changed. `release`, on main after that
-# pull request merged, refuses before tagging anything when a mod's notes
-# are not ready, then tags each released mod `<package>-v<version>` and makes
-# its own prerelease; one job per released mod builds only that mod from its
-# tag, attaches its zip, PDB, SBOM, their sums and a build provenance
+# bumps only the mods whose folders changed. `release`, on main, releases
+# every mod whose version has no tag yet: it refuses before tagging anything
+# when a mod's notes are not ready, then tags each such mod
+# `<package>-v<version>` and makes its own prerelease with the notes of
+# `cargo xtask notes`; one job per released mod builds only that mod from its
+# tag and attaches its zip, PDB, SBOM, their sums and a build provenance
 # attestation of each, which players check with
-# `gh attestation verify <file> --owner enshwick`, and sets the notes of
-# `cargo xtask notes`. On Windows each attached DLL must report the version
+# `gh attestation verify <file> --owner enshwick`. On Windows each attached DLL must report the version
 # of its tag, and the docs site builds again for the new downloads. `build`,
 # from any branch, writes the notes and builds the files a release would, and
 # publishes nothing.
@@ -52,6 +52,8 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-rust
+        with:
+          gh: true
 
       # A release goes out with its notes or not at all: a mod with changes
       # still under Unreleased, or a platform pin no loader alpha tags,
@@ -79,6 +81,18 @@ jobs:
           command: ${{ inputs.command }}
         env:
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+
+      # The notes checked above, with the alpha warning and the loader alpha,
+      # replace release-plz's body at once, before any file is built.
+      - name: Notes
+        if: inputs.command == 'release'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          jq -r '.[] | "\(.tag) \(.package_name)"' <<< "${RELEASES:-[]}" | while read -r tag package; do
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes/$package.md"
+          done
 
   assets:
     needs: release-plz
@@ -158,16 +172,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         working-directory: ${{ env.OUT }}
         run: gh release upload "$TAG" ./* --clobber --repo "$GITHUB_REPOSITORY"
-
-      # release-plz wrote the changelog section alone; the notes add the
-      # alpha warning and the loader alpha the mod is built on.
-      - name: Notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cargo xtask notes --package "$PACKAGE" --out "$RUNNER_TEMP/notes"
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
-            --notes-file "$RUNNER_TEMP/notes/$PACKAGE.md"
 
   # The DLL attached to each release reports its tag's version, read through
   # its manifest as the loader reads it, which needs Windows.

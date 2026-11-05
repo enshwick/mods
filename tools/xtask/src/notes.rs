@@ -211,14 +211,16 @@ fn closed<'a>(changelog: &'a str, version: &str) -> Result<&'a str, String> {
 }
 
 /// The body of the `## [version]` section of a Keep a Changelog file, up to
-/// the next section, trimmed; `None` without one or when it is empty.
+/// the next section or the link definitions at the file's foot, trimmed;
+/// `None` without one or when it is empty.
 fn section<'a>(changelog: &'a str, version: &str) -> Option<&'a str> {
     let heading = format!("## [{version}]");
     let mut offset = 0;
     let mut start = None;
     for line in changelog.split_inclusive('\n') {
         if let Some(start) = start {
-            if line.starts_with("## ") {
+            let definition = line.starts_with('[') && line.contains("]: ");
+            if line.starts_with("## ") || definition {
                 return Some(changelog[start..offset].trim()).filter(|s| !s.is_empty());
             }
         } else if line.starts_with(&heading) {
@@ -297,6 +299,12 @@ mod tests {
         let changelog = "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-11-05\n\n### Added\n\n- More loot.\n\n## [0.1.0]\n\n- First.\n";
         assert_eq!(closed(changelog, "0.2.0"), Ok("### Added\n\n- More loot."));
         assert_eq!(closed(changelog, "0.1.0"), Ok("- First."));
+    }
+
+    #[test]
+    fn the_last_section_stops_at_the_link_definitions() {
+        let changelog = "## [Unreleased]\n\n## [0.1.0]\n\n- First, see [docs].\n\n[docs]: https://example.com/docs\n[0.1.0]: https://example.com/tag\n";
+        assert_eq!(closed(changelog, "0.1.0"), Ok("- First, see [docs]."));
     }
 
     #[test]

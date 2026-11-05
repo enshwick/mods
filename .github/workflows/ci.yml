@@ -145,6 +145,13 @@ jobs:
             cargo xtask check
           fi
 
+      # A release pull request merges only once `release` would take its
+      # notes: each bumped mod's section closed, the platform on a loader
+      # alpha.
+      - name: Notes of the mods to release
+        if: startsWith(github.head_ref || github.ref_name, 'release-plz-')
+        run: cargo xtask notes --unreleased
+
   # The tests of the crates marked `windows-only`, natively on Windows.
   windows:
     needs: scope

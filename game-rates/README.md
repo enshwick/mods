@@ -81,11 +81,11 @@ the log says so. The new counts then apply at the next start.
 ## Install
 
 Download
-`enshwick-game-rates.zip` from its [newest release](https://github.com/enshwick/mods/releases?q=enshwick-game-rates-v&expanded=true).
+`enshwick-game-rates.zip` from its [newest release](https://github.com/enshwick/mods/releases?q=enshwick-game-rates&expanded=true).
 Extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. The mod needs the Enshwick loader. Get
-`enshwick.zip` from the [newest Enshwick release](https://github.com/enshwick/enshwick/releases)
-and extract it into the same folder. Until 1.0 both are alphas, and anything may change from one alpha
+`enshwick.zip` from the [Enshwick release](https://github.com/enshwick/enshwick/releases)
+that the mod's release notes name, and extract it into the same folder. Until 1.0 both are alphas, and anything may change from one alpha
 to the next. Back up your saves before you update.
 
 ## Who needs it

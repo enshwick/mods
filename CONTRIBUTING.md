@@ -63,9 +63,21 @@ Until 1.0 each release is an alpha: a GitHub prerelease built on a loader
 alpha.
 
 Each mod's `CHANGELOG.md` is written by hand for players; release-plz never
-writes it. A change players notice adds a line under `## [Unreleased]`. The
-release pull request renames that heading to the mod's new version, as
-`## [0.2.0] - 2026-11-05`, and leaves `## [Unreleased]` empty above it.
+writes it. A change players notice adds a line under `## [Unreleased]`.
+
+A release goes in three steps:
+
+1. Pin the platform in the root `Cargo.toml` to the commit of the loader
+   alpha the mods are built for.
+2. Set the versions. `release-pr` opens the release pull request, which bumps
+   the mods whose folders changed. In that pull request, rename each bumped
+   mod's `## [Unreleased]` heading to its new version, as
+   `## [0.2.0] - 2026-11-05`, and leave `## [Unreleased]` empty above it. A
+   mod with no change players notice keeps its old version. Its CI fails until
+   every bumped mod's notes are ready. A mod never released has no tag to bump
+   from, so release-plz opens no pull request for it: set its version and
+   close its section in an ordinary pull request.
+3. Run `release` on `main` once that pull request merged.
 
 `release-plz.yml` runs by hand:
 
@@ -74,16 +86,16 @@ release pull request renames that heading to the mod's new version, as
   builds those mods, every mod when a mod's notes are refused, and shows both
   in the run's summary.
 - `release-pr` opens the release pull request for the mods that changed.
-- `release`, once that pull request merged, makes one prerelease per mod. A
-  job per released mod then builds only that mod from its tag, attaches its
-  zip, PDB, SBOM, `SHA256SUMS` and build provenance, and replaces the notes
-  with those of `cargo xtask notes`. Then the docs site builds again.
+- `release` makes one prerelease for each mod whose version has no tag yet,
+  with the notes of `cargo xtask notes`. A job per released mod then builds
+  only that mod from its tag and attaches its zip, PDB, SBOM, `SHA256SUMS`
+  and build provenance. Then the docs site builds again.
 
 `cargo xtask notes` opens each mod's notes with the alpha warning in English
 and Ukrainian, names the loader alpha and gives the mod's section of its
 version. It refuses a mod with changes under Unreleased or without its
 version's section, and a workspace whose `enshwick` commit no loader release
-tags: before a release, pin the platform to the commit of a loader alpha.
+tags. `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.

@@ -48,14 +48,16 @@ play.
 
 ## Actions
 
-On the mod's page of the Mods screen, for administrators, on a dedicated
-server or while the client hosts a game:
+For administrators, on a dedicated server or while the client hosts a game.
+A client runs the actions without arguments on a key, which the Mods screen's
+controls page changes; the server's console runs each as
+`enshwick.research <action> [value]`.
 
-| Action       | What it does                                                                                  |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| `mark`       | a marked line in the log; every tooltip function dumps its next call                          |
-| `mark-value` | the same, and the value given is looked for in what is dumped                                 |
-| `status`     | how many tooltip dumps were written since the last mark, and how many impact writes were seen |
+| Action       | Key | What it does                                                                                  |
+| ------------ | --- | --------------------------------------------------------------------------------------------- |
+| `mark`       | F7  | a marked line in the log; every tooltip function dumps its next call                          |
+| `mark-value` |     | the same, and the value given is looked for in what is dumped                                 |
+| `status`     | F8  | how many tooltip dumps were written since the last mark, and how many impact writes were seen |
 
 ## Settings
 

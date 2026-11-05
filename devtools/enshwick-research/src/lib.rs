@@ -11,8 +11,8 @@
 //! the game's impact programs set (heals, revives, scripted kills), how
 //! skills are unlocked and taken back, where a player's spawn target
 //! points, and whether any thread runs on a fiber.
-//! Its `mark` action, for administrators on the Mods screen while the
-//! client hosts a game, starts a new section of the log.
+//! Its `mark` action, F7 for administrators while the client hosts a game,
+//! starts a new section of the log.
 
 mod entities;
 mod fibers;
@@ -25,7 +25,8 @@ mod tooltip;
 mod ui;
 
 use enshwick::abi::Side;
-use enshwick::actions::{Action, Arg, Outcome, Request, Value};
+use enshwick::actions::{Action, Actions, Arg, Outcome, Request, Value};
+use enshwick::controls::{Control, Key};
 use enshwick::i18n::Texts;
 use enshwick::{Load, Mod, Off};
 
@@ -182,7 +183,20 @@ impl Mod for Research {
                 }
             }
         }
-        actions(load)?;
+        let actions = actions(load)?;
+        if client {
+            for (name, label, key) in CONTROLS {
+                let running = actions.clone();
+                let _keyed = load.feature(name, |load| {
+                    let control = Control::new(name, label).key(Key::parse(key)?);
+                    load.control(control, move |_| {
+                        if let Err(off) = running.run(name, &[]) {
+                            enshwick::warn!("research {name} not sent: {off}");
+                        }
+                    })
+                });
+            }
+        }
         enshwick::info!("research on");
         Ok(Self {
             fibers: settings.fibers,
@@ -241,6 +255,24 @@ mod tests {
     }
 
     #[test]
+    fn f7_marks_the_log_and_f8_asks_the_status_on_a_client() {
+        let (status, loader) = start(Side::CLIENT, "enabled = true\n");
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        for (name, _, key) in CONTROLS {
+            let key = Key::parse(key).unwrap();
+            assert_eq!(
+                loader.keys(&[key], core::time::Duration::from_millis(16)),
+                1
+            );
+            assert_eq!(loader.keys(&[], core::time::Duration::from_millis(16)), 0);
+            assert_eq!(
+                loader.action_runs().last(),
+                Some(&(name.to_owned(), String::new()))
+            );
+        }
+    }
+
+    #[test]
     fn on_either_side_it_starts_or_turns_off_with_one_reason_and_never_panics() {
         for side in [Side::SERVER, Side::CLIENT] {
             let (status, loader) = start(side, "enabled = true\n");
@@ -292,8 +324,15 @@ fn mark(request: &Request<'_>, values: &[u32]) -> Outcome {
     Outcome::done(format!("mark {mark}; hover the item now"))
 }
 
+/// The keys of the actions without arguments, as control, label and default
+/// key; F7 and up, which the game leaves free.
+const CONTROLS: [(&str, &str, &str); 2] = [
+    ("mark", "Mark the log", "F7"),
+    ("status", "Research status", "F8"),
+];
+
 /// Declares the research actions, for administrators.
-fn actions(load: &mut Load<'_>) -> Result<(), Off> {
+fn actions(load: &mut Load<'_>) -> Result<Actions, Off> {
     let actions = load.actions(Texts::default())?;
     actions.add(Action::new("mark", "Mark the log").admins(), |request| {
         mark(request, &[])
@@ -321,7 +360,8 @@ fn actions(load: &mut Load<'_>) -> Result<(), Off> {
             }
             None => format!("the tooltip is not looked at in this process{impact}"),
         })
-    })
+    })?;
+    Ok(actions)
 }
 
 enshwick::declare_mod!(Research);

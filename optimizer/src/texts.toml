@@ -10,7 +10,7 @@
 "config.server_wait_cap_ms" = "Server wait cap, ms"
 "config.server_wait_cap_ms.doc" = "The longest the server's game loop waits between its passes while players are online, 1 to 8 ms, never past the next simulation step. 1 is vanilla. Check gliding, joining and combat before keeping more."
 "config.measure" = "Measure mode"
-"config.measure.doc" = "A line a minute in the log and the status summary: CPU by thread group, loop and step rates, exact waits and the server's Bad Performance warnings."
+"config.measure.doc" = "A line a minute in the log and the status summary: CPU by thread group, loop and step rates, exact waits, frame times in the game and the server's Bad Performance warnings."
 
 [uk]
 "mod.name" = "Optimizer"
@@ -24,7 +24,7 @@
 "config.server_wait_cap_ms" = "Межа очікування сервера, мс"
 "config.server_wait_cap_ms.doc" = "Найдовше очікування ігрового циклу сервера між проходами, поки на ньому є гравці, від 1 до 8 мс, ніколи не довше за наступний крок симуляції. 1 як у грі. Перш ніж лишати більше, перевірте політ на планері, приєднання й бій."
 "config.measure" = "Режим вимірювань"
-"config.measure.doc" = "Рядок щохвилини в журналі та у зведенні стану: CPU за групами потоків, частота циклу й кроків, точні очікування та попередження сервера Bad Performance."
+"config.measure.doc" = "Рядок щохвилини в журналі та у зведенні стану: CPU за групами потоків, частота циклу й кроків, точні очікування, час кадрів у грі та попередження сервера Bad Performance."
 
 [de]
 "mod.name" = "Optimizer"
@@ -38,7 +38,7 @@
 "config.server_wait_cap_ms" = "Server-Wartegrenze, ms"
 "config.server_wait_cap_ms.doc" = "Die längste Wartezeit der Spielschleife des Servers zwischen ihren Durchläufen, solange Spieler online sind, 1 bis 8 ms, nie über den nächsten Simulationsschritt hinaus. 1 entspricht dem Grundspiel. Prüfe Gleiten, Beitreten und Kampf, bevor du mehr behältst."
 "config.measure" = "Messmodus"
-"config.measure.doc" = "Eine Zeile pro Minute im Log und in der Statusübersicht: CPU nach Threadgruppe, Schleifen- und Schrittraten, exakte Wartezeiten und die Bad-Performance-Warnungen des Servers."
+"config.measure.doc" = "Eine Zeile pro Minute im Log und in der Statusübersicht: CPU nach Threadgruppe, Schleifen- und Schrittraten, exakte Wartezeiten, Bildzeiten im Spiel und die Bad-Performance-Warnungen des Servers."
 
 [fr]
 "mod.name" = "Optimizer"
@@ -52,7 +52,7 @@
 "config.server_wait_cap_ms" = "Attente max. du serveur, ms"
 "config.server_wait_cap_ms.doc" = "L'attente la plus longue de la boucle de jeu du serveur entre ses passages tant que des joueurs sont en ligne, de 1 à 8 ms, jamais au-delà de la prochaine étape de simulation. 1 correspond au jeu de base. Vérifiez le vol plané, les connexions et le combat avant de garder plus."
 "config.measure" = "Mode mesure"
-"config.measure.doc" = "Une ligne par minute dans le journal et le résumé d'état : CPU par groupe de threads, fréquences de boucle et d'étape, attentes exactes et avertissements Bad Performance du serveur."
+"config.measure.doc" = "Une ligne par minute dans le journal et le résumé d'état : CPU par groupe de threads, fréquences de boucle et d'étape, attentes exactes, durée des images en jeu et avertissements Bad Performance du serveur."
 
 [it]
 "mod.name" = "Optimizer"
@@ -66,7 +66,7 @@
 "config.server_wait_cap_ms" = "Attesa massima del server, ms"
 "config.server_wait_cap_ms.doc" = "L'attesa più lunga del ciclo di gioco del server tra un passaggio e l'altro mentre ci sono giocatori online, da 1 a 8 ms, mai oltre il prossimo passo di simulazione. 1 è il gioco base. Controlla planata, accesso e combattimento prima di tenere di più."
 "config.measure" = "Modalità misura"
-"config.measure.doc" = "Una riga al minuto nel log e nel riepilogo di stato: CPU per gruppo di thread, frequenze di ciclo e di passo, attese esatte e avvisi Bad Performance del server."
+"config.measure.doc" = "Una riga al minuto nel log e nel riepilogo di stato: CPU per gruppo di thread, frequenze di ciclo e di passo, attese esatte, tempi dei fotogrammi nel gioco e avvisi Bad Performance del server."
 
 [es]
 "mod.name" = "Optimizer"
@@ -80,7 +80,7 @@
 "config.server_wait_cap_ms" = "Espera máxima del servidor, ms"
 "config.server_wait_cap_ms.doc" = "La espera más larga del bucle de juego del servidor entre sus pasadas mientras hay jugadores conectados, de 1 a 8 ms, nunca más allá del siguiente paso de simulación. 1 es el juego base. Comprueba el planeo, la conexión y el combate antes de dejar más."
 "config.measure" = "Modo de medición"
-"config.measure.doc" = "Una línea por minuto en el registro y en el resumen de estado: CPU por grupo de hilos, frecuencias de bucle y de paso, esperas exactas y los avisos Bad Performance del servidor."
+"config.measure.doc" = "Una línea por minuto en el registro y en el resumen de estado: CPU por grupo de hilos, frecuencias de bucle y de paso, esperas exactas, tiempos de fotograma en el juego y los avisos Bad Performance del servidor."
 
 [ru]
 "mod.name" = "Optimizer"
@@ -94,7 +94,7 @@
 "config.server_wait_cap_ms" = "Предел ожидания сервера, мс"
 "config.server_wait_cap_ms.doc" = "Самое долгое ожидание игрового цикла сервера между проходами, пока на нём есть игроки, от 1 до 8 мс, никогда не дольше следующего шага симуляции. 1 как в обычной игре. Прежде чем оставить больше, проверьте планирование, подключение и бой."
 "config.measure" = "Режим замеров"
-"config.measure.doc" = "Строка в минуту в журнале и в сводке состояния: CPU по группам потоков, частота цикла и шагов, точные ожидания и предупреждения сервера Bad Performance."
+"config.measure.doc" = "Строка в минуту в журнале и в сводке состояния: CPU по группам потоков, частота цикла и шагов, точные ожидания, время кадров в игре и предупреждения сервера Bad Performance."
 
 [pl]
 "mod.name" = "Optimizer"
@@ -108,7 +108,7 @@
 "config.server_wait_cap_ms" = "Limit oczekiwania serwera, ms"
 "config.server_wait_cap_ms.doc" = "Najdłuższe oczekiwanie pętli gry serwera między przebiegami, gdy gracze są online, od 1 do 8 ms, nigdy dłużej niż do następnego kroku symulacji. 1 to podstawowa gra. Zanim zostawisz więcej, sprawdź szybowanie, dołączanie i walkę."
 "config.measure" = "Tryb pomiaru"
-"config.measure.doc" = "Wiersz na minutę w dzienniku i w podsumowaniu stanu: CPU według grup wątków, częstotliwości pętli i kroków, dokładne oczekiwania oraz ostrzeżenia serwera Bad Performance."
+"config.measure.doc" = "Wiersz na minutę w dzienniku i w podsumowaniu stanu: CPU według grup wątków, częstotliwości pętli i kroków, dokładne oczekiwania, czasy klatek w grze oraz ostrzeżenia serwera Bad Performance."
 
 [ja]
 "mod.name" = "Optimizer"
@@ -122,7 +122,7 @@
 "config.server_wait_cap_ms" = "サーバー待機の上限（ミリ秒）"
 "config.server_wait_cap_ms.doc" = "プレイヤーがオンラインの間、サーバーのゲームループが処理の合間に待機する最長時間（1～8ミリ秒）。次のシミュレーションステップを超えることはありません。1は通常のゲームと同じです。大きな値のままにする前に、滑空、参加、戦闘を確認してください。"
 "config.measure" = "測定モード"
-"config.measure.doc" = "ログとステータス概要に1分ごとに1行：スレッドグループ別のCPU、ループとステップの頻度、正確な待機、サーバーのBad Performance警告。"
+"config.measure.doc" = "ログとステータス概要に1分ごとに1行：スレッドグループ別のCPU、ループとステップの頻度、正確な待機、ゲーム内のフレーム時間、サーバーのBad Performance警告。"
 
 [ko]
 "mod.name" = "Optimizer"
@@ -136,7 +136,7 @@
 "config.server_wait_cap_ms" = "서버 대기 상한(ms)"
 "config.server_wait_cap_ms.doc" = "플레이어가 접속해 있는 동안 서버 게임 루프가 처리 사이에 대기하는 최대 시간입니다. 1~8ms이며, 다음 시뮬레이션 단계를 넘지 않습니다. 1은 기본 게임과 같습니다. 더 큰 값을 유지하기 전에 활공, 접속, 전투를 확인하세요."
 "config.measure" = "측정 모드"
-"config.measure.doc" = "로그와 상태 요약에 1분마다 한 줄: 스레드 그룹별 CPU, 루프와 단계 빈도, 정밀 대기, 서버의 Bad Performance 경고."
+"config.measure.doc" = "로그와 상태 요약에 1분마다 한 줄: 스레드 그룹별 CPU, 루프와 단계 빈도, 정밀 대기, 게임 내 프레임 시간, 서버의 Bad Performance 경고."
 
 [pt-br]
 "mod.name" = "Optimizer"
@@ -150,7 +150,7 @@
 "config.server_wait_cap_ms" = "Espera máxima do servidor, ms"
 "config.server_wait_cap_ms.doc" = "A espera mais longa do loop de jogo do servidor entre suas passadas enquanto há jogadores online, de 1 a 8 ms, nunca além do próximo passo da simulação. 1 é o jogo base. Verifique planar, entrar e combater antes de manter mais."
 "config.measure" = "Modo de medição"
-"config.measure.doc" = "Uma linha por minuto no log e no resumo de status: CPU por grupo de threads, taxas de loop e de passo, esperas exatas e os avisos Bad Performance do servidor."
+"config.measure.doc" = "Uma linha por minuto no log e no resumo de status: CPU por grupo de threads, taxas de loop e de passo, esperas exatas, tempos de quadro no jogo e os avisos Bad Performance do servidor."
 
 [th]
 "mod.name" = "Optimizer"
@@ -164,7 +164,7 @@
 "config.server_wait_cap_ms" = "ขีดจำกัดการรอของเซิร์ฟเวอร์ (มิลลิวินาที)"
 "config.server_wait_cap_ms.doc" = "เวลารอนานที่สุดของลูปเกมของเซิร์ฟเวอร์ระหว่างรอบ ขณะที่มีผู้เล่นออนไลน์ ตั้งแต่ 1 ถึง 8 มิลลิวินาที และไม่เกินขั้นจำลองถัดไป ค่า 1 เหมือนเกมปกติ ตรวจสอบการร่อน การเข้าร่วม และการต่อสู้ก่อนใช้ค่าที่สูงกว่า"
 "config.measure" = "โหมดวัดผล"
-"config.measure.doc" = "หนึ่งบรรทัดต่อนาทีในล็อกและสรุปสถานะ: CPU ตามกลุ่มเธรด อัตราลูปและขั้น การรอแบบแม่นยำ และคำเตือน Bad Performance ของเซิร์ฟเวอร์"
+"config.measure.doc" = "หนึ่งบรรทัดต่อนาทีในล็อกและสรุปสถานะ: CPU ตามกลุ่มเธรด อัตราลูปและขั้น การรอแบบแม่นยำ เวลาเฟรมในเกม และคำเตือน Bad Performance ของเซิร์ฟเวอร์"
 
 [tr]
 "mod.name" = "Optimizer"
@@ -178,7 +178,7 @@
 "config.server_wait_cap_ms" = "Sunucu bekleme sınırı, ms"
 "config.server_wait_cap_ms.doc" = "Oyuncular çevrimiçiyken sunucunun oyun döngüsünün geçişleri arasında beklediği en uzun süre, 1 ile 8 ms arası, asla bir sonraki simülasyon adımını geçmez. 1 temel oyundur. Daha yüksek bir değerde kalmadan önce süzülmeyi, katılmayı ve savaşı kontrol edin."
 "config.measure" = "Ölçüm modu"
-"config.measure.doc" = "Günlükte ve durum özetinde dakikada bir satır: iş parçacığı grubuna göre CPU, döngü ve adım hızları, tam beklemeler ve sunucunun Bad Performance uyarıları."
+"config.measure.doc" = "Günlükte ve durum özetinde dakikada bir satır: iş parçacığı grubuna göre CPU, döngü ve adım hızları, tam beklemeler, oyundaki kare süreleri ve sunucunun Bad Performance uyarıları."
 
 [zh-cn]
 "mod.name" = "Optimizer"
@@ -192,7 +192,7 @@
 "config.server_wait_cap_ms" = "服务器等待上限（毫秒）"
 "config.server_wait_cap_ms.doc" = "有玩家在线时，服务器游戏循环在两次处理之间等待的最长时间，1 到 8 毫秒，绝不超过下一个模拟步。1 与原版游戏相同。保留更大的值前，请检查滑翔、加入和战斗。"
 "config.measure" = "测量模式"
-"config.measure.doc" = "每分钟在日志和状态摘要中写一行：按线程组的 CPU、循环和步进频率、精确等待以及服务器的 Bad Performance 警告。"
+"config.measure.doc" = "每分钟在日志和状态摘要中写一行：按线程组的 CPU、循环和步进频率、精确等待、游戏中的帧时间以及服务器的 Bad Performance 警告。"
 
 [zh-tw]
 "mod.name" = "Optimizer"
@@ -206,4 +206,4 @@
 "config.server_wait_cap_ms" = "伺服器等待上限（毫秒）"
 "config.server_wait_cap_ms.doc" = "有玩家在線時，伺服器遊戲迴圈在兩次處理之間等待的最長時間，1 到 8 毫秒，絕不超過下一個模擬步。1 與原版遊戲相同。保留更大的值前，請檢查滑翔、加入和戰鬥。"
 "config.measure" = "量測模式"
-"config.measure.doc" = "每分鐘在記錄和狀態摘要中寫一行：依執行緒群組的 CPU、迴圈和步進頻率、精確等待以及伺服器的 Bad Performance 警告。"
+"config.measure.doc" = "每分鐘在記錄和狀態摘要中寫一行：依執行緒群組的 CPU、迴圈和步進頻率、精確等待、遊戲中的影格時間以及伺服器的 Bad Performance 警告。"

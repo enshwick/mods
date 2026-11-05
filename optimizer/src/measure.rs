@@ -1,7 +1,7 @@
 //! Measure mode: once a minute, a line with the CPU the process, its main
 //! thread, the server loop's thread and its busiest groups of threads used,
-//! the server loop's passes and steps, the exact waits slept and the server's
-//! "Bad Performance" warnings.
+//! the server loop's passes and steps, the exact waits slept, the frame times
+//! in the game and the server's "Bad Performance" warnings.
 //!
 //! The warnings come from the game's own log beside the game,
 //! `logs/<game>.log`, read from where the last minute stopped.
@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use enshwick::state::ModLocal;
 use rustc_hash::FxHashMap;
 
+use crate::frames;
 use crate::sys::{self, Thread};
 use crate::waits::{self, CAPPED, LATE_NS, PASSES, SERVER_THREAD, SLEEPS, SLEPT_NS, STEPS};
 use enshwick::Relock;
@@ -97,6 +98,11 @@ pub(crate) fn set(on: bool, context: String) {
     *lines.context.relock() = context;
 }
 
+/// Whether measure mode is on.
+pub(crate) fn on() -> bool {
+    lines().on.load(Ordering::Relaxed)
+}
+
 /// The platform and what runs on it.
 pub(crate) fn context() -> String {
     lines().context.relock().clone()
@@ -162,6 +168,8 @@ pub(crate) struct Minute {
     pub(crate) slept_ns: u64,
     /// Nanoseconds they woke past the deadline.
     pub(crate) late_ns: u64,
+    /// The frames of the interface, none on the dedicated server.
+    pub(crate) frames: frames::Times,
     /// The server's warnings.
     pub(crate) warnings: Option<Warnings>,
     /// The busiest groups of threads, busiest first.
@@ -262,6 +270,17 @@ pub(crate) fn line(minute: &Minute) -> String {
         #[expect(clippy::cast_precision_loss, reason = "a mean to one decimal")]
         let late = minute.late_ns as f64 / minute.sleeps as f64 / 1_000.0;
         let _ = write!(out, " of {mean:.0} µs on average, {late:.0} µs late");
+    }
+    let frames = minute.frames;
+    if frames.count > 0 {
+        let ms = |ns: u64| rate(ns, 1_000_000.0);
+        let _ = write!(
+            out,
+            "; frames {:.1}/s, 99% within {:.1} ms, worst {:.1} ms",
+            rate(frames.count, s),
+            ms(frames.p99_ns),
+            ms(frames.worst_ns),
+        );
     }
     match minute.warnings {
         Some(found) if found.count > 0 => {
@@ -380,6 +399,7 @@ impl Meter {
             threads: FxHashMap::default(),
         };
         let _first = meter.thread_groups();
+        let _before = frames::take();
         meter
     }
 
@@ -485,6 +505,7 @@ impl Meter {
             sleeps: now.sleeps - was.sleeps,
             slept_ns: now.slept_ns - was.slept_ns,
             late_ns: now.late_ns - was.late_ns,
+            frames: frames::take(),
             warnings,
             threads,
         };
@@ -588,6 +609,11 @@ mod tests {
             sleeps: 3_600,
             slept_ns: 3_600 * 600_000,
             late_ns: 0,
+            frames: frames::Times {
+                count: 3_600,
+                p99_ns: 17_000_000,
+                worst_ns: 33_100_000,
+            },
             warnings: Some(Warnings {
                 count: 2,
                 worst_us: 34_012,
@@ -598,6 +624,7 @@ mod tests {
             line(&minute),
             "CPU: process 50.0%, main thread 5.0%, server loop thread ? (100% = one core); \
              server loop 900/s, steps 60.0/s; exact waits 60/s of 600 µs on average, 0 µs late; \
+             frames 60.0/s, 99% within 17.0 ms, worst 33.1 ms; \
              Bad Performance 2 (worst 34.0 ms); threads: Session 20.0%, main 5.0%"
         );
         let quiet = Minute {

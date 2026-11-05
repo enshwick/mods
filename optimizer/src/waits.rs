@@ -119,7 +119,7 @@ pub(crate) fn server_wait(
 }
 
 /// Nanoseconds since the mod started.
-fn now_ns() -> Option<u64> {
+pub(crate) fn now_ns() -> Option<u64> {
     let epoch = EPOCH.get()?;
     Some(
         u64::try_from(epoch.elapsed().as_nanos())

@@ -13,7 +13,8 @@
 //! - Server wait cap: the server's game loop may wait longer between its
 //!   passes while players are online, never past the next simulation step.
 //! - Measure mode: a line a minute with the CPU used, by thread group, the
-//!   loop and step rates and the server's "Bad Performance" warnings.
+//!   loop and step rates, the frame times in the game and the server's "Bad
+//!   Performance" warnings.
 //! - At start, one line names what the server runs on: Wine or Windows, the
 //!   fast synchronisation available, the CPU governor, the container's CPU
 //!   limit and the CPUs the game saw.
@@ -32,6 +33,7 @@ use crate::env::CpuLimit;
 use crate::platform::{Change, Platform, default_on};
 
 mod env;
+mod frames;
 mod measure;
 mod platform;
 mod sys;
@@ -80,8 +82,8 @@ pub struct Settings {
     #[config(range = 1..=8)]
     pub server_wait_cap_ms: u32,
     /// A line a minute in the log and the status summary: CPU, by thread
-    /// group, loop and step rates, exact waits and the server's Bad
-    /// Performance warnings.
+    /// group, loop and step rates, exact waits, the frame times in the game
+    /// and the server's Bad Performance warnings.
     pub measure: bool,
 }
 
@@ -202,7 +204,8 @@ impl Mod for Optimizer {
         let _texts = load.texts()?;
         let environment = env::Environment::probe(&measure::game_log_text());
         let wine = environment.is_wine();
-        let platform = Platform::of(load.host().build().side == Side::SERVER, wine);
+        let server = load.host().build().side == Side::SERVER;
+        let platform = Platform::of(server, wine);
         let summary = environment.summary();
         enshwick::info!("environment: {summary}");
         for advice in environment.advice() {
@@ -229,6 +232,9 @@ impl Mod for Optimizer {
             workers.is_some()
         );
         load.on_every_step(|_| waits::stepped())?;
+        if !server {
+            load.on_frame(|_| frames::frame())?;
+        }
         let _first = FOUND.set(Found {
             platform,
             summary: format!("environment: {summary}"),
@@ -436,6 +442,24 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert!(measure::running(), "{:?}", loader.logs());
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+    }
+
+    #[test]
+    fn a_hosted_game_times_the_frames_of_its_interface() {
+        let loader = enshwick::test::FakeHost::new()
+            .side(Side::CLIENT)
+            .settings("exact_waits = \"auto\"\nserver_wait_cap_ms = 1\nmeasure = true\n")
+            .install();
+        // SAFETY: the export of `declare_mod!` above.
+        let status = unsafe { loader.init(enshwick_mod_init) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        for _ in 0..4 {
+            let _drawn = loader.draw_frame();
+        }
+        let found = frames::take();
+        assert_eq!(found.count, 3, "{:?}", loader.logs());
+        assert!(found.p99_ns <= found.worst_ns);
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
     }
 }

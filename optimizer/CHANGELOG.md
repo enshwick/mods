@@ -6,6 +6,11 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Added
+
+- In a game you host, measure mode also writes the frames a second and how
+  long they take, so you can see what each change does to the frame rate.
+
 ## [0.1.0] - 2026-11-05
 
 ### Added

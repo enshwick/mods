@@ -16,7 +16,7 @@ settings:
     applies: at-once
   - key: measure
     default: true
-    meaning: Writes a line a minute to the log with the server's CPU use and loop rates.
+    meaning: Writes a line a minute to the log with the server's CPU use and loop rates. In a game you host, the line also has the frame times.
     applies: at-once
 ---
 
@@ -54,8 +54,10 @@ shows.
 
 ## Multiplayer
 
-Only the dedicated server needs Optimizer. In a game you host, every change
-stays off unless a setting turns it on.
+A dedicated server needs Optimizer most. In a game you host, Optimizer runs
+too, but every change stays off by default, because none was measured there
+yet. The `exact_waits` and `server_wait_cap_ms` settings turn their change on
+there too. Players who join a game need nothing.
 
 ## Problems
 

@@ -1,7 +1,7 @@
 ---
 id: enshwick.personal-safes
 name: Personal Safes
-summary: Adds the Safe, a chest that only its owner and the players they allow can open. Only the owner picks it up.
+summary: Adds the Safe, a chest that only its owner and the players they allow can open. Only the owner picks it up. You craft it where you craft the Wooden Chest.
 needs: everyone
 settings:
   - key: cost_multiplier

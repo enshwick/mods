@@ -1,7 +1,7 @@
 ---
 id: enshwick.build-camera
 name: Build Camera
-summary: Every player may use the building fly mode of the Flying Architect skill near a base, with no skill points spent.
+summary: Every player may use the building fly mode of the Flying Architect skill near a base, with no skill points spent. The usual building limits stay.
 needs: everyone
 settings:
   - key: enabled

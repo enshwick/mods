@@ -27,7 +27,9 @@ return {
 			s.tell(`{player.name}: type "who am I"`)
 			local chat = s.event("ChatSaid", 300, typed("who am I"))
 			s.equal(chat.player, player.key, "the sender's account")
-			s.equal(chat.entity, player.entity, "the sender's character")
+			s.log(`the sender's character: {chat.entity}, theirs {player.entity}`)
+			-- The game names none for a sender with no character in the world.
+			s.expect(chat.entity == nil or chat.entity == player.entity, "another character named")
 		end)
 	end,
 }

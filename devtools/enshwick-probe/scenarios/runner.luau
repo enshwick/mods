@@ -74,9 +74,32 @@ local function notify(event: string, data: any)
 	end
 end
 
--- Events a scenario may wait for, each heard from the start. A typed game
--- event this build lacks only leaves its name unheard.
-local EVENTS = {
+-- The runner's clock, in seconds, moved by the time `Ticked` reports, so
+-- every wait counts the server's steps as they come.
+local clock = 0
+local timers: { { at: number, run: () -> () } } = {}
+
+-- Runs `run` once `seconds` have passed on the runner's clock.
+local function after(seconds: number, run: () -> ())
+	table.insert(timers, { at = clock + seconds, run = run })
+end
+
+enshwick.on("Ticked", function(data)
+	clock += (tonumber(data.elapsed_nanos) or 0) / 1e9
+	local due = {}
+	for i = #timers, 1, -1 do
+		if timers[i].at <= clock then
+			table.insert(due, 1, table.remove(timers, i))
+		end
+	end
+	for _, timer in due do
+		timer.run()
+	end
+	notify("Ticked", data)
+end)
+
+-- Events a scenario may wait for, each heard from the start.
+local LOADER_EVENTS = {
 	"WorldSaving",
 	"WorldSaved",
 	"PlayerJoined",
@@ -84,10 +107,13 @@ local EVENTS = {
 	"PlayerDied",
 	"DayStarted",
 	"NightStarted",
-	"Ticked",
 	"KnowledgeChanged",
 	"BuildingPlaced",
 	"BuildingRemoved",
+}
+-- Typed game events, heard only where the build has them: a subscription
+-- to one it lacks would turn the probe off once the start is over.
+local GAME_EVENTS = {
 	"CraftRecipeEvent",
 	"CraftRecipeSuccessEvent",
 	"LootInteractionEvent",
@@ -97,14 +123,33 @@ local EVENTS = {
 	"XpGainedEvent",
 	"LevelUpEvent",
 }
+
+-- The reflected name of a typed game event: `CraftRecipeEvent` is
+-- `craft_recipe_event`.
+local function reflected(event: string): string
+	return (event:gsub("(%l)(%u)", "%1_%2"):lower())
+end
+
 local heard: { [string]: boolean } = {}
-for _, event in EVENTS do
-	local ok, why = pcall(enshwick.on :: any, event, function(data: any)
+local function hear(event: string)
+	enshwick.on(event :: any, function(data: any)
 		notify(event, data)
 	end)
-	heard[event] = ok
-	if not ok then
-		enshwick.log.warn(`scenario runner: {event} is not heard: {why}`)
+	heard[event] = true
+end
+for _, event in LOADER_EVENTS do
+	hear(event)
+end
+heard.Ticked = true
+local types: { [string]: boolean } = {}
+for _, ty in enshwick.game_event_types() do
+	types[ty.name] = true
+end
+for _, event in GAME_EVENTS do
+	if types[reflected(event)] then
+		hear(event)
+	else
+		enshwick.log.info(`scenario runner: {event} is not heard: this build has no {reflected(event)}`)
 	end
 end
 local HOOKS: { [string]: () -> () } = {
@@ -176,14 +221,15 @@ local function context(name: string)
 	--- Waits `seconds` of the server's time.
 	function s.wait(seconds: number)
 		local co = current()
-		enshwick.schedule.after(seconds, function()
+		after(seconds, function()
 			resume(co)
 		end)
 		coroutine.yield()
 	end
 
 	--- Waits for the event `event` whose data meets `test`, at most
-	--- `seconds`; its data, or `nil` when none came in time.
+	--- `seconds`; its data, `true` for an event without data, or `nil` when
+	--- none came in time.
 	function s.next(event: string, seconds: number, test: ((any) -> boolean)?): any?
 		assert(heard[event], `the runner does not hear {event}`)
 		local co = current()
@@ -191,14 +237,17 @@ local function context(name: string)
 		local list = waiting[event] or {}
 		table.insert(list, waiter)
 		waiting[event] = list
-		enshwick.schedule.after(seconds, function()
+		after(seconds, function()
 			if not waiter.done then
 				waiter.done = true
 				resume(co, false)
 			end
 		end)
 		local came, data = coroutine.yield()
-		return if came then data else nil
+		if not came then
+			return nil
+		end
+		return if data == nil then true else data
 	end
 
 	--- Waits for `event` as `next` does and fails the step without it.
@@ -347,7 +396,8 @@ enshwick.on("WorldLoaded", function()
 	if type(name) ~= "string" or name == "" then
 		return
 	end
-	enshwick.schedule.after(START_DELAY, function()
+	line(`scenario {name}: starts in {START_DELAY} s`)
+	after(START_DELAY, function()
 		start(name)
 	end)
 end)

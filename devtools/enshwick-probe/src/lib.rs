@@ -127,9 +127,9 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
     extras
 }
 
-/// The probe, with its scenario runner while it is on.
+/// The probe.
 #[derive(Debug)]
-pub struct Probe(Option<enshwick_luau::Runtime>);
+pub struct Probe;
 
 /// The characters, survivors and animals in the world: what holds health
 /// and buffs.
@@ -348,7 +348,7 @@ impl Mod for Probe {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let settings: Settings = own_settings(load);
         if !settings.enabled {
-            return Ok(Self(None));
+            return Ok(Self);
         }
         let census = Arc::new(Census::new(load));
         let counted = Arc::clone(&census);
@@ -427,9 +427,9 @@ impl Mod for Probe {
         let saved = Arc::clone(&checks);
         load.on::<WorldSaved>(move |()| saved.saved())?;
         actions(load, census, &checks, run_all, affix_checks)?;
-        let runner = scenarios::start(load)?;
+        scenarios::start(load)?;
         enshwick::info!("probe on");
-        Ok(Self(Some(runner)))
+        Ok(Self)
     }
 }
 

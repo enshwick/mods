@@ -17,11 +17,15 @@
 //! downloads: `<package>.zip` with `mods/<id>/<package>.dll` and the license, and
 //! the PDB beside it, for every mod in the workspace, or with `--package`
 //! for the named ones only.
+//!
+//! `cargo xtask notes` writes the release notes of each mod about to be
+//! released ([`notes`]), and refuses a mod whose notes are not ready.
 
 #![forbid(unsafe_code)]
 
 mod crate_rules;
 mod mod_rules;
+mod notes;
 mod wine;
 
 use std::io::{Cursor, Write as _};
@@ -30,7 +34,7 @@ use std::process::{Command, ExitCode};
 use std::thread;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--package <name>]... [--out <dir>]";
+const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--package <name>]... [--out <dir>] | cargo xtask notes (--unreleased | --package <name>...) [--out <dir>]";
 const WINDOWS_TARGET: &str = "x86_64-pc-windows-msvc";
 
 fn main() -> ExitCode {
@@ -49,6 +53,7 @@ fn run(args: &[String]) -> Result<bool, String> {
     let (task, rest) = args.split_first().ok_or(USAGE)?;
     match task.as_str() {
         "dist" => return dist(rest),
+        "notes" => return notes::run(rest),
         "wine-run" => return wine::run_one(rest),
         "check" => {}
         _ => return Err(USAGE.to_owned()),
@@ -89,6 +94,9 @@ fn run(args: &[String]) -> Result<bool, String> {
 #[derive(Debug)]
 struct Package {
     name: String,
+    version: String,
+    /// The folder of its `Cargo.toml`.
+    dir: PathBuf,
     /// The mod id from `[package.metadata.enshwick]`, else the name: the
     /// folder in `mods/` its release installs into.
     id: String,
@@ -132,6 +140,11 @@ fn packages() -> Result<Vec<Package>, String> {
                     .as_str()
                     .map_or_else(|| name.clone(), str::to_owned),
                 name,
+                version: package["version"].as_str().unwrap_or_default().to_owned(),
+                dir: Path::new(package["manifest_path"].as_str().unwrap_or_default())
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_default(),
                 windows_only: package["metadata"]["xtask"]["windows-only"].as_bool() == Some(true),
                 cdylib: types(&["cdylib"]),
                 lib: types(&["lib", "rlib"]),

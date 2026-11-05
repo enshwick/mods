@@ -17,12 +17,12 @@ every switch again.
 ## Install
 
 Download
-[`enshwick-admin-tools.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-admin-tools.zip).
+`enshwick-admin-tools.zip` from its [newest release](https://github.com/enshwick/mods/releases?q=enshwick-admin-tools&expanded=true).
 Extract it into the folder with `enshrouded_server.exe`. The mod needs the
 Enshwick loader. Get
-[`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-and extract it into the same folder. These files are development builds of the
-newest commit. Until the first release, 1.0.0, there are no other builds.
+`enshwick.zip` from the [Enshwick release](https://github.com/enshwick/enshwick/releases)
+that the mod's release notes name, and extract it into the same folder. Until 1.0 both are alphas, and anything may change from one alpha
+to the next. Back up your saves before you update.
 
 ## Who needs it
 

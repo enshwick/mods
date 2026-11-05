@@ -8,6 +8,5 @@ loader, never shipped to players:
 - [`enshwick-research`](enshwick-research/README.md) logs what a running
   client does where the platform still needs engine facts.
 
-Development builds are on the
-[`dev` prerelease](https://github.com/enshwick/mods/releases/tag/dev),
-one archive per mod.
+They are never released. Build their archives with
+`cargo xtask dist --package enshwick-probe --package enshwick-research`.

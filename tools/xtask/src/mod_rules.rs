@@ -58,6 +58,12 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
             ));
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
+        // Its release notes come from it (`cargo xtask notes`).
+        if dir.join("docs/player.md").is_file() && !dir.join("CHANGELOG.md").is_file() {
+            problems.push(format!(
+                "{name}: no CHANGELOG.md; a mod players get keeps one by hand"
+            ));
+        }
     }
     Ok(problems)
 }

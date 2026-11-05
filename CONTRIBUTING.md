@@ -59,15 +59,43 @@ pull request needs to pass.
 Every mod has its own version. release-plz, configured in
 `release-plz.toml`, versions each mod from the commits that touch its folder
 and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.
-`release-plz.yml` runs by hand: `release-pr` opens the release pull request
-for the mods that changed, and `release`, once it merged, makes one GitHub
-release per mod. A job per released mod then builds only that mod from its
-tag and attaches its zip, PDB, SBOM, `SHA256SUMS` and build provenance.
+Until 1.0 each release is an alpha: a GitHub prerelease built on a loader
+alpha.
 
-Every night `dev.yml` builds every mod and replaces the files of the `dev`
-prerelease, one `<package>.zip` per mod, when `main` moved since the last
-build. A run by hand from `main` builds it at once; from any other branch it
-does nothing.
+Each mod's `CHANGELOG.md` is written by hand for players; release-plz never
+writes it. A change players notice adds a line under `## [Unreleased]`.
+
+A release goes in three steps:
+
+1. Pin the platform in the root `Cargo.toml` to the commit of the loader
+   alpha the mods are built for.
+2. Set the versions. `release-pr` opens the release pull request, which bumps
+   the mods whose folders changed. In that pull request, rename each bumped
+   mod's `## [Unreleased]` heading to its new version, as
+   `## [0.2.0] - 2026-11-05`, and leave `## [Unreleased]` empty above it. A
+   mod with no change players notice keeps its old version. Its CI fails until
+   every bumped mod's notes are ready. A mod never released has no tag to bump
+   from, so release-plz opens no pull request for it: set its version and
+   close its section in an ordinary pull request.
+3. Run `release` on `main` once that pull request merged.
+
+`release-plz.yml` runs by hand:
+
+- `build`, from any branch, does what a release would and publishes
+  nothing: it writes the notes of every mod whose version has no tag yet and
+  builds those mods, every mod when a mod's notes are refused, and shows both
+  in the run's summary.
+- `release-pr` opens the release pull request for the mods that changed.
+- `release` makes one prerelease for each mod whose version has no tag yet,
+  with the notes of `cargo xtask notes`. A job per released mod then builds
+  only that mod from its tag and attaches its zip, PDB, SBOM, `SHA256SUMS`
+  and build provenance. Then the docs site builds again.
+
+`cargo xtask notes` opens each mod's notes with the alpha warning in English
+and Ukrainian, names the loader alpha and gives the mod's section of its
+version. It refuses a mod with changes under Unreleased or without its
+version's section, and a workspace whose `enshwick` commit no loader release
+tags. `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.

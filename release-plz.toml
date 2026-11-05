@@ -1,29 +1,36 @@
-# release-plz: each mod's version and CHANGELOG.md from the conventional
-# commits that touch its folder, so a change to one mod releases only it.
-# Each mod is tagged `<package>-v<version>` and gets its own GitHub release.
+# release-plz: each mod's version from the conventional commits that touch
+# its folder, so a change to one mod releases only it. Each mod is tagged
+# `<package>-v<version>` and gets its own GitHub release. Its CHANGELOG.md is
+# written by hand for players, and `cargo xtask notes` makes the release
+# notes from it.
 
 [workspace]
 # The mods are not published to crates.io: their versions live in git tags.
 git_only = true
 publish = false
-# `release` acts only when the newest commit on main is a merged release pull
-# request, so a stray run releases nothing.
-release_always = false
-# A version with a prerelease part (`0.2.0-alpha.1`) makes a GitHub prerelease.
-git_release_type = "auto"
+# `release` runs only by hand, on main, and releases every mod whose version
+# has no tag yet, whichever pull request set it: the first alpha of a mod
+# never released has no release pull request to wait for. `cargo xtask notes`
+# refuses the run first when a mod's notes are not ready.
+release_always = true
+# Until the loader's 1.0, every mod release is an alpha built on a loader
+# alpha; then "auto", where only a version like `0.2.0-alpha.1` is one.
+git_release_type = "pre"
+changelog_update = false
 git_tag_name = "{{ package }}-v{{ version }}"
 # Renovate moves the dependencies.
 dependencies_update = false
 pr_labels = ["release"]
-# The pull request body follows the repository's form: outcome bullets;
-# each CHANGELOG.md in the pull request holds the details.
+# The pull request body follows the repository's form: outcome bullets.
+# Before it merges, each bumped mod's CHANGELOG.md closes its Unreleased
+# section as the new version; its CI refuses it until then.
 pr_body = """
 ## Chores
 
 {% for release in releases -%}
 - Released `{{ release.package }}` {{ release.next_version }}{% if release.previous_version and release.previous_version != release.next_version %} (was {{ release.previous_version }}){% endif %}.
 {% endfor %}
-Each `CHANGELOG.md` in this pull request lists what changed.
+Before merging, close each released mod's `## [Unreleased]` in its `CHANGELOG.md` as its new version.
 """
 
 [[package]]

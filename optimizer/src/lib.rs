@@ -82,8 +82,8 @@ pub struct Settings {
     #[config(range = 1..=8)]
     pub server_wait_cap_ms: u32,
     /// A line a minute in the log and the status summary: CPU, by thread
-    /// group, loop and step rates, exact waits and the server's Bad
-    /// Performance warnings.
+    /// group, loop and step rates, exact waits, the frame times in the game
+    /// and the server's Bad Performance warnings.
     pub measure: bool,
 }
 
@@ -204,7 +204,8 @@ impl Mod for Optimizer {
         let _texts = load.texts()?;
         let environment = env::Environment::probe(&measure::game_log_text());
         let wine = environment.is_wine();
-        let platform = Platform::of(load.host().build().side == Side::SERVER, wine);
+        let server = load.host().build().side == Side::SERVER;
+        let platform = Platform::of(server, wine);
         let summary = environment.summary();
         enshwick::info!("environment: {summary}");
         for advice in environment.advice() {
@@ -231,7 +232,7 @@ impl Mod for Optimizer {
             workers.is_some()
         );
         load.on_every_step(|_| waits::stepped())?;
-        if load.host().build().side != Side::SERVER {
+        if !server {
             load.on_frame(|_| frames::frame())?;
         }
         let _first = FOUND.set(Found {

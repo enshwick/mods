@@ -55,9 +55,9 @@ shows.
 ## Multiplayer
 
 A dedicated server needs Optimizer most. In a game you host, Optimizer runs
-too, but every change stays off, because none was measured there yet. The
-`exact_waits` setting turns the short waits on there too. Players who join a
-game need nothing.
+too, but every change stays off by default, because none was measured there
+yet. The `exact_waits` and `server_wait_cap_ms` settings turn their change on
+there too. Players who join a game need nothing.
 
 ## Problems
 

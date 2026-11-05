@@ -61,8 +61,7 @@ CPU use of an idle dedicated server, where 100 % is one core (see
   the server loop's thread and its busiest thread groups. It also holds the loop
   and step rates, the exact waits slept and how late they woke, and the server's
   "Bad Performance" warnings. In the game it also holds the frames a second,
-  their mean length, the length 99 of 100 frames stay within and the longest
-  frame.
+  the length 99 of 100 frames stay within and the longest frame.
 - **Environment report.** At start, one line names what the server runs on.
   Under Wine it names the Wine version and host, the fast synchronisation
   available (ntsync, esync, fsync), the CPU governor, the container's CPU limit
@@ -103,7 +102,8 @@ measure = true
   higher value, check in the game that gliding, joining, respawning and combat
   feel the same.
 - `measure`: the line a minute. It costs a few atomic counters and a look at the
-  threads once a minute.
+  threads once a minute. In the game, each frame also reads the clock and
+  counts the frame; with `measure` off it only checks the setting.
 
 The task worker cap has no setting. The game starts its task workers once, before
 any world loads, so a world's settings could never change them. The mod caps them
@@ -195,7 +195,7 @@ to the next. Back up your saves before you update.
 
 ## Who needs it
 
-A dedicated server needs it most: every measurement above comes from one. A
+A dedicated server needs it most: every measurement in this README comes from one. A
 game you host loads the mod too, with every change off by default, as the table
 shows, because none was measured there yet. A setting can force the exact waits
 or the server wait cap on. The task workers stay as the game picks them: the

@@ -98,6 +98,11 @@ pub(crate) fn set(on: bool, context: String) {
     *lines.context.relock() = context;
 }
 
+/// Whether measure mode is on.
+pub(crate) fn on() -> bool {
+    lines().on.load(Ordering::Relaxed)
+}
+
 /// The platform and what runs on it.
 pub(crate) fn context() -> String {
     lines().context.relock().clone()
@@ -271,9 +276,8 @@ pub(crate) fn line(minute: &Minute) -> String {
         let ms = |ns: u64| rate(ns, 1_000_000.0);
         let _ = write!(
             out,
-            "; frames {:.1}/s, {:.1} ms on average, 99% within {:.1} ms, worst {:.1} ms",
+            "; frames {:.1}/s, 99% within {:.1} ms, worst {:.1} ms",
             rate(frames.count, s),
-            ms(frames.mean_ns),
             ms(frames.p99_ns),
             ms(frames.worst_ns),
         );
@@ -395,6 +399,7 @@ impl Meter {
             threads: FxHashMap::default(),
         };
         let _first = meter.thread_groups();
+        let _before = frames::take();
         meter
     }
 
@@ -606,7 +611,6 @@ mod tests {
             late_ns: 0,
             frames: frames::Times {
                 count: 3_600,
-                mean_ns: 16_666_667,
                 p99_ns: 17_000_000,
                 worst_ns: 33_100_000,
             },
@@ -620,7 +624,7 @@ mod tests {
             line(&minute),
             "CPU: process 50.0%, main thread 5.0%, server loop thread ? (100% = one core); \
              server loop 900/s, steps 60.0/s; exact waits 60/s of 600 µs on average, 0 µs late; \
-             frames 60.0/s, 16.7 ms on average, 99% within 17.0 ms, worst 33.1 ms; \
+             frames 60.0/s, 99% within 17.0 ms, worst 33.1 ms; \
              Bad Performance 2 (worst 34.0 ms); threads: Session 20.0%, main 5.0%"
         );
         let quiet = Minute {

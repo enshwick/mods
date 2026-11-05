@@ -279,7 +279,7 @@ mod tests {
             "{REV}\trefs/tags/v1.0.0-alpha.9\n{REV}\trefs/tags/v1.0.0\n{REV}\trefs/tags/v1.0.0-alpha.10\n"
         );
         assert_eq!(release_at(&listing, REV), Some("v1.0.0"));
-        let alphas = format!("{REV}\trefs/tags/v1.0.0-alpha.9\n{REV}\trefs/tags/v1.0.0-alpha.10\n");
+        let alphas = format!("{REV}\trefs/tags/v1.0.0-alpha.10\n{REV}\trefs/tags/v1.0.0-alpha.9\n");
         assert_eq!(release_at(&alphas, REV), Some("v1.0.0-alpha.10"));
     }
 
@@ -322,7 +322,9 @@ mod tests {
 
     #[test]
     fn notes_over_the_length_github_takes_are_refused() {
-        let long = "x".repeat(MAX_BODY);
-        assert!(notes("m", "v1.0.0-alpha.12", &long).is_err());
+        let at_limit = notes("m", "v1.0.0-alpha.12", "").unwrap();
+        let room = MAX_BODY - at_limit.chars().count();
+        assert!(notes("m", "v1.0.0-alpha.12", &"x".repeat(room)).is_ok());
+        assert!(notes("m", "v1.0.0-alpha.12", &"x".repeat(room + 1)).is_err());
     }
 }

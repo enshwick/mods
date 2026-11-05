@@ -54,8 +54,10 @@ shows.
 
 ## Multiplayer
 
-Only the dedicated server needs Optimizer. In a game you host, every change
-stays off unless a setting turns it on.
+A dedicated server needs Optimizer most. In a game you host, Optimizer runs
+too, but every change stays off, because none was measured there yet. The
+`exact_waits` setting turns the short waits on there too. Players who join a
+game need nothing.
 
 ## Problems
 

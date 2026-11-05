@@ -60,7 +60,9 @@ CPU use of an idle dedicated server, where 100 % is one core (see
   summary. The line holds the platform, the CPU of the process, its main thread,
   the server loop's thread and its busiest thread groups. It also holds the loop
   and step rates, the exact waits slept and how late they woke, and the server's
-  "Bad Performance" warnings.
+  "Bad Performance" warnings. In the game it also holds the frames a second,
+  their mean length, the length 99 of 100 frames stay within and the longest
+  frame.
 - **Environment report.** At start, one line names what the server runs on.
   Under Wine it names the Wine version and host, the fast synchronisation
   available (ntsync, esync, fsync), the CPU governor, the container's CPU limit
@@ -193,11 +195,14 @@ to the next. Back up your saves before you update.
 
 ## Who needs it
 
-The dedicated server needs it. In the game, hosted or not, every change is off
-by default, as the table shows, because none was measured there. A setting can
-force the exact waits or the server wait cap on. The task workers stay as the game picks them, because only
-the dedicated server lets the mod change them. Measure mode and the environment
-line run in the game too. Players need nothing, and the mod does not count in
-the join check.
+A dedicated server needs it most: every measurement above comes from one. A
+game you host loads the mod too, with every change off by default, as the table
+shows, because none was measured there yet. A setting can force the exact waits
+or the server wait cap on. The task workers stay as the game picks them: the
+game starts them before the mod loads, and only the dedicated server waits for
+the loader. Measure mode and the environment line run in the game too, and
+measure mode adds the frame times there. A run with a change off and a run with
+it on show what the change does to CPU and to frame pacing. Players who join
+need nothing, and the mod does not count in the join check.
 
 Licensed under [MIT](LICENSE).

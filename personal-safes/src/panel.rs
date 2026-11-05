@@ -218,6 +218,10 @@ struct Panel {
     drawn: Option<Instant>,
     /// When the message drawn came, to tell a new one.
     since: Option<Instant>,
+    /// When the message drawn while the screen was open before came: it
+    /// was for that chest, so a chest opened soon after waits for the
+    /// server's word.
+    stale: Option<Instant>,
     /// The title and the help line, in the player's language.
     words: (String, String),
     /// Switches the player changed since the message drawn, until the
@@ -233,6 +237,7 @@ impl Panel {
             .is_none_or(|drawn| now.saturating_duration_since(drawn) > REOPENED)
         {
             self.opened = now;
+            self.stale = self.since.take();
         }
         self.drawn = Some(now);
         let Some(last) = self.last.load_full() else {
@@ -242,7 +247,7 @@ impl Panel {
         let Shown::Safe { players, .. } = shown else {
             return;
         };
-        if *received + GRACE < self.opened {
+        if *received + GRACE < self.opened || self.stale == Some(*received) {
             return;
         }
         if self.since != Some(*received) {
@@ -296,6 +301,7 @@ pub fn extend(
         opened: Instant::now(),
         drawn: None,
         since: None,
+        stale: None,
         words: (String::new(), String::new()),
         pending: FxHashMap::default(),
     };

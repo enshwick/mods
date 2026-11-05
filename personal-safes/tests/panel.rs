@@ -279,4 +279,41 @@ mod tests {
         );
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
     }
+
+    #[test]
+    fn a_plain_chest_opened_right_after_a_safe_shows_no_list_before_the_server_s_word() {
+        let loader = host().side(Side::CLIENT).net_peer(Peer::Server).install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let safe = Shown::Safe {
+            at: (2, 0, 0),
+            players: vec![Listed {
+                key: PlayerKey::new(2),
+                name: "Bob".into(),
+                allowed: false,
+            }],
+        };
+        assert!(loader.net_deliver(CHANNEL, Peer::Server, &safe));
+        assert!(!loader.draw_screen(HudScreenType::StorageChest).is_empty());
+        // Closed and another chest opened within the grace, its Nothing still
+        // on the way.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        assert!(
+            loader.draw_screen(HudScreenType::StorageChest).is_empty(),
+            "the Safe's list was for the chest closed before"
+        );
+        assert!(loader.net_deliver(CHANNEL, Peer::Server, &safe));
+        assert!(
+            !loader.draw_screen(HudScreenType::StorageChest).is_empty(),
+            "a fresh message for the chest open now"
+        );
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+    }
 }

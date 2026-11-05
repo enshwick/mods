@@ -347,15 +347,17 @@ impl Checks {
     /// Spawns one entity of `template` at `at` and follows it through
     /// writes, a teleport and its destruction.
     pub(crate) fn spawn(&self, template: [u8; 16], at: [f64; 3]) -> String {
-        let entity = match self.effects.spawn(template, at, Spawn::new()) {
+        // The probe's copies stay out of the save, so a killed server leaves
+        // none behind in the world.
+        let entity = match self.effects.spawn(template, at, Spawn::new().do_not_save()) {
             Ok(entity) => entity,
             Err(why) => {
-                fail(&format!("spawn of {template:02x?}: {why}"));
+                fail(&format!("spawn of {template:02x?}, not saved: {why}"));
                 return format!("{why}");
             }
         };
         pass(&format!(
-            "spawn of {template:02x?} at {at:?} handed out entity {entity}"
+            "spawn of {template:02x?} at {at:?}, not saved, handed out entity {entity}"
         ));
         let world = self.world;
         let effects = self.effects;

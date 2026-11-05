@@ -97,12 +97,12 @@ before any world loads, so no setting changes the full count.
 ## Install
 
 Download
-[`enshwick-survivors-per-altar.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-survivors-per-altar.zip)
+`enshwick-survivors-per-altar.zip` from its [newest release](https://github.com/enshwick/mods/releases?q=enshwick-survivors-per-altar-v&expanded=true)
 and extract it into the folder that holds `enshrouded.exe` or
 `enshrouded_server.exe`. It needs the Enshwick loader. Get
-[`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-and extract it into the same folder. These are development builds of the newest commit. Until the
-first release, 1.0.0, there are no other builds.
+`enshwick.zip` from the [newest Enshwick release](https://github.com/enshwick/enshwick/releases)
+and extract it into the same folder. Until 1.0 both are alphas, and anything may change from one alpha
+to the next. Back up your saves before you update.
 
 ## Who needs it
 

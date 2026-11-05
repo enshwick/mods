@@ -52,12 +52,12 @@ id on the first start.
 ## Install
 
 Download
-[`enshwick-area-loot.zip`](https://github.com/enshwick/mods/releases/download/dev/enshwick-area-loot.zip).
+`enshwick-area-loot.zip` from its [newest release](https://github.com/enshwick/mods/releases?q=enshwick-area-loot-v&expanded=true).
 Extract it into the folder with `enshrouded.exe` or `enshrouded_server.exe`. The
 mod needs the Enshwick loader. Get
-[`enshwick.zip`](https://github.com/enshwick/enshwick/releases/download/dev/enshwick.zip)
-and extract it into the same folder. These files are development builds of the newest
-commit. Until the first release, 1.0.0, there are no other builds.
+`enshwick.zip` from the [newest Enshwick release](https://github.com/enshwick/enshwick/releases)
+and extract it into the same folder. Until 1.0 both are alphas, and anything may change from one alpha
+to the next. Back up your saves before you update.
 
 ## Who needs it
 

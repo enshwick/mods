@@ -1,12 +1,17 @@
 # Release pull requests and releases with release-plz (release-plz.toml), run
-# by hand on main only. `release-pr` opens or updates the release pull
-# request, which bumps only the mods whose folders changed.
-# `release`, after that pull request merged, tags each released mod
-# `<package>-v<version>` and makes its own GitHub release; then one job per
-# released mod builds only that mod from its tag and attaches its zip, PDB,
-# SBOM, their sums and a build provenance attestation of each, which players
-# check with `gh attestation verify <file> --owner enshwick`. Last, on
-# Windows, each attached DLL must report the version of its tag.
+# by hand. Until 1.0 each release is an alpha, a GitHub prerelease.
+# `release-pr`, on main, opens or updates the release pull request, which
+# bumps only the mods whose folders changed. `release`, on main after that
+# pull request merged, refuses before tagging anything when a mod's notes
+# are not ready, then tags each released mod `<package>-v<version>` and makes
+# its own prerelease; one job per released mod builds only that mod from its
+# tag, attaches its zip, PDB, SBOM, their sums and a build provenance
+# attestation of each, which players check with
+# `gh attestation verify <file> --owner enshwick`, and sets the notes of
+# `cargo xtask notes`. On Windows each attached DLL must report the version
+# of its tag, and the docs site builds again for the new downloads. `build`,
+# from any branch, writes the notes and builds the files a release would, and
+# publishes nothing.
 name: release-plz
 
 on:
@@ -16,16 +21,17 @@ on:
         description: What to run
         type: choice
         options:
+          - build
           - release-pr
           - release
-        default: release-pr
+        default: build
 
 permissions: {}
 
 jobs:
   release-plz:
     # Releases come only from main; the build jobs need this one.
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.command != 'build'
     # The release environment admits main only.
     environment: release
     # A fresh machine: what ships is built and published without the caches
@@ -46,6 +52,13 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-rust
+
+      # A release goes out with its notes or not at all: a mod with changes
+      # still under Unreleased, or a platform pin no loader alpha tags,
+      # stops the run before anything is tagged.
+      - name: Notes of the mods to release
+        if: inputs.command == 'release'
+        run: cargo xtask notes --unreleased --out "$RUNNER_TEMP/notes"
 
       # The app pushes the release branch and tags, makes the releases and
       # opens the release pull request, which then runs CI as any other; the
@@ -93,8 +106,12 @@ jobs:
           ref: ${{ matrix.release.tag }}
           persist-credentials: false
 
-      # Only the Windows SDK files that a build of main saved (dev.yml).
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # The Windows SDK and CRT that cargo-xwin downloads, 7 to 9 minutes
+      # from Microsoft on a hosted runner: Microsoft's files only, no build
+      # output, under a key of their own that only a release from main saves.
+      - name: Restore the Windows SDK
+        id: xwin
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/xwin
           key: xwin-release-${{ runner.os }}-0.23.1-v1
@@ -107,6 +124,14 @@ jobs:
         with:
           packages: ${{ matrix.release.package_name }}
           out: ${{ env.OUT }}
+
+      # Beside other mods' jobs only the first save wins, which is enough.
+      - name: Save the Windows SDK
+        if: steps.xwin.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/xwin
+          key: xwin-release-${{ runner.os }}-0.23.1-v1
 
       - name: Sums
         working-directory: ${{ env.OUT }}
@@ -133,6 +158,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         working-directory: ${{ env.OUT }}
         run: gh release upload "$TAG" ./* --clobber --repo "$GITHUB_REPOSITORY"
+
+      # release-plz wrote the changelog section alone; the notes add the
+      # alpha warning and the loader alpha the mod is built on.
+      - name: Notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cargo xtask notes --package "$PACKAGE" --out "$RUNNER_TEMP/notes"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
+            --notes-file "$RUNNER_TEMP/notes/$PACKAGE.md"
 
   # The DLL attached to each release reports its tag's version, read through
   # its manifest as the loader reads it, which needs Windows.
@@ -183,3 +218,80 @@ jobs:
           dlls=("$RUNNER_TEMP"/release/mods/*/"$PACKAGE.dll")
           test "${#dlls[@]}" -eq 1 && test -f "${dlls[0]}"
           cargo enshwick manifest "${dlls[0]}" --expect-version "$VERSION"
+
+  # The site links each mod's newest release, read when it builds. It builds
+  # on Cloudflare Workers Builds, whose deploy hook builds its main again.
+  site:
+    needs: [release-plz, assets]
+    if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Start the docs site build
+        env:
+          DOCS_DEPLOY_HOOK: ${{ secrets.DOCS_DEPLOY_HOOK }}
+        run: curl --fail-with-body --silent --show-error --retry 3 -X POST "$DOCS_DEPLOY_HOOK"
+
+  # What `release` would ship, from any branch, published nowhere: the notes
+  # of every mod whose version has no tag yet and their files, or every mod's
+  # files when a mod's notes are refused, so the build is checked even then;
+  # the run fails on refused notes after it shows them.
+  build:
+    if: inputs.command == 'build'
+    # A fresh machine, as above, without the release environment's secrets.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/xwin
+          key: xwin-release-${{ runner.os }}-0.23.1-v1
+      - uses: ./.github/actions/setup-rust
+        with:
+          gh: true
+          tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
+
+      - name: Notes
+        id: notes
+        continue-on-error: true
+        run: |
+          cargo xtask notes --unreleased --out "$RUNNER_TEMP/notes"
+          packages=$(find "$RUNNER_TEMP/notes" -name '*.md' -printf '%f\n' 2> /dev/null | sed 's/\.md$//' | sort | tr '\n' ' ')
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/release-files
+        with:
+          packages: ${{ steps.notes.outputs.packages }}
+          out: ${{ runner.temp }}/release
+
+      - name: Summary
+        env:
+          NOTES: ${{ steps.notes.outcome }}
+        run: |
+          {
+            echo "### Files a release would attach"
+            echo
+            echo "| File | Bytes | SHA-256 |"
+            echo "| --- | ---: | --- |"
+            for file in "$RUNNER_TEMP"/release/*; do
+              echo "| $(basename "$file") | $(stat -c %s "$file") | \`$(sha256sum "$file" | cut -d' ' -f1)\` |"
+            done
+            for notes in "$RUNNER_TEMP"/notes/*.md; do
+              [ -f "$notes" ] || continue
+              echo
+              echo "### Notes of $(basename "$notes" .md)"
+              echo
+              cat "$notes"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$NOTES" != success ]; then
+            echo "::error title=notes::cargo xtask notes refused a mod; its log says why"
+            exit 1
+          fi

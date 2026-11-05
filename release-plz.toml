@@ -1,6 +1,8 @@
-# release-plz: each mod's version and CHANGELOG.md from the conventional
-# commits that touch its folder, so a change to one mod releases only it.
-# Each mod is tagged `<package>-v<version>` and gets its own GitHub release.
+# release-plz: each mod's version from the conventional commits that touch
+# its folder, so a change to one mod releases only it. Each mod is tagged
+# `<package>-v<version>` and gets its own GitHub release. Its CHANGELOG.md is
+# written by hand for players, and `cargo xtask notes` makes the release
+# notes from it.
 
 [workspace]
 # The mods are not published to crates.io: their versions live in git tags.
@@ -9,8 +11,10 @@ publish = false
 # `release` acts only when the newest commit on main is a merged release pull
 # request, so a stray run releases nothing.
 release_always = false
-# A version with a prerelease part (`0.2.0-alpha.1`) makes a GitHub prerelease.
-git_release_type = "auto"
+# Until the loader's 1.0, every mod release is an alpha built on a loader
+# alpha; then "auto", where only a version like `0.2.0-alpha.1` is one.
+git_release_type = "pre"
+changelog_update = false
 git_tag_name = "{{ package }}-v{{ version }}"
 # Renovate moves the dependencies.
 dependencies_update = false

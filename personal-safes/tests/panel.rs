@@ -261,6 +261,17 @@ mod tests {
             "shown on until the server answers"
         );
 
+        // Closed past the grace of the last message, then opened again.
+        std::thread::sleep(std::time::Duration::from_millis(1300));
+        assert!(
+            loader.draw_screen(HudScreenType::StorageChest).is_empty(),
+            "a chest opened again waits for the server's word"
+        );
+        assert!(loader.net_deliver(CHANNEL, Peer::Server, &safe));
+        assert_eq!(
+            toggles(&loader.draw_screen(HudScreenType::StorageChest)).len(),
+            2
+        );
         assert!(loader.net_deliver(CHANNEL, Peer::Server, &Shown::Nothing));
         assert!(
             loader.draw_screen(HudScreenType::StorageChest).is_empty(),

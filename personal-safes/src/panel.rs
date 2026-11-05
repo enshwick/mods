@@ -34,9 +34,23 @@ const CHANNEL: &str = "panel";
 /// The channel's version; a client of another version hears nothing.
 const VERSION: u16 = 1;
 
-/// The most players one message lists; with names of at most 64 bytes the
-/// list stays well inside a message.
+/// The most players one message lists; with names cut to [`MAX_NAME`] bytes
+/// the list stays well inside a message.
 pub const MAX_LISTED: usize = 64;
+
+/// The longest name a list carries, in bytes, as the game keeps a player's
+/// name; a longer one from the owners file is cut.
+pub const MAX_NAME: usize = 64;
+
+/// `name` cut to at most [`MAX_NAME`] bytes, on a character boundary.
+fn bounded(mut name: String) -> String {
+    let mut end = name.len().min(MAX_NAME);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    name.truncate(end);
+    name
+}
 
 /// How long before the chest screen opens a message still counts for it:
 /// on a hosted game the server's message can come in just before the
@@ -104,6 +118,9 @@ pub fn listing(
     }
     players.sort_by_key(|p| p.name.to_lowercase());
     players.truncate(MAX_LISTED);
+    for player in &mut players {
+        player.name = bounded(core::mem::take(&mut player.name));
+    }
     Shown::Safe { at, players }
 }
 
@@ -320,13 +337,25 @@ mod tests {
 
     #[test]
     fn a_long_list_is_cut_to_fit_one_message() {
-        let safe = Safe::new(PlayerKey::new(1), "Ann");
+        let mut safe = Safe::new(PlayerKey::new(1), "Ann");
+        safe.allowed.push(Allowed {
+            key: PlayerKey::new(500),
+            name: "ё".repeat(200),
+        });
         let online = (2..200).map(|key| (PlayerKey::new(key), "x".repeat(64)));
         let shown = listing((0, 0, 0), &safe, PlayerKey::new(1), online);
         let Shown::Safe { players, .. } = &shown else {
             panic!("a Safe")
         };
         assert_eq!(players.len(), MAX_LISTED);
+        assert_eq!(players[0].name, "x".repeat(64));
+        assert_eq!(bounded("ё".repeat(200)), "ё".repeat(32));
+        assert_eq!(
+            bounded(format!("a{}", "ё".repeat(100))),
+            format!("a{}", "ё".repeat(31)),
+            "cut between characters"
+        );
+        assert_eq!(bounded("Ann".into()), "Ann");
         let bytes = postcard::to_allocvec(&shown).unwrap();
         assert!(bytes.len() <= enshwick::net::MAX_MESSAGE, "{}", bytes.len());
     }

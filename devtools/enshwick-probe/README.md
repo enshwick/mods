@@ -66,7 +66,14 @@ Ten seconds after the world has loaded, and again on the `check` action:
 - terrain: the materials, a dry dig at the first placed entity, a mound
   added 40 metres above it and dug away again, and a radius of 100 metres
   refused;
-- a save on demand, followed by `WorldSaved`.
+- a save on demand, followed by `WorldSaved`; the save on disk read, the
+  first `WorldSaving`, and half a minute later the saves held, a save asked
+  meanwhile refused, and the saves let go.
+
+Its spawns stay out of the world's save. From start, its chat filter drops a
+line of exactly `drop me` and keeps every other line, and it logs each line
+that reaches the chat with its sender's account, its kind and its length,
+never its text.
 
 While enabled, from start it counts the damage its damage filter sees by cause,
 and every game event by type, named as the game's reflection names it, and logs the counts every minute. It logs each
@@ -115,9 +122,95 @@ soften_damage = false
 # Keep the bosses' health at 1.25 for the next start, to see a kept game
 # setting come back with the world; the next run with this on forgets it.
 keep_across_restart = false
+# Run none of the checks when the world loads, only the world's scenario.
+scenario_only = false
 ```
 
 `enabled` is off by default: until it is `true` the probe does nothing, no
-checks, counts or actions, and the other settings have no effect.
+checks, counts, scenarios or actions, and the other settings have no effect.
+
+## Check scenarios
+
+A scenario is an in-game check written in Luau: the probe runs it in a Luau
+VM of its own ten seconds after the world has loaded, one step after another,
+through the platform's Luau API only. Each step logs a line, and the last line
+is `scenario <name>: PASS, <n> steps` or `scenario <name>: FAIL at step <n>
+<step>: <reason>`, the reason naming the values compared. A check that needs
+a player tells them each thing to do in chat, then waits for what the server
+sees.
+
+The world's own setting `scenario` names the scenario, in
+`<stem>-mod-settings/enshwick.probe/settings.toml` beside the world's save or
+behind the probe's gear on the Mods screen; empty, the default, runs none.
+
+| Scenario | What it checks | Needs |
+| --- | --- | --- |
+| `chat` | the probe's chat filter drops a line of exactly `drop me` and keeps every other line, which names its sender | one player |
+| `saves` | a save held by the probe is refused, a save once let go runs `WorldSaving` before `WorldSaved`, and the save on disk follows | nothing |
+| `weather` | the [test content mod](../enshwick-test-content/README.md)'s rain comes as a front in the first weather layer | the test content mod |
+| `item-actions` | each item action a player takes reaches the server as its kind, and a hand craft as a craft event | one player with food, a healing potion, armour, a prop and craft materials |
+| `craft-rewards` | a craft reward goes to the player who brewed, once per unit | two players and a pack that rewards each brew with an item |
+| `join-throw` | a throw a pack refuses stays refused right after a join, and a pack's first-drink experience comes once | two players and such a pack |
+
+### Run a scenario
+
+1. Create the empty file `mods/enshwick/developer-tools` in the server's game
+   folder, so the loader runs developer mods.
+2. Put the probe in a folder of its own in `mods/`, and beside it its
+   `settings.toml` with `enabled = true` and `scenario_only = true`.
+3. Put the mods the scenario needs in `mods/`.
+4. Write `scenario = "<name>"` into
+   `<stem>-mod-settings/enshwick.probe/settings.toml` beside the world's
+   save, where `<stem>` is the save's name without `.ksd`.
+5. Start the server, or host the world in the game.
+6. Read the lines that start with `scenario` in
+   `logs/enshwick.probe_<date>_<time>.log` in the game folder.
+
+### Write a scenario
+
+A scenario is a file in [`scenarios/`](scenarios/), listed in
+`src/scenarios.rs`, that returns its `about` line and its `run` function:
+
+```luau
+return {
+    about = "a save on demand is written",
+    run = function(s)
+        s.step("a save asked runs WorldSaved", function()
+            enshwick.world.save()
+            s.event("WorldSaved", 120)
+        end)
+    end,
+}
+```
+
+`run` calls the platform's Luau API through `enshwick`, and these calls of
+`s`:
+
+| Call | What it does |
+| --- | --- |
+| `s.step(title, body)` | runs `body` as the next step and logs its `PASS` once it returns |
+| `s.expect(ok, what)` | fails the step with `what` unless `ok` |
+| `s.equal(got, want, what)` | fails the step unless `got` equals `want`, naming both |
+| `s.wait(seconds)` | waits that long |
+| `s.ticks(steps)` | waits that many server steps |
+| `s.event(event, seconds, test?)` | waits for the event whose data meets `test` and returns its data; fails the step without it |
+| `s.next(event, seconds, test?)` | the same, returning `nil` instead of failing |
+| `s.no_event(event, seconds, test?)` | fails the step if the event comes within `seconds` |
+| `s.players(count, seconds)` | the players online once at least `count` are; fails the step without them |
+| `s.tell(text)` | tells the players in chat what to do, and logs it |
+| `s.give(root, item, count)`, `s.take(root, item, count)` | gives or takes items in an inventory; fails the step unless the game committed it |
+| `s.items(root)` | what an inventory holds, a count per item |
+| `s.changed(before, after)`, `s.describe(delta)` | the counts that changed between two `s.items`, and that as a log line |
+| `s.log(text)` | logs a line beside the scenario's |
+
+The events a scenario waits for are the loader's events by name, such as
+`WorldSaved`, `PlayerJoined` and `Ticked`; the typed game events
+`CraftRecipeEvent`, `CraftRecipeSuccessEvent`, `LootInteractionEvent`,
+`HandleEquipmentSlotChangedEvent`, `BuildingPlaceEvent`,
+`BuildingPickUpEvent`, `XpGainedEvent` and `LevelUpEvent` where the game build
+has them; `ChatSaid` for each chat line; `ItemAction` for each item action;
+and `FrontChanged` for each weather front that starts or ends. A failed
+check, an error or a wait that runs out ends the scenario with `FAIL`; the
+probe runs on.
 
 Licensed under [MIT](../LICENSE).

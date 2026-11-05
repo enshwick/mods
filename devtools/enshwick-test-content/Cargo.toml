@@ -1,0 +1,32 @@
+[package]
+name = "enshwick-test-content"
+version = "0.1.0"
+description = "Development only, never shipped: content of its own for checking the platform in game"
+keywords = ["enshrouded", "mod", "testing"]
+categories = ["game-development"]
+readme = "README.md"
+authors = ["themaiby"]
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/enshwick/mods"
+homepage = "https://github.com/enshwick/mods/tree/main/devtools/enshwick-test-content"
+publish = false
+
+[package.metadata.enshwick]
+id = "enshwick.test-content"
+side = "both"
+name = "Test Content"
+developer = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+enshwick = { workspace = true, features = ["typed"] }
+
+[dev-dependencies]
+enshwick = { workspace = true, features = ["test", "typed"] }
+
+[lints]
+workspace = true

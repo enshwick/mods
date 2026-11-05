@@ -381,7 +381,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     if client {
         let listing = actions.clone();
         let _keyed = load.feature(actions::CONTROLS_FEATURE, |load| {
-            actions::list_control(load, listing)
+            actions::list_control(load, listing, &phrases.texts)
         });
     }
     if client && channel.is_some() {

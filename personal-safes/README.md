@@ -31,8 +31,7 @@ only at a Safe you may manage, never at another chest.
 
 Press Shift+L within 4 m of a Safe you manage to hear who may open it: a
 notice names the Safe, such as "your Safe at (x, y, z)", and the players let
-in. Players change the key on the Mods screen's controls page; a dedicated
-server's console runs the same list as `enshwick.personal-safes list`.
+in. Players change the key on the Mods screen's controls page.
 
 A player you switch on can open the Safe, take, put and sort items, and craft or
 build from it, as you do. That player never picks it up, dismantles it, renames

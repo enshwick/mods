@@ -273,13 +273,15 @@ pub const CONTROLS_FEATURE: &str = "controls";
 pub const LIST_KEY: &str = "Shift+L";
 
 /// Declares the control that runs the list action on the client, so a player
-/// asks without the Mods screen.
+/// asks without the Mods screen; its label is in the client's language, as
+/// the controls page shows labels as given.
 ///
 /// # Errors
 ///
 /// [`Off`] when the loader refuses the control.
-pub fn list_control(load: &mut Load<'_>, actions: Actions) -> Result<(), Off> {
-    let control = Control::new(LIST_ACTION, texts::ACTION_LIST).key(Key::parse(LIST_KEY)?);
+pub fn list_control(load: &mut Load<'_>, actions: Actions, texts: &Texts) -> Result<(), Off> {
+    let label = texts.fill(texts::ACTION_LIST, enshwick::i18n::language(), &[]);
+    let control = Control::new(LIST_ACTION, &label).key(Key::parse(LIST_KEY)?);
     load.control(control, move |_| {
         if let Err(off) = actions.run(LIST_ACTION, &[]) {
             enshwick::warn!("the Safe's list was not asked for: {off}");

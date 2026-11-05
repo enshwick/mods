@@ -621,7 +621,9 @@ label_language = \"en\"
             loader
                 .controls()
                 .iter()
-                .any(|(name, _, keys)| name == "list" && keys[0] == Some(key)),
+                .any(|(name, label, keys)| name == "list"
+                    && label == "Name who may open it"
+                    && keys[0] == Some(key)),
             "{:?}",
             loader.controls()
         );

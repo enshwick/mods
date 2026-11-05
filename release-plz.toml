@@ -65,6 +65,11 @@ git_release_name = "Shared Experience {{ version }}"
 name = "enshwick-survivors-per-altar"
 git_release_name = "Survivors per Altar {{ version }}"
 
+# Admin Tools is held back from the alphas: it ships after 1.0.
+[[package]]
+name = "enshwick-admin-tools"
+release = false
+
 # The developer mods are never shipped: nothing there is versioned or released.
 [[package]]
 name = "enshwick-probe"

@@ -98,4 +98,6 @@ version's section, and a workspace whose `enshwick` commit no loader release
 tags. `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
-`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`.
+`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. A mod that is
+not ready to ship has `release = false` in its entry: release-plz never tags
+it, and `cargo xtask notes` leaves it out.

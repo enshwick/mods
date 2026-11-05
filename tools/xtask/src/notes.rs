@@ -15,6 +15,8 @@ const PLATFORM: &str = "https://github.com/enshwick/enshwick";
 /// The workspace dependency whose commit names the loader a mod builds on.
 const API: &str = "enshwick";
 const CHANGELOG: &str = "CHANGELOG.md";
+/// Which packages release-plz releases.
+const RELEASE_CONFIG: &str = "release-plz.toml";
 /// Only a mod with a player page ships to players.
 const PLAYER_PAGE: &str = "docs/player.md";
 /// GitHub refuses a release body longer than this, in characters.
@@ -53,9 +55,14 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     if unreleased != chosen.is_empty() {
         return Err(USAGE.to_owned());
     }
+    let config = root.join(RELEASE_CONFIG);
+    let held = std::fs::read_to_string(&config)
+        .map_err(|e| e.to_string())
+        .and_then(|text| held_back(&text))
+        .map_err(|e| format!("{}: {e}", config.display()))?;
     let shipped: Vec<Package> = packages()?
         .into_iter()
-        .filter(|p| p.cdylib && p.dir.join(PLAYER_PAGE).is_file())
+        .filter(|p| p.cdylib && p.dir.join(PLAYER_PAGE).is_file() && !held.contains(&p.name))
         .collect();
     if let Some(missing) = chosen
         .iter()
@@ -117,6 +124,21 @@ fn released(tag: &str) -> Result<bool, String> {
             .trim()
             .is_empty(),
     )
+}
+
+/// The packages `release-plz.toml` never releases (`release = false`), so a
+/// mod held back there gets no notes and does not stop the others.
+fn held_back(config: &str) -> Result<Vec<String>, String> {
+    let config: toml::Table = toml::from_str(config).map_err(|e| e.to_string())?;
+    Ok(config
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|package| package.get("release").and_then(toml::Value::as_bool) == Some(false))
+        .filter_map(|package| package.get("name").and_then(toml::Value::as_str))
+        .map(str::to_owned)
+        .collect())
 }
 
 /// The loader release whose commit the workspace pins the API to.
@@ -283,6 +305,17 @@ mod tests {
         assert_eq!(release_at(&listing, REV), Some("v1.0.0"));
         let alphas = format!("{REV}\trefs/tags/v1.0.0-alpha.10\n{REV}\trefs/tags/v1.0.0-alpha.9\n");
         assert_eq!(release_at(&alphas, REV), Some("v1.0.0-alpha.10"));
+    }
+
+    #[test]
+    fn only_packages_release_plz_never_releases_are_held_back() {
+        let config = "[workspace]\nrelease_always = true\n\n\
+            [[package]]\nname = \"a\"\ngit_release_name = \"A {{ version }}\"\n\n\
+            [[package]]\nname = \"b\"\nrelease = false\n\n\
+            [[package]]\nname = \"c\"\nrelease = true\n";
+        assert_eq!(held_back(config), Ok(vec!["b".to_owned()]));
+        assert_eq!(held_back("[workspace]\n"), Ok(Vec::new()));
+        assert!(held_back("[[package]\n").is_err());
     }
 
     #[test]

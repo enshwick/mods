@@ -51,10 +51,13 @@ pub(crate) fn frame() {
         .unwrap_or(u64::MAX)
         .max(1);
     let last = frames.last_ns.swap(now, Ordering::Relaxed);
-    if last == 0 {
-        return;
+    if last != 0 {
+        record(frames, now.saturating_sub(last));
     }
-    let length = now.saturating_sub(last);
+}
+
+/// Counts a frame of `length` ns.
+fn record(frames: &Frames, length: u64) {
     let bucket = usize::try_from(length / BUCKET_NS).map_or(BUCKETS - 1, |b| b.min(BUCKETS - 1));
     let _count = frames.counts[bucket].fetch_add(1, Ordering::Relaxed);
     let _sum = frames.sum_ns.fetch_add(length, Ordering::Relaxed);
@@ -175,5 +178,24 @@ mod tests {
         assert_eq!(found.count, 2);
         assert!(found.worst_ns >= 2_000_000);
         assert_eq!(take().count, 0);
+    }
+
+    #[test]
+    fn each_frame_lands_in_the_bucket_of_its_length_and_long_ones_in_the_last() {
+        let frames = frames();
+        let _old = take();
+        for _ in 0..98 {
+            record(frames, 1_000_000);
+        }
+        record(frames, 10_000_000);
+        record(frames, 100_000_000);
+        let found = take();
+        assert_eq!(found.count, 100);
+        assert_eq!(
+            found.p99_ns, 10_250_000,
+            "the end of the 10 ms frame's bucket"
+        );
+        assert_eq!(found.worst_ns, 100_000_000);
+        assert_eq!(found.mean_ns, 2_080_000);
     }
 }

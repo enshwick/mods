@@ -1,7 +1,6 @@
 //! Who may open a Safe, as the owner manages it: a list of the server's
-//! players with a switch each, for the Safe at hand, on the Mods screen
-//! and in the panel beside the Safe's chest screen, and a list action that
-//! names them.
+//! players with a switch each, for the Safe at hand, in the panel beside
+//! the Safe's chest screen, and a list action on Shift+L that names them.
 //!
 //! The Safe at hand is the one within reach the player may manage: the one
 //! they opened last first, then their own nearest one, else the nearest

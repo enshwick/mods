@@ -1,6 +1,6 @@
 //! The Safe: a chest crafted beside the wooden chest that only the player who
-//! placed it, and the players they let in beside its chest screen or from
-//! the Mods screen, can open or empty; only the owner picks it up, and nobody upgrades it away. The owner
+//! placed it, and the players they let in beside its chest screen, can open
+//! or empty; only the owner picks it up, and nobody upgrades it away. The owner
 //! shows on hover, as the chest's name.
 //!
 //! The Safe item places the vanilla wooden chest, so a Safe without the mod is

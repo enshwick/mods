@@ -12,7 +12,7 @@ local START_DELAY = 10
 type Waiter = { co: thread, test: ((any) -> boolean)?, done: boolean }
 
 local waiting: { [string]: { Waiter } } = {}
-local running: { name: string, co: thread, step: number, title: string? }? = nil
+local running: { name: string, co: thread, step: number, title: string?, cleanup: (() -> ())? }? = nil
 
 local function line(text: string)
 	enshwick.log.info(text)
@@ -24,6 +24,12 @@ local function finish(passed: boolean, why: any?)
 		return
 	end
 	running = nil
+	if run.cleanup then
+		local ok, failed = pcall(run.cleanup)
+		if not ok then
+			passed, why = false, `its cleanup: {failed}`
+		end
+	end
 	if passed then
 		line(`scenario {run.name}: PASS, {run.step} steps`)
 	else
@@ -166,8 +172,16 @@ local HOOKS: { [string]: () -> () } = {
 			notify("ChatSaid", chat)
 		end)
 	end,
+	-- Registered before the probe's own filter, so it sees the lines that
+	-- filter drops.
+	ChatTyped = function()
+		enshwick.chat.on_chat(function(chat)
+			notify("ChatTyped", chat)
+			return nil
+		end)
+	end,
 	ItemAction = function()
-		enshwick.interactions.on_item_action(function(action)
+		enshwick.items.on_item_action(function(action)
 			notify("ItemAction", action)
 			return nil
 		end)
@@ -277,11 +291,13 @@ local function context(name: string)
 		end
 	end
 
-	--- Waits `steps` server steps, counted by `Ticked`.
+	--- Waits `steps` server steps, as `Ticked` counts them.
 	function s.ticks(steps: number)
-		for _ = 1, steps do
-			s.event("Ticked", 5)
-		end
+		local left = steps
+		s.event("Ticked", 5 + steps, function(data)
+			left -= tonumber(data.elapsed_steps) or 0
+			return left <= 0
+		end)
 	end
 
 	--- Asks the players to do something, in chat and in the log.
@@ -338,10 +354,15 @@ local function context(name: string)
 		outcome(enshwick.inventory.take, root, item, count)
 	end
 
-	--- What the inventory `root` holds now: a count per item.
+	--- What the inventory `root` holds now: a count per item; fails the
+	--- step when it reads no slots, so a failed read never passes as empty.
 	function s.items(root: number): { [number]: number }
+		local slots = enshwick.inventory.slots(root)
+		if #slots == 0 then
+			error(`inventory {root} reads no slots`, 2)
+		end
 		local held: { [number]: number } = {}
-		for _, slot in enshwick.inventory.slots(root) do
+		for _, slot in slots do
 			if slot.item ~= 0 then
 				held[slot.item] = (held[slot.item] or 0) + slot.count
 			end
@@ -396,21 +417,28 @@ local function start(name: string)
 	local co = coroutine.create(function()
 		scenario.run(s)
 	end)
-	running = { name = name, co = co, step = 0, title = nil }
+	running = { name = name, co = co, step = 0, title = nil, cleanup = scenario.cleanup }
 	line(`scenario {name}: start: {scenario.about}`)
 	resume(co)
 end
+
+-- Counts world loads, so a start timer of an earlier world never fires.
+local loads = 0
 
 enshwick.on("WorldLoaded", function()
 	-- A hosted game loads worlds one after another; a scenario left
 	-- waiting in the last one would hold every later start.
 	finish(false, "the world loaded again before it ended")
+	loads += 1
+	local load = loads
 	local name = enshwick.settings().scenario
 	if type(name) ~= "string" or name == "" then
 		return
 	end
 	line(`scenario {name}: starts in {START_DELAY} s`)
 	after(START_DELAY, function()
-		start(name)
+		if load == loads then
+			start(name)
+		end
 	end)
 end)

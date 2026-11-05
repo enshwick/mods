@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn the_test_content_is_a_developer_tool_on_both_sides() {
+    fn the_test_content_is_a_developer_tool() {
         // SAFETY: `enshwick_mod_query` returns the `'static` manifest of
         // `declare_mod!`, which no thread writes.
         let manifest = unsafe { &*enshwick_mod_query() };

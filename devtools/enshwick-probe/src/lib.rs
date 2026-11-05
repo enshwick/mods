@@ -329,7 +329,7 @@ fn stat_actions(actions: &Actions, affix_checks: &Arc<affixes::AffixChecks>) -> 
 }
 
 /// This machine's switches, `settings.toml` in the mod's own folder, which the
-/// mod reads itself: a developer mod keeps no world settings. The defaults
+/// mod reads itself, beside the world setting of its scenarios. The defaults
 /// without the file, or with a file that does not read.
 fn own_settings<T: enshwick::config::Config>(load: &Load<'_>) -> T {
     let Ok(path) = load.mod_dir().map(|dir| dir.join("settings.toml")) else {
@@ -369,6 +369,10 @@ impl Mod for Probe {
         log_typed::<RevivedPlayerEvent>(load);
 
         vetoes(load, &settings);
+        // Before the chat filter, so the scenarios see the lines it drops.
+        if let Err(off) = scenarios::start(load) {
+            enshwick::warn!("FAIL scenarios: {off}");
+        }
         chat::register(load);
         // The probe is a server mod, so the loader refuses it a channel.
         match load.channel::<u32, _>("probe", 1, |_, _| ()) {
@@ -427,7 +431,6 @@ impl Mod for Probe {
         let saved = Arc::clone(&checks);
         load.on::<WorldSaved>(move |()| saved.saved())?;
         actions(load, census, &checks, run_all, affix_checks)?;
-        scenarios::start(load)?;
         enshwick::info!("probe on");
         Ok(Self)
     }

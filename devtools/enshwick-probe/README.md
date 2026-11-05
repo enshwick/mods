@@ -162,14 +162,17 @@ behind the probe's gear on the Mods screen; empty, the default, runs none.
 4. Write `scenario = "<name>"` into
    `<stem>-mod-settings/enshwick.probe/settings.toml` beside the world's
    save, where `<stem>` is the save's name without `.ksd`.
-5. Start the server, or host the world in the game.
+5. Start the server, or host the world in the game. A scenario that needs no
+   player runs the same way on a copy of a dedicated server.
 6. Read the lines that start with `scenario` in
    `logs/enshwick.probe_<date>_<time>.log` in the game folder.
 
 ### Write a scenario
 
 A scenario is a file in [`scenarios/`](scenarios/), listed in
-`src/scenarios.rs`, that returns its `about` line and its `run` function:
+`src/scenarios.rs`, that returns its `about` line and its `run` function, and
+may return a `cleanup` function that runs once the scenario ends, passed or
+failed, to undo what it changed:
 
 ```luau
 return {
@@ -199,7 +202,7 @@ return {
 | `s.players(count, seconds)` | the players online once at least `count` are; fails the step without them |
 | `s.tell(text)` | tells the players in chat what to do, and logs it |
 | `s.give(root, item, count)`, `s.take(root, item, count)` | gives or takes items in an inventory; fails the step unless the game committed it |
-| `s.items(root)` | what an inventory holds, a count per item |
+| `s.items(root)` | what an inventory holds, a count per item; fails the step when it reads no slots |
 | `s.changed(before, after)`, `s.describe(delta)` | the counts that changed between two `s.items`, and that as a log line |
 | `s.log(text)` | logs a line beside the scenario's |
 
@@ -208,7 +211,9 @@ The events a scenario waits for are the loader's events by name, such as
 `CraftRecipeEvent`, `CraftRecipeSuccessEvent`, `LootInteractionEvent`,
 `HandleEquipmentSlotChangedEvent`, `BuildingPlaceEvent`,
 `BuildingPickUpEvent`, `XpGainedEvent` and `LevelUpEvent` where the game build
-has them; `ChatSaid` for each chat line; `ItemAction` for each item action;
+has them; `ChatSaid` for each line that reached the chat; `ChatTyped` for
+each line a player typed, before the probe's filter drops any; `ItemAction`
+for each item action;
 and `FrontChanged` for each weather front that starts or ends. A failed
 check, an error or a wait that runs out ends the scenario with `FAIL`; the
 probe runs on.

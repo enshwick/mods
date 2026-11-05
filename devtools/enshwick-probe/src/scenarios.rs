@@ -38,7 +38,7 @@ pub(crate) const SCENARIOS: [(&str, &str); 6] = [
 /// the index that requires them.
 fn scripts(list: &[(&str, &str)]) -> Scripts {
     let mut index = String::from("return {\n");
-    let mut scripts = Scripts::new().with("main.luau", RUNNER);
+    let mut scripts = Scripts::new().with(enshwick::packs::SCRIPT_MAIN, RUNNER);
     for &(name, source) in list {
         scripts = scripts.with(&format!("scenarios/{name}.luau"), source);
         // Writing to a `String` cannot fail.
@@ -87,6 +87,10 @@ mod tests {
 
     use super::SCENARIOS;
 
+    /// The events the runner hears through a hook of the API rather than
+    /// `enshwick.on`.
+    const HOOKED: [&str; 4] = ["ChatSaid", "ChatTyped", "ItemAction", "FrontChanged"];
+
     /// The scenarios a test runs, set before the mod starts.
     static LIST: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
 
@@ -94,11 +98,11 @@ mod tests {
 
     impl Mod for Runner {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-            crate::chat::register(load);
             match LIST.get() {
                 Some(list) => super::run(load, list)?,
                 None => super::start(load)?,
             }
+            crate::chat::register(load);
             Ok(Self)
         }
     }
@@ -342,5 +346,77 @@ mod tests {
         run_for(&loader, Duration::from_millis(200));
         assert_logged(&loader, "scenario saves: step 3");
         assert_logged(&loader, "scenario saves: PASS, 4 steps");
+    }
+
+    #[test]
+    fn the_runner_hears_every_event_it_hooks() {
+        let loader = start(None, "");
+        for event in HOOKED {
+            assert!(
+                !logged(&loader, &format!("{event} is not heard")),
+                "{:#?}",
+                loader.logs()
+            );
+        }
+    }
+
+    const HEARS_AN_ITEM_ACTION: &str = r#"
+        return {
+            about = "hears a drink",
+            run = function(s)
+                s.step("hears a drink", function()
+                    local action = s.event("ItemAction", 5, function(action)
+                        return action.kind == "Consume"
+                    end)
+                    s.equal(action.player, 10, "the player")
+                end)
+            end,
+        }
+    "#;
+
+    #[test]
+    fn a_scenario_hears_an_item_action_and_lets_it_happen() {
+        use enshwick::abi::ItemAction;
+
+        let loader = start(Some(vec![("t", HEARS_AN_ITEM_ACTION)]), "t");
+        let call = ItemAction {
+            header: Header::of::<ItemAction>(),
+            kind: ItemAction::CONSUME,
+            player: ANN_ENTITY,
+            item: enshwick::ItemId::new(0x5e01),
+            count: 1,
+            inventory: Entity(2),
+            slot: 0,
+        };
+        assert!(loader.item_action(&call));
+        run_for(&loader, Duration::from_millis(200));
+        assert_logged(&loader, "scenario t: PASS, 1 steps");
+    }
+
+    #[test]
+    fn the_chat_scenario_fails_when_drop_me_was_never_typed() {
+        let loader = start(None, "chat");
+        assert_eq!(
+            loader.say(ANN, "hello probe").as_deref(),
+            Some("hello probe")
+        );
+        run_for(&loader, Duration::from_secs(301));
+        assert_logged(&loader, "no ChatTyped within 300 s");
+        assert!(
+            !logged(&loader, "scenario chat: step 1"),
+            "{:#?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_failed_saves_scenario_lets_the_saves_go() {
+        let loader = start(None, "saves");
+        run_for(&loader, Duration::from_secs(2));
+        assert!(loader.saves_held(), "{:#?}", loader.logs());
+        let _handled = loader.raise::<WorldSaved>(&());
+        run_for(&loader, Duration::from_millis(200));
+        assert_logged(&loader, "WorldSaved came within 5 s");
+        assert!(!loader.saves_held(), "{:#?}", loader.logs());
     }
 }

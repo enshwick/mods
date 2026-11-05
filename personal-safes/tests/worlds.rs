@@ -507,13 +507,13 @@ label_language = \"en\"
     }
 
     #[test]
-    fn the_access_window_lists_players_for_the_safe_at_hand_own_first() {
+    fn the_mods_screen_lists_players_for_the_safe_at_hand_own_first() {
         use enshwick::abi::{ActionCall, PlayerInfo};
         use enshwick::actions::sheet::decode;
         use enshwick::i18n::Language;
 
         let dir = std::env::temp_dir().join(format!(
-            "enshwick-personal-safes-window-{}",
+            "enshwick-personal-safes-access-{}",
             std::process::id()
         ));
         let _gone = std::fs::remove_dir_all(&dir);
@@ -562,7 +562,7 @@ label_language = \"en\"
         let access = sheet.iter().find(|e| e.id == "access").unwrap();
         assert_eq!(access.label, "Хто може відкривати цей сейф");
         assert_eq!(access.subject, "ваш сейф у (3, 0, 0)", "own Safe first");
-        assert!(access.offered && access.hint);
+        assert!(access.offered);
         let names: Vec<&str> = access.players.iter().map(|p| p.1.as_str()).collect();
         assert_eq!(names, ["Bob", "Cat"]);
 
@@ -584,11 +584,15 @@ label_language = \"en\"
             .ask_actions(ActionCall::RUN, &root, 0, "access", "p0000000000000003	b0")
             .unwrap();
         assert!(ran.starts_with("1Cat may no longer open"), "{ran}");
-        assert_eq!(
-            loader
-                .ask_actions(ActionCall::HINTS, &bob, 0, "", "")
-                .as_deref(),
-            Some(""),
+        let bobs = decode(
+            &loader
+                .ask_actions(ActionCall::SHEET, &bob, 0, "", "")
+                .unwrap(),
+        );
+        assert!(
+            bobs.iter()
+                .find(|e| e.id == "access")
+                .is_some_and(|e| !e.offered && e.subject == "No Safe you manage within 4 m."),
             "Bob stands at no Safe"
         );
         assert!(loader.faults().is_empty());

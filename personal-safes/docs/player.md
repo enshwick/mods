@@ -27,8 +27,9 @@ settings:
 
 ## How do I let another player in?
 
-Stand within 4 metres of your Safe and press the actions key, F7 by default. A
-window lists the players online, each with a switch.
+Stand within 4 metres of your Safe. Open the pause menu, then Mods, then
+Actions under Personal Safes. The screen lists the players online, each with a
+switch.
 
 A player you switch on can use the Safe as you do, but cannot pick it up. You
 can switch the player off at any time, also while the player is away.

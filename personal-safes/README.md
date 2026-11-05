@@ -24,19 +24,18 @@ settings allow.
 
 ## Letting other players in
 
-Stand within 4 m of one of your Safes. The bottom of the screen shows "[F7] Who
-may open this Safe: your Safe at (x, y, z)". Press F7. A window lists the
-players online and the players you already let in, each with a switch.
+Stand within 4 m of one of your Safes. Open the pause menu, then Mods, then
+Actions under Personal Safes. The screen names the Safe, such as "your Safe at
+(x, y, z)", and lists the players online and the players you already let in,
+each with a switch.
 
 A player you switch on can open the Safe, take, put and sort items, and craft or
 build from it, as you do. That player never picks it up, dismantles it, renames
 it or changes who may use it. Switch the player off to take this back, also
 while the player is away. The game confirms each change with a notice.
 
-The same list is on the Mods screen. Open the pause menu, then Mods, then
-Actions under Personal Safes. The screen shows one action at a time: the list,
-and "Name who may open it", which answers with a notice. The key is
-`actions_key` in the loader's settings.
+The screen shows one action at a time: the list, and "Name who may open it",
+which answers with a notice.
 
 The Safe at hand is the nearest one within 4 m that you may manage, your own
 first. You may manage your own Safes and the Safes another mod lets you manage
@@ -81,8 +80,8 @@ is also true for a world with another value.
 
 `label_language` refuses any value that is not a language code. The Mods screen
 then shows the reason in the player's language. A change applies while the game
-runs, to Safes named after the change. The window and the hint use each player's
-own language.
+runs, to Safes named after the change. The actions on the Mods screen use each
+player's own language.
 
 The texts come in every language of [texts.toml](src/texts.toml).
 

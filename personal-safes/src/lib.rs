@@ -1,5 +1,5 @@
 //! The Safe: a chest crafted beside the wooden chest that only the player who
-//! placed it, and the players they let in from the access window, can open or
+//! placed it, and the players they let in from the Mods screen, can open or
 //! empty; only the owner picks it up, and nobody upgrades it away. The owner
 //! shows on hover, as the chest's name.
 //!

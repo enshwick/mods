@@ -80,8 +80,8 @@ is also true for a world with another value.
 
 `label_language` refuses any value that is not a language code. The Mods screen
 then shows the reason in the player's language. A change applies while the game
-runs, to Safes named after the change. The Mods screen uses each player's own
-language.
+runs, to Safes named after the change. The actions on the Mods screen use each
+player's own language.
 
 The texts come in every language of [texts.toml](src/texts.toml).
 

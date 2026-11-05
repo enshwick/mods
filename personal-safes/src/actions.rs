@@ -211,7 +211,8 @@ fn list(request: &Request<'_>) -> Outcome {
     })
 }
 
-/// Declares who may open a Safe: the list, and the list as text; saves through `save` when it changed who may.
+/// Declares who may open a Safe and the list of them; saves through `save`
+/// when it changed who may.
 ///
 /// # Errors
 ///

@@ -7,7 +7,8 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 - You craft the Safe at the same workshop as the Wooden Chest. By default it
   costs twice the ingredients of the Wooden Chest.
-- Only the player who placed a Safe can open, empty, pick up or dismantle it.
+- Only the player who placed a Safe, and the players they let in, can open or
+  empty it. Only the owner picks it up or dismantles it.
 - Crafting and building do not take items from another player's Safe.
 - The server's administrators can open every Safe, unless the settings turn this
   off.
@@ -24,10 +25,13 @@ settings allow.
 
 ## Letting other players in
 
-Stand within 4 m of one of your Safes. Open the pause menu, then Mods, then
-Actions under Personal Safes. The screen names the Safe, such as "your Safe at
-(x, y, z)", and lists the players online and the players you already let in,
-each with a switch.
+Open one of your Safes. A panel beside the chest's screen lists the players
+online and the players you already let in, each with a switch. The panel shows
+only at a Safe you may manage, never at another chest.
+
+The same list is on the Mods screen: stand within 4 m of the Safe, open the
+pause menu, then Mods, then Actions under Personal Safes. The screen names the
+Safe, such as "your Safe at (x, y, z)".
 
 A player you switch on can open the Safe, take, put and sort items, and craft or
 build from it, as you do. That player never picks it up, dismantles it, renames
@@ -37,8 +41,8 @@ while the player is away. The game confirms each change with a notice.
 The screen shows one action at a time: the list, and "Name who may open it",
 which answers with a notice.
 
-The Safe at hand is the nearest one within 4 m that you may manage, your own
-first. You may manage your own Safes and the Safes another mod lets you manage
+The Safe at hand is the one you opened last, while it is within 4 m, else the
+nearest one within 4 m that you may manage, your own first. You may manage your own Safes and the Safes another mod lets you manage
 (see For mod authors). Administrators may manage every Safe while
 `admins_can_open` is on. Nobody else removes a Safe, except administrators while
 `admins_can_open` is on.

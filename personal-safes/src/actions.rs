@@ -1,18 +1,19 @@
 //! Who may open a Safe, as the owner manages it: a list of the server's
-//! players with a switch each, for the Safe at hand, on the Mods screen,
-//! and a list action that names them.
+//! players with a switch each, for the Safe at hand, on the Mods screen
+//! and in the panel beside the Safe's chest screen, and a list action that
+//! names them.
 //!
-//! The Safe at hand is the one within reach the player may manage: their
-//! own nearest one first, else the nearest other they may manage, as an
-//! administrator while `admins_can_open` is on, or one another mod lets
-//! them manage.
+//! The Safe at hand is the one within reach the player may manage: the one
+//! they opened last first, then their own nearest one, else the nearest
+//! other they may manage, as an administrator while `admins_can_open` is
+//! on, or one another mod lets them manage.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use enshwick::actions::{Action, Ask, FindSubjectError, Outcome, Request, Subject, Value};
+use enshwick::actions::{Action, Actions, Ask, FindSubjectError, Outcome, Request, Subject, Value};
 use enshwick::i18n::{Language, Texts};
 use enshwick::world::World;
-use enshwick::{Load, Off, PlayerKey};
+use enshwick::{Entity, Load, Off, PlayerKey};
 
 use crate::access::{AllowOutcome, Cell, Safe, Seen, centre, nearest_own, snapshots};
 use crate::texts;
@@ -22,7 +23,7 @@ use crate::texts;
 pub const REACH: f64 = 4.0;
 
 /// The action that switches players on and off at the Safe at hand.
-const ACCESS_ACTION: &str = "access";
+pub(crate) const ACCESS_ACTION: &str = "access";
 /// The action that names who may open the Safe at hand.
 const LIST_ACTION: &str = "list";
 
@@ -212,7 +213,8 @@ fn list(request: &Request<'_>) -> Outcome {
 }
 
 /// Declares who may open a Safe and the list of them; saves through `save`
-/// when it changed who may.
+/// when it changed who may, and calls `answered` with the player and their
+/// character after every switch, changed or refused.
 ///
 /// # Errors
 ///
@@ -222,7 +224,8 @@ pub fn declare(
     world: World,
     texts: Texts,
     save: impl Fn() + Send + Sync + 'static,
-) -> Result<(), Off> {
+    answered: impl Fn(Seen, Entity) + Send + Sync + 'static,
+) -> Result<Actions, Off> {
     let actions = load.actions(texts)?;
     actions.add(
         Action::per_player(ACCESS_ACTION, texts::ACTION_ACCESS, |_ask, subject| {
@@ -242,12 +245,24 @@ pub fn declare(
         })
         .help(texts::ACTION_ACCESS_HELP)
         .at(move |ask| at_hand(world, ask)),
-        move |request| access(request, &save),
+        move |request| {
+            let outcome = access(request, &save);
+            let me = request.player;
+            answered(
+                Seen {
+                    key: me.key,
+                    admin: me.is_admin(),
+                },
+                me.entity,
+            );
+            outcome
+        },
     )?;
     actions.add(
         Action::new(LIST_ACTION, texts::ACTION_LIST).at(move |ask| at_hand(world, ask)),
         list,
-    )
+    )?;
+    Ok(actions)
 }
 
 #[cfg(test)]

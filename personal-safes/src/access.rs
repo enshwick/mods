@@ -267,6 +267,9 @@ pub struct Access {
     pub owners_unread: AtomicBool,
     /// Safes seen this session without a recorded owner.
     pub unowned: ArcSwap<FxHashSet<Entity>>,
+    /// The Safe each player last opened and may manage, which their panel
+    /// shows and the access action acts on first.
+    pub opened: ArcSwap<FxHashMap<PlayerKey, Cell>>,
 }
 
 static ACCESS: ModLocal<Access> = ModLocal::new();
@@ -289,7 +292,25 @@ impl Access {
             unregistered: AtomicBool::new(false),
             owners_unread: AtomicBool::new(false),
             unowned: ArcSwap::from_pointee(FxHashSet::default()),
+            opened: ArcSwap::from_pointee(FxHashMap::default()),
         }
+    }
+
+    /// Records the Safe at `at` as the one `key` opened, or none; whether
+    /// that changed what they had open.
+    pub fn open(&self, key: PlayerKey, at: Option<Cell>) -> bool {
+        if self.opened.load().get(&key).copied() == at {
+            return false;
+        }
+        self.opened.rcu(|opened| {
+            let mut opened = FxHashMap::clone(opened);
+            match at {
+                Some(at) => opened.insert(key, at),
+                None => opened.remove(&key),
+            };
+            opened
+        });
+        true
     }
 
     /// Whether `player` may do `action` with `chest`, the Safe of `owner`
@@ -341,9 +362,10 @@ impl Access {
     }
 
     /// The Safe within `max` metres of `position` that `player`, with the
-    /// character `character`, may manage, and its record: their own nearest
-    /// one first, else the nearest other, as an administrator's while
-    /// `admins_can_open` is on or one another mod lets them manage.
+    /// character `character`, may manage, and its record: the one they last
+    /// opened first, then their own nearest one, else the nearest other, as
+    /// an administrator's while `admins_can_open` is on or one another mod
+    /// lets them manage.
     pub fn nearest_managed(
         &self,
         player: Seen,
@@ -361,10 +383,12 @@ impl Access {
             })
             .filter(|&(distance, _)| distance <= max)
             .collect();
+        let opened = self.opened.load().get(&player.key).copied();
         let theirs = |at: &Cell| owners.get(at).is_none_or(|safe| safe.owner != player.key);
         near.sort_by(|a, b| {
-            theirs(&a.1)
-                .cmp(&theirs(&b.1))
+            (opened != Some(a.1))
+                .cmp(&(opened != Some(b.1)))
+                .then(theirs(&a.1).cmp(&theirs(&b.1)))
                 .then(a.0.total_cmp(&b.0))
                 .then(a.1.cmp(&b.1))
         });
@@ -467,6 +491,7 @@ impl Access {
         self.safes.store(Arc::new(FxHashMap::default()));
         self.players.store(Arc::new(FxHashMap::default()));
         self.unowned.store(Arc::new(FxHashSet::default()));
+        self.opened.store(Arc::new(FxHashMap::default()));
     }
 
     /// Records a Safe just placed by the player with `key`, named `name`.
@@ -677,6 +702,27 @@ mod tests {
             players
         });
         assert!(!access.refused_seen(Entity(500), Entity(14)));
+    }
+
+    #[test]
+    fn the_safe_a_player_opened_comes_before_their_own_nearer_one() {
+        let access = Access::new();
+        access.placed(Entity(500), (0, 0, 0), ADMIN.key, "Root");
+        access.placed(Entity(501), (4, 0, 0), OWNER.key, "Ann");
+        let at_hand = || {
+            access
+                .nearest_managed(ADMIN, Entity(13), [0.0; 3], 4.0)
+                .map(|(at, _)| at)
+        };
+        assert_eq!(at_hand(), Some((0, 0, 0)), "own first");
+        assert!(access.open(ADMIN.key, Some((4, 0, 0))));
+        assert!(!access.open(ADMIN.key, Some((4, 0, 0))), "no change");
+        assert_eq!(at_hand(), Some((4, 0, 0)), "the one opened");
+        assert!(access.open(ADMIN.key, None));
+        assert_eq!(at_hand(), Some((0, 0, 0)));
+        assert!(access.open(ADMIN.key, Some((4, 0, 0))));
+        access.forget_session();
+        assert!(access.opened.load().is_empty());
     }
 
     #[test]

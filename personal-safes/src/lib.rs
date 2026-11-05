@@ -1,6 +1,6 @@
 //! The Safe: a chest crafted beside the wooden chest that only the player who
-//! placed it, and the players they let in from the Mods screen, can open or
-//! empty; only the owner picks it up, and nobody upgrades it away. The owner
+//! placed it, and the players they let in beside its chest screen or from
+//! the Mods screen, can open or empty; only the owner picks it up, and nobody upgrades it away. The owner
 //! shows on hover, as the chest's name.
 //!
 //! The Safe item places the vanilla wooden chest, so a Safe without the mod is
@@ -16,6 +16,7 @@
 pub mod access;
 pub mod actions;
 pub mod content;
+pub mod panel;
 pub mod points;
 
 enshwick::deps!();
@@ -23,7 +24,7 @@ enshwick::texts!();
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use enshwick::abi::BuildingData;
@@ -362,7 +363,27 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     })?;
     label_seen(load, world, phrases, store)?;
     load.on_rename(move |rename| may_rename(world, rename))?;
-    actions::declare(load, world, phrases.texts.clone(), move || save(store))?;
+    let last = Arc::new(panel::Last::empty());
+    let channel = load.feature(panel::FEATURE, |load| {
+        panel::open(load, world, Arc::clone(&last))
+    });
+    let actions = actions::declare(
+        load,
+        world,
+        phrases.texts.clone(),
+        move || save(store),
+        move |seen, character| {
+            if let Some(channel) = channel {
+                panel::refresh(channel, world, seen, character);
+            }
+        },
+    )?;
+    if client && channel.is_some() {
+        let texts = phrases.texts.clone();
+        let _shown = load.feature(panel::FEATURE, |load| {
+            panel::extend(load, last, actions, texts)
+        });
+    }
     Ok(())
 }
 
@@ -508,7 +529,7 @@ fn snapshot_players(world: World) {
         .iter()
         .map(|p| (p.entity, seen(p)))
         .collect();
-    snapshots().players.store(std::sync::Arc::new(players));
+    snapshots().players.store(Arc::new(players));
 }
 
 /// Keeps the connected players' keys and administrator flags current: on
@@ -531,6 +552,9 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
         });
     })?;
     load.on::<PlayerLeft>(|left| {
+        if let Some(gone) = snapshots().players.load().get(&left.entity) {
+            let _closed = snapshots().open(gone.key, None);
+        }
         snapshots().players.rcu(|players| {
             let mut players = FxHashMap::clone(players);
             players.remove(&left.entity);

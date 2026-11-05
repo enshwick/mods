@@ -392,6 +392,9 @@ local function start(name: string)
 end
 
 enshwick.on("WorldLoaded", function()
+	-- A hosted game loads worlds one after another; a scenario left
+	-- waiting in the last one would hold every later start.
+	finish(false, "the world loaded again before it ended")
 	local name = enshwick.settings().scenario
 	if type(name) ~= "string" or name == "" then
 		return

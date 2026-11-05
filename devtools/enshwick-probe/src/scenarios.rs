@@ -254,6 +254,17 @@ mod tests {
     }
 
     #[test]
+    fn a_scenario_still_waiting_when_the_world_loads_again_fails() {
+        let loader = start(vec![("t", WAITS)], "t");
+        let _handled = loader.raise::<WorldLoaded>(&());
+        run_for(&loader, Duration::from_millis(200));
+        assert_logged(
+            &loader,
+            "FAIL at step 1 hears a save: the world loaded again",
+        );
+    }
+
+    #[test]
     fn the_chat_scenario_passes_when_the_filter_drops_only_drop_me() {
         let loader = start(SCENARIOS.to_vec(), "chat");
         assert_logged(&loader, "scenario chat: start");

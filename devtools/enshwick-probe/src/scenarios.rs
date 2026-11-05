@@ -95,7 +95,10 @@ mod tests {
     impl Mod for Runner {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
             crate::chat::register(load);
-            super::run(load, LIST.get().map_or(&[], Vec::as_slice))?;
+            match LIST.get() {
+                Some(list) => super::run(load, list)?,
+                None => super::start(load)?,
+            }
             Ok(Self)
         }
     }
@@ -125,10 +128,13 @@ mod tests {
         }
     }
 
-    /// Starts the runner over `list` with the world's setting naming
-    /// `scenario`, with Ann online, and loads the world.
-    fn start(list: Vec<(&'static str, &'static str)>, scenario: &str) -> Installed {
-        LIST.set(list).unwrap();
+    /// Starts the runner over `list`, the shipped scenarios for `None`, with
+    /// the world's setting naming `scenario`, with Ann online, and loads the
+    /// world.
+    fn start(list: Option<Vec<(&'static str, &'static str)>>, scenario: &str) -> Installed {
+        if let Some(list) = list {
+            LIST.set(list).unwrap();
+        }
         let loader = FakeHost::new()
             .world()
             .player(ann())
@@ -186,9 +192,17 @@ mod tests {
 
     #[test]
     fn every_shipped_scenario_compiles_and_none_runs_without_the_setting() {
-        let loader = start(SCENARIOS.to_vec(), "");
+        let loader = start(None, "");
         run_for(&loader, Duration::from_secs(5));
         assert!(!logged(&loader, "starts in"), "{:#?}", loader.logs());
+        let schema = loader.config_schema("settings").unwrap();
+        let choices = &schema.field(super::SETTING).unwrap().choices;
+        for (name, _) in SCENARIOS {
+            assert!(
+                choices.contains(&format!("\"{name}\"")),
+                "{name} in {choices:?}"
+            );
+        }
     }
 
     const PASSES: &str = r#"
@@ -203,7 +217,7 @@ mod tests {
 
     #[test]
     fn a_scenario_logs_a_pass_per_step_and_a_pass_at_the_end() {
-        let loader = start(vec![("t", PASSES)], "t");
+        let loader = start(Some(vec![("t", PASSES)]), "t");
         assert_logged(&loader, "scenario t: start: waits and hears");
         run_for(&loader, Duration::from_secs(2));
         assert_logged(&loader, "scenario t: step 1 waits a second: PASS");
@@ -226,7 +240,7 @@ mod tests {
 
     #[test]
     fn a_failed_check_names_its_step_and_both_values_and_ends_the_scenario() {
-        let loader = start(vec![("t", FAILS)], "t");
+        let loader = start(Some(vec![("t", FAILS)]), "t");
         assert_logged(&loader, "scenario t: FAIL at step 1 adds: ");
         assert_logged(&loader, "the sum: expected 3, got 2");
         assert!(!logged(&loader, "never runs"), "{:#?}", loader.logs());
@@ -243,7 +257,7 @@ mod tests {
 
     #[test]
     fn an_event_that_does_not_come_in_time_fails_its_step() {
-        let loader = start(vec![("t", WAITS)], "t");
+        let loader = start(Some(vec![("t", WAITS)]), "t");
         run_for(&loader, Duration::from_secs(1));
         assert!(!logged(&loader, "FAIL"), "{:#?}", loader.logs());
         run_for(&loader, Duration::from_secs(2));
@@ -255,7 +269,7 @@ mod tests {
 
     #[test]
     fn a_scenario_still_waiting_when_the_world_loads_again_fails() {
-        let loader = start(vec![("t", WAITS)], "t");
+        let loader = start(Some(vec![("t", WAITS)]), "t");
         let _handled = loader.raise::<WorldLoaded>(&());
         run_for(&loader, Duration::from_millis(200));
         assert_logged(
@@ -266,7 +280,9 @@ mod tests {
 
     #[test]
     fn the_chat_scenario_passes_when_the_filter_drops_only_drop_me() {
-        let loader = start(SCENARIOS.to_vec(), "chat");
+        let loader = start(None, "chat");
+        assert_logged(&loader, "PASS chat filter registered");
+        assert_logged(&loader, "PASS chat lines heard");
         assert_logged(&loader, "scenario chat: start");
         assert_eq!(loader.say(ANN, "drop me"), None);
         assert_eq!(
@@ -284,7 +300,7 @@ mod tests {
 
     #[test]
     fn the_saves_scenario_passes_when_a_held_save_is_refused() {
-        let loader = start(SCENARIOS.to_vec(), "saves");
+        let loader = start(None, "saves");
         run_for(&loader, Duration::from_secs(8));
         assert_logged(&loader, "scenario saves: step 2");
         assert!(loader.saves() > 0, "{:#?}", loader.logs());

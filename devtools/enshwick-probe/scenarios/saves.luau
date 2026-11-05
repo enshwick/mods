@@ -24,6 +24,7 @@ return {
 			local asked, refused = pcall(enshwick.world.save)
 			s.expect(not asked, "the save was not refused")
 			s.log(`refused: {refused}`)
+			s.expect(string.find(tostring(refused), "refused", 1, true), "the save failed for another reason")
 			s.no_event("WorldSaved", 5)
 		end)
 		s.step("a save asked once let go runs WorldSaving, then WorldSaved", function()

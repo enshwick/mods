@@ -138,10 +138,10 @@ local GAME_EVENTS = {
 	"LevelUpEvent",
 }
 
--- The reflected name of a typed game event: `CraftRecipeEvent` is
--- `craft_recipe_event`.
-local function reflected(event: string): string
-	return (event:gsub("(%l)(%u)", "%1_%2"):lower())
+-- A reflected type's own name, without its namespaces: the typed event
+-- `CraftRecipeEvent` is the last part of its reflected name.
+local function own_name(reflected: string): string
+	return reflected:match("([%w_]+)$") or reflected
 end
 
 local heard: { [string]: boolean } = {}
@@ -157,13 +157,13 @@ end
 heard.Ticked = true
 local types: { [string]: boolean } = {}
 for _, ty in enshwick.game_event_types() do
-	types[ty.name] = true
+	types[own_name(ty.name)] = true
 end
 for _, event in GAME_EVENTS do
-	if types[reflected(event)] then
+	if types[event] then
 		hear(event)
 	else
-		enshwick.log.info(`scenario runner: {event} is not heard: this build has no {reflected(event)}`)
+		enshwick.log.info(`scenario runner: {event} is not heard: this build has no such game event type`)
 	end
 end
 local HOOKS: { [string]: () -> () } = {

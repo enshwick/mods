@@ -316,4 +316,83 @@ mod tests {
         );
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
     }
+
+    /// Each switch the panel draws, by label.
+    fn switches(drawn: &[(u32, Vec<Drawn>)]) -> Vec<(String, bool)> {
+        drawn
+            .iter()
+            .flat_map(|(_, list)| {
+                list.iter().filter_map(|widget| match widget {
+                    Drawn::Toggle { label, on, .. } => Some((label.clone(), *on)),
+                    _ => None,
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_stalled_frame_keeps_the_panel_and_an_unanswered_switch_falls_back() {
+        // A client build without the server's event of an accepted
+        // interaction still hears the server.
+        let loader = FakeHost::new()
+            .world()
+            .items()
+            .recipes()
+            .workshops()
+            .vanilla_items(&[(Guid([9; 16]), content::CHEST)])
+            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .side(Side::CLIENT)
+            .net_peer(Peer::Server)
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert!(
+            format!("{:?}", loader.logs()).contains("follows no opened chest"),
+            "{:?}",
+            loader.logs()
+        );
+        let safe = Shown::Safe {
+            at: (2, 0, 0),
+            players: vec![Listed {
+                key: PlayerKey::new(2),
+                name: "Bob".into(),
+                allowed: false,
+            }],
+        };
+        assert!(loader.net_deliver(CHANNEL, Peer::Server, &safe));
+        let frame = || {
+            let _hud = loader.draw_frame();
+            switches(&loader.draw_screen(HudScreenType::StorageChest))
+        };
+        assert_eq!(frame(), [("Bob".to_owned(), false)]);
+
+        loader.input("Bob", Input::Toggle(true));
+        assert_eq!(frame(), [("Bob".to_owned(), true)]);
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        assert_eq!(
+            frame(),
+            [("Bob".to_owned(), true)],
+            "one long frame is a stall, not a chest opened again"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1600));
+        assert_eq!(
+            frame(),
+            [("Bob".to_owned(), false)],
+            "with no answer the switch shows the server's word again"
+        );
+
+        let _closed = loader.draw_frame();
+        assert!(
+            frame().is_empty(),
+            "a frame without the panel closed the chest; the list was for it"
+        );
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+    }
 }

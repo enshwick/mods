@@ -552,9 +552,7 @@ fn track_players(load: &mut Load<'_>, world: World) -> Result<(), Off> {
         });
     })?;
     load.on::<PlayerLeft>(|left| {
-        if let Some(gone) = snapshots().players.load().get(&left.entity) {
-            let _closed = snapshots().open(gone.key, None);
-        }
+        let _closed = snapshots().open(left.key, None);
         snapshots().players.rcu(|players| {
             let mut players = FxHashMap::clone(players);
             players.remove(&left.entity);

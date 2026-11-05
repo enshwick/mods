@@ -8,11 +8,13 @@
 //! answers with a notice and a fresh message.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwapOption;
 use rustc_hash::FxHashMap;
 
+use enshwick::abi::Side;
 use enshwick::actions::{Actions, Value};
 use enshwick::game_events::AcceptOfferedInteractionEvent;
 use enshwick::i18n::{Texts, language};
@@ -44,11 +46,7 @@ pub const MAX_NAME: usize = 64;
 
 /// `name` cut to at most [`MAX_NAME`] bytes, on a character boundary.
 fn bounded(mut name: String) -> String {
-    let mut end = name.len().min(MAX_NAME);
-    while !name.is_char_boundary(end) {
-        end -= 1;
-    }
-    name.truncate(end);
+    name.truncate(name.floor_char_boundary(MAX_NAME));
     name
 }
 
@@ -58,8 +56,12 @@ fn bounded(mut name: String) -> String {
 const GRACE: Duration = Duration::from_secs(1);
 
 /// A pause in drawing this long means the chest screen closed and opened
-/// again.
+/// again, when no frame count tells it.
 const REOPENED: Duration = Duration::from_millis(250);
+
+/// How long a switch shows as changed with no answer from the server, which
+/// drops a run too soon after the last and refuses some before the action.
+const UNANSWERED: Duration = Duration::from_secs(3);
 
 /// What a player's panel shows, as the server tells their client.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -116,8 +118,10 @@ pub fn listing(
             });
         }
     }
-    players.sort_by_key(|p| p.name.to_lowercase());
+    // The allowed are kept over the cut, so each can still be switched off.
+    players.sort_by_key(|p| (!p.allowed, p.name.to_lowercase()));
     players.truncate(MAX_LISTED);
+    players.sort_by_key(|p| p.name.to_lowercase());
     for player in &mut players {
         player.name = bounded(core::mem::take(&mut player.name));
     }
@@ -150,10 +154,7 @@ pub fn accepted(channel: Channel<Shown>, world: World, character: Entity, chest:
     let Some(player) = world.player(character) else {
         return;
     };
-    let seen = Seen {
-        key: player.key,
-        admin: player.is_admin(),
-    };
+    let seen = crate::seen(&player);
     let at = snapshots()
         .owner(chest, world.used_item(chest), world.position(chest))
         .map(|(_, at)| at)
@@ -195,16 +196,24 @@ fn receive(last: &Last, from: Peer, mut shown: Shown) {
 ///
 /// # Errors
 ///
-/// [`Off`] when the loader refuses the channel or the game build lacks the
-/// event of an accepted interaction.
+/// [`Off`] when the loader refuses the channel, or on a server whose game
+/// build lacks the event of an accepted interaction.
 pub fn open(load: &mut Load<'_>, world: World, last: Arc<Last>) -> Result<Channel<Shown>, Off> {
     let channel = load.channel::<Shown, _>(CHANNEL, VERSION, move |from, shown| {
         receive(&last, from, shown);
     })?;
-    load.on::<AcceptOfferedInteractionEvent>(move |used| {
+    let followed = load.on::<AcceptOfferedInteractionEvent>(move |used| {
         accepted(channel, world, used.guest_entity_id, used.host_entity_id);
-    })?;
-    Ok(channel)
+    });
+    match followed {
+        Err(off) if load.host().build().side == Side::SERVER => Err(off),
+        // A client hears the server; the event is the server's part.
+        Err(off) => {
+            enshwick::warn!("the Safe's panel follows no opened chest on this side: {off}");
+            Ok(channel)
+        }
+        Ok(()) => Ok(channel),
+    }
 }
 
 /// What the panel draws, kept between frames.
@@ -212,10 +221,13 @@ struct Panel {
     last: Arc<Last>,
     actions: Actions,
     texts: Texts,
+    /// The interface's frames so far, counted every frame whatever the
+    /// screen; zero while the loader runs no frame callback.
+    frames: Arc<AtomicU64>,
     /// When the chest screen last opened.
     opened: Instant,
-    /// When the panel last drew.
-    drawn: Option<Instant>,
+    /// When the panel last drew, and the frame count then.
+    drawn: Option<(Instant, u64)>,
     /// When the message drawn came, to tell a new one.
     since: Option<Instant>,
     /// When the message drawn while the screen was open before came: it
@@ -224,22 +236,29 @@ struct Panel {
     stale: Option<Instant>,
     /// The title and the help line, in the player's language.
     words: (String, String),
-    /// Switches the player changed since the message drawn, until the
-    /// server's answer.
-    pending: FxHashMap<PlayerKey, bool>,
+    /// Switches the player changed since the message drawn and when, until
+    /// the server's answer or [`UNANSWERED`].
+    pending: FxHashMap<PlayerKey, (bool, Instant)>,
 }
 
 impl Panel {
     fn draw(&mut self, frame: &mut Frame<'_>) {
         let now = Instant::now();
-        if self
-            .drawn
-            .is_none_or(|drawn| now.saturating_duration_since(drawn) > REOPENED)
-        {
+        let count = self.frames.load(Ordering::Relaxed);
+        // A frame drawn without the panel means the screen closed; a long
+        // frame alone is a stall.
+        let reopened = self.drawn.is_none_or(|(at, before)| {
+            if count == before {
+                now.saturating_duration_since(at) > REOPENED
+            } else {
+                count.wrapping_sub(before) > 1
+            }
+        });
+        if reopened {
             self.opened = now;
             self.stale = self.since.take();
         }
-        self.drawn = Some(now);
+        self.drawn = Some((now, count));
         let Some(last) = self.last.load_full() else {
             return;
         };
@@ -262,12 +281,11 @@ impl Panel {
             let mut on = self
                 .pending
                 .get(&player.key)
-                .copied()
-                .unwrap_or(player.allowed);
+                .filter(|(_, at)| now.saturating_duration_since(*at) < UNANSWERED)
+                .map_or(player.allowed, |&(on, _)| on);
             if !frame.toggle(Toggle::new(&player.name), &mut on) {
                 continue;
             }
-            self.pending.insert(player.key, on);
             let args = [
                 Value::Player {
                     key: player.key,
@@ -275,8 +293,11 @@ impl Panel {
                 },
                 Value::Toggle(on),
             ];
-            if let Err(off) = self.actions.run(ACCESS_ACTION, &args) {
-                enshwick::warn!("the switch for {} was not sent: {off}", player.name);
+            match self.actions.run(ACCESS_ACTION, &args) {
+                Ok(()) => {
+                    self.pending.insert(player.key, (on, now));
+                }
+                Err(off) => enshwick::warn!("the switch for {} was not sent: {off}", player.name),
             }
         }
     }
@@ -294,10 +315,18 @@ pub fn extend(
     actions: Actions,
     texts: Texts,
 ) -> Result<(), Off> {
+    let frames = Arc::new(AtomicU64::new(0));
+    let counted = Arc::clone(&frames);
+    if let Err(off) = load.on_frame(move |_| {
+        counted.fetch_add(1, Ordering::Relaxed);
+    }) {
+        enshwick::warn!("the Safe's panel tells a reopened chest by time alone: {off}");
+    }
     let mut panel = Panel {
         last,
         actions,
         texts,
+        frames,
         opened: Instant::now(),
         drawn: None,
         since: None,
@@ -348,13 +377,18 @@ mod tests {
             key: PlayerKey::new(500),
             name: "ё".repeat(200),
         });
-        let online = (2..200).map(|key| (PlayerKey::new(key), "x".repeat(64)));
+        let online = (2..200).map(|key| (PlayerKey::new(u64::MAX - key), "x".repeat(64)));
         let shown = listing((0, 0, 0), &safe, PlayerKey::new(1), online);
         let Shown::Safe { players, .. } = &shown else {
             panic!("a Safe")
         };
         assert_eq!(players.len(), MAX_LISTED);
         assert_eq!(players[0].name, "x".repeat(64));
+        assert_eq!(
+            players.last().map(|p| (p.key, p.name.as_str(), p.allowed)),
+            Some((PlayerKey::new(500), "ё".repeat(32).as_str(), true)),
+            "an allowed player sorting last stays, cut"
+        );
         assert_eq!(bounded("ё".repeat(200)), "ё".repeat(32));
         assert_eq!(
             bounded(format!("a{}", "ё".repeat(100))),

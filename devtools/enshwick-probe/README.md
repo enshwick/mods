@@ -83,26 +83,23 @@ typed event whose fields this game build lacks shows as `FAIL typed <type>`.
 
 ## Actions
 
-On the mod's page of the Mods screen, for administrators.
+For administrators. In a game the client hosts, each action without an
+argument has a key, which `mod-controls.toml` can change. The actions on an
+entity run as console lines, such as `enshwick.probe vitals 1234`. The
+scenarios `teleport`, `stats` and `knowledge` check the rest on a player.
 
-| Action      | What it does                                                                                                |
-| ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `census`    | the game events counted so far, by type                                                                     |
-| `check`     | runs the checks again                                                                                       |
-| `key`       | your account key                                                                                            |
-| `vitals`    | an entity's vitals and progress, against its replicated health                                              |
-| `my-vitals` | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
-| `teleport`  | moves your character by the offset given and logs where it stands four times a second for five seconds      |
-| `destroy`   | asks the world to destroy an entity; on a copy of a world only                                              |
-| `spawn`     | spawns a copy of an entity above it and follows it as above                                                 |
-| `notice`    | shows a notice on your screen, or in chat without Enshwick                                                  |
-| `knowledge` | a knowledge value of yours, or of the world for its ids                                                     |
-| `learn`     | grants it to you: a bool set, a counter raised by the bit or amount, that flag set                          |
-| `unlearn`   | takes it back the same way                                                                                  |
-| `stat`      | adds a value to one of your stats                                                                           |
-| `stat-off`  | removes what the probe added to that stat                                                                   |
-| `stats`     | your stats that differ from the defaults, and their sources                                                 |
-| `affix`     | rolls one to three affixes anew on everything you wear                                                      |
+| Action      | Key         | What it does                                                                                                |
+| ----------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `census`    | `Shift+F2`  | the game events counted so far, by type                                                                     |
+| `check`     | `Shift+F3`  | runs the checks again                                                                                       |
+| `key`       | `Shift+F4`  | your account key                                                                                            |
+| `my-vitals` | `Shift+F5`  | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
+| `notice`    | `Shift+F6`  | shows a notice on your screen, or in chat without Enshwick                                                  |
+| `stats`     | `Shift+F9`  | your stats that differ from the defaults, and their sources                                                 |
+| `affix`     | `Shift+F11` | rolls one to three affixes anew on everything you wear                                                      |
+| `vitals`    | console     | an entity's vitals and progress, against its replicated health                                              |
+| `destroy`   | console     | asks the world to destroy an entity; on a copy of a world only                                              |
+| `spawn`     | console     | spawns a copy of an entity above it and follows it as the checks do                                         |
 
 ## Settings
 
@@ -151,6 +148,9 @@ behind the probe's gear on the Mods screen; empty, the default, runs none.
 | `item-actions` | each item action a player takes reaches the server as its kind, and a hand craft as a craft event | one player with food, a healing potion, armour, a prop and craft materials |
 | `craft-rewards` | a craft reward goes to the player who brewed, once per unit | two players and a pack that rewards each brew with an item |
 | `join-throw` | a throw a pack refuses stays refused right after a join, and a pack's first-drink experience comes once | two players and such a pack |
+| `teleport` | a teleport of the first player's character lands three metres aside and stays there | one player |
+| `stats` | 100 extra maximum health the probe sets on the first player counts as the probe's source, and goes again | one player |
+| `knowledge` | a quest the first player has not got is granted and taken back, both read back and come as `KnowledgeChanged` | one player on a character of their own: the quest's rewards stay |
 
 ### Run a scenario
 

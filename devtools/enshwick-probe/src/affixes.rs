@@ -1,19 +1,17 @@
 //! Affixes and stats by hand: two affixes of the probe's own, an item with
 //! an entity found in a container and rolled from a seed, its lines read
-//! and its old stats put back; and the `stat`, `stat-off`, `stats` and
-//! `affix` actions an administrator tries them with in game.
+//! and its old stats put back; and the `stats` and `affix` actions an
+//! administrator tries them with in game.
 
 use enshwick::affixes::{AffixDef, Affixes, ItemRarity, Range, RollRules};
 use enshwick::content::categories::ItemCategoryMask;
 use enshwick::inventory::ItemInstance;
 use enshwick::inventory::{Inventories, InventoryCategory};
-use enshwick::stats::{Lasting, Modifier, Op, Stat, StatDef, Stats, builtin};
+use enshwick::stats::{Op, Stat, StatDef, Stats, builtin};
 use enshwick::world::Player;
 use enshwick::world::{ContainerKinds, World};
 use enshwick::{Load, Off};
 
-/// The probe's key for the modifiers its commands set.
-const KEY: &str = "probe-command";
 /// The stat the probe defines.
 const LUCKY: enshwick::content::Id = enshwick::content::id!("lucky");
 /// The affixes the probe defines.
@@ -29,16 +27,11 @@ pub(crate) struct AffixChecks {
     stats: Stats,
     inventories: Inventories,
     world: World,
-    /// Every stat the actions may set, by id.
+    /// Every stat the `stats` action reads, by id.
     kinds: Vec<(String, Stat)>,
 }
 
 impl AffixChecks {
-    /// The ids of the stats the actions may set.
-    pub(crate) fn kind_ids(&self) -> Vec<String> {
-        self.kinds.iter().map(|(id, _)| id.clone()).collect()
-    }
-
     pub(crate) fn new(load: &mut Load<'_>) -> Result<Self, Off> {
         let world = load.world()?;
         let mut kinds = Vec::new();
@@ -145,29 +138,6 @@ impl AffixChecks {
         match self.stats.set_item(item, &before) {
             Ok(()) => enshwick::info!("PASS affixes: {item:?} put back"),
             Err(why) => enshwick::warn!("FAIL affixes: putting back {item:?}: {why}"),
-        }
-    }
-
-    /// The `stat` and `stat-off` actions: an `Add` modifier on the caller,
-    /// or none for `off`.
-    pub(crate) fn stat(&self, player: &Player, id: &str, value: &str) -> String {
-        let Some(&(_, stat)) = self.kinds.iter().find(|(known, _)| known == id) else {
-            let ids: Vec<&str> = self.kinds.iter().map(|(id, _)| id.as_str()).collect();
-            return format!("stats: {}", ids.join(", "));
-        };
-        let done = if value == "off" {
-            self.stats.remove(player.entity, KEY, stat)
-        } else {
-            let Ok(value) = value.parse::<f32>() else {
-                return format!("not a value: {value}");
-            };
-            let modifier = Modifier::new(stat, Op::Add, value);
-            self.stats
-                .set(player.entity, KEY, modifier, Lasting::UntilRemoved)
-        };
-        match done {
-            Ok(()) => format!("{id}: {value}; the value follows after the next step"),
-            Err(why) => format!("{id}: {why}"),
         }
     }
 

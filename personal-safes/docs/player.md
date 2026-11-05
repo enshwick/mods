@@ -27,9 +27,11 @@ settings:
 
 ## How do I let another player in?
 
-Stand within 4 metres of your Safe. Open the pause menu, then Mods, then
-Actions under Personal Safes. The screen lists the players online, each with a
-switch.
+Open your Safe. A list beside the chest's screen shows the players online, each
+with a switch. Other chests show no list.
+
+You can also stand within 4 metres of your Safe and open the pause menu, then
+Mods, then Actions under Personal Safes. The screen shows the same list.
 
 A player you switch on can use the Safe as you do, but cannot pick it up. You
 can switch the player off at any time, also while the player is away.

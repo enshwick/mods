@@ -29,6 +29,7 @@ serde = { version = "1.0.229", default-features = false, features = ["std", "der
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test", "unstable"] }
+postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
 toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]

@@ -10,7 +10,10 @@ local EXTRA = 100
 -- How long the value takes to follow a change.
 local SETTLE = 1
 
+-- Extra maximum health, 0 without a modifier.
 local HEALTH_MAX = enshwick.stats.open_stat("enshwick:health_max")
+-- Opens the module's handle; until then its functions raise.
+local _STATS = enshwick.stats.stats()
 
 local me = 0
 
@@ -23,11 +26,10 @@ return {
 	end,
 	run = function(s)
 		local before = 0
-		s.step("the first player's maximum health reads", function()
+		s.step("the first player's extra maximum health reads", function()
 			me = s.players(1, 300)[1].entity
 			before = enshwick.stats.value(me, HEALTH_MAX)
-			s.log(`maximum health {before}`)
-			s.expect(before > 0, "the maximum health reads 0")
+			s.log(`extra maximum health {before}`)
 		end)
 		s.step("the probe's modifier raises it", function()
 			enshwick.stats.set(me, KEY, { stat = HEALTH_MAX, op = "Add", value = EXTRA }, "UntilRemoved")

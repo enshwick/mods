@@ -422,4 +422,62 @@ mod tests {
         assert_logged(&loader, "WorldSaved came within 5 s");
         assert!(!loader.saves_held(), "{:#?}", loader.logs());
     }
+
+    #[test]
+    fn a_failed_knowledge_scenario_takes_the_granted_quest_back() {
+        use enshwick::abi::KnowledgeInfo;
+        use enshwick::knowledge::KnowledgeId;
+
+        let quest = KnowledgeId::new(42);
+        let info = |value| KnowledgeInfo {
+            header: Header::of::<KnowledgeInfo>(),
+            id: quest,
+            kind: KnowledgeInfo::BOOL,
+            scope: KnowledgeInfo::PLAYER,
+            reserved: 0,
+            value,
+            flags: 0,
+        };
+        let loader = FakeHost::new()
+            .world()
+            .player(ann())
+            .settings("scenario = \"knowledge\"\n")
+            .install();
+        loader.set_knowledge(&[(Some(ANN_ENTITY), info(0))], &[quest]);
+        // SAFETY: both functions are the exports of this module's `declare_mod!(Runner)`.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        let _handled = loader.raise::<SettingsReplaced>(&());
+        let _handled = loader.raise::<WorldLoaded>(&());
+        run_for(&loader, Duration::from_secs(12));
+        assert_logged(&loader, "scenario knowledge: step 1");
+        assert_eq!(loader.grants().len(), 1, "{:#?}", loader.logs());
+        // The grant lands, but its event never comes.
+        loader.set_knowledge(&[(Some(ANN_ENTITY), info(1))], &[quest]);
+        run_for(&loader, Duration::from_secs(11));
+        assert_logged(&loader, "no KnowledgeChanged within 10 s");
+        assert_eq!(
+            loader
+                .revokes()
+                .iter()
+                .map(|revoke| revoke.1)
+                .collect::<Vec<_>>(),
+            [quest],
+            "{:#?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn the_stats_scenario_reads_extra_maximum_health_of_a_plain_character() {
+        let loader = start(None, "stats");
+        run_for(&loader, Duration::from_secs(2));
+        assert_logged(&loader, "scenario stats: step 1");
+        assert!(
+            !logged(&loader, "scenario stats: FAIL at step 1"),
+            "{:#?}",
+            loader.logs()
+        );
+    }
 }

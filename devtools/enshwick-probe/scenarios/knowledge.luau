@@ -6,11 +6,19 @@
 -- How long a change may take to come as an event.
 local PATIENCE = 10
 
+local me = 0
+local quest = 0
+
 return {
 	about = "a quest is granted to a player and taken back, and both read back",
+	-- A failed step must not leave the quest granted.
+	cleanup = function()
+		local known = if quest ~= 0 then enshwick.knowledge.get(me, quest) else nil
+		if known and known.value ~= 0 then
+			enshwick.knowledge.revoke(me, quest, "Clear")
+		end
+	end,
 	run = function(s)
-		local me = 0
-		local quest = 0
 		local function changed(value: number)
 			s.event("KnowledgeChanged", PATIENCE, function(change)
 				return change.id == quest and change.entity == me and change.value == value

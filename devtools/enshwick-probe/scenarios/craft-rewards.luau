@@ -29,11 +29,13 @@ return {
 		s.log(`player A is {a.name}, player B is {b.name}`)
 
 		-- Runs `ask` and returns how both inventories changed once the
-		-- server has had time to pay.
-		local function brew(ask: () -> ()): ({ [number]: number }, { [number]: number })
+		-- server has had time to pay, after `crafts` crafts (one if nil).
+		local function brew(ask: () -> (), crafts: number?): ({ [number]: number }, { [number]: number })
 			local a0, b0 = s.items(a.entity), s.items(b.entity)
 			ask()
-			s.event("CraftRecipeSuccessEvent", PATIENCE)
+			for _ = 1, crafts or 1 do
+				s.event("CraftRecipeSuccessEvent", PATIENCE)
+			end
 			s.wait(SETTLE)
 			local da, db = s.changed(a0, s.items(a.entity)), s.changed(b0, s.items(b.entity))
 			s.log(`A: {s.describe(da)}; B: {s.describe(db)}`)
@@ -75,7 +77,7 @@ return {
 		s.step("both brew 1 at once: each gets 1 reward", function()
 			local da, db = brew(function()
 				s.tell(`{a.name} and {b.name}: brew 1 Shrine Tonic each at the same moment`)
-			end)
+			end, 2)
 			local both = rose(da, 1) + rose(db, 1)
 			-- The two rewards may swap here; only their number counts.
 			s.equal(both, 4, "items up by 1 across A and B (two tonics and two rewards)")

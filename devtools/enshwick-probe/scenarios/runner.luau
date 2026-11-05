@@ -58,7 +58,15 @@ local function notify(event: string, data: any)
 		if waiter.done then
 			continue
 		end
-		if waiter.test == nil or waiter.test(data) then
+		local ok, met = true, true
+		if waiter.test then
+			ok, met = pcall(waiter.test, data)
+		end
+		if not ok then
+			-- The test's error belongs to the scenario, not to this event.
+			waiter.done = true
+			resume(waiter.co, "error", met)
+		elseif met then
 			waiter.done = true
 			resume(waiter.co, true, data)
 		else
@@ -244,7 +252,9 @@ local function context(name: string)
 			end
 		end)
 		local came, data = coroutine.yield()
-		if not came then
+		if came == "error" then
+			error(`the test of {event}: {data}`, 0)
+		elseif not came then
 			return nil
 		end
 		return if data == nil then true else data

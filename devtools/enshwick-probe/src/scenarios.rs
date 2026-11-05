@@ -267,6 +267,29 @@ mod tests {
         assert!(!logged(&loader, "scenario t: PASS"), "{:#?}", loader.logs());
     }
 
+    const BAD_TEST: &str = r#"
+        return {
+            about = "tests badly",
+            run = function(s)
+                s.step("hears a save", function()
+                    s.event("WorldSaved", 5, function() error("boom") end)
+                end)
+            end,
+        }
+    "#;
+
+    #[test]
+    fn an_error_in_an_event_test_fails_the_scenario_at_once() {
+        let loader = start(Some(vec![("t", BAD_TEST)]), "t");
+        let _handled = loader.raise::<WorldSaved>(&());
+        run_for(&loader, Duration::from_millis(200));
+        assert_logged(
+            &loader,
+            "FAIL at step 1 hears a save: the test of WorldSaved: ",
+        );
+        assert_logged(&loader, "boom");
+    }
+
     #[test]
     fn a_scenario_still_waiting_when_the_world_loads_again_fails() {
         let loader = start(Some(vec![("t", WAITS)]), "t");

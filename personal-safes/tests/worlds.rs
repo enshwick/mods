@@ -600,6 +600,37 @@ label_language = \"en\"
     }
 
     #[test]
+    fn shift_l_asks_the_server_who_may_open_the_safe_at_hand() {
+        use std::time::Duration;
+
+        use enshwick::abi::Side;
+        use enshwick::controls::Key;
+
+        let loader = host().side(Side::CLIENT).install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        let key = Key::parse("Shift+L").unwrap();
+        assert!(
+            loader
+                .controls()
+                .iter()
+                .any(|(name, _, keys)| name == "list" && keys[0] == Some(key)),
+            "{:?}",
+            loader.controls()
+        );
+        assert_eq!(loader.keys(&[key], Duration::from_millis(16)), 1);
+        assert_eq!(loader.action_runs(), [("list".to_owned(), String::new())]);
+        assert!(loader.faults().is_empty());
+    }
+
+    #[test]
     fn safes_stay_locked_while_their_owners_do_not_read() {
         use std::time::Duration;
 

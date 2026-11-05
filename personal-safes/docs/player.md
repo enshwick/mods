@@ -32,8 +32,9 @@ settings:
 Open your Safe. A list beside the chest's screen shows the players online, each
 with a switch. Other chests show no list.
 
-You can also stand within 4 metres of your Safe and open the pause menu, then
-Mods, then Actions under Personal Safes. The screen shows the same list.
+To hear who may open your Safe, stand within 4 metres of it and press
+Shift+L. A notice names the players. You can change the key on the controls
+page of the Mods screen.
 
 A player you switch on can use the Safe as you do, but cannot pick it up. You
 can switch the player off at any time, also while the player is away.

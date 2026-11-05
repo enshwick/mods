@@ -378,6 +378,12 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
             }
         },
     )?;
+    if client {
+        let listing = actions.clone();
+        let _keyed = load.feature(actions::CONTROLS_FEATURE, |load| {
+            actions::list_control(load, listing)
+        });
+    }
     if client && channel.is_some() {
         let texts = phrases.texts.clone();
         let _shown = load.feature(panel::FEATURE, |load| {

@@ -11,6 +11,8 @@ Each entry says what players notice; a release's notes show its section.
 - A panel beside a Safe's chest screen lists the players online, each with a
   switch, so the owner lets players in or out without the Mods screen. Other
   chests show no panel.
+- Shift+L near a Safe you manage names who may open it, in a notice. The key
+  replaces the list on the Mods screen, and players can change it there.
 
 ## [0.1.0] - 2026-11-05
 

@@ -11,6 +11,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use enshwick::actions::{Action, Actions, Ask, FindSubjectError, Outcome, Request, Subject, Value};
+use enshwick::controls::{Control, Key};
 use enshwick::i18n::{Language, Texts};
 use enshwick::world::World;
 use enshwick::{Entity, Load, Off, PlayerKey};
@@ -263,6 +264,28 @@ pub fn declare(
         list,
     )?;
     Ok(actions)
+}
+
+/// The controls' name as a feature of the mod, on the Mods screen and in the
+/// log.
+pub const CONTROLS_FEATURE: &str = "controls";
+
+/// The key that names who may open the Safe at hand, as a notice.
+pub const LIST_KEY: &str = "Shift+L";
+
+/// Declares the control that runs the list action on the client, so a player
+/// asks without the Mods screen.
+///
+/// # Errors
+///
+/// [`Off`] when the loader refuses the control.
+pub fn list_control(load: &mut Load<'_>, actions: Actions) -> Result<(), Off> {
+    let control = Control::new(LIST_ACTION, texts::ACTION_LIST).key(Key::parse(LIST_KEY)?);
+    load.control(control, move |_| {
+        if let Err(off) = actions.run(LIST_ACTION, &[]) {
+            enshwick::warn!("the Safe's list was not asked for: {off}");
+        }
+    })
 }
 
 #[cfg(test)]

@@ -16,7 +16,7 @@ settings:
     applies: at-once
   - key: measure
     default: true
-    meaning: Writes a line a minute to the log with the server's CPU use and loop rates.
+    meaning: Writes a line a minute to the log with the server's CPU use and loop rates. In a game you host, the line also has the frame times.
     applies: at-once
 ---
 

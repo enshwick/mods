@@ -6,6 +6,8 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-05
+
 ### Added
 
 - First alpha. More Flame Altars at each Flame Level, up to 255, in up to 179

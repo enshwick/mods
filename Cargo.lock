@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-build-camera"
-version = "0.0.0-dev"
+version = "0.1.0"
 dependencies = [
  "enshwick",
  "toml",
@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-personal-safes"
-version = "0.0.0-dev"
+version = "0.1.0"
 dependencies = [
  "arc-swap",
  "enshwick",
@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-shared-experience"
-version = "0.0.0-dev"
+version = "0.1.0"
 dependencies = [
  "enshwick",
  "serde",

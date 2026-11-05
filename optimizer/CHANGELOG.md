@@ -6,6 +6,8 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-05
+
 ### Added
 
 - First alpha. A dedicated server uses less CPU, on Windows and under Wine or

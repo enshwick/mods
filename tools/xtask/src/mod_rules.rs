@@ -58,9 +58,7 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
             ));
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
-        if let Ok(texts) = std::fs::read_to_string(dir.join("src/texts.toml")) {
-            problems.extend(undrawn_apostrophes(name, &texts));
-        }
+        problems.extend(text_apostrophes(name, dir)?);
         // Its release notes come from it (`cargo xtask notes`).
         if dir.join("docs/player.md").is_file() && !dir.join("CHANGELOG.md").is_file() {
             problems.push(format!(
@@ -296,19 +294,43 @@ fn player_doc(file: &str, is_dir: bool) -> bool {
 /// the game's own Ukrainian texts use `'`.
 const UNDRAWN_APOSTROPHES: [char; 5] = ['\u{2018}', '\u{2019}', '\u{02B9}', '\u{02BC}', '\u{2032}'];
 
-/// The lines of a mod's `texts.toml` with an apostrophe the game font does not draw.
-fn undrawn_apostrophes(name: &str, texts: &str) -> Vec<String> {
-    texts
-        .lines()
+/// The lines of a mod file with an apostrophe the game font does not draw.
+fn undrawn_apostrophes(name: &str, file: &str, text: &str) -> Vec<String> {
+    text.lines()
         .enumerate()
         .filter(|(_, line)| line.contains(UNDRAWN_APOSTROPHES))
         .map(|(index, _)| {
             format!(
-                "{name}: src/texts.toml:{}: an apostrophe the game font lacks; use '",
+                "{name}: {file}:{}: an apostrophe the game font lacks; use '",
                 index + 1
             )
         })
         .collect()
+}
+
+/// The undrawn apostrophes in a mod's texts and player pages, which share
+/// one apostrophe so a text copied between them stays drawable.
+fn text_apostrophes(name: &str, dir: &Path) -> Result<Vec<String>, String> {
+    let mut files = vec!["src/texts.toml".to_owned()];
+    if let Ok(entries) = std::fs::read_dir(dir.join("docs")) {
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("{}: {e}", dir.join("docs").display()))?;
+            let file = entry.file_name().to_string_lossy().into_owned();
+            if player_doc(&file, false) {
+                files.push(format!("docs/{file}"));
+            }
+        }
+    }
+    let mut problems = Vec::new();
+    for file in files {
+        let path = dir.join(&file);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => problems.extend(undrawn_apostrophes(name, &file, &text)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("{}: {error}", path.display())),
+        }
+    }
+    Ok(problems)
 }
 
 #[cfg(test)]
@@ -436,11 +458,29 @@ mod tests {
     }
 
     #[test]
+    fn a_player_page_with_an_undrawn_apostrophe_is_a_problem_and_a_missing_texts_file_is_not() {
+        let dir = std::env::temp_dir().join(format!("xtask-apostrophes-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        std::fs::write(dir.join("docs/player.uk.md"), "ім'я\nпам\u{2019}ять\n").unwrap();
+        std::fs::write(dir.join("docs/notes.txt"), "пам\u{2019}ять\n").unwrap();
+        let problems = text_apostrophes("a", &dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("src/texts.toml"), [0xFF]).unwrap();
+        let unreadable = text_apostrophes("a", &dir);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(unreadable.is_err());
+        assert_eq!(
+            problems.unwrap(),
+            ["a: docs/player.uk.md:2: an apostrophe the game font lacks; use '"]
+        );
+    }
+
+    #[test]
     fn a_text_with_an_apostrophe_the_game_font_lacks_is_a_problem() {
         let texts =
             "[uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n";
         assert_eq!(
-            undrawn_apostrophes("a", texts),
+            undrawn_apostrophes("a", "src/texts.toml", texts),
             [
                 "a: src/texts.toml:3: an apostrophe the game font lacks; use '",
                 "a: src/texts.toml:4: an apostrophe the game font lacks; use '",

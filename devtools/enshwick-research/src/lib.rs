@@ -25,8 +25,8 @@ mod tooltip;
 mod ui;
 
 use enshwick::abi::Side;
-use enshwick::actions::{Action, Actions, Arg, Outcome, Request, Value};
-use enshwick::controls::{Control, Key};
+use enshwick::actions::{Action, Actions, Outcome, Request};
+use enshwick::controls::Key;
 use enshwick::i18n::Texts;
 use enshwick::{Load, Mod, Off};
 
@@ -89,6 +89,10 @@ struct Settings {
     #[serde(default = "max_dumps")]
     #[config(range = 1..=100_000)]
     max_dumps: u32,
+    /// The values each mark looks for in what the tooltip functions are
+    /// handed; read again at each mark.
+    #[serde(default)]
+    mark_values: Vec<u32>,
 }
 
 impl Default for Settings {
@@ -105,6 +109,7 @@ impl Default for Settings {
             respawn: yes(),
             dump_interval_ms: interval_ms(),
             max_dumps: max_dumps(),
+            mark_values: Vec::new(),
         }
     }
 }
@@ -113,9 +118,13 @@ impl Default for Settings {
 /// mod reads itself: a developer mod keeps no world settings. The defaults
 /// without the file, or with a file that does not read.
 fn own_settings<T: enshwick::config::Config>(load: &Load<'_>) -> T {
-    let Ok(path) = load.mod_dir().map(|dir| dir.join("settings.toml")) else {
-        return T::default();
-    };
+    load.mod_dir()
+        .map_or_else(|_| T::default(), |dir| settings_in(&dir))
+}
+
+/// The switches of `settings.toml` in `dir`, as [`own_settings`] reads them.
+fn settings_in<T: enshwick::config::Config>(dir: &std::path::Path) -> T {
+    let path = dir.join("settings.toml");
     let Ok(text) = std::fs::read_to_string(&path) else {
         return T::default();
     };
@@ -184,18 +193,8 @@ impl Mod for Research {
             }
         }
         let actions = actions(load)?;
-        if client {
-            for (name, label, key) in CONTROLS {
-                let running = actions.clone();
-                let _keyed = load.feature(name, |load| {
-                    let control = Control::new(name, label).key(Key::parse(key)?);
-                    load.control(control, move |_| {
-                        if let Err(off) = running.run(name, &[]) {
-                            enshwick::warn!("research {name} not sent: {off}");
-                        }
-                    })
-                });
-            }
+        for (name, key) in CONTROLS {
+            let _keyed = load.feature(name, |_| actions.control(name, Key::parse(key)?));
         }
         enshwick::info!("research on");
         Ok(Self {
@@ -223,9 +222,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("enshwick-research-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("settings.toml"), settings).unwrap();
+        // A client hosts, as a server mod's keys need.
         let loader = enshwick::test::FakeHost::new()
             .developer_tools(true)
             .side(side)
+            .hosting(side == Side::CLIENT)
             .mod_dir(dir.to_str().unwrap())
             .install();
         // SAFETY: the exports of the `declare_mod!` below.
@@ -258,7 +259,7 @@ mod tests {
     fn f7_marks_the_log_and_f8_asks_the_status_on_a_client() {
         let (status, loader) = start(Side::CLIENT, "enabled = true\n");
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        for (name, _, key) in CONTROLS {
+        for (name, key) in CONTROLS {
             let key = Key::parse(key).unwrap();
             assert_eq!(
                 loader.keys(&[key], core::time::Duration::from_millis(16)),
@@ -270,6 +271,39 @@ mod tests {
                 Some(&(name.to_owned(), String::new()))
             );
         }
+    }
+
+    #[test]
+    fn each_mark_looks_for_the_values_the_settings_name_at_that_moment() {
+        use enshwick::abi::{ActionCall, Header, PlayerInfo};
+
+        let (status, loader) = start(Side::SERVER, "enabled = true\nmark_values = [7, 42]\n");
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        let admin = PlayerInfo {
+            header: Header::of::<PlayerInfo>(),
+            slot: 0,
+            entity: enshwick::Entity(2),
+            key: enshwick::PlayerKey::new(1),
+            permissions: PlayerInfo::CAN_KICK_BAN,
+            name_len: 0,
+            name: [0; 64],
+        };
+        let marked = |values: &str| {
+            let reply = loader.ask_actions(ActionCall::RUN, &admin, 0, "mark", "");
+            assert!(reply.is_some_and(|r| r.starts_with('1')));
+            loader
+                .logs()
+                .iter()
+                .any(|(_, line)| line.contains(&format!("(values looked for: {values})")))
+        };
+        assert!(marked("[7, 42]"), "{:?}", loader.logs());
+        let dir = std::env::temp_dir().join(format!("enshwick-research-{}", std::process::id()));
+        std::fs::write(
+            dir.join("settings.toml"),
+            "enabled = true\nmark_values = [5]\n",
+        )
+        .unwrap();
+        assert!(marked("[5]"), "{:?}", loader.logs());
     }
 
     #[test]
@@ -324,31 +358,21 @@ fn mark(request: &Request<'_>, values: &[u32]) -> Outcome {
     Outcome::done(format!("mark {mark}; hover the item now"))
 }
 
-/// The keys of the actions without arguments, as control, label and default
-/// key; F7 and up, which the game leaves free.
-const CONTROLS: [(&str, &str, &str); 2] = [
-    ("mark", "Mark the log", "F7"),
-    ("status", "Research status", "F8"),
-];
+/// The keys of the actions, as action and default key; F7 and up, which the
+/// game leaves free.
+const CONTROLS: [(&str, &str); 2] = [("mark", "F7"), ("status", "F8")];
 
 /// Declares the research actions, for administrators.
 fn actions(load: &mut Load<'_>) -> Result<Actions, Off> {
+    let dir = load.mod_dir().ok();
     let actions = load.actions(Texts::default())?;
-    actions.add(Action::new("mark", "Mark the log").admins(), |request| {
-        mark(request, &[])
-    })?;
     actions.add(
-        Action::new("mark-value", "Mark the log and look for a value")
-            .admins()
-            .arg(Arg::number("Value", 0.0..=f64::from(u32::MAX), 1.0)),
-        |request| match request.args {
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "the argument's range is within u32"
-            )]
-            [Value::Number(value)] => mark(request, &[*value as u32]),
-            _ => Outcome::refused(""),
+        Action::new("mark", "Mark the log").admins(),
+        move |request| {
+            let values = dir
+                .as_deref()
+                .map_or_else(Vec::new, |dir| settings_in::<Settings>(dir).mark_values);
+            mark(request, &values)
         },
     )?;
     actions.add(Action::new("status", "Research status").admins(), |_| {

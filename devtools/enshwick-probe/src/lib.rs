@@ -8,8 +8,8 @@
 //! every minute, logs each typed game event it receives, and runs its checks
 //! once the world has loaded: world key, entity queries, stats, component
 //! writes, actions, spawns, a per-world store and a save on demand. Its
-//! actions, for administrators on Shift and F2 to F6, F9 and F11 in a game
-//! the client hosts or as console lines, run them again and try single calls.
+//! actions, for administrators on Shift and F2 to F6, F9 and F11 or as
+//! console lines, run them again and try single calls.
 
 mod affixes;
 mod buffs;
@@ -34,9 +34,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use enshwick::Entity;
-use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Arg, Outcome, Value};
-use enshwick::controls::{Control, Key};
+use enshwick::controls::Key;
 use enshwick::events::{Kind, WorldLoaded, WorldSaved};
 use enshwick::game_events::{
     AcceptOfferedInteractionEvent, BuildingPickUpEvent, BuildingPlaceEvent, BuildingTearDownEvent,
@@ -189,22 +188,21 @@ const fn id(value: f64) -> u32 {
     value as u32
 }
 
-/// The keys of the actions, as action, label and default key: Shift with
-/// F2 to F6, F9 and F11, clear of the game's F1 (its tutorial) and the
-/// research mod's F7 and F8. The last two need the affix checks.
-const CONTROLS: [(&str, &str, &str); 7] = [
-    ("census", "Game events counted", "Shift+F2"),
-    ("check", "Run the checks again", "Shift+F3"),
-    ("key", "Your account key", "Shift+F4"),
-    ("my-vitals", "Your raw stats", "Shift+F5"),
-    ("notice", "Show yourself a notice", "Shift+F6"),
-    ("stats", "Your changed stats", "Shift+F9"),
-    ("affix", "Roll affixes again", "Shift+F11"),
+/// The keys of the actions, as action and default key: Shift with F2 to F6,
+/// F9 and F11, clear of the game's F1 (its tutorial) and the research mod's
+/// F7 and F8. The last two need the affix checks.
+const CONTROLS: [(&str, &str); 7] = [
+    ("census", "Shift+F2"),
+    ("check", "Shift+F3"),
+    ("key", "Shift+F4"),
+    ("my-vitals", "Shift+F5"),
+    ("notice", "Shift+F6"),
+    ("stats", "Shift+F9"),
+    ("affix", "Shift+F11"),
 ];
 
 /// Declares the probe's actions, for administrators: those without arguments
-/// on the keys of [`CONTROLS`] in a game the client hosts, those with an
-/// entity as console lines.
+/// on the keys of [`CONTROLS`], those with an entity as console lines.
 fn actions(
     load: &mut Load<'_>,
     census: Arc<Census>,
@@ -279,7 +277,7 @@ fn actions(
 
 /// The controls the probe declares: every one of [`CONTROLS`] with the affix
 /// checks, else all but the last two.
-fn keyed(affixes: bool) -> &'static [(&'static str, &'static str, &'static str)] {
+fn keyed(affixes: bool) -> &'static [(&'static str, &'static str)] {
     let count = if affixes {
         CONTROLS.len()
     } else {
@@ -290,18 +288,11 @@ fn keyed(affixes: bool) -> &'static [(&'static str, &'static str, &'static str)]
 
 /// Puts the actions of [`CONTROLS`] on their keys, the affix ones only with
 /// `affixes`; each key is a feature of its own, so a refused one leaves the
-/// rest.
+/// rest. Declared on every side: a dedicated server offers them to the
+/// clients that join, and a client that hosts reads them itself.
 fn controls(load: &mut Load<'_>, actions: &Actions, affixes: bool) {
-    for (name, label, key) in keyed(affixes) {
-        let running = actions.clone();
-        let _keyed = load.feature(name, |load| {
-            let control = Control::new(name, label).key(Key::parse(key)?);
-            load.control(control, move |_| {
-                if let Err(off) = running.run(name, &[]) {
-                    enshwick::warn!("probe {name} not sent: {off}");
-                }
-            })
-        });
+    for (name, key) in keyed(affixes) {
+        let _keyed = load.feature(name, |_| actions.control(name, Key::parse(key)?));
     }
 }
 
@@ -409,9 +400,7 @@ impl Mod for Probe {
         load.on::<WorldSaved>(move |()| saved.saved())?;
         let affixes = affix_checks.is_some();
         let actions = actions(load, census, &checks, run_all, affix_checks)?;
-        if load.host().build().side == Side::CLIENT {
-            controls(load, &actions, affixes);
-        }
+        controls(load, &actions, affixes);
         enshwick::info!("probe on");
         Ok(Self)
     }
@@ -497,8 +486,8 @@ mod keys {
     impl Mod for Keys {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
             let actions = load.actions(Texts::default())?;
-            for (name, label, _) in CONTROLS {
-                actions.add(Action::new(name, label).admins(), |_| Outcome::done(""))?;
+            for (name, _) in CONTROLS {
+                actions.add(Action::new(name, name).admins(), |_| Outcome::done(""))?;
             }
             super::controls(load, &actions, true);
             Ok(Self)
@@ -529,26 +518,43 @@ mod keys {
             .iter()
             .map(|key| Key::parse(key).unwrap().code())
             .collect();
-        for (name, _, key) in CONTROLS {
+        for (name, key) in CONTROLS {
             let code = Key::parse(key).unwrap().code();
             assert!(!taken.contains(&code), "{name} on {key}");
         }
     }
 
-    #[test]
-    fn on_a_hosting_client_each_key_runs_its_action() {
-        let loader = enshwick::test::FakeHost::new().side(Side::CLIENT).install();
+    /// The probe's stub keys started on a fake host of `side`.
+    fn start(side: Side, hosting: bool) -> enshwick::test::Installed {
+        let loader = enshwick::test::FakeHost::new()
+            .side(side)
+            .hosting(hosting)
+            .install();
         // SAFETY: the exports of this module's `declare_mod!(Keys)`.
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        loader
+    }
+
+    #[test]
+    fn a_dedicated_server_declares_every_key_for_the_clients_that_join() {
+        let loader = start(Side::SERVER, false);
+        let declared: Vec<String> = loader.controls().into_iter().map(|c| c.0).collect();
+        let names: Vec<&str> = CONTROLS.iter().map(|c| c.0).collect();
+        assert_eq!(declared, names);
+    }
+
+    #[test]
+    fn on_a_hosting_client_each_key_runs_its_action() {
+        let loader = start(Side::CLIENT, true);
         assert_eq!(
             loader.controls().len(),
             CONTROLS.len(),
             "{:?}",
             loader.controls()
         );
-        for (name, _, key) in CONTROLS {
+        for (name, key) in CONTROLS {
             let key = Key::parse(key).unwrap();
             assert!(
                 loader

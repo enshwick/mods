@@ -83,10 +83,14 @@ typed event whose fields this game build lacks shows as `FAIL typed <type>`.
 
 ## Actions
 
-For administrators. In a game the client hosts, each action without an
-argument has a key, which `mod-controls.toml` can change. The actions on an
-entity run as console lines, such as `enshwick.probe vitals 1234`. The
-scenarios `teleport`, `stats` and `knowledge` check the rest on a player.
+For administrators. Each action without an argument has a key, which the
+Mods screen's controls page changes: in a game the client hosts, and on a
+dedicated server, which sends the keys to each client with Enshwick that
+joins. The actions on an entity run as a dedicated server's console lines,
+such as `enshwick.probe vitals 1234`; a client that hosts has no console, and
+there the `check` key runs the same vitals, spawn and destroy checks on the
+world's entities. The scenarios `teleport`, `stats` and `knowledge` check the
+rest on a player.
 
 | Action      | Key         | What it does                                                                                                |
 | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------- |

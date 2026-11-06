@@ -277,7 +277,8 @@ pub const LIST_KEY: &str = "Shift+L";
 ///
 /// # Errors
 ///
-/// [`Off`] when the loader refuses the control.
+/// [`Off`] as [`Actions::control`] gives it, such as when the loader refuses
+/// the control.
 pub fn list_control(actions: &Actions) -> Result<(), Off> {
     actions.control(LIST_ACTION, Key::parse(LIST_KEY)?)
 }

@@ -64,8 +64,8 @@ console runs each as `enshwick.research <action>`.
 ## Settings
 
 `settings.toml` in the mod's own folder in `mods/`, this machine's switches for
-every world. The mod reads the file itself as the game starts. Without the file,
-the defaults apply:
+every world. The mod reads the file itself as the game starts, and
+`mark_values` again at each mark. Without the file, the defaults apply:
 
 ```toml
 enabled = false

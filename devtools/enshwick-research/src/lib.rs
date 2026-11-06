@@ -11,8 +11,8 @@
 //! the game's impact programs set (heals, revives, scripted kills), how
 //! skills are unlocked and taken back, where a player's spawn target
 //! points, and whether any thread runs on a fiber.
-//! Its `mark` action, F7 for administrators while the client hosts a game,
-//! starts a new section of the log.
+//! Its `mark` action, F7 for administrators in a game the client hosts or on
+//! a dedicated server, starts a new section of the log.
 
 mod entities;
 mod fibers;
@@ -129,7 +129,7 @@ fn settings_in<T: enshwick::config::Config>(dir: &std::path::Path) -> T {
         return T::default();
     };
     toml::from_str(&text).unwrap_or_else(|e| {
-        enshwick::warn!("{}: {e}; the defaults apply", path.display());
+        enshwick::warn!("{}: {e}; its defaults apply this time", path.display());
         T::default()
     })
 }
@@ -215,11 +215,20 @@ mod tests {
 
     use super::*;
 
-    /// Starts the research mod on a fake host of `side` with `settings`;
-    /// the status and the host to look at.
-    /// The mod started on `side` with `settings` as the file in its own folder.
+    /// This test's own folder for the mod, so tests on threads of one
+    /// process never write each other's `settings.toml`.
+    fn own_dir() -> std::path::PathBuf {
+        let test = std::thread::current()
+            .name()
+            .unwrap_or_default()
+            .replace(':', "_");
+        std::env::temp_dir().join(format!("enshwick-research-{}-{test}", std::process::id()))
+    }
+
+    /// Starts the research mod on a fake host of `side` with `settings` as
+    /// the file in its own folder; the status and the host to look at.
     fn start(side: Side, settings: &str) -> (Status, enshwick::test::Installed) {
-        let dir = std::env::temp_dir().join(format!("enshwick-research-{}", std::process::id()));
+        let dir = own_dir();
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("settings.toml"), settings).unwrap();
         // A client hosts, as a server mod's keys need.
@@ -297,9 +306,8 @@ mod tests {
                 .any(|(_, line)| line.contains(&format!("(values looked for: {values})")))
         };
         assert!(marked("[7, 42]"), "{:?}", loader.logs());
-        let dir = std::env::temp_dir().join(format!("enshwick-research-{}", std::process::id()));
         std::fs::write(
-            dir.join("settings.toml"),
+            own_dir().join("settings.toml"),
             "enabled = true\nmark_values = [5]\n",
         )
         .unwrap();

@@ -293,16 +293,25 @@ fn player_doc(file: &str, is_dir: bool) -> bool {
 /// Apostrophes other than `'`, the one the game's Ukrainian texts use: 2,074
 /// times, U+2019 261 times and the others never (game texts of build 1269579).
 /// The game font draws U+02BC as a box (client 26430625).
-const OTHER_APOSTROPHES: [char; 5] = ['\u{2018}', '\u{2019}', '\u{02B9}', '\u{02BC}', '\u{2032}'];
+const OTHER_APOSTROPHES: [char; 9] = [
+    '\u{2018}', '\u{2019}', '\u{201B}', '\u{02B9}', '\u{02BB}', '\u{02BC}', '\u{02BD}', '\u{2032}',
+    '\u{FF07}',
+];
 
 const OTHER_APOSTROPHE: &str = "an apostrophe other than ', the one the game's Ukrainian texts use";
+
+/// A mod's texts, which `texts!()` reads.
+const TEXTS: &str = "src/texts.toml";
+
+/// A mod's Ukrainian player page.
+const UK_PAGE: &str = "docs/player.uk.md";
 
 /// The Ukrainian texts and player page lines of a mod with an apostrophe
 /// other than `'`, so one apostrophe draws everywhere; other languages keep
 /// their own typography.
 fn text_apostrophes(name: &str, dir: &Path) -> Result<Vec<String>, String> {
     let mut problems = Vec::new();
-    let texts = dir.join("src/texts.toml");
+    let texts = dir.join(TEXTS);
     if texts.is_file()
         && let Some(uk) = manifest(&texts)?.get("uk").and_then(toml::Value::as_table)
     {
@@ -311,24 +320,21 @@ fn text_apostrophes(name: &str, dir: &Path) -> Result<Vec<String>, String> {
                 .as_str()
                 .is_some_and(|text| text.contains(OTHER_APOSTROPHES))
             {
-                problems.push(format!(
-                    "{name}: src/texts.toml: uk.{key}: {OTHER_APOSTROPHE}"
-                ));
+                problems.push(format!("{name}: {TEXTS}: uk.{key}: {OTHER_APOSTROPHE}"));
             }
         }
     }
-    let page = dir.join("docs/player.uk.md");
+    let page = dir.join(UK_PAGE);
+    // A folder of that name is docs_files' problem.
+    if page.is_dir() {
+        return Ok(problems);
+    }
     match std::fs::read_to_string(&page) {
         Ok(text) => problems.extend(
             text.lines()
                 .enumerate()
                 .filter(|(_, line)| line.contains(OTHER_APOSTROPHES))
-                .map(|(index, _)| {
-                    format!(
-                        "{name}: docs/player.uk.md:{}: {OTHER_APOSTROPHE}",
-                        index + 1
-                    )
-                }),
+                .map(|(index, _)| format!("{name}: {UK_PAGE}:{}: {OTHER_APOSTROPHE}", index + 1)),
         ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("{}: {error}", page.display())),
@@ -463,13 +469,18 @@ mod tests {
     #[test]
     fn only_ukrainian_texts_and_pages_with_another_apostrophe_are_problems() {
         let dir = std::env::temp_dir().join(format!("xtask-apostrophes-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+        std::fs::create_dir_all(dir.join("docs/player.uk.md")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
-        let none = text_apostrophes("a", &dir);
+        let folder = text_apostrophes("a", &dir);
+        std::fs::remove_dir(dir.join("docs/player.uk.md")).unwrap();
         std::fs::write(
             dir.join("src/texts.toml"),
-            "[en]\n\"a\" = \"it\u{2019}s\"\n[fr]\n\"a\" = \"l\u{2019}arbre\"\n\
-             [uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n",
+            "# don\u{2019}t\n[en]\n\"a\" = \"it\u{2019}s\"\n[fr]\n\"a\" = \"l\u{2019}arbre\"\n\
+             [uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n\
+             \"d\" = \"ім\\u02BCя\"\n",
         )
         .unwrap();
         std::fs::write(
@@ -483,7 +494,7 @@ mod tests {
         std::fs::write(dir.join("src/texts.toml"), [0xFF]).unwrap();
         let unreadable = text_apostrophes("a", &dir);
         std::fs::remove_dir_all(&dir).unwrap();
-        assert_eq!(none.unwrap(), Vec::<String>::new());
+        assert_eq!(folder.unwrap(), Vec::<String>::new());
         assert!(unreadable.is_err());
         let problem = OTHER_APOSTROPHE;
         assert_eq!(
@@ -491,6 +502,7 @@ mod tests {
             [
                 format!("a: src/texts.toml: uk.b: {problem}"),
                 format!("a: src/texts.toml: uk.c: {problem}"),
+                format!("a: src/texts.toml: uk.d: {problem}"),
                 format!("a: docs/player.uk.md:2: {problem}"),
             ]
         );

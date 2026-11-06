@@ -1,7 +1,8 @@
 # Enshwick mods
 
 The Enshrouded mods of the Enshwick project, each in its own folder and
-released on its own. Built on [Enshwick](https://github.com/enshwick/enshwick).
+released on its own. Built on [Enshwick](https://github.com/enshwick/enshwick),
+the modding framework and API for Enshrouded.
 
 | Mod | What it does |
 | --- | --- |

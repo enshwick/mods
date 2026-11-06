@@ -51,7 +51,10 @@ play.
 For administrators, on a key the Mods screen's controls page changes: while
 the client hosts a game, where the tooltip it looks at runs, and on a
 dedicated server, which sends the keys to each client with Enshwick that
-joins. The server's console runs each as `enshwick.research <action>`.
+joins. The action runs where the world does: on a dedicated server, `mark`
+marks the server's log, with its entity, impact health and spawn target
+lines, while the tooltip it dumps is the hosting client's only. The server's
+console runs each as `enshwick.research <action>`.
 
 | Action   | Key | What it does                                                                                                          |
 | -------- | --- | --------------------------------------------------------------------------------------------------------------------- |

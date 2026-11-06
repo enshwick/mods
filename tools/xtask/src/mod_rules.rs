@@ -58,6 +58,7 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
             ));
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
+        problems.extend(text_apostrophes(name, dir)?);
         // Its release notes come from it (`cargo xtask notes`).
         if dir.join("docs/player.md").is_file() && !dir.join("CHANGELOG.md").is_file() {
             problems.push(format!(
@@ -289,6 +290,41 @@ fn player_doc(file: &str, is_dir: bool) -> bool {
         })
 }
 
+/// Apostrophes other than `'`, the one the game's Ukrainian texts use: 2,074
+/// times, U+2019 261 times and the others never (game texts of build 1269579).
+/// The game font draws U+02BC as a box (client 26430625).
+const OTHER_APOSTROPHES: [char; 9] = [
+    '\u{2018}', '\u{2019}', '\u{201B}', '\u{02B9}', '\u{02BB}', '\u{02BC}', '\u{02BD}', '\u{2032}',
+    '\u{FF07}',
+];
+
+const OTHER_APOSTROPHE: &str = "an apostrophe other than ', the one the game's Ukrainian texts use";
+
+/// A mod's texts, which `texts!()` reads and the game draws.
+const TEXTS: &str = "src/texts.toml";
+
+/// The Ukrainian texts of a mod with an apostrophe other than `'`, which the
+/// game font draws; web pages keep U+02BC and other languages their own
+/// typography.
+fn text_apostrophes(name: &str, dir: &Path) -> Result<Vec<String>, String> {
+    let texts = dir.join(TEXTS);
+    if !texts.is_file() {
+        return Ok(Vec::new());
+    }
+    let table = manifest(&texts)?;
+    let Some(uk) = table.get("uk").and_then(toml::Value::as_table) else {
+        return Ok(Vec::new());
+    };
+    Ok(uk
+        .iter()
+        .filter(|(_, text)| {
+            text.as_str()
+                .is_some_and(|text| text.contains(OTHER_APOSTROPHES))
+        })
+        .map(|(key, _)| format!("{name}: {TEXTS}: uk.{key}: {OTHER_APOSTROPHE}"))
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,5 +447,39 @@ mod tests {
         assert!(!player_doc("player.UK.md", false));
         assert!(!player_doc("notes", true));
         assert!(!player_doc("images", false));
+    }
+
+    #[test]
+    fn only_ukrainian_texts_with_another_apostrophe_are_problems() {
+        let dir = std::env::temp_dir().join(format!("xtask-apostrophes-{}", std::process::id()));
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let none = text_apostrophes("a", &dir);
+        std::fs::write(
+            dir.join("src/texts.toml"),
+            "# don\u{2019}t\n[en]\n\"a\" = \"it\u{2019}s\"\n[fr]\n\"a\" = \"l\u{2019}arbre\"\n\
+             [uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n\
+             \"d\" = \"ім\\u02BCя\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("docs/player.uk.md"), "пам\u{02BC}ять\n").unwrap();
+        let problems = text_apostrophes("a", &dir);
+        std::fs::write(dir.join("src/texts.toml"), [0xFF]).unwrap();
+        let unreadable = text_apostrophes("a", &dir);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(none.unwrap(), Vec::<String>::new());
+        assert!(unreadable.is_err());
+        let problem = OTHER_APOSTROPHE;
+        assert_eq!(
+            problems.unwrap(),
+            [
+                format!("a: src/texts.toml: uk.b: {problem}"),
+                format!("a: src/texts.toml: uk.c: {problem}"),
+                format!("a: src/texts.toml: uk.d: {problem}"),
+            ]
+        );
     }
 }

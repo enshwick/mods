@@ -58,6 +58,9 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
             ));
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
+        if let Ok(texts) = std::fs::read_to_string(dir.join("src/texts.toml")) {
+            problems.extend(undrawn_apostrophes(name, &texts));
+        }
         // Its release notes come from it (`cargo xtask notes`).
         if dir.join("docs/player.md").is_file() && !dir.join("CHANGELOG.md").is_file() {
             problems.push(format!(
@@ -289,6 +292,25 @@ fn player_doc(file: &str, is_dir: bool) -> bool {
         })
 }
 
+/// Apostrophes the game font has no glyph for (a box on client 26430625);
+/// the game's own Ukrainian texts use `'`.
+const UNDRAWN_APOSTROPHES: [char; 5] = ['\u{2018}', '\u{2019}', '\u{02B9}', '\u{02BC}', '\u{2032}'];
+
+/// The lines of a mod's `texts.toml` with an apostrophe the game font does not draw.
+fn undrawn_apostrophes(name: &str, texts: &str) -> Vec<String> {
+    texts
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains(UNDRAWN_APOSTROPHES))
+        .map(|(index, _)| {
+            format!(
+                "{name}: src/texts.toml:{}: an apostrophe the game font lacks; use '",
+                index + 1
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,5 +433,18 @@ mod tests {
         assert!(!player_doc("player.UK.md", false));
         assert!(!player_doc("notes", true));
         assert!(!player_doc("images", false));
+    }
+
+    #[test]
+    fn a_text_with_an_apostrophe_the_game_font_lacks_is_a_problem() {
+        let texts =
+            "[uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n";
+        assert_eq!(
+            undrawn_apostrophes("a", texts),
+            [
+                "a: src/texts.toml:3: an apostrophe the game font lacks; use '",
+                "a: src/texts.toml:4: an apostrophe the game font lacks; use '",
+            ]
+        );
     }
 }

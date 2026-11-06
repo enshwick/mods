@@ -14,6 +14,10 @@ Each entry says what players notice; a release's notes show its section.
 - Shift+L near a Safe you manage names who may open it, in a notice. The key
   replaces the list on the Mods screen, and players can change it there.
 
+### Fixed
+
+- The Ukrainian texts show an apostrophe instead of a box.
+
 ## [0.1.0] - 2026-11-05
 
 ### Added

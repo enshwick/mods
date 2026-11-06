@@ -290,45 +290,48 @@ fn player_doc(file: &str, is_dir: bool) -> bool {
         })
 }
 
-/// Apostrophes the game font has no glyph for (a box on client 26430625);
-/// the game's own Ukrainian texts use `'`.
-const UNDRAWN_APOSTROPHES: [char; 5] = ['\u{2018}', '\u{2019}', '\u{02B9}', '\u{02BC}', '\u{2032}'];
+/// Apostrophes other than `'`, the one the game's Ukrainian texts use: 2,074
+/// times, U+2019 261 times and the others never (game texts of build 1269579).
+/// The game font draws U+02BC as a box (client 26430625).
+const OTHER_APOSTROPHES: [char; 5] = ['\u{2018}', '\u{2019}', '\u{02B9}', '\u{02BC}', '\u{2032}'];
 
-/// The lines of a mod file with an apostrophe the game font does not draw.
-fn undrawn_apostrophes(name: &str, file: &str, text: &str) -> Vec<String> {
-    text.lines()
-        .enumerate()
-        .filter(|(_, line)| line.contains(UNDRAWN_APOSTROPHES))
-        .map(|(index, _)| {
-            format!(
-                "{name}: {file}:{}: an apostrophe the game font lacks; use '",
-                index + 1
-            )
-        })
-        .collect()
-}
+const OTHER_APOSTROPHE: &str = "an apostrophe other than ', the one the game's Ukrainian texts use";
 
-/// The undrawn apostrophes in a mod's texts and player pages, which share
-/// one apostrophe so a text copied between them stays drawable.
+/// The Ukrainian texts and player page lines of a mod with an apostrophe
+/// other than `'`, so one apostrophe draws everywhere; other languages keep
+/// their own typography.
 fn text_apostrophes(name: &str, dir: &Path) -> Result<Vec<String>, String> {
-    let mut files = vec!["src/texts.toml".to_owned()];
-    if let Ok(entries) = std::fs::read_dir(dir.join("docs")) {
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("{}: {e}", dir.join("docs").display()))?;
-            let file = entry.file_name().to_string_lossy().into_owned();
-            if player_doc(&file, false) {
-                files.push(format!("docs/{file}"));
+    let mut problems = Vec::new();
+    let texts = dir.join("src/texts.toml");
+    if texts.is_file()
+        && let Some(uk) = manifest(&texts)?.get("uk").and_then(toml::Value::as_table)
+    {
+        for (key, text) in uk {
+            if text
+                .as_str()
+                .is_some_and(|text| text.contains(OTHER_APOSTROPHES))
+            {
+                problems.push(format!(
+                    "{name}: src/texts.toml: uk.{key}: {OTHER_APOSTROPHE}"
+                ));
             }
         }
     }
-    let mut problems = Vec::new();
-    for file in files {
-        let path = dir.join(&file);
-        match std::fs::read_to_string(&path) {
-            Ok(text) => problems.extend(undrawn_apostrophes(name, &file, &text)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(format!("{}: {error}", path.display())),
-        }
+    let page = dir.join("docs/player.uk.md");
+    match std::fs::read_to_string(&page) {
+        Ok(text) => problems.extend(
+            text.lines()
+                .enumerate()
+                .filter(|(_, line)| line.contains(OTHER_APOSTROPHES))
+                .map(|(index, _)| {
+                    format!(
+                        "{name}: docs/player.uk.md:{}: {OTHER_APOSTROPHE}",
+                        index + 1
+                    )
+                }),
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("{}: {error}", page.display())),
     }
     Ok(problems)
 }
@@ -458,32 +461,37 @@ mod tests {
     }
 
     #[test]
-    fn a_player_page_with_an_undrawn_apostrophe_is_a_problem_and_a_missing_texts_file_is_not() {
+    fn only_ukrainian_texts_and_pages_with_another_apostrophe_are_problems() {
         let dir = std::env::temp_dir().join(format!("xtask-apostrophes-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("docs")).unwrap();
-        std::fs::write(dir.join("docs/player.uk.md"), "ім'я\nпам\u{2019}ять\n").unwrap();
-        std::fs::write(dir.join("docs/notes.txt"), "пам\u{2019}ять\n").unwrap();
-        let problems = text_apostrophes("a", &dir);
         std::fs::create_dir_all(dir.join("src")).unwrap();
+        let none = text_apostrophes("a", &dir);
+        std::fs::write(
+            dir.join("src/texts.toml"),
+            "[en]\n\"a\" = \"it\u{2019}s\"\n[fr]\n\"a\" = \"l\u{2019}arbre\"\n\
+             [uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("docs/player.md"),
+            "the game\u{2019}s \u{2018}box\u{2019}\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("docs/player.fr.md"), "l\u{2019}arbre\n").unwrap();
+        std::fs::write(dir.join("docs/player.uk.md"), "ім'я\nпам\u{2019}ять\n").unwrap();
+        let problems = text_apostrophes("a", &dir);
         std::fs::write(dir.join("src/texts.toml"), [0xFF]).unwrap();
         let unreadable = text_apostrophes("a", &dir);
         std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(none.unwrap(), Vec::<String>::new());
         assert!(unreadable.is_err());
+        let problem = OTHER_APOSTROPHE;
         assert_eq!(
             problems.unwrap(),
-            ["a: docs/player.uk.md:2: an apostrophe the game font lacks; use '"]
-        );
-    }
-
-    #[test]
-    fn a_text_with_an_apostrophe_the_game_font_lacks_is_a_problem() {
-        let texts =
-            "[uk]\n\"a\" = \"здоров'я\"\n\"b\" = \"ім\u{2019}я\"\n\"c\" = \"з\u{02BC}єднуються\"\n";
-        assert_eq!(
-            undrawn_apostrophes("a", "src/texts.toml", texts),
             [
-                "a: src/texts.toml:3: an apostrophe the game font lacks; use '",
-                "a: src/texts.toml:4: an apostrophe the game font lacks; use '",
+                format!("a: src/texts.toml: uk.b: {problem}"),
+                format!("a: src/texts.toml: uk.c: {problem}"),
+                format!("a: docs/player.uk.md:2: {problem}"),
             ]
         );
     }

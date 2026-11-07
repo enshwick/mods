@@ -75,20 +75,6 @@ pub(crate) struct Target {
     pub(crate) prologues: &'static [&'static [u8]],
 }
 
-impl Target {
-    /// Whether `code` opens with one of the target's prologues.
-    pub(crate) fn opens(&self, code: &[u8]) -> bool {
-        self.prologues
-            .iter()
-            .any(|prologue| !prologue.is_empty() && code.starts_with(prologue))
-    }
-
-    /// The longest prologue's length.
-    pub(crate) fn longest(&self) -> usize {
-        self.prologues.iter().map(|p| p.len()).max().unwrap_or(0)
-    }
-}
-
 /// The search pattern of `prologue`; `None` for an empty one.
 fn pattern(prologue: &[u8]) -> Option<Pattern> {
     let text: Vec<String> = prologue.iter().map(|b| format!("{b:02x}")).collect();
@@ -97,10 +83,7 @@ fn pattern(prologue: &[u8]) -> Option<Pattern> {
 
 /// Where each of `targets` sits in `code`, as offsets from its start: the one
 /// place one of its prologues opens, in one pass for all of them.
-pub(crate) fn offsets<const N: usize>(
-    targets: [&Target; N],
-    code: &[u8],
-) -> [Result<usize, FindError>; N] {
+pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, FindError>> {
     let owned: Vec<(usize, Pattern)> = targets
         .iter()
         .enumerate()
@@ -113,23 +96,21 @@ pub(crate) fn offsets<const N: usize>(
         .collect();
     let patterns: Vec<&Pattern> = owned.iter().map(|(_, p)| p).collect();
     let found = find_each_unique(&patterns, code);
-    core::array::from_fn(|n| {
-        owned
-            .iter()
-            .zip(&found)
-            .filter(|((owner, _), _)| *owner == n)
-            .fold(Err(FindError::None), |at, (_, next)| match (at, *next) {
-                (Err(FindError::None), next) => next,
-                (at, Err(FindError::None)) => at,
-                (Ok(at), Ok(next)) if at == next => Ok(at),
-                _ => Err(FindError::Many),
-            })
-    })
+    let mut each = vec![Err(FindError::None); targets.len()];
+    for ((owner, _), next) in owned.iter().zip(found) {
+        each[*owner] = match (each[*owner], next) {
+            (Err(FindError::None), next) => next,
+            (at, Err(FindError::None)) => at,
+            (Ok(at), Ok(next)) if at == next => Ok(at),
+            _ => Err(FindError::Many),
+        };
+    }
+    each
 }
 
 /// The address of each of `targets` in the game's `code`, as
-/// [`Load::code`](enshwick::Load::code)
-/// gives it, found as [`offsets`] finds it; the bytes there are its prologue.
+/// [`Load::code`](enshwick::Load::code) gives it, found as [`offsets`] finds
+/// it; the bytes there are its prologue.
 ///
 /// # Errors
 ///
@@ -137,7 +118,7 @@ pub(crate) fn offsets<const N: usize>(
 /// prologues opens the code or they open more than one place.
 pub(crate) fn find<const N: usize>(targets: [&Target; N], code: &[u8]) -> [Result<u64, Off>; N] {
     let base = code.as_ptr().addr() as u64;
-    let found = offsets(targets, code);
+    let found = offsets(&targets, code);
     core::array::from_fn(|n| {
         found[n].map(|at| base + at as u64).map_err(|e| {
             let why = if e == FindError::Many {
@@ -254,25 +235,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_target_opens_only_code_that_starts_with_one_of_its_prologues() {
-        let target = Target {
-            name: "test.target",
-            prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
-        };
-        assert!(target.opens(&[0x48, 0x89, 0x5c, 0xcc]));
-        assert!(target.opens(&[0x40, 0x55]));
-        assert!(!target.opens(&[0x48, 0x89]));
-        assert!(!target.opens(&[0xcc, 0x48, 0x89, 0x5c]));
-        assert!(!target.opens(&[]));
-        assert_eq!(target.longest(), 3);
-        let empty = Target {
-            name: "test.empty",
-            prologues: &[&[]],
-        };
-        assert!(!empty.opens(&[0x90]));
-    }
-
-    #[test]
     fn a_target_is_found_only_where_its_prologues_open_exactly_one_place() {
         let two = Target {
             name: "test.two",
@@ -288,14 +250,14 @@ mod tests {
         };
         let code = [0xcc, 0x48, 0x89, 0x5c, 0xcc, 0x41, 0x57, 0x48, 0xcc];
         assert_eq!(
-            offsets([&two, &prefix, &empty], &code),
+            offsets(&[&two, &prefix, &empty], &code),
             [Ok(1), Ok(5), Err(FindError::None)]
         );
         let both = [0x40, 0x55, 0xcc, 0x48, 0x89, 0x5c];
-        assert_eq!(offsets([&two], &both), [Err(FindError::Many)]);
+        assert_eq!(offsets(&[&two], &both), [Err(FindError::Many)]);
         let twice = [0x40, 0x55, 0xcc, 0x40, 0x55];
-        assert_eq!(offsets([&two], &twice), [Err(FindError::Many)]);
-        assert_eq!(offsets([&two], &[0x90; 4]), [Err(FindError::None)]);
+        assert_eq!(offsets(&[&two], &twice), [Err(FindError::Many)]);
+        assert_eq!(offsets(&[&two], &[0x90; 4]), [Err(FindError::None)]);
     }
 
     #[test]

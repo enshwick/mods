@@ -316,29 +316,27 @@ mod tests {
         assert!(marked("[5]"), "{:?}", loader.logs());
     }
 
-    /// The game code of a fake host: each target's first prologue in a slot
-    /// of its own, padded with traps, and each target's symbol `skew` bytes
-    /// into its slot.
-    fn code_of(
-        targets: &[&memory::Target],
-        skew: u64,
-    ) -> (&'static [u8], Vec<(&'static str, u64)>) {
+    /// The game code of a fake host: `copies` runs of slots padded with
+    /// traps, each target's first prologue in a slot of its own in each run;
+    /// where each target's first copy opens.
+    fn code_of(targets: &[&memory::Target], copies: usize) -> (&'static [u8], Vec<u64>) {
         const SLOT: usize = 64;
-        let mut code = vec![0xccu8; SLOT * targets.len()];
-        for (slot, target) in code.chunks_mut(SLOT).zip(targets) {
-            slot[..target.prologues[0].len()].copy_from_slice(target.prologues[0]);
+        let mut code = vec![0xccu8; SLOT * targets.len() * copies.max(1)];
+        for (n, slot) in code.chunks_mut(SLOT).enumerate() {
+            if n / targets.len() < copies {
+                let prologue = targets[n % targets.len()].prologues[0];
+                slot[..prologue.len()].copy_from_slice(prologue);
+            }
         }
         let code: &'static [u8] = Vec::leak(code);
-        let symbols = targets
-            .iter()
-            .enumerate()
-            .map(|(n, t)| (t.symbol, (code.as_ptr().addr() + n * SLOT) as u64 + skew))
+        let first = (0..targets.len())
+            .map(|n| (code.as_ptr().addr() + n * SLOT) as u64)
             .collect();
-        (code, symbols)
+        (code, first)
     }
 
     /// A feature's setting, side, targets, how many of them it hooks, the
-    /// line when every target opens as pinned, and the line when none does.
+    /// line when each target opens one place, and the line when none does.
     type Case = (
         &'static str,
         Side,
@@ -349,13 +347,14 @@ mod tests {
     );
 
     /// Starts the mod with only `setting` on, over `code` with `symbols` and
-    /// `constants`; its log lines and how many hooks landed on a symbol.
+    /// `constants`; its log lines and how many hooks landed on `watched`.
     fn started_with_only(
         setting: &str,
         side: Side,
         code: &'static [u8],
         symbols: &[(&str, u64)],
         constants: &[(&str, u64)],
+        watched: &[u64],
     ) -> (Vec<String>, usize) {
         let features = [
             "tooltip",
@@ -375,7 +374,6 @@ mod tests {
                 format!("{text}{f} = {}\n", *f == setting)
             });
         std::fs::write(dir.join("settings.toml"), only).unwrap();
-        let pinned: Vec<u64> = symbols.iter().map(|&(_, at)| at).collect();
         let host = enshwick::test::FakeHost::new()
             .developer_tools(true)
             .side(side)
@@ -400,7 +398,7 @@ mod tests {
             .iter()
             .map(|hook| hook.target)
             .chain(loader.mid_hooks())
-            .filter(|at| pinned.contains(at))
+            .filter(|at| watched.contains(at))
             .count();
         let logs = loader.logs().into_iter().map(|(_, line)| line).collect();
         (logs, hooked)
@@ -422,8 +420,9 @@ mod tests {
                 ("ui.main_entry.bytes", main),
                 ("ui.pause_entry.bytes", pause),
             ];
+            let watched = symbols.map(|(_, at)| at);
             let (logs, hooked) =
-                started_with_only("join", Side::CLIENT, code, &symbols, &constants);
+                started_with_only("join", Side::CLIENT, code, &symbols, &constants, &watched);
             assert_eq!(hooked, hooks, "{logs:?}");
             let off = logs
                 .iter()
@@ -433,7 +432,7 @@ mod tests {
     }
 
     #[test]
-    fn each_feature_hooks_or_calls_only_code_that_opens_with_a_prologue_of_its_targets() {
+    fn each_feature_hooks_or_calls_its_targets_only_where_one_place_opens_with_their_prologue() {
         let tooltip_sites: &'static [tooltip::Site] = &tooltip::SITES;
         let ui_sites: &'static [ui::Site] = &ui::SITES;
         let called: &'static [memory::Target] = &entities::CALLED;
@@ -447,7 +446,7 @@ mod tests {
                 vec![&health::TARGET],
                 1,
                 "R17 impact health writes looked at",
-                "R17 off: research.impact_attribute: its bytes at",
+                "R17 off: research.impact_attribute: ",
             ),
             (
                 "skills",
@@ -455,7 +454,7 @@ mod tests {
                 vec![&skills::TARGET],
                 1,
                 "R19 skill changes looked at",
-                "R19 off: research.skill_change: its bytes at",
+                "R19 off: research.skill_change: ",
             ),
             (
                 "tooltip",
@@ -479,25 +478,24 @@ mod tests {
                 entities,
                 1,
                 "R11 client sweeps every 5 s in a game",
-                "R11 client side off: research.client_cursor: its bytes at",
+                "R11 client side off: research.client_cursor: ",
             ),
         ];
         for (setting, side, targets, hooks, on, off) in cases {
-            for skew in [0, 1] {
-                let (code, symbols) = code_of(&targets, skew);
-                let (logs, hooked) = started_with_only(setting, side, code, &symbols, &[]);
+            for copies in [1, 0, 2] {
+                let (code, first) = code_of(&targets, copies);
+                let (logs, hooked) = started_with_only(setting, side, code, &[], &[], &first);
                 let logged = |text: &str| logs.iter().any(|line| line.starts_with(text));
                 let named = logs
                     .iter()
-                    .filter(|line| line.contains("its bytes at"))
-                    .inspect(|line| assert!(line.contains("; the game is build "), "{line}"))
+                    .filter(|line| line.contains(" in the game's code; the game is build "))
                     .count();
-                if skew == 0 {
+                if copies == 1 {
                     assert!(logged(on), "{setting}: {logs:?}");
                     assert_eq!((named, hooked), (0, hooks), "{setting}: {logs:?}");
                 } else {
-                    assert!(logged(off), "{setting}: {logs:?}");
-                    assert_eq!((named, hooked), (hooks, 0), "{setting}: {logs:?}");
+                    assert!(logged(off), "{setting} {copies}: {logs:?}");
+                    assert_eq!((named, hooked), (hooks, 0), "{setting} {copies}: {logs:?}");
                 }
             }
         }

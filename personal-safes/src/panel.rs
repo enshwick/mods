@@ -4,8 +4,8 @@
 //! The server tells a player's client which Safe they opened when it is one
 //! they may manage, and that none is open when they open anything else
 //! after it. The client draws a switch per player from the last message;
-//! a switch runs the access action, which the server checks again and
-//! answers with a notice and a fresh message.
+//! a switch runs the access action on that Safe, which the server checks
+//! again and answers with a notice and a fresh message.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,7 +15,7 @@ use arc_swap::ArcSwapOption;
 use rustc_hash::FxHashMap;
 
 use enshwick::abi::Side;
-use enshwick::actions::{Actions, Value};
+use enshwick::actions::{ActionTarget, Actions, Value};
 use enshwick::game_events::AcceptOfferedInteractionEvent;
 use enshwick::i18n::{Texts, language};
 use enshwick::net::{Channel, Peer, SendError};
@@ -23,7 +23,7 @@ use enshwick::ui::{Edge, Frame, HudScreenType, Label, Style, Toggle};
 use enshwick::world::World;
 use enshwick::{Entity, Load, Off, PlayerKey};
 
-use crate::access::{Cell, Safe, Seen, snapshots};
+use crate::access::{Cell, Safe, Seen, centre, snapshots};
 use crate::actions::ACCESS_ACTION;
 use crate::texts;
 
@@ -263,7 +263,7 @@ impl Panel {
             return;
         };
         let (shown, received) = &*last;
-        let Shown::Safe { players, .. } = shown else {
+        let Shown::Safe { at, players } = shown else {
             return;
         };
         if *received + GRACE < self.opened || self.stale == Some(*received) {
@@ -293,7 +293,8 @@ impl Panel {
                 },
                 Value::Toggle(on),
             ];
-            match self.actions.run(ACCESS_ACTION, &args) {
+            let safe = ActionTarget::at(centre(*at));
+            match self.actions.run_at(ACCESS_ACTION, &args, safe) {
                 Ok(()) => {
                     self.pending.insert(player.key, (on, now));
                 }

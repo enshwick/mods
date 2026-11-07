@@ -71,7 +71,8 @@ pub(crate) struct Target {
     /// The name its log lines and tests give it.
     pub(crate) name: &'static str,
     /// The bytes it opens with, one entry per prologue the kept builds have,
-    /// each opening it and no other place in the code of a kept executable.
+    /// each opening it and no other place but its copies in the code of a
+    /// kept executable.
     pub(crate) prologues: &'static [&'static [u8]],
     /// Bytes further into it that each place must hold too, as runs at their
     /// offsets from its start; the bytes between them may be anything.
@@ -109,7 +110,6 @@ impl Target {
     }
 
     /// The bytes its patterns span.
-    #[cfg(test)]
     pub(crate) fn span(&self) -> usize {
         self.patterns().map(|p| p.len()).max().unwrap_or(0)
     }
@@ -128,8 +128,9 @@ pub(crate) fn places(target: &Target, code: &[u8]) -> Vec<usize> {
 }
 
 /// Where each of `targets` sits in `code`, as offsets from its start: the one
-/// place one of its prologues opens, or the first for a target with copies,
-/// in one pass for all of them.
+/// place one of its prologues opens, or the first for a target with copies
+/// when each place holds the same bytes over its span, in one pass for all
+/// of them.
 pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, FindError>> {
     let owned: Vec<(usize, Pattern)> = targets
         .iter()
@@ -149,10 +150,25 @@ pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, Fin
     }
     for (at, target) in each.iter_mut().zip(targets) {
         if target.copies && *at == Err(FindError::Many) {
-            *at = places(target, code).first().copied().ok_or(FindError::None);
+            *at = first_copy(target, code);
         }
     }
     each
+}
+
+/// The first place `target` opens in `code`, when every place holds the
+/// bytes the first holds over its span, masked ones too.
+fn first_copy(target: &Target, code: &[u8]) -> Result<usize, FindError> {
+    let places = places(target, code);
+    let span = target.span();
+    let bytes = |at: usize| code.get(at..at + span);
+    let start = *places.first().ok_or(FindError::None)?;
+    let first = bytes(start);
+    if first.is_some() && places.iter().all(|&at| bytes(at) == first) {
+        Ok(start)
+    } else {
+        Err(FindError::Many)
+    }
 }
 
 /// The address of each of `targets` in the game's `code`, as
@@ -162,7 +178,8 @@ pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, Fin
 /// # Errors
 ///
 /// [`Off`] per target, naming it and the running build, when none of its
-/// prologues opens the code or they open more than one place.
+/// prologues opens the code or they open more than one place, for a target
+/// with copies places that differ.
 pub(crate) fn find<const N: usize>(targets: [&Target; N], code: &[u8]) -> [Result<u64, Off>; N] {
     let base = code.as_ptr().addr() as u64;
     let found = offsets(&targets, code);
@@ -326,6 +343,20 @@ mod tests {
         assert_eq!(places(&copied, &twice), [1, 4]);
         assert_eq!(offsets(&[&copied], &[0xcc; 4]), [Err(FindError::None)]);
         assert!(places(&copied, &[0xcc; 4]).is_empty());
+    }
+
+    #[test]
+    fn places_that_differ_in_masked_bytes_are_no_copies_and_turn_the_target_off() {
+        let copied = Target {
+            name: "test.copied",
+            prologues: &[&[0x40, 0x55]],
+            body: &[(3, &[0xc3])],
+            copies: true,
+        };
+        let same = [0x40, 0x55, 0x90, 0xc3, 0x40, 0x55, 0x90, 0xc3];
+        assert_eq!(offsets(&[&copied], &same), [Ok(0)]);
+        let other = [0x40, 0x55, 0x90, 0xc3, 0x40, 0x55, 0x91, 0xc3];
+        assert_eq!(offsets(&[&copied], &other), [Err(FindError::Many)]);
     }
 
     #[test]

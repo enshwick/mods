@@ -3,10 +3,11 @@
 A development mod, never released: it logs what a running client does where
 the platform still needs engine facts, to
 `logs/enshwick.research_<date>_<time>.log`. It only reads. It finds each
-function it hooks or calls by the bytes the function opens with, the one
-place in the game's code that holds them, and checks a function the loader
-finds against the loader's first bytes; what depends on a function it does
-not find once stays off. Keep it off games people play.
+function it hooks by the bytes the function opens with, and hooks each
+identical copy of one. It takes the engine functions and layout the loader
+already finds from the loader, and checks a function the loader finds against
+the loader's first bytes. What depends on a function it does not find, or on a
+layout the loader reads differently, stays off. Keep it off games people play.
 
 ## What it logs
 

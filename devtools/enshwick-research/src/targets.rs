@@ -10,15 +10,13 @@ use enshwick_gamedata::reflect::{Fingerprint, Image, Layout};
 use crate::memory::{self, Target};
 
 /// Every target of the mod: the tooltip's ten, the interface's five, the
-/// entity walk's five, then R17's and R19's.
+/// entity walk's cursor system, then R17's and R19's.
 pub(crate) fn all() -> Vec<&'static Target> {
     let tooltip: &'static [crate::tooltip::Site] = &crate::tooltip::SITES;
     let ui: &'static [crate::ui::Site] = &crate::ui::SITES;
-    let called: &'static [Target] = &crate::entities::CALLED;
     let mut all: Vec<&'static Target> = tooltip.iter().map(|site| &site.target).collect();
     all.extend(ui.iter().map(|site| &site.target));
     all.push(&crate::entities::CURSOR);
-    all.extend(called);
     all.extend([&crate::health::TARGET, &crate::skills::TARGET]);
     all
 }
@@ -43,7 +41,7 @@ const FOUND: [(Side, &str, u32, &[u64]); 8] = [
         &[
             0xbf_ef20, 0xbf_f750, 0xc9_dd10, 0xb6_7e00, 0xb5_62c0, 0xb5_6b80, 0xbe_b220, 0xbe_bb60,
             0xc3_da50, 0xb5_5140, 0xa2_fb10, 0xa3_1c50, 0xcc_a5a0, 0xcc_8e30, 0xb1_2120, 0x28_fa70,
-            0x9a_71d0, 0x9a_8070, 0x9a_5080, 0x9a_5ec0, 0x3e_2cc0, 0xe5_f220,
+            0x3e_2cc0, 0xe5_f220,
         ],
     ),
     (
@@ -53,7 +51,7 @@ const FOUND: [(Side, &str, u32, &[u64]); 8] = [
         &[
             0xc0_0aa0, 0xc0_12d0, 0xc9_f7a0, 0xb6_98e0, 0xb5_7da0, 0xb5_8660, 0xbe_cda0, 0xbe_d6e0,
             0xc3_f5d0, 0xb5_6c20, 0xa3_1640, 0xa3_3780, 0xcc_c030, 0xcc_a8c0, 0xb1_3c30, 0x28_fc10,
-            0x9a_85b0, 0x9a_9450, 0x9a_6460, 0x9a_72a0, 0x3e_3040, 0xe6_1de0,
+            0x3e_3040, 0xe6_1de0,
         ],
     ),
     (
@@ -63,7 +61,7 @@ const FOUND: [(Side, &str, u32, &[u64]); 8] = [
         &[
             0xc1_00f0, 0xc1_0930, 0xcb_2400, 0xb7_8820, 0xb6_7aa0, 0xb6_8370, 0xbf_c2f0, 0xbf_cc30,
             0xc4_f0f0, 0xb6_6920, 0xa3_df60, 0xa4_00a0, 0xcd_f0c0, 0xcd_d950, 0xb2_3200, 0x29_4540,
-            0x9b_3e60, 0x9b_4d00, 0x9b_1cf0, 0x9b_2b30, 0x3e_9d60, 0xe7_8c60,
+            0x3e_9d60, 0xe7_8c60,
         ],
     ),
     (
@@ -73,7 +71,7 @@ const FOUND: [(Side, &str, u32, &[u64]); 8] = [
         &[
             0xc1_01b0, 0xc1_09f0, 0xcb_24c0, 0xb7_88e0, 0xb6_7b60, 0xb6_8430, 0xbf_c3b0, 0xbf_ccf0,
             0xc4_f1b0, 0xb6_69e0, 0xa3_e020, 0xa4_0160, 0xcd_f180, 0xcd_da10, 0xb2_32c0, 0x29_4620,
-            0x9b_3f20, 0x9b_4dc0, 0x9b_1db0, 0x9b_2bf0, 0x3e_9e40, 0xe7_8d20,
+            0x3e_9e40, 0xe7_8d20,
         ],
     ),
     (
@@ -182,6 +180,11 @@ fn every_target_is_found_once_in_the_executables_where_it_was_found_before() {
             .iter()
             .find(|&&(s, hex, age, _)| s == side && Fingerprint::new(guid(hex), age) == build)
             .map(|&(_, _, _, found)| found);
+        assert!(
+            before.is_some() || !reported(side, build),
+            "{variable} is reported build {}, which FOUND does not list",
+            build_name(build)
+        );
         let targets = on(side);
         let rva = |at: usize| text.start - image.base() + at as u64;
         let found = memory::offsets(&targets, code);

@@ -436,14 +436,50 @@ mod tests {
         }
     }
 
+    /// A symbol or constant the fake host gives, by name.
+    type Row = (&'static str, u64);
+
+    /// The loader's rows the client walk takes: its engine functions, at
+    /// addresses it never calls in a test, and its layout as the walk reads it.
+    fn walk_rows() -> ([Row; 4], [Row; 9]) {
+        (
+            entities::CALLED.map(|symbol| (symbol, 0x1000)),
+            entities::LAYOUT.map(|(constant, value)| (constant, value as u64)),
+        )
+    }
+
+    #[test]
+    fn the_client_walk_turns_off_when_the_loader_lacks_a_function_or_reads_another_layout() {
+        let (functions, layout) = walk_rows();
+        let mut moved = layout;
+        moved[3].1 += 8;
+        let cases: [(&[Row], &[Row], Option<&str>); 3] = [
+            (&functions, &layout, None),
+            (&functions, &moved, Some("ecs.entity_map is 0x150")),
+            (&functions[1..], &layout, Some("ecs.entities_with")),
+        ];
+        for (symbols, constants, off) in cases {
+            let (code, first) = code_of(&[&entities::CURSOR], 1);
+            let (logs, hooked) =
+                started_with_only("entities", Side::CLIENT, code, symbols, constants, &first);
+            let said = |text: &str| {
+                logs.iter()
+                    .any(|l| l.starts_with("R11 client side off: ") && l.contains(text))
+            };
+            match off {
+                None => assert_eq!(hooked, 1, "{logs:?}"),
+                Some(text) => assert!(hooked == 0 && said(text), "{text}: {logs:?}"),
+            }
+        }
+    }
+
     #[test]
     fn each_feature_hooks_or_calls_its_targets_only_where_one_place_opens_with_their_prologue() {
         let tooltip_sites: &'static [tooltip::Site] = &tooltip::SITES;
         let ui_sites: &'static [ui::Site] = &ui::SITES;
-        let called: &'static [memory::Target] = &entities::CALLED;
         let tooltip = tooltip_sites.iter().map(|site| &site.target).collect();
         let ui = ui_sites.iter().map(|site| &site.target).collect();
-        let entities = core::iter::once(&entities::CURSOR).chain(called).collect();
+        let (functions, layout) = walk_rows();
         let cases: [Case; 5] = [
             (
                 "impact_health",
@@ -480,7 +516,7 @@ mod tests {
             (
                 "entities",
                 Side::CLIENT,
-                entities,
+                vec![&entities::CURSOR],
                 1,
                 "R11 client sweeps every 5 s in a game",
                 "R11 client side off: research.client_cursor: ",
@@ -491,7 +527,13 @@ mod tests {
             let doubled = if setting == "ui" { 0 } else { 2 };
             for copies in [1, 0, doubled] {
                 let (code, first) = code_of(&targets, copies);
-                let (logs, hooked) = started_with_only(setting, side, code, &[], &[], &first);
+                let (symbols, constants) = if setting == "entities" {
+                    (&functions[..], &layout[..])
+                } else {
+                    (&[][..], &[][..])
+                };
+                let (logs, hooked) =
+                    started_with_only(setting, side, code, symbols, constants, &first);
                 let logged = |text: &str| logs.iter().any(|line| line.starts_with(text));
                 let named = logs
                     .iter()

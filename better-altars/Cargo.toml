@@ -1,6 +1,6 @@
 [package]
 name = "enshwick-better-altars"
-version = "0.1.0"
+version = "0.1.1"
 description = "More Flame Altars per Flame Level, and altar zones that touch grow together and can be built across"
 keywords = ["enshrouded", "mod", "altar", "building"]
 categories = ["game-development"]

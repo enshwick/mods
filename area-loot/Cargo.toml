@@ -1,6 +1,6 @@
 [package]
 name = "enshwick-area-loot"
-version = "0.1.0"
+version = "0.1.1"
 description = "Empty one enemy corpse and also get the loot of the enemies nearby"
 keywords = ["enshrouded", "mod", "loot"]
 categories = ["game-development"]

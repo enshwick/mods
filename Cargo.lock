@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-area-loot"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "enshwick",
  "rustc-hash",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-better-altars"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arc-swap",
  "arrayvec",
@@ -257,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-build-camera"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "enshwick",
  "toml",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-optimizer"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "enshwick",
  "rustc-hash",
@@ -324,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "enshwick-personal-safes"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arc-swap",
  "enshwick",

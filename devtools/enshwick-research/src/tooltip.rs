@@ -598,7 +598,10 @@ pub(crate) mod tests {
             let build = image.fingerprint().map_or_else(
                 || "without a fingerprint".to_owned(),
                 |f| {
-                    let guid: String = f.guid().iter().map(|b| format!("{b:02x}")).collect();
+                    let guid = f.guid().iter().fold(String::new(), |mut hex, b| {
+                        write!(hex, "{b:02x}").unwrap();
+                        hex
+                    });
                     format!("{guid}/{}", f.age())
                 },
             );

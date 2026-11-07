@@ -268,20 +268,12 @@ mod tests {
                 site.name
             );
         }
-        let Ok(path) = std::env::var("ENSH_CLIENT_EXE") else {
+        let Some(bytes) = crate::tooltip::tests::client_bytes() else {
             return;
         };
-        let Ok(bytes) = std::fs::read(path) else {
+        let Some((image, rows)) = crate::tooltip::tests::client_rows(&bytes) else {
             return;
         };
-        let Ok(image) = enshwick_gamedata::reflect::Image::parse(
-            &bytes,
-            enshwick_gamedata::reflect::Layout::File,
-            None,
-        ) else {
-            unreachable!("the client parses");
-        };
-        let rows = crate::tooltip::tests::pinned_in(&image);
         for site in &SITES {
             let rva = rows.iter().find(|(name, _)| name == site.symbol);
             let Some((_, rva)) = rva else {

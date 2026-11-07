@@ -156,12 +156,12 @@ enshwick::detour! {
 }
 
 /// The client's cursor system and the engine functions it calls, found on
-/// client build 1269579 and the same on every client build the manifest
-/// pins. Each prologue is as long as it takes for no other function to open
-/// alike but an identical copy, which for the entity and type lookups runs
-/// through their first branch.
+/// client build 1269579 and the same on every kept client build. Each
+/// prologue is as long as it takes for no other place in the code to open
+/// alike, which for the entity and type lookups runs through their first
+/// branch.
 pub(crate) const CURSOR: memory::Target = memory::Target {
-    symbol: "research.client_cursor",
+    name: "research.client_cursor",
     prologues: &[&[
         0x48, 0x89, 0x4c, 0x24, 0x08, 0x55, 0x41, 0x54, 0x48, 0x8d, 0xac, 0x24, 0x88, 0xe7, 0xff,
         0xff,
@@ -169,27 +169,27 @@ pub(crate) const CURSOR: memory::Target = memory::Target {
 };
 pub(crate) const CALLED: [memory::Target; 4] = [
     memory::Target {
-        symbol: "research.entities_with",
+        name: "research.entities_with",
         prologues: &[&[
             0x40, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x48, 0x83, 0xec, 0x38, 0x4c, 0x8b, 0x2a,
         ]],
     },
     memory::Target {
-        symbol: "research.entity_slot",
+        name: "research.entity_slot",
         prologues: &[&[
             0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x83, 0x79, 0x54, 0x00,
             0x4c, 0x8b, 0xc9, 0x4c, 0x8b, 0x59, 0x10, 0x74, 0x75,
         ]],
     },
     memory::Target {
-        symbol: "research.type_index",
+        name: "research.type_index",
         prologues: &[&[
             0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x83, 0x79, 0x54, 0x00,
             0x4c, 0x8b, 0xc9, 0x48, 0x8b, 0x59, 0x10, 0x74, 0x53, 0x44, 0x8b, 0x12,
         ]],
     },
     memory::Target {
-        symbol: "research.component_read_raw",
+        name: "research.component_read_raw",
         prologues: &[&[
             0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x44, 0x89, 0x4c, 0x24,
             0x20, 0x57, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8d, 0xba, 0x48, 0x01, 0x00, 0x00,
@@ -197,10 +197,9 @@ pub(crate) const CALLED: [memory::Target; 4] = [
     },
 ];
 
-/// The address of a checked target as the function pointer types take it.
-fn address(load: &Load<'_>, code: &[u8], target: &memory::Target) -> Result<usize, Off> {
-    usize::try_from(target.checked(load, code)?)
-        .map_err(|_| Off::new(format!("{}: address out of range", target.symbol)))
+/// The address of a found target as the function pointer types take it.
+fn address(found: Result<u64, Off>, target: &memory::Target) -> Result<usize, Off> {
+    usize::try_from(found?).map_err(|_| Off::new(format!("{}: address out of range", target.name)))
 }
 
 /// Links the client side: the `client_cursor` system and the engine
@@ -208,15 +207,24 @@ fn address(load: &Load<'_>, code: &[u8], target: &memory::Target) -> Result<usiz
 ///
 /// # Errors
 ///
-/// [`Off`] when a site's bytes differ from the pinned builds, a type is not
+/// [`Off`] when a site's prologue opens no place or several, a type is not
 /// reflected or the hook is refused.
 pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> {
-    let code = load.code()?;
-    let cursor = address(load, code, &CURSOR)?;
-    let [entities_with, entity_slot, type_index, read_component] =
-        CALLED.each_ref().map(|target| address(load, code, target));
-    let (entities_with, entity_slot, type_index, read_component) =
-        (entities_with?, entity_slot?, type_index?, read_component?);
+    let [with, slot, index, read] = &CALLED;
+    let [
+        cursor,
+        entities_with,
+        entity_slot,
+        type_index,
+        read_component,
+    ] = memory::find([&CURSOR, with, slot, index, read], load.code()?);
+    let cursor = address(cursor, &CURSOR)?;
+    let (entities_with, entity_slot, type_index, read_component) = (
+        address(entities_with, with)?,
+        address(entity_slot, slot)?,
+        address(type_index, index)?,
+        address(read_component, read)?,
+    );
     let references = REFERENCES
         .iter()
         .filter_map(|&(ty, name, offset)| {
@@ -227,16 +235,16 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
         .collect();
     let engine = Engine {
         // SAFETY: each address holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // signature on the kept client builds, found on 1269579, the one place its prologue opens.
         entities_with: unsafe { core::mem::transmute::<usize, EntitiesWith>(entities_with) },
         // SAFETY: `entity_slot` holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // signature on the kept client builds, found on 1269579, the one place its prologue opens.
         entity_slot: unsafe { core::mem::transmute::<usize, EntitySlot>(entity_slot) },
         // SAFETY: `type_index` holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // signature on the kept client builds, found on 1269579, the one place its prologue opens.
         type_index: unsafe { core::mem::transmute::<usize, TypeIndex>(type_index) },
         // SAFETY: `read_component` holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // signature on the kept client builds, found on 1269579, the one place its prologue opens.
         read_component: unsafe { core::mem::transmute::<usize, ReadComponent>(read_component) },
         transform: world.transform_type().hash(),
         local_player: ComponentType::resolve(load, LOCAL_PLAYER)?.hash(),
@@ -245,8 +253,8 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
     };
     let _first = ENGINE.set(engine);
     // SAFETY: the client's cursor system, of the type `CLIENT_CURSOR`
-    // declares on the pinned client builds, found on 1269579, its first
-    // bytes checked above.
+    // declares on the kept client builds, found on 1269579, the one place
+    // its prologue opens.
     unsafe { load.hook(&CLIENT_CURSOR, cursor as u64) }
 }
 

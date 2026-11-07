@@ -32,9 +32,9 @@ enshwick::detour! {
     ) -> u8 = change;
 }
 
-/// The skill change, the same on every pinned client and server build.
+/// The skill change, the same on every kept client and server build.
 pub(crate) const TARGET: memory::Target = memory::Target {
-    symbol: "research.skill_change",
+    name: "research.skill_change",
     prologues: &[&[
         0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
         0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x83, 0xec, 0x30, 0x4c, 0x8b,
@@ -44,9 +44,11 @@ pub(crate) const TARGET: memory::Target = memory::Target {
 
 /// Links the skill change.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
-    let change = TARGET.checked(load, load.code()?)?;
-    // SAFETY: the skill change `CHANGE` declares on the pinned client and
-    // server builds, found on 1269579, its first bytes checked above.
+    let [change] = memory::find([&TARGET], load.code()?);
+    let change = change?;
+    // SAFETY: the one place in the code that opens with the prologue of the
+    // skill change `CHANGE` declares, as on every kept client and server
+    // build, found on 1269579.
     unsafe { load.hook(&CHANGE, change) }
 }
 

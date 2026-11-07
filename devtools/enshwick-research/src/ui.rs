@@ -10,8 +10,9 @@
 //!   text field's text whenever it changes.
 //!
 //! Every hook only reads, at the entry of a function, through reads that
-//! cannot fault. Each site's first bytes are checked against those it has
-//! on the pinned builds; a site that differs stays unhooked.
+//! cannot fault. Each site is found by the prologue it has on the kept
+//! builds; a site it finds nowhere, or in more than one place, stays
+//! unhooked.
 
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -39,7 +40,7 @@ enum Kind {
 }
 
 /// One function looked at; its prologue found on client build 1269579 and
-/// the same on every client build the manifest pins.
+/// the same on every kept client build.
 #[derive(Debug)]
 pub(crate) struct Site {
     name: &'static str,
@@ -51,7 +52,7 @@ pub(crate) const SITES: [Site; 5] = [
     Site {
         name: "R2 scroll begin",
         target: memory::Target {
-            symbol: "research.scroll_begin",
+            name: "research.scroll_begin",
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d, 0xa8,
                 0xc8, 0xfd, 0xff, 0xff,
@@ -62,7 +63,7 @@ pub(crate) const SITES: [Site; 5] = [
     Site {
         name: "R2 scroll end",
         target: memory::Target {
-            symbol: "research.scroll_end",
+            name: "research.scroll_end",
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8d, 0xa8,
                 0xd8, 0xfc, 0xff, 0xff,
@@ -73,7 +74,7 @@ pub(crate) const SITES: [Site; 5] = [
     Site {
         name: "R3 tabs",
         target: memory::Target {
-            symbol: "research.tabs",
+            name: "research.tabs",
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x41, 0x55, 0x48, 0x8d, 0xa8, 0x98, 0xfa, 0xff, 0xff,
             ]],
@@ -83,7 +84,7 @@ pub(crate) const SITES: [Site; 5] = [
     Site {
         name: "R5 text dialog",
         target: memory::Target {
-            symbol: "research.text_dialog",
+            name: "research.text_dialog",
             prologues: &[&[0x48, 0x8b, 0xc4, 0x55, 0x53, 0x41, 0x55, 0x41]],
         },
         kind: Kind::TextDialog,
@@ -91,7 +92,7 @@ pub(crate) const SITES: [Site; 5] = [
     Site {
         name: "R5 text field",
         target: memory::Target {
-            symbol: "research.text_field",
+            name: "research.text_field",
             prologues: &[&[
                 0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x48, 0x83, 0xec,
                 0x60, 0x4c, 0x8b, 0x5a, 0x08,
@@ -131,7 +132,7 @@ static SEEN: OnceLock<Seen> = OnceLock::new();
 /// [`Off`] when the game's code cannot be read.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
     let code = load.code()?;
-    let checked = SITES.each_ref().map(|site| site.target.checked(load, code));
+    let checked = memory::find(SITES.each_ref().map(|site| &site.target), code);
     let _first = SEEN.set(Seen {
         start: Instant::now(),
         base: memory::image_base(),
@@ -147,9 +148,9 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
             }
         };
         let kind = site.kind;
-        // SAFETY: the site's bytes match a prologue it has on the client
-        // builds the manifest pins, found on 1269579, where it starts an
-        // instruction; the handler only reads the registers.
+        // SAFETY: the one place in the code that opens with a prologue the
+        // site has on the kept client builds, found on 1269579, where it
+        // starts an instruction; the handler only reads the registers.
         match unsafe { load.hook_at(address, move |registers| seen(kind, registers)) } {
             Ok(()) => hooked += 1,
             Err(off) => enshwick::warn!("{} off: {off}", site.name),

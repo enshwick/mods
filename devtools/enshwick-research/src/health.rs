@@ -54,9 +54,9 @@ enshwick::detour! {
     ) -> *mut u8 = writer;
 }
 
-/// The attribute writer, the same on every pinned client and server build.
+/// The attribute writer, the same on every kept client and server build.
 pub(crate) const TARGET: memory::Target = memory::Target {
-    symbol: "research.impact_attribute",
+    name: "research.impact_attribute",
     prologues: &[&[
         0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89, 0x7c, 0x24, 0x18,
         0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8b, 0xec, 0x48, 0x83, 0xec,
@@ -66,9 +66,11 @@ pub(crate) const TARGET: memory::Target = memory::Target {
 
 /// Links the impact programs' attribute writer.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
-    let writer = TARGET.checked(load, load.code()?)?;
-    // SAFETY: the writer `WRITER` declares on the pinned client and server
-    // builds, found on 1269579, its first bytes checked above.
+    let [writer] = memory::find([&TARGET], load.code()?);
+    let writer = writer?;
+    // SAFETY: the one place in the code that opens with the prologue of the
+    // writer `WRITER` declares, as on every kept client and server build,
+    // found on 1269579.
     unsafe { load.hook(&WRITER, writer) }
 }
 

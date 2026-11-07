@@ -38,46 +38,54 @@ enum Kind {
     TextField,
 }
 
-/// One function looked at.
+/// One function looked at; its prologue found on client build 1269579 and
+/// the same on every client build the manifest pins.
 #[derive(Debug)]
-struct Site {
+pub(crate) struct Site {
     name: &'static str,
-    symbol: &'static str,
-    /// Its first bytes, found on client build 1269579 and the same on every
-    /// client build the manifest pins.
-    expected: [u8; 8],
+    pub(crate) target: memory::Target,
     kind: Kind,
 }
 
-const SITES: [Site; 5] = [
+pub(crate) const SITES: [Site; 5] = [
     Site {
         name: "R2 scroll begin",
-        symbol: "research.scroll_begin",
-        expected: 0x4154_4157_55c4_8b48_u64.to_le_bytes(),
+        target: memory::Target {
+            symbol: "research.scroll_begin",
+            prologues: &[&[0x48, 0x8b, 0xc4, 0x55, 0x57, 0x41, 0x54, 0x41]],
+        },
         kind: Kind::ScrollBegin,
     },
     Site {
         name: "R2 scroll end",
-        symbol: "research.scroll_end",
-        expected: 0x4157_5653_55c4_8b48_u64.to_le_bytes(),
+        target: memory::Target {
+            symbol: "research.scroll_end",
+            prologues: &[&[0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x41]],
+        },
         kind: Kind::ScrollEnd,
     },
     Site {
         name: "R3 tabs",
-        symbol: "research.tabs",
-        expected: 0x8d48_5541_55c4_8b48_u64.to_le_bytes(),
+        target: memory::Target {
+            symbol: "research.tabs",
+            prologues: &[&[0x48, 0x8b, 0xc4, 0x55, 0x41, 0x55, 0x48, 0x8d]],
+        },
         kind: Kind::Tabs,
     },
     Site {
         name: "R5 text dialog",
-        symbol: "research.text_dialog",
-        expected: 0x4155_4153_55c4_8b48_u64.to_le_bytes(),
+        target: memory::Target {
+            symbol: "research.text_dialog",
+            prologues: &[&[0x48, 0x8b, 0xc4, 0x55, 0x53, 0x41, 0x55, 0x41]],
+        },
         kind: Kind::TextDialog,
     },
     Site {
         name: "R5 text field",
-        symbol: "research.text_field",
-        expected: 0x7489_4810_245c_8948_u64.to_le_bytes(),
+        target: memory::Target {
+            symbol: "research.text_field",
+            prologues: &[&[0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x74]],
+        },
         kind: Kind::TextField,
     },
 ];
@@ -111,7 +119,7 @@ static SEEN: OnceLock<Seen> = OnceLock::new();
 ///
 /// [`Off`] when the game's code cannot be read.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
-    let start = load.code()?.as_ptr().addr();
+    load.code()?;
     let _first = SEEN.set(Seen {
         start: Instant::now(),
         base: memory::image_base(),
@@ -119,29 +127,16 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
     });
     let mut hooked = 0;
     for site in &SITES {
-        let address = match load.symbol(site.symbol) {
+        let address = match site.target.checked(load) {
             Ok(address) => address,
             Err(off) => {
                 enshwick::warn!("{} off: {off}", site.name);
                 continue;
             }
         };
-        let Ok(at) = usize::try_from(address) else {
-            continue;
-        };
-        let found = at
-            .checked_sub(start)
-            .and_then(|offset| load.code().ok()?.get(offset..offset + site.expected.len()));
-        if found != Some(&site.expected[..]) {
-            enshwick::warn!(
-                "{} off: its bytes at {at:#x} are {found:02x?}, not those of a pinned build",
-                site.name
-            );
-            continue;
-        }
         let kind = site.kind;
-        // SAFETY: the site's bytes match those it has on the client builds
-        // the manifest pins, found on 1269579, where it starts an
+        // SAFETY: the site's bytes match a prologue it has on the client
+        // builds the manifest pins, found on 1269579, where it starts an
         // instruction; the handler only reads the registers.
         match unsafe { load.hook_at(address, move |registers| seen(kind, registers)) } {
             Ok(()) => hooked += 1,
@@ -254,35 +249,4 @@ fn seen(kind: Kind, registers: &mut Registers) {
         seen.start.elapsed().as_secs_f64(),
         memory::as_note(caller, seen.base)
     );
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_site_is_pinned_and_reads_its_bytes_in_the_client() {
-        let pinned = crate::tooltip::tests::pinned();
-        for site in &SITES {
-            assert!(
-                pinned.iter().any(|(name, _, _)| name == site.symbol),
-                "{}",
-                site.name
-            );
-        }
-        let Some(bytes) = crate::tooltip::tests::client_bytes() else {
-            return;
-        };
-        let Some((image, rows)) = crate::tooltip::tests::client_rows(&bytes) else {
-            return;
-        };
-        for site in &SITES {
-            let rva = rows.iter().find(|(name, _)| name == site.symbol);
-            let Some((_, rva)) = rva else {
-                unreachable!("{} is pinned for this client build", site.name);
-            };
-            let found = image.read(image.base() + rva, 8);
-            assert_eq!(found, Some(&site.expected[..]), "{}", site.name);
-        }
-    }
 }

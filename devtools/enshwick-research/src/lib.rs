@@ -21,6 +21,8 @@ mod join;
 mod memory;
 mod respawn;
 mod skills;
+#[cfg(test)]
+mod targets;
 mod tooltip;
 mod ui;
 
@@ -312,6 +314,62 @@ mod tests {
         )
         .unwrap();
         assert!(marked("[5]"), "{:?}", loader.logs());
+    }
+
+    /// Code that opens with `prologue`, then traps.
+    const fn opening(prologue: &[u8]) -> [u8; 32] {
+        let mut code = [0xcc; 32];
+        let mut at = 0;
+        while at < prologue.len() {
+            code[at] = prologue[at];
+            at += 1;
+        }
+        code
+    }
+
+    static CODE: [[u8; 32]; 2] = [
+        opening(health::TARGET.prologues[0]),
+        opening(skills::TARGET.prologues[0]),
+    ];
+
+    #[test]
+    fn r17_and_r19_hook_only_code_that_opens_with_their_prologue() {
+        let cases = [
+            (&CODE[0], health::TARGET.symbol, "impact_health", "R17"),
+            (&CODE[1], skills::TARGET.symbol, "skills", "R19"),
+        ];
+        for (code, symbol, setting, research) in cases {
+            for skew in [0, 1] {
+                let dir = own_dir().join(format!("{research}-{skew}"));
+                std::fs::create_dir_all(&dir).unwrap();
+                let only = format!(
+                    "enabled = true\ntooltip = false\nui = false\njoin = false\nentities = false\n\
+                     impact_health = false\nfibers = false\nskills = false\nrespawn = false\n\
+                     {setting} = true\n"
+                );
+                std::fs::write(dir.join("settings.toml"), only).unwrap();
+                let loader = enshwick::test::FakeHost::new()
+                    .developer_tools(true)
+                    .side(Side::SERVER)
+                    .mod_dir(dir.to_str().unwrap())
+                    .code(code)
+                    .symbol(symbol, code.as_ptr().addr() as u64 + skew)
+                    .install();
+                // SAFETY: the exports of the `declare_mod!` below.
+                let status = unsafe {
+                    loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready)
+                };
+                assert_eq!(status, Status::OK, "{:?}", loader.faults());
+                let logs = loader.logs();
+                let on = logs
+                    .iter()
+                    .any(|(_, line)| line.starts_with(research) && line.ends_with("looked at"));
+                let off = logs.iter().any(|(_, line)| {
+                    line.starts_with(&format!("{research} off: {symbol}: its bytes"))
+                });
+                assert_eq!((on, off), (skew == 0, skew == 1), "{research}: {logs:?}");
+            }
+        }
     }
 
     #[test]

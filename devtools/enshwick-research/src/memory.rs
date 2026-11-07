@@ -4,6 +4,7 @@
 
 use core::fmt::Write as _;
 
+use enshwick::{Load, Off};
 use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
@@ -61,6 +62,55 @@ fn read_exact(address: usize, out: &mut [u8]) -> bool {
         )
     };
     ok != 0 && done == out.len()
+}
+
+/// A game function the mod hooks or calls, its first bytes checked before
+/// either.
+#[derive(Debug)]
+pub(crate) struct Target {
+    /// The symbol the manifest pins.
+    pub(crate) symbol: &'static str,
+    /// The bytes it opens with, one entry per prologue the pinned builds
+    /// have, each long enough to tell it from every other target.
+    pub(crate) prologues: &'static [&'static [u8]],
+}
+
+impl Target {
+    /// Whether `code` opens with one of the target's prologues.
+    pub(crate) fn opens(&self, code: &[u8]) -> bool {
+        self.prologues
+            .iter()
+            .any(|prologue| !prologue.is_empty() && code.starts_with(prologue))
+    }
+
+    /// The bytes a check reads: the longest prologue's.
+    pub(crate) fn longest(&self) -> usize {
+        self.prologues.iter().map(|p| p.len()).max().unwrap_or(0)
+    }
+
+    /// The target's address, when the game's code there opens with one of
+    /// its prologues.
+    ///
+    /// # Errors
+    ///
+    /// [`Off`] when the symbol is not pinned for this build, the code cannot
+    /// be read, or its bytes are no prologue of a pinned build.
+    pub(crate) fn checked(&self, load: &Load<'_>) -> Result<u64, Off> {
+        let address = load.symbol(self.symbol)?;
+        let code = load.code()?;
+        let found = usize::try_from(address)
+            .ok()
+            .and_then(|at| at.checked_sub(code.as_ptr().addr()))
+            .and_then(|offset| code.get(offset..));
+        match found {
+            Some(found) if self.opens(found) => Ok(address),
+            _ => Err(Off::new(format!(
+                "{}: its bytes at {address:#x} are {:02x?}, no prologue of a pinned build",
+                self.symbol,
+                found.map(|f| &f[..self.longest().min(f.len())])
+            ))),
+        }
+    }
 }
 
 /// The game image's base in this process.

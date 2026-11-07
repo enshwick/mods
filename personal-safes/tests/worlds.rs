@@ -473,7 +473,7 @@ label_language = \"en\"
 
         assert_eq!(
             access(&ann, 3, true),
-            "Cat may now open your Safe at (1, 0, 0), the nearest you manage within 4 m."
+            "Cat may now open your Safe at (1, 0, 0)."
         );
         assert_eq!(
             run(&cat, "list", ""),
@@ -489,7 +489,7 @@ label_language = \"en\"
         }));
         assert_eq!(
             access(&cat, 1, true),
-            "Ann may now open Bob's Safe at (21, 0, 0), the nearest you manage within 4 m."
+            "Ann may now open Bob's Safe at (21, 0, 0)."
         );
         assert_eq!(
             run(&cat, "list", ""),
@@ -569,10 +569,7 @@ label_language = \"en\"
         let ran = loader
             .ask_actions(ActionCall::RUN, &root, 0, "access", "p0000000000000003	b1")
             .unwrap();
-        assert_eq!(
-            ran,
-            "1Cat may now open your Safe at (3, 0, 0), the nearest you manage within 4 m."
-        );
+        assert_eq!(ran, "1Cat may now open your Safe at (3, 0, 0).");
         assert_eq!(
             snapshots().owners.load()[&(6, 0, 0)].allowed[0].key,
             PlayerKey::new(3)

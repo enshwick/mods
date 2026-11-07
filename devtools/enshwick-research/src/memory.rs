@@ -73,30 +73,58 @@ pub(crate) struct Target {
     /// The bytes it opens with, one entry per prologue the kept builds have,
     /// each opening it and no other place in the code of a kept executable.
     pub(crate) prologues: &'static [&'static [u8]],
-    /// Whether other places open with its prologue as copies of it, the same
-    /// code that other callers reach: its prologue then spans what a call to
-    /// any copy or a hook on each relies on, and [`find`] gives the first.
+    /// Bytes further into it that each place must hold too, as runs at their
+    /// offsets from its start; the bytes between them may be anything.
+    pub(crate) body: &'static [(usize, &'static [u8])],
+    /// Whether other places open as it does as copies of it, the same code
+    /// that other callers reach, so that a call to any copy or a hook on each
+    /// does what the mod needs; [`find`] gives the first.
     pub(crate) copies: bool,
+}
+
+impl Target {
+    /// The search pattern of each prologue with the body's runs; none for an
+    /// empty prologue.
+    fn patterns(&self) -> impl Iterator<Item = Pattern> + '_ {
+        self.prologues.iter().filter_map(|prologue| {
+            let end = self
+                .body
+                .iter()
+                .map(|(at, run)| at + run.len())
+                .fold(prologue.len(), usize::max);
+            let mut bytes = vec![None; end];
+            for (at, run) in core::iter::once((0, *prologue)).chain(self.body.iter().copied()) {
+                for (slot, &byte) in bytes[at..].iter_mut().zip(run) {
+                    *slot = Some(byte);
+                }
+            }
+            let text: Vec<String> = bytes
+                .iter()
+                .map(|b| b.map_or_else(|| "??".to_owned(), |b| format!("{b:02x}")))
+                .collect();
+            (!prologue.is_empty())
+                .then(|| Pattern::parse(&text.join(" ")).ok())
+                .flatten()
+        })
+    }
+
+    /// The bytes its patterns span.
+    #[cfg(test)]
+    pub(crate) fn span(&self) -> usize {
+        self.patterns().map(|p| p.len()).max().unwrap_or(0)
+    }
 }
 
 /// Every place in `code`, as offsets from its start, where one of the
 /// prologues of `target` opens, in order.
 pub(crate) fn places(target: &Target, code: &[u8]) -> Vec<usize> {
     let mut places: Vec<usize> = target
-        .prologues
-        .iter()
-        .filter_map(|p| pattern(p))
+        .patterns()
         .flat_map(|p| p.find_all(code).collect::<Vec<_>>())
         .collect();
     places.sort_unstable();
     places.dedup();
     places
-}
-
-/// The search pattern of `prologue`; `None` for an empty one.
-fn pattern(prologue: &[u8]) -> Option<Pattern> {
-    let text: Vec<String> = prologue.iter().map(|b| format!("{b:02x}")).collect();
-    Pattern::parse(&text.join(" ")).ok()
 }
 
 /// Where each of `targets` sits in `code`, as offsets from its start: the one
@@ -106,12 +134,7 @@ pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, Fin
     let owned: Vec<(usize, Pattern)> = targets
         .iter()
         .enumerate()
-        .flat_map(|(n, target)| {
-            target
-                .prologues
-                .iter()
-                .filter_map(move |p| pattern(p).map(|p| (n, p)))
-        })
+        .flat_map(|(n, target)| target.patterns().map(move |p| (n, p)))
         .collect();
     let patterns: Vec<&Pattern> = owned.iter().map(|(_, p)| p).collect();
     let found = find_each_unique(&patterns, code);
@@ -263,16 +286,19 @@ mod tests {
         let two = Target {
             name: "test.two",
             prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
+            body: &[],
             copies: false,
         };
         let prefix = Target {
             name: "test.prefix",
             prologues: &[&[0x41, 0x57], &[0x41, 0x57, 0x48]],
+            body: &[],
             copies: false,
         };
         let empty = Target {
             name: "test.empty",
             prologues: &[&[]],
+            body: &[],
             copies: false,
         };
         let code = [0xcc, 0x48, 0x89, 0x5c, 0xcc, 0x41, 0x57, 0x48, 0xcc];
@@ -292,6 +318,7 @@ mod tests {
         let copied = Target {
             name: "test.copied",
             prologues: &[&[0x40, 0x55]],
+            body: &[],
             copies: true,
         };
         let twice = [0xcc, 0x40, 0x55, 0xcc, 0x40, 0x55];
@@ -299,6 +326,20 @@ mod tests {
         assert_eq!(places(&copied, &twice), [1, 4]);
         assert_eq!(offsets(&[&copied], &[0xcc; 4]), [Err(FindError::None)]);
         assert!(places(&copied, &[0xcc; 4]).is_empty());
+    }
+
+    #[test]
+    fn a_target_with_a_body_is_found_only_where_its_runs_hold_too() {
+        let bodied = Target {
+            name: "test.bodied",
+            prologues: &[&[0x40, 0x55], &[0x48, 0x89]],
+            body: &[(3, &[0xc3])],
+            copies: false,
+        };
+        assert_eq!(bodied.span(), 4);
+        let code = [0x40, 0x55, 0x90, 0xcc, 0x48, 0x89, 0x90, 0xc3];
+        assert_eq!(offsets(&[&bodied], &code), [Ok(4)]);
+        assert_eq!(places(&bodied, &code[..4]), [0usize; 0]);
     }
 
     #[test]

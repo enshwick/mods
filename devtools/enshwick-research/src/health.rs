@@ -57,6 +57,7 @@ enshwick::detour! {
 /// The attribute writer, the same on every kept client and server build.
 pub(crate) const TARGET: memory::Target = memory::Target {
     name: "research.impact_attribute",
+    body: &[],
     copies: false,
     prologues: &[&[
         0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89, 0x7c, 0x24, 0x18,

@@ -317,15 +317,20 @@ mod tests {
     }
 
     /// The game code of a fake host: `copies` runs of slots padded with
-    /// traps, each target's first prologue in a slot of its own in each run;
+    /// traps, each target's first prologue and its body in a slot of its own
+    /// in each run;
     /// where each target's first copy opens.
     fn code_of(targets: &[&memory::Target], copies: usize) -> (&'static [u8], Vec<u64>) {
         const SLOT: usize = 256;
         let mut code = vec![0xccu8; SLOT * targets.len() * copies.max(1)];
         for (n, slot) in code.chunks_mut(SLOT).enumerate() {
             if n / targets.len() < copies {
-                let prologue = targets[n % targets.len()].prologues[0];
-                slot[..prologue.len()].copy_from_slice(prologue);
+                let target = targets[n % targets.len()];
+                for (at, run) in
+                    core::iter::once((0, target.prologues[0])).chain(target.body.iter().copied())
+                {
+                    slot[at..at + run.len()].copy_from_slice(run);
+                }
             }
         }
         let code: &'static [u8] = Vec::leak(code);

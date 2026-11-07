@@ -155,7 +155,8 @@ fn no_prologue_of_one_target_opens_like_one_of_another() {
 /// On the executables `ENSH_CLIENT_EXE` and `ENSH_SERVER_EXE` name, each
 /// target of their side is found, as the mod finds it, at one place, or one
 /// of its copies, the one it was found at on that build where [`FOUND`]
-/// lists the build; skipped without them.
+/// lists the build, and every place it matches holds the same bytes over its
+/// span there; skipped without them.
 #[test]
 fn every_target_is_found_once_in_the_executables_where_it_was_found_before() {
     for (variable, side) in [
@@ -186,7 +187,20 @@ fn every_target_is_found_once_in_the_executables_where_it_was_found_before() {
         let found = memory::offsets(&targets, code);
         let mut wrong = Vec::new();
         for (n, (target, at)) in targets.iter().zip(found).enumerate() {
-            let places: Vec<u64> = memory::places(target, code).into_iter().map(rva).collect();
+            let offsets = memory::places(target, code);
+            let places: Vec<u64> = offsets.iter().map(|&at| rva(at)).collect();
+            if let Some(before) = before {
+                let span = target.span();
+                let mine = image.read(image.base() + before[n], span as u64);
+                for (&at, place) in offsets.iter().zip(&places) {
+                    if mine.is_none_or(|mine| code.get(at..at + span) != Some(mine)) {
+                        wrong.push(format!(
+                            "{}: the code at {place:#x} is no copy of its own",
+                            target.name
+                        ));
+                    }
+                }
+            }
             match (at, before) {
                 (Err(e), _) => wrong.push(format!("{}: {e}, at {places:#x?}", target.name)),
                 (Ok(_), Some(before)) if target.copies && !places.contains(&before[n]) => wrong

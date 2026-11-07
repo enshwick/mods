@@ -49,6 +49,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "tooltip",
         target: memory::Target {
             name: "research.tooltip",
+            body: &[],
             copies: false,
             prologues: &[
                 &[
@@ -68,6 +69,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "tooltip_body",
         target: memory::Target {
             name: "research.tooltip_body",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
@@ -80,6 +82,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "stat_rows",
         target: memory::Target {
             name: "research.stat_rows",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x48, 0x89, 0x50, 0x10, 0x48, 0x89, 0x48, 0x08, 0x55, 0x53, 0x56,
@@ -93,6 +96,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_compare",
         target: memory::Target {
             name: "research.viewer_compare",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x40, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d, 0xac, 0x24,
@@ -105,6 +109,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_b562c0",
         target: memory::Target {
             name: "research.viewer_b562c0",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x56, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
@@ -117,6 +122,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_b56b80",
         target: memory::Target {
             name: "research.viewer_b56b80",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x53, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d,
@@ -129,6 +135,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_beb220",
         target: memory::Target {
             name: "research.viewer_beb220",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x89, 0x5c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x55, 0x57, 0x41, 0x56,
@@ -141,6 +148,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_bebb60",
         target: memory::Target {
             name: "research.viewer_bebb60",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89, 0x7c, 0x24, 0x20, 0x55, 0x41, 0x54, 0x41,
@@ -154,6 +162,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_c3da50",
         target: memory::Target {
             name: "research.viewer_c3da50",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x48, 0x89, 0x58, 0x20, 0x55, 0x48, 0x8d, 0xa8, 0xd8, 0xfe, 0xff,
@@ -166,6 +175,7 @@ pub(crate) const SITES: [Site; 10] = [
         name: "viewer_b55140",
         target: memory::Target {
             name: "research.viewer_b55140",
+            body: &[],
             copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x48, 0x8d, 0xa8, 0x38, 0xfc, 0xff, 0xff,

@@ -3,7 +3,7 @@
 //! the Safe's chest screen, and a list action on Shift+L that names them.
 //!
 //! The Safe at hand is the one the panel names, the open Safe, when the
-//! player may manage it. Without one, from the list key, it is the one
+//! player may manage it and the server saw them open it. Without one, from the list key, it is the one
 //! within reach the player may manage: the one they opened last
 //! first, then their own nearest one, else the nearest other they may
 //! manage, as an administrator while `admins_can_open` is on, or one
@@ -105,9 +105,9 @@ fn whose(say: &Say<'_>, safe: &Safe, key: PlayerKey) -> String {
     }
 }
 
-/// The Safe at hand for the player who asks: the one their client named, or
-/// else within reach, one they may manage, their own first; or why there is
-/// none.
+/// The Safe at hand for the player who asks: the one their client named, if
+/// the server saw them open it, or else within reach, one they may manage,
+/// their own first; or why there is none.
 fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, FindSubjectError> {
     let me = ask.player;
     let seen = Seen {
@@ -123,7 +123,14 @@ fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, FindSubjectError> {
         let place = place(at);
         let here = [(texts::value::AT, place.as_str())];
         return match safe {
-            Some(safe) if snapshots().may_manage(at, seen, me.entity) => Ok(subject(ask, at, safe)),
+            // A client may name any Safe; only the one the server saw them open counts.
+            Some(safe) if snapshots().may_manage(at, seen, me.entity) => {
+                if snapshots().opened.load().get(&me.key) == Some(&at) {
+                    Ok(subject(ask, at, safe))
+                } else {
+                    Err(ask.say(texts::COMMAND_NOT_OPEN, &here).into())
+                }
+            }
             // An own Safe that another mod's link keeps them from.
             Some(safe) if safe.owner == me.key => {
                 Err(ask.say(texts::COMMAND_REFUSED, &here).into())

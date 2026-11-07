@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn a_switch_acts_on_the_safe_its_panel_names_and_a_run_without_one_on_the_nearest() {
+    fn a_switch_acts_only_on_the_open_safe_and_a_run_without_one_on_the_nearest() {
         let dir = std::env::temp_dir().join(format!(
             "enshwick-personal-safes-target-{}",
             std::process::id()
@@ -200,6 +200,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let ann = player(10, 1, "Ann");
         let host = host();
+        let (open_far, open_near) = (accepted(&host, 10, 701), accepted(&host, 10, 700));
         let (transform, here) = (
             host.hash(facts::CURRENT_TRANSFORM.id()).unwrap(),
             origin(&host),
@@ -231,6 +232,22 @@ mod tests {
         let ran = loader
             .ask_action_at(&ann, 0, "access", cat_on, far)
             .unwrap();
+        assert_eq!(
+            ran, "0Open the Safe at (6, 0, 0) to change who may open it.",
+            "never a Safe the server did not see Ann open"
+        );
+        assert_eq!(loader.raise_game_event(0x0a11, &open_far), 1);
+        let near = ActionTarget::at([1.0, 0.0, 0.0]);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, near)
+            .unwrap();
+        assert_eq!(
+            ran, "0Open the Safe at (1, 0, 0) to change who may open it.",
+            "never another Safe Ann manages than the one open"
+        );
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, far)
+            .unwrap();
         assert!(
             ran.starts_with("1Cat may now open your Safe at (6, 0, 0)."),
             "{ran}"
@@ -249,6 +266,14 @@ mod tests {
         assert!(
             ran.starts_with("1Cat may now open your Safe at (1, 0, 0)."),
             "{ran}"
+        );
+        assert_eq!(loader.raise_game_event(0x0a11, &open_near), 1);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, far)
+            .unwrap();
+        assert_eq!(
+            ran, "0Open the Safe at (6, 0, 0) to change who may open it.",
+            "a panel left on the Safe opened before is stale"
         );
         let bobs = ActionTarget::at([0.0, 0.0, 6.0]);
         let ran = loader

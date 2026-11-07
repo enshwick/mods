@@ -183,6 +183,18 @@ static MARK: AtomicU32 = AtomicU32::new(0);
 static LOOKED_FOR: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 static LOOKED_FOR_COUNT: AtomicU32 = AtomicU32::new(0);
 
+impl Site {
+    /// Whether `found` is one of the site's prologues.
+    fn matches(&self, found: Option<&[u8]>) -> bool {
+        self.expected.iter().any(|bytes| found == Some(&bytes[..]))
+    }
+}
+
+/// The prologue's bytes at `offset` into `code`, if it holds them all.
+fn prologue(code: &[u8], offset: usize) -> Option<&[u8]> {
+    code.get(offset..offset + PROLOGUE)
+}
+
 /// Hooks every site whose bytes match; returns how many it hooked.
 pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Result<usize, Off> {
     let start = load.code()?.as_ptr().addr();
@@ -210,8 +222,8 @@ pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Res
         };
         let found = at
             .checked_sub(start)
-            .and_then(|offset| load.code().ok()?.get(offset..offset + PROLOGUE));
-        if !site.expected.iter().any(|bytes| found == Some(&bytes[..])) {
+            .and_then(|offset| prologue(load.code().ok()?, offset));
+        if !site.matches(found) {
             enshwick::warn!(
                 "R1 {} off: its bytes at {at:#x} are {found:02x?}, no prologue of a pinned build",
                 site.name
@@ -618,6 +630,21 @@ pub(crate) mod tests {
         std::fs::read(std::env::var_os("ENSH_CLIENT_EXE")?).ok()
     }
 
+    #[test]
+    fn a_site_matches_any_of_its_prologues_read_at_its_offset() {
+        let tooltip = &SITES[0];
+        for expected in tooltip.expected {
+            let mut code = vec![0xccu8; 4];
+            code.extend_from_slice(expected);
+            assert_eq!(prologue(&code, 4), Some(&code[4..]));
+            assert!(tooltip.matches(prologue(&code, 4)));
+            assert!(!tooltip.matches(prologue(&code, 3)));
+            assert_eq!(prologue(&code, 5), None);
+        }
+        assert!(!tooltip.matches(Some(&[0xcc; PROLOGUE][..])));
+        assert!(!tooltip.matches(None));
+    }
+
     /// A build without client rows, as a newer client is until it is pinned,
     /// skips instead of failing; the server's executable is such a build.
     #[test]
@@ -664,11 +691,7 @@ pub(crate) mod tests {
                 unreachable!("{} is pinned for this client build", site.name);
             };
             let found = image.read(image.base() + rva, PROLOGUE as u64);
-            assert!(
-                site.expected.iter().any(|bytes| found == Some(&bytes[..])),
-                "{}: {found:02x?}",
-                site.name
-            );
+            assert!(site.matches(found), "{}: {found:02x?}", site.name);
         }
     }
 }

@@ -3,18 +3,19 @@
 //! the Safe's chest screen, and a list action on Shift+L that names them.
 //!
 //! The Safe at hand is the one the panel names, the open Safe, when the
-//! player may manage it and the server saw them open it. Without one, from the list key, it is the one
-//! within reach the player may manage: the one they opened last
-//! first, then their own nearest one, else the nearest other they may
-//! manage, as an administrator while `admins_can_open` is on, or one
-//! another mod lets them manage.
+//! player may manage it and the server saw them open it. Without one, from
+//! the list key, it is the one within reach the player may manage: the one
+//! they opened last first, then their own nearest one, else the nearest
+//! other they may manage, as an administrator while `admins_can_open` is
+//! on, or one another mod lets them manage.
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use enshwick::actions::{Action, Actions, Ask, FindSubjectError, Outcome, Request, Subject, Value};
 use enshwick::controls::Key;
 use enshwick::i18n::{Language, Texts};
-use enshwick::world::World;
+use enshwick::world::{Player, World};
 use enshwick::{Entity, Load, Off, PlayerKey};
 
 use crate::access::{
@@ -248,7 +249,8 @@ fn list(request: &Request<'_>) -> Outcome {
 
 /// Declares who may open a Safe and the list of them; saves through `save`
 /// when it changed who may, and calls `answered` with the player and their
-/// character after every switch, changed or refused.
+/// character after every switch, changed or refused, also one refused
+/// before it runs.
 ///
 /// # Errors
 ///
@@ -261,6 +263,16 @@ pub fn declare(
     answered: impl Fn(Seen, Entity) + Send + Sync + 'static,
 ) -> Result<Actions, Off> {
     let actions = load.actions(texts)?;
+    let answered = Arc::new(move |me: &Player| {
+        answered(
+            Seen {
+                key: me.key,
+                admin: me.is_admin(),
+            },
+            me.entity,
+        );
+    });
+    let refused = Arc::clone(&answered);
     actions.add(
         Action::per_player(ACCESS_ACTION, texts::ACTION_ACCESS, |_ask, subject| {
             let Some(at) = subject.map(|s| unpack(s.id)) else {
@@ -278,17 +290,19 @@ pub fn declare(
                 })
         })
         .help(texts::ACTION_ACCESS_HELP)
-        .at(move |ask| at_hand(world, ask)),
+        .at(move |ask| {
+            let found = at_hand(world, ask);
+            // A switch refused here never runs, so its panel hears the list now, not after a wait.
+            // shortcut: the loader asks twice per run (its players, then the run), so the list
+            // goes twice; send it once if a refusal ever costs.
+            if found.is_err() && ask.target.is_some() {
+                refused(ask.player);
+            }
+            found
+        }),
         move |request| {
             let outcome = access(request, &save);
-            let me = request.player;
-            answered(
-                Seen {
-                    key: me.key,
-                    admin: me.is_admin(),
-                },
-                me.entity,
-            );
+            answered(request.player);
             outcome
         },
     )?;

@@ -190,25 +190,21 @@ mod tests {
         let _gone = std::fs::remove_dir_all(&dir);
     }
 
-    #[test]
-    fn a_switch_acts_only_on_the_open_safe_and_a_run_without_one_on_the_nearest() {
-        let dir = std::env::temp_dir().join(format!(
-            "enshwick-personal-safes-target-{}",
-            std::process::id()
-        ));
-        let _gone = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let ann = player(10, 1, "Ann");
+    /// A running server where Ann stands at the origin with her Safes 1 m
+    /// and 6 m away and Bob's 6 m away, and the accepted interactions of
+    /// her opening the far one and the near one.
+    fn three_safes(dir: &std::path::Path) -> (enshwick::test::Installed, [Vec<u8>; 2]) {
         let host = host();
-        let (open_far, open_near) = (accepted(&host, 10, 701), accepted(&host, 10, 700));
+        let opened = [accepted(&host, 10, 701), accepted(&host, 10, 700)];
         let (transform, here) = (
             host.hash(facts::CURRENT_TRANSFORM.id()).unwrap(),
             origin(&host),
         );
         let loader = host
-            .player(ann)
+            .player(player(10, 1, "Ann"))
             .player(player(12, 3, "Cat"))
             .component(Entity(10), transform, &here)
+            .net_peer(Peer::Player(PlayerKey::new(1)))
             .data_dir(dir.join("worlds/world0-pp").to_str().unwrap())
             .world_key("world0-pp")
             .install();
@@ -222,10 +218,22 @@ mod tests {
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        // Ann stands at the origin: her Safes 1 m and 6 m away, Bob's 6 m.
         snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
         snapshots().placed(Entity(701), (12, 0, 0), PlayerKey::new(1), "Ann");
         snapshots().placed(Entity(702), (0, 0, 12), PlayerKey::new(2), "Bob");
+        (loader, opened)
+    }
+
+    #[test]
+    fn a_switch_acts_only_on_the_open_safe_and_a_run_without_one_on_the_nearest() {
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-target-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ann = player(10, 1, "Ann");
+        let (loader, [open_far, open_near]) = three_safes(&dir);
         let cat_on = "p0000000000000003\tb1";
 
         let far = ActionTarget::at([6.0, 0.0, 0.0]);
@@ -236,6 +244,11 @@ mod tests {
             ran, "0Open the Safe at (6, 0, 0) to change who may open it.",
             "never a Safe the server did not see Ann open"
         );
+        assert_eq!(told(&loader), [], "no Safe open, so no list to send");
+        let open_at = |loader: &enshwick::test::Installed| match told(loader).last() {
+            Some((_, Shown::Safe { at, .. })) => Some(*at),
+            _ => None,
+        };
         assert_eq!(loader.raise_game_event(0x0a11, &open_far), 1);
         let near = ActionTarget::at([1.0, 0.0, 0.0]);
         let ran = loader
@@ -245,12 +258,20 @@ mod tests {
             ran, "0Open the Safe at (1, 0, 0) to change who may open it.",
             "never another Safe Ann manages than the one open"
         );
+        assert!(told(&loader).len() > 1, "the refusal resends the list");
+        assert_eq!(open_at(&loader), Some((12, 0, 0)), "of the open Safe");
+        let before = told(&loader).len();
         let ran = loader
             .ask_action_at(&ann, 0, "access", cat_on, far)
             .unwrap();
         assert!(
             ran.starts_with("1Cat may now open your Safe at (6, 0, 0)."),
             "{ran}"
+        );
+        assert_eq!(
+            told(&loader).len(),
+            before + 1,
+            "a switch that runs sends one list"
         );
         let beside = ActionTarget::at([6.4, 0.0, 0.0]);
         let ran = loader
@@ -274,6 +295,11 @@ mod tests {
         assert_eq!(
             ran, "0Open the Safe at (6, 0, 0) to change who may open it.",
             "a panel left on the Safe opened before is stale"
+        );
+        assert_eq!(
+            open_at(&loader),
+            Some((2, 0, 0)),
+            "and hears the open Safe's list at once"
         );
         let bobs = ActionTarget::at([0.0, 0.0, 6.0]);
         let ran = loader

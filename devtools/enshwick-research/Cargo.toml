@@ -153,6 +153,24 @@ age = 399
 "research.impact_attribute" = 0x18_5a40
 "research.skill_change" = 0x91_5fb0
 
+[[package.metadata.enshwick.builds]]
+side = "server"
+guid = "1c129660cd6efc4f9f0b21652d5ff2bf"
+age = 479
+
+[package.metadata.enshwick.builds.symbols]
+"research.impact_attribute" = 0x18_b0e0
+"research.skill_change" = 0x91_fe10
+
+[[package.metadata.enshwick.builds]]
+side = "server"
+guid = "f1e760a53ff247409ab91462e88b8f49"
+age = 224
+
+[package.metadata.enshwick.builds.symbols]
+"research.impact_attribute" = 0x18_b0e0
+"research.skill_change" = 0x91_fe90
+
 [package.metadata.xtask]
 windows-only = true
 

@@ -342,11 +342,21 @@ mod tests {
             for skew in [0, 1] {
                 let dir = own_dir().join(format!("{research}-{skew}"));
                 std::fs::create_dir_all(&dir).unwrap();
-                let only = format!(
-                    "enabled = true\ntooltip = false\nui = false\njoin = false\nentities = false\n\
-                     impact_health = false\nfibers = false\nskills = false\nrespawn = false\n\
-                     {setting} = true\n"
-                );
+                let features = [
+                    "tooltip",
+                    "ui",
+                    "join",
+                    "entities",
+                    "impact_health",
+                    "fibers",
+                    "skills",
+                    "respawn",
+                ];
+                let only = features
+                    .iter()
+                    .fold("enabled = true\n".to_owned(), |text, f| {
+                        format!("{text}{f} = {}\n", *f == setting)
+                    });
                 std::fs::write(dir.join("settings.toml"), only).unwrap();
                 let loader = enshwick::test::FakeHost::new()
                     .developer_tools(true)

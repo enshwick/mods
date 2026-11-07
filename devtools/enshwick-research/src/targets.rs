@@ -108,7 +108,7 @@ fn every_target_is_pinned_once_on_every_build_of_each_side_that_pins_it() {
             .filter(|row| sides.contains(&row.side))
             .map(|row| row.build)
             .collect();
-        builds.sort_unstable_by_key(|b| (*b.guid(), b.age()));
+        builds.sort_unstable_by_key(|b| (b.guid(), b.age()));
         builds.dedup();
         for build in builds {
             let count = rows

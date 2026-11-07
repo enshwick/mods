@@ -70,8 +70,8 @@ const REFERENCES: [(&str, &str, usize); 4] = [
 // ast-grep-ignore: engine-names-stay-in-loader
 pub(crate) const LOCAL_PLAYER: &str = "keen::ecs::ClientPlayerInput";
 
-/// The engine's layout on client build 1269579, as the loader's build
-/// table names it.
+/// The engine's layout on client build 1269579, under the loader's constant
+/// names; [`LAYOUT`] checks it against the loader's on the running build.
 mod layout {
     /// `ecs.context_entity_world`: the query descriptor's entity world.
     pub(super) const CONTEXT_WORLD: usize = 0x30;
@@ -155,52 +155,65 @@ enshwick::detour! {
     static CLIENT_CURSOR: unsafe extern "system" fn(ctx: *mut u64) = client_cursor;
 }
 
-/// The client's cursor system and the engine functions it calls, found on
-/// client build 1269579 and the same on every client build the manifest
-/// pins. Each prologue is as long as it takes for no other function to open
-/// alike but an identical copy, which for the entity and type lookups runs
-/// through their first branch.
+/// The client's cursor system, found on client build 1269579 and the same on
+/// every kept client build, its prologue as long as it takes for no other
+/// place in the code to open alike.
 pub(crate) const CURSOR: memory::Target = memory::Target {
-    symbol: "research.client_cursor",
+    name: "research.client_cursor",
+    body: &[],
+    copies: false,
     prologues: &[&[
         0x48, 0x89, 0x4c, 0x24, 0x08, 0x55, 0x41, 0x54, 0x48, 0x8d, 0xac, 0x24, 0x88, 0xe7, 0xff,
         0xff,
     ]],
 };
-pub(crate) const CALLED: [memory::Target; 4] = [
-    memory::Target {
-        symbol: "research.entities_with",
-        prologues: &[&[
-            0x40, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x48, 0x83, 0xec, 0x38, 0x4c, 0x8b, 0x2a,
-        ]],
-    },
-    memory::Target {
-        symbol: "research.entity_slot",
-        prologues: &[&[
-            0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x83, 0x79, 0x54, 0x00,
-            0x4c, 0x8b, 0xc9, 0x4c, 0x8b, 0x59, 0x10, 0x74, 0x75,
-        ]],
-    },
-    memory::Target {
-        symbol: "research.type_index",
-        prologues: &[&[
-            0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x83, 0x79, 0x54, 0x00,
-            0x4c, 0x8b, 0xc9, 0x48, 0x8b, 0x59, 0x10, 0x74, 0x53, 0x44, 0x8b, 0x12,
-        ]],
-    },
-    memory::Target {
-        symbol: "research.component_read_raw",
-        prologues: &[&[
-            0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x44, 0x89, 0x4c, 0x24,
-            0x20, 0x57, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8d, 0xba, 0x48, 0x01, 0x00, 0x00,
-        ]],
-    },
+
+/// The engine functions the walk calls, as the loader routes and checks
+/// them on every build.
+pub(crate) const CALLED: [&str; 4] = [
+    "ecs.entities_with",
+    "ecs.entity_slot",
+    "ecs.type_index",
+    "ecs.component_read_raw",
 ];
 
-/// The address of a checked target as the function pointer types take it.
-fn address(load: &Load<'_>, code: &[u8], target: &memory::Target) -> Result<usize, Off> {
-    usize::try_from(target.checked(load, code)?)
-        .map_err(|_| Off::new(format!("{}: address out of range", target.symbol)))
+/// The loader's constants for the layout the walk reads, each with the
+/// value of [`layout`] it must equal.
+pub(crate) const LAYOUT: [(&str, usize); 9] = [
+    ("ecs.context_entity_world", layout::CONTEXT_WORLD),
+    ("ecs.registry_type_map", layout::REGISTRY_MAPS[0]),
+    ("ecs.registry_type_map_fallback", layout::REGISTRY_MAPS[1]),
+    ("ecs.entity_map", layout::ENTITY_MAP),
+    ("ecs.entity_map_capacity", layout::ENTITY_CAPACITY),
+    ("ecs.entity_records", layout::ENTITY_RECORDS),
+    ("ecs.record_template", layout::RECORD_TEMPLATE),
+    ("ecs.entities_entry_size", layout::ENTRY_SIZE),
+    ("ecs.entities_entry_transform", layout::ENTRY_TRANSFORM),
+];
+
+/// The address the loader gives an engine function, as the function pointer
+/// types take it.
+fn address(load: &Load<'_>, symbol: &str) -> Result<usize, Off> {
+    usize::try_from(load.symbol(symbol)?)
+        .map_err(|_| Off::new(format!("{symbol}: address out of range")))
+}
+
+/// Whether the loader's layout on the running build is the one the walk
+/// reads.
+///
+/// # Errors
+///
+/// [`Off`] naming the first constant the loader lacks or gives another value.
+fn layout_holds(load: &Load<'_>) -> Result<(), Off> {
+    for (constant, mine) in LAYOUT {
+        let theirs = load.constant(constant)?;
+        if theirs != mine as u64 {
+            return Err(Off::new(format!(
+                "{constant} is {theirs:#x} on this build, the walk reads {mine:#x}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Links the client side: the `client_cursor` system and the engine
@@ -208,13 +221,15 @@ fn address(load: &Load<'_>, code: &[u8], target: &memory::Target) -> Result<usiz
 ///
 /// # Errors
 ///
-/// [`Off`] when a site's bytes differ from the pinned builds, a type is not
-/// reflected or the hook is refused.
+/// [`Off`] when the cursor system's prologue opens no place or several, the
+/// loader lacks an engine function or its layout differs from the walk's, a
+/// type is not reflected or the hook is refused.
 pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> {
-    let code = load.code()?;
-    let cursor = address(load, code, &CURSOR)?;
+    let [cursor] = memory::find([&CURSOR], load.code()?);
+    let cursor = cursor?;
+    layout_holds(load)?;
     let [entities_with, entity_slot, type_index, read_component] =
-        CALLED.each_ref().map(|target| address(load, code, target));
+        CALLED.map(|symbol| address(load, symbol));
     let (entities_with, entity_slot, type_index, read_component) =
         (entities_with?, entity_slot?, type_index?, read_component?);
     let references = REFERENCES
@@ -226,17 +241,17 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
         })
         .collect();
     let engine = Engine {
-        // SAFETY: each address holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // SAFETY: the loader's `ecs.entities_with`, routed and checked on
+        // this build, with this signature since client build 1269579.
         entities_with: unsafe { core::mem::transmute::<usize, EntitiesWith>(entities_with) },
-        // SAFETY: `entity_slot` holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // SAFETY: the loader's `ecs.entity_slot`, routed and checked on this
+        // build, with this signature since client build 1269579.
         entity_slot: unsafe { core::mem::transmute::<usize, EntitySlot>(entity_slot) },
-        // SAFETY: `type_index` holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // SAFETY: the loader's `ecs.type_index`, routed and checked on this
+        // build, with this signature since client build 1269579.
         type_index: unsafe { core::mem::transmute::<usize, TypeIndex>(type_index) },
-        // SAFETY: `read_component` holds the engine function with this
-        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
+        // SAFETY: the loader's `ecs.component_read_raw`, routed and checked on
+        // this build, with this signature since client build 1269579.
         read_component: unsafe { core::mem::transmute::<usize, ReadComponent>(read_component) },
         transform: world.transform_type().hash(),
         local_player: ComponentType::resolve(load, LOCAL_PLAYER)?.hash(),
@@ -245,9 +260,9 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
     };
     let _first = ENGINE.set(engine);
     // SAFETY: the client's cursor system, of the type `CLIENT_CURSOR`
-    // declares on the pinned client builds, found on 1269579, its first
-    // bytes checked above.
-    unsafe { load.hook(&CLIENT_CURSOR, cursor as u64) }
+    // declares on the kept client builds, found on 1269579, the one place
+    // its prologue opens.
+    unsafe { load.hook(&CLIENT_CURSOR, cursor) }
 }
 
 /// Links the server side: a sweep every five seconds on the server's game

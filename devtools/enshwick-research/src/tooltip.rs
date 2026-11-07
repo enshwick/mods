@@ -3,8 +3,9 @@
 //! stat rows, and of the function that draws the rows, logging what each
 //! call is handed whenever it changes.
 //!
-//! Every hook only reads. Each site's first bytes are checked against the
-//! prologues it has on the pinned builds; a site that differs stays unhooked.
+//! Every hook only reads. Each site is found by the prologues it has on the
+//! kept builds; a site they find nowhere, or in more than one place, stays
+//! unhooked.
 
 use core::fmt::Write as _;
 use core::hash::Hasher as _;
@@ -47,7 +48,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "tooltip",
         target: memory::Target {
-            symbol: "research.tooltip",
+            name: "research.tooltip",
+            body: &[],
+            copies: false,
             prologues: &[
                 &[
                     0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x55, 0x48, 0x8d,
@@ -65,7 +68,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "tooltip_body",
         target: memory::Target {
-            symbol: "research.tooltip_body",
+            name: "research.tooltip_body",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
                 0x8d, 0xac, 0x24, 0x18, 0xe7, 0xff, 0xff, 0xb8, 0xe8, 0x19, 0x00, 0x00,
@@ -76,7 +81,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "stat_rows",
         target: memory::Target {
-            symbol: "research.stat_rows",
+            name: "research.stat_rows",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x48, 0x89, 0x50, 0x10, 0x48, 0x89, 0x48, 0x08, 0x55, 0x53, 0x56,
                 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8d, 0xa8, 0x88, 0xf3,
@@ -88,7 +95,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_compare",
         target: memory::Target {
-            symbol: "research.viewer_compare",
+            name: "research.viewer_compare",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x40, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d, 0xac, 0x24,
                 0xe8, 0xf6,
@@ -99,7 +108,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_b562c0",
         target: memory::Target {
-            symbol: "research.viewer_b562c0",
+            name: "research.viewer_b562c0",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x56, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
                 0x8d, 0xa8,
@@ -110,7 +121,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_b56b80",
         target: memory::Target {
-            symbol: "research.viewer_b56b80",
+            name: "research.viewer_b56b80",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x53, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d,
                 0xa8, 0xa8,
@@ -121,7 +134,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_beb220",
         target: memory::Target {
-            symbol: "research.viewer_beb220",
+            name: "research.viewer_beb220",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x89, 0x5c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x55, 0x57, 0x41, 0x56,
                 0x48, 0x8d, 0xac, 0x24, 0x40, 0xf7, 0xff, 0xff,
@@ -132,7 +147,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_bebb60",
         target: memory::Target {
-            symbol: "research.viewer_bebb60",
+            name: "research.viewer_bebb60",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89, 0x7c, 0x24, 0x20, 0x55, 0x41, 0x54, 0x41,
                 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8d, 0xac, 0x24, 0x00, 0xf8, 0xff, 0xff, 0x48,
@@ -144,7 +161,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_c3da50",
         target: memory::Target {
-            symbol: "research.viewer_c3da50",
+            name: "research.viewer_c3da50",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x48, 0x89, 0x58, 0x20, 0x55, 0x48, 0x8d, 0xa8, 0xd8, 0xfe, 0xff,
                 0xff, 0x48,
@@ -155,7 +174,9 @@ pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "viewer_b55140",
         target: memory::Target {
-            symbol: "research.viewer_b55140",
+            name: "research.viewer_b55140",
+            body: &[],
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x48, 0x8d, 0xa8, 0x38, 0xfc, 0xff, 0xff,
                 0x48, 0x81,
@@ -205,7 +226,7 @@ static LOOKED_FOR_COUNT: AtomicU32 = AtomicU32::new(0);
 /// Hooks every site whose bytes match; returns how many it hooked.
 pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Result<usize, Off> {
     let code = load.code()?;
-    let checked = SITES.each_ref().map(|site| site.target.checked(load, code));
+    let checked = memory::find(SITES.each_ref().map(|site| &site.target), code);
     let _first = SHARED.set(Shared {
         start: Instant::now(),
         base: memory::image_base(),
@@ -226,9 +247,9 @@ pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Res
             }
         };
         let kind = site.kind;
-        // SAFETY: the site's bytes match a prologue it has on the client
-        // builds the manifest pins, found on 1269579, where it starts an
-        // instruction; the handler only reads the registers.
+        // SAFETY: the one place in the code that opens with a prologue the
+        // site has on the kept client builds, found on 1269579, where it
+        // starts an instruction; the handler only reads the registers.
         match unsafe { load.hook_at(address, move |registers| seen(index, kind, registers)) } {
             Ok(()) => hooked += 1,
             Err(off) => enshwick::warn!("R1 {} off: {off}", site.name),

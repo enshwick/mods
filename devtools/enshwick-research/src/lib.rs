@@ -316,29 +316,32 @@ mod tests {
         assert!(marked("[5]"), "{:?}", loader.logs());
     }
 
-    /// The game code of a fake host: each target's first prologue in a slot
-    /// of its own, padded with traps, and each target's symbol `skew` bytes
-    /// into its slot.
-    fn code_of(
-        targets: &[&memory::Target],
-        skew: u64,
-    ) -> (&'static [u8], Vec<(&'static str, u64)>) {
-        const SLOT: usize = 64;
-        let mut code = vec![0xccu8; SLOT * targets.len()];
-        for (slot, target) in code.chunks_mut(SLOT).zip(targets) {
-            slot[..target.prologues[0].len()].copy_from_slice(target.prologues[0]);
+    /// The game code of a fake host: `copies` runs of slots padded with
+    /// traps, each target's first prologue and its body in a slot of its own
+    /// in each run;
+    /// where each target's first copy opens.
+    fn code_of(targets: &[&memory::Target], copies: usize) -> (&'static [u8], Vec<u64>) {
+        const SLOT: usize = 256;
+        let mut code = vec![0xccu8; SLOT * targets.len() * copies.max(1)];
+        for (n, slot) in code.chunks_mut(SLOT).enumerate() {
+            if n / targets.len() < copies {
+                let target = targets[n % targets.len()];
+                for (at, run) in
+                    core::iter::once((0, target.prologues[0])).chain(target.body.iter().copied())
+                {
+                    slot[at..at + run.len()].copy_from_slice(run);
+                }
+            }
         }
         let code: &'static [u8] = Vec::leak(code);
-        let symbols = targets
-            .iter()
-            .enumerate()
-            .map(|(n, t)| (t.symbol, (code.as_ptr().addr() + n * SLOT) as u64 + skew))
+        let first = (0..targets.len())
+            .map(|n| (code.as_ptr().addr() + n * SLOT) as u64)
             .collect();
-        (code, symbols)
+        (code, first)
     }
 
     /// A feature's setting, side, targets, how many of them it hooks, the
-    /// line when every target opens as pinned, and the line when none does.
+    /// line when each target opens one place, and the line when none does.
     type Case = (
         &'static str,
         Side,
@@ -349,13 +352,14 @@ mod tests {
     );
 
     /// Starts the mod with only `setting` on, over `code` with `symbols` and
-    /// `constants`; its log lines and how many hooks landed on a symbol.
+    /// `constants`; its log lines and how many hooks landed on `watched`.
     fn started_with_only(
         setting: &str,
         side: Side,
         code: &'static [u8],
         symbols: &[(&str, u64)],
         constants: &[(&str, u64)],
+        watched: &[u64],
     ) -> (Vec<String>, usize) {
         let features = [
             "tooltip",
@@ -375,7 +379,6 @@ mod tests {
                 format!("{text}{f} = {}\n", *f == setting)
             });
         std::fs::write(dir.join("settings.toml"), only).unwrap();
-        let pinned: Vec<u64> = symbols.iter().map(|&(_, at)| at).collect();
         let host = enshwick::test::FakeHost::new()
             .developer_tools(true)
             .side(side)
@@ -400,7 +403,7 @@ mod tests {
             .iter()
             .map(|hook| hook.target)
             .chain(loader.mid_hooks())
-            .filter(|at| pinned.contains(at))
+            .filter(|at| watched.contains(at))
             .count();
         let logs = loader.logs().into_iter().map(|(_, line)| line).collect();
         (logs, hooked)
@@ -422,8 +425,9 @@ mod tests {
                 ("ui.main_entry.bytes", main),
                 ("ui.pause_entry.bytes", pause),
             ];
+            let watched = symbols.map(|(_, at)| at);
             let (logs, hooked) =
-                started_with_only("join", Side::CLIENT, code, &symbols, &constants);
+                started_with_only("join", Side::CLIENT, code, &symbols, &constants, &watched);
             assert_eq!(hooked, hooks, "{logs:?}");
             let off = logs
                 .iter()
@@ -432,14 +436,50 @@ mod tests {
         }
     }
 
+    /// A symbol or constant the fake host gives, by name.
+    type Row = (&'static str, u64);
+
+    /// The loader's rows the client walk takes: its engine functions, at
+    /// addresses it never calls in a test, and its layout as the walk reads it.
+    fn walk_rows() -> ([Row; 4], [Row; 9]) {
+        (
+            entities::CALLED.map(|symbol| (symbol, 0x1000)),
+            entities::LAYOUT.map(|(constant, value)| (constant, value as u64)),
+        )
+    }
+
     #[test]
-    fn each_feature_hooks_or_calls_only_code_that_opens_with_a_prologue_of_its_targets() {
+    fn the_client_walk_turns_off_when_the_loader_lacks_a_function_or_reads_another_layout() {
+        let (functions, layout) = walk_rows();
+        let mut moved = layout;
+        moved[3].1 += 8;
+        let cases: [(&[Row], &[Row], Option<&str>); 3] = [
+            (&functions, &layout, None),
+            (&functions, &moved, Some("ecs.entity_map is 0x150")),
+            (&functions[1..], &layout, Some("ecs.entities_with")),
+        ];
+        for (symbols, constants, off) in cases {
+            let (code, first) = code_of(&[&entities::CURSOR], 1);
+            let (logs, hooked) =
+                started_with_only("entities", Side::CLIENT, code, symbols, constants, &first);
+            let said = |text: &str| {
+                logs.iter()
+                    .any(|l| l.starts_with("R11 client side off: ") && l.contains(text))
+            };
+            match off {
+                None => assert_eq!(hooked, 1, "{logs:?}"),
+                Some(text) => assert!(hooked == 0 && said(text), "{text}: {logs:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn each_feature_hooks_or_calls_its_targets_only_where_one_place_opens_with_their_prologue() {
         let tooltip_sites: &'static [tooltip::Site] = &tooltip::SITES;
         let ui_sites: &'static [ui::Site] = &ui::SITES;
-        let called: &'static [memory::Target] = &entities::CALLED;
         let tooltip = tooltip_sites.iter().map(|site| &site.target).collect();
         let ui = ui_sites.iter().map(|site| &site.target).collect();
-        let entities = core::iter::once(&entities::CURSOR).chain(called).collect();
+        let (functions, layout) = walk_rows();
         let cases: [Case; 5] = [
             (
                 "impact_health",
@@ -447,7 +487,7 @@ mod tests {
                 vec![&health::TARGET],
                 1,
                 "R17 impact health writes looked at",
-                "R17 off: research.impact_attribute: its bytes at",
+                "R17 off: research.impact_attribute: ",
             ),
             (
                 "skills",
@@ -455,7 +495,7 @@ mod tests {
                 vec![&skills::TARGET],
                 1,
                 "R19 skill changes looked at",
-                "R19 off: research.skill_change: its bytes at",
+                "R19 off: research.skill_change: ",
             ),
             (
                 "tooltip",
@@ -476,31 +516,59 @@ mod tests {
             (
                 "entities",
                 Side::CLIENT,
-                entities,
+                vec![&entities::CURSOR],
                 1,
                 "R11 client sweeps every 5 s in a game",
-                "R11 client side off: research.client_cursor: its bytes at",
+                "R11 client side off: research.client_cursor: ",
             ),
         ];
         for (setting, side, targets, hooks, on, off) in cases {
-            for skew in [0, 1] {
-                let (code, symbols) = code_of(&targets, skew);
-                let (logs, hooked) = started_with_only(setting, side, code, &symbols, &[]);
+            // The text field has copies, which the interface hooks each.
+            let doubled = if setting == "ui" { 0 } else { 2 };
+            for copies in [1, 0, doubled] {
+                let (code, first) = code_of(&targets, copies);
+                let (symbols, constants) = if setting == "entities" {
+                    (&functions[..], &layout[..])
+                } else {
+                    (&[][..], &[][..])
+                };
+                let (logs, hooked) =
+                    started_with_only(setting, side, code, symbols, constants, &first);
                 let logged = |text: &str| logs.iter().any(|line| line.starts_with(text));
                 let named = logs
                     .iter()
-                    .filter(|line| line.contains("its bytes at"))
-                    .inspect(|line| assert!(line.contains("; the game is build "), "{line}"))
+                    .filter(|line| line.contains(" in the game's code; the game is build "))
                     .count();
-                if skew == 0 {
+                if copies == 1 {
                     assert!(logged(on), "{setting}: {logs:?}");
                     assert_eq!((named, hooked), (0, hooks), "{setting}: {logs:?}");
                 } else {
-                    assert!(logged(off), "{setting}: {logs:?}");
-                    assert_eq!((named, hooked), (hooks, 0), "{setting}: {logs:?}");
+                    assert!(logged(off), "{setting} {copies}: {logs:?}");
+                    assert_eq!((named, hooked), (hooks, 0), "{setting} {copies}: {logs:?}");
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_interface_hooks_each_copy_of_a_site_with_copies_and_no_site_found_twice_otherwise() {
+        let sites: &'static [ui::Site] = &ui::SITES;
+        let targets: Vec<&memory::Target> = sites.iter().map(|site| &site.target).collect();
+        let (code, first) = code_of(&targets, 2);
+        let run = (first[1] - first[0]) * targets.len() as u64;
+        let second: Vec<u64> = first.iter().map(|at| at + run).collect();
+        let watched: Vec<u64> = first.iter().chain(&second).copied().collect();
+        let (logs, hooked) = started_with_only("ui", Side::CLIENT, code, &[], &[], &watched);
+        let twins = targets.iter().filter(|t| t.copies).count();
+        assert!(twins > 0);
+        let line = format!("R2 R3 R5 {} interface functions looked at", 2 * twins);
+        assert!(logs.contains(&line), "{logs:?}");
+        assert_eq!(hooked, 2 * twins, "{logs:?}");
+        let off = logs
+            .iter()
+            .filter(|l| l.contains("more than one place"))
+            .count();
+        assert_eq!(off, targets.len() - twins, "{logs:?}");
     }
 
     #[test]

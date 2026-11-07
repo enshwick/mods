@@ -2,10 +2,12 @@
 
 A development mod, never released: it logs what a running client does where
 the platform still needs engine facts, to
-`logs/enshwick.research_<date>_<time>.log`. It only reads. The first bytes of
-each function it hooks or calls are checked against those it has on the
-builds its manifest pins, or, for a function the loader finds, against the
-loader's, and what depends on a function that differs stays off. Keep it off games people play.
+`logs/enshwick.research_<date>_<time>.log`. It only reads. It finds each
+function it hooks by the bytes the function opens with, and hooks each
+identical copy of one. It takes the engine functions and layout the loader
+already finds from the loader, and checks a function the loader finds against
+the loader's first bytes. What depends on a function it does not find, or on a
+layout the loader reads differently, stays off. Keep it off games people play.
 
 ## What it logs
 

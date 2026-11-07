@@ -4,7 +4,8 @@
 
 use core::fmt::Write as _;
 
-use enshwick::{Load, Off};
+use enshwick::Off;
+use enshwick::code::{FindError, Pattern, find_each_unique};
 use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
@@ -64,53 +65,138 @@ fn read_exact(address: usize, out: &mut [u8]) -> bool {
     ok != 0 && done == out.len()
 }
 
-/// A game function the mod hooks or calls, its first bytes checked before
-/// either.
+/// A game function the mod hooks or calls, found by the bytes it opens with.
 #[derive(Debug)]
 pub(crate) struct Target {
-    /// The symbol the manifest pins.
-    pub(crate) symbol: &'static str,
-    /// The bytes it opens with, one entry per prologue the pinned builds
-    /// have, each long enough to tell it from every other target.
+    /// The name its log lines and tests give it.
+    pub(crate) name: &'static str,
+    /// The bytes it opens with, one entry per prologue the kept builds have,
+    /// each opening it and no other place but its copies in the code of a
+    /// kept executable.
     pub(crate) prologues: &'static [&'static [u8]],
+    /// Bytes further into it that each place must hold too, as runs at their
+    /// offsets from its start; the bytes between them may be anything.
+    pub(crate) body: &'static [(usize, &'static [u8])],
+    /// Whether other places open as it does as copies of it, the same code
+    /// that other callers reach, so that a call to any copy or a hook on each
+    /// does what the mod needs; [`find`] gives the first.
+    pub(crate) copies: bool,
 }
 
 impl Target {
-    /// Whether `code` opens with one of the target's prologues.
-    pub(crate) fn opens(&self, code: &[u8]) -> bool {
-        self.prologues
-            .iter()
-            .any(|prologue| !prologue.is_empty() && code.starts_with(prologue))
+    /// The search pattern of each prologue with the body's runs; none for an
+    /// empty prologue.
+    fn patterns(&self) -> impl Iterator<Item = Pattern> + '_ {
+        self.prologues.iter().filter_map(|prologue| {
+            let end = self
+                .body
+                .iter()
+                .map(|(at, run)| at + run.len())
+                .fold(prologue.len(), usize::max);
+            let mut bytes = vec![None; end];
+            for (at, run) in core::iter::once((0, *prologue)).chain(self.body.iter().copied()) {
+                for (slot, &byte) in bytes[at..].iter_mut().zip(run) {
+                    *slot = Some(byte);
+                }
+            }
+            let text: Vec<String> = bytes
+                .iter()
+                .map(|b| b.map_or_else(|| "??".to_owned(), |b| format!("{b:02x}")))
+                .collect();
+            (!prologue.is_empty())
+                .then(|| Pattern::parse(&text.join(" ")).ok())
+                .flatten()
+        })
     }
 
-    /// The bytes a check reads: the longest prologue's.
-    pub(crate) fn longest(&self) -> usize {
-        self.prologues.iter().map(|p| p.len()).max().unwrap_or(0)
+    /// The bytes its patterns span.
+    pub(crate) fn span(&self) -> usize {
+        self.patterns().map(|p| p.len()).max().unwrap_or(0)
     }
+}
 
-    /// The target's address, when the game's `code`, as [`Load::code`] gives
-    /// it, opens there with one of its prologues.
-    ///
-    /// # Errors
-    ///
-    /// [`Off`] when the symbol is not pinned for this build or its bytes are
-    /// no prologue of a pinned build.
-    pub(crate) fn checked(&self, load: &Load<'_>, code: &[u8]) -> Result<u64, Off> {
-        let address = load.symbol(self.symbol)?;
-        let found = usize::try_from(address)
-            .ok()
-            .and_then(|at| at.checked_sub(code.as_ptr().addr()))
-            .and_then(|offset| code.get(offset..));
-        match found {
-            Some(found) if self.opens(found) => Ok(address),
-            _ => Err(Off::new(format!(
-                "{}: its bytes at {address:#x} are {:02x?}, no prologue of a pinned build; the game is {}",
-                self.symbol,
-                found.map(|f| &f[..self.longest().min(f.len())]),
-                running_build()
-            ))),
+/// Every place in `code`, as offsets from its start, where one of the
+/// prologues of `target` opens, in order.
+pub(crate) fn places(target: &Target, code: &[u8]) -> Vec<usize> {
+    let mut places: Vec<usize> = target
+        .patterns()
+        .flat_map(|p| p.find_all(code).collect::<Vec<_>>())
+        .collect();
+    places.sort_unstable();
+    places.dedup();
+    places
+}
+
+/// Where each of `targets` sits in `code`, as offsets from its start: the one
+/// place one of its prologues opens, or the first for a target with copies
+/// when each place holds the same bytes over its span, in one pass for all
+/// of them.
+pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, FindError>> {
+    let owned: Vec<(usize, Pattern)> = targets
+        .iter()
+        .enumerate()
+        .flat_map(|(n, target)| target.patterns().map(move |p| (n, p)))
+        .collect();
+    let patterns: Vec<&Pattern> = owned.iter().map(|(_, p)| p).collect();
+    let found = find_each_unique(&patterns, code);
+    let mut each = vec![Err(FindError::None); targets.len()];
+    for ((owner, _), next) in owned.iter().zip(found) {
+        each[*owner] = match (each[*owner], next) {
+            (Err(FindError::None), next) => next,
+            (at, Err(FindError::None)) => at,
+            (Ok(at), Ok(next)) if at == next => Ok(at),
+            _ => Err(FindError::Many),
+        };
+    }
+    for (at, target) in each.iter_mut().zip(targets) {
+        if target.copies && *at == Err(FindError::Many) {
+            *at = first_copy(target, code);
         }
     }
+    each
+}
+
+/// The first place `target` opens in `code`, when every place holds the
+/// bytes the first holds over its span, masked ones too.
+fn first_copy(target: &Target, code: &[u8]) -> Result<usize, FindError> {
+    let places = places(target, code);
+    let span = target.span();
+    let bytes = |at: usize| code.get(at..at + span);
+    let start = *places.first().ok_or(FindError::None)?;
+    let first = bytes(start);
+    if first.is_some() && places.iter().all(|&at| bytes(at) == first) {
+        Ok(start)
+    } else {
+        Err(FindError::Many)
+    }
+}
+
+/// The address of each of `targets` in the game's `code`, as
+/// [`Load::code`](enshwick::Load::code) gives it, found as [`offsets`] finds
+/// it; the bytes there are its prologue.
+///
+/// # Errors
+///
+/// [`Off`] per target, naming it and the running build, when none of its
+/// prologues opens the code or they open more than one place, for a target
+/// with copies places that differ.
+pub(crate) fn find<const N: usize>(targets: [&Target; N], code: &[u8]) -> [Result<u64, Off>; N] {
+    let base = code.as_ptr().addr() as u64;
+    let found = offsets(&targets, code);
+    core::array::from_fn(|n| {
+        found[n].map(|at| base + at as u64).map_err(|e| {
+            let why = if e == FindError::Many {
+                "its prologues open more than one place"
+            } else {
+                "no prologue of it opens any place"
+            };
+            Off::new(format!(
+                "{}: {why} in the game's code; the game is {}",
+                targets[n].name,
+                running_build()
+            ))
+        })
+    })
 }
 
 /// The running game's build fingerprint, as `guid/age`, for a warning.
@@ -213,22 +299,78 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_target_opens_only_code_that_starts_with_one_of_its_prologues() {
-        let target = Target {
-            symbol: "test.target",
+    fn a_target_is_found_only_where_its_prologues_open_exactly_one_place() {
+        let two = Target {
+            name: "test.two",
             prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
+            body: &[],
+            copies: false,
         };
-        assert!(target.opens(&[0x48, 0x89, 0x5c, 0xcc]));
-        assert!(target.opens(&[0x40, 0x55]));
-        assert!(!target.opens(&[0x48, 0x89]));
-        assert!(!target.opens(&[0xcc, 0x48, 0x89, 0x5c]));
-        assert!(!target.opens(&[]));
-        assert_eq!(target.longest(), 3);
+        let prefix = Target {
+            name: "test.prefix",
+            prologues: &[&[0x41, 0x57], &[0x41, 0x57, 0x48]],
+            body: &[],
+            copies: false,
+        };
         let empty = Target {
-            symbol: "test.empty",
+            name: "test.empty",
             prologues: &[&[]],
+            body: &[],
+            copies: false,
         };
-        assert!(!empty.opens(&[0x90]));
+        let code = [0xcc, 0x48, 0x89, 0x5c, 0xcc, 0x41, 0x57, 0x48, 0xcc];
+        assert_eq!(
+            offsets(&[&two, &prefix, &empty], &code),
+            [Ok(1), Ok(5), Err(FindError::None)]
+        );
+        let both = [0x40, 0x55, 0xcc, 0x48, 0x89, 0x5c];
+        assert_eq!(offsets(&[&two], &both), [Err(FindError::Many)]);
+        let twice = [0x40, 0x55, 0xcc, 0x40, 0x55];
+        assert_eq!(offsets(&[&two], &twice), [Err(FindError::Many)]);
+        assert_eq!(offsets(&[&two], &[0x90; 4]), [Err(FindError::None)]);
+    }
+
+    #[test]
+    fn a_target_with_copies_is_found_at_the_first_of_its_places() {
+        let copied = Target {
+            name: "test.copied",
+            prologues: &[&[0x40, 0x55]],
+            body: &[],
+            copies: true,
+        };
+        let twice = [0xcc, 0x40, 0x55, 0xcc, 0x40, 0x55];
+        assert_eq!(offsets(&[&copied], &twice), [Ok(1)]);
+        assert_eq!(places(&copied, &twice), [1, 4]);
+        assert_eq!(offsets(&[&copied], &[0xcc; 4]), [Err(FindError::None)]);
+        assert!(places(&copied, &[0xcc; 4]).is_empty());
+    }
+
+    #[test]
+    fn places_that_differ_in_masked_bytes_are_no_copies_and_turn_the_target_off() {
+        let copied = Target {
+            name: "test.copied",
+            prologues: &[&[0x40, 0x55]],
+            body: &[(3, &[0xc3])],
+            copies: true,
+        };
+        let same = [0x40, 0x55, 0x90, 0xc3, 0x40, 0x55, 0x90, 0xc3];
+        assert_eq!(offsets(&[&copied], &same), [Ok(0)]);
+        let other = [0x40, 0x55, 0x90, 0xc3, 0x40, 0x55, 0x91, 0xc3];
+        assert_eq!(offsets(&[&copied], &other), [Err(FindError::Many)]);
+    }
+
+    #[test]
+    fn a_target_with_a_body_is_found_only_where_its_runs_hold_too() {
+        let bodied = Target {
+            name: "test.bodied",
+            prologues: &[&[0x40, 0x55], &[0x48, 0x89]],
+            body: &[(3, &[0xc3])],
+            copies: false,
+        };
+        assert_eq!(bodied.span(), 4);
+        let code = [0x40, 0x55, 0x90, 0xcc, 0x48, 0x89, 0x90, 0xc3];
+        assert_eq!(offsets(&[&bodied], &code), [Ok(4)]);
+        assert_eq!(places(&bodied, &code[..4]), [0usize; 0]);
     }
 
     #[test]

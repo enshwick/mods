@@ -48,22 +48,24 @@ play.
 
 ## Actions
 
-For administrators, on a dedicated server or while the client hosts a game.
-A client runs the actions without arguments on a key, which the Mods screen's
-controls page changes; the server's console runs each as
-`enshwick.research <action> [value]`.
+For administrators, on a key the Mods screen's controls page changes: while
+the client hosts a game, where the tooltip it looks at runs, and on a
+dedicated server, which sends the keys to each client with Enshwick that
+joins. The action runs where the world does: on a dedicated server, `mark`
+marks the server's log, with its entity, impact health and spawn target
+lines, while the tooltip it dumps is the hosting client's only. The server's
+console runs each as `enshwick.research <action>`.
 
-| Action       | Key | What it does                                                                                  |
-| ------------ | --- | --------------------------------------------------------------------------------------------- |
-| `mark`       | F7  | a marked line in the log; every tooltip function dumps its next call                          |
-| `mark-value` |     | the same, and the value given is looked for in what is dumped                                 |
-| `status`     | F8  | how many tooltip dumps were written since the last mark, and how many impact writes were seen |
+| Action   | Key | What it does                                                                                                          |
+| -------- | --- | --------------------------------------------------------------------------------------------------------------------- |
+| `mark`   | F7  | a marked line in the log; every tooltip function dumps its next call, looking for the values `mark_values` names     |
+| `status` | F8  | how many tooltip dumps were written since the last mark, and how many impact writes were seen                         |
 
 ## Settings
 
 `settings.toml` in the mod's own folder in `mods/`, this machine's switches for
-every world. The mod reads the file itself as the game starts. Without the file,
-the defaults apply:
+every world. The mod reads the file itself as the game starts, and
+`mark_values` again at each mark. Without the file, the defaults apply:
 
 ```toml
 enabled = false
@@ -83,6 +85,9 @@ respawn = true
 # comes between, and the most dumps between two marks.
 dump_interval_ms = 1000
 max_dumps = 300
+# The values each mark looks for in what the tooltip functions are handed,
+# such as an item's id; read again at each mark, so a change needs no restart.
+mark_values = []
 ```
 
 Licensed under [MIT](../LICENSE).

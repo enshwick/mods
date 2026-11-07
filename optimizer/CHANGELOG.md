@@ -6,6 +6,8 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-07
+
 ### Added
 
 - In a game you host, measure mode also writes the frames a second and how

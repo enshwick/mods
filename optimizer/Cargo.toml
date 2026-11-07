@@ -1,6 +1,6 @@
 [package]
 name = "enshwick-optimizer"
-version = "0.1.0"
+version = "0.1.1"
 description = "A dedicated server uses less CPU, on Windows and under Wine or Proton"
 keywords = ["enshrouded", "mod", "wine", "proton", "performance"]
 categories = ["game-development"]

@@ -3,8 +3,9 @@
 A development mod, never released: it logs what a running client does where
 the platform still needs engine facts, to
 `logs/enshwick.research_<date>_<time>.log`. It only reads; the first bytes of each function it hooks or calls are
-checked against the client build its address was found on (1269579), and
-what depends on a function that differs stays off. Keep it off games people
+checked against the prologues it has on the client builds the mod pins
+(1269579, 1273043, 1283531 and 1287369), and what depends on a function
+that differs stays off. Keep it off games people
 play.
 
 ## What it logs

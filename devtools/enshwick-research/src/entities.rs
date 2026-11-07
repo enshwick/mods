@@ -68,7 +68,7 @@ const REFERENCES: [(&str, &str, usize); 4] = [
 // The research tells the local player apart by a component the API has no
 // id for yet.
 // ast-grep-ignore: engine-names-stay-in-loader
-const LOCAL_PLAYER: &str = "keen::ecs::ClientPlayerInput";
+pub(crate) const LOCAL_PLAYER: &str = "keen::ecs::ClientPlayerInput";
 
 /// The engine's layout on client build 1269579, as the loader's build
 /// table names it.

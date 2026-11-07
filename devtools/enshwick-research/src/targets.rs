@@ -10,8 +10,9 @@ use enshwick_gamedata::reflect::{Fingerprint, Image, Layout};
 
 use crate::memory::Target;
 
-/// Every target of the mod.
-fn all() -> Vec<&'static Target> {
+/// Every target of the mod: the tooltip's ten, the interface's five, the
+/// entity walk's five, then R17's and R19's.
+pub(crate) fn all() -> Vec<&'static Target> {
     let tooltip: &'static [crate::tooltip::Site] = &crate::tooltip::SITES;
     let ui: &'static [crate::ui::Site] = &crate::ui::SITES;
     let called: &'static [Target] = &crate::entities::CALLED;

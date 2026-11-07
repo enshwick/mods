@@ -316,54 +316,106 @@ mod tests {
         assert!(marked("[5]"), "{:?}", loader.logs());
     }
 
-    /// Code that opens with `prologue`, then traps.
-    const fn opening(prologue: &[u8]) -> [u8; 32] {
-        let mut code = [0xcc; 32];
-        let mut at = 0;
-        while at < prologue.len() {
-            code[at] = prologue[at];
-            at += 1;
+    /// The game code of a fake host: each target's first prologue in a slot
+    /// of its own, padded with traps, and each target's symbol `skew` bytes
+    /// into its slot.
+    fn code_of(
+        targets: &[&memory::Target],
+        skew: u64,
+    ) -> (&'static [u8], Vec<(&'static str, u64)>) {
+        const SLOT: usize = 64;
+        let mut code = vec![0xccu8; SLOT * targets.len()];
+        for (slot, target) in code.chunks_mut(SLOT).zip(targets) {
+            slot[..target.prologues[0].len()].copy_from_slice(target.prologues[0]);
         }
-        code
+        let code: &'static [u8] = Vec::leak(code);
+        let symbols = targets
+            .iter()
+            .enumerate()
+            .map(|(n, t)| (t.symbol, (code.as_ptr().addr() + n * SLOT) as u64 + skew))
+            .collect();
+        (code, symbols)
     }
 
-    static CODE: [[u8; 32]; 2] = [
-        opening(health::TARGET.prologues[0]),
-        opening(skills::TARGET.prologues[0]),
-    ];
-
     #[test]
-    fn r17_and_r19_hook_only_code_that_opens_with_their_prologue() {
-        let cases = [
-            (&CODE[0], health::TARGET.symbol, "impact_health", "R17"),
-            (&CODE[1], skills::TARGET.symbol, "skills", "R19"),
+    fn each_feature_hooks_or_calls_only_code_that_opens_with_a_prologue_of_its_targets() {
+        let tooltip: Vec<&memory::Target> = targets::all()[..10].to_vec();
+        let ui: Vec<&memory::Target> = targets::all()[10..15].to_vec();
+        let entities: Vec<&memory::Target> = targets::all()[15..20].to_vec();
+        assert_eq!(tooltip[0].symbol, "research.tooltip");
+        assert_eq!(ui[0].symbol, "research.scroll_begin");
+        assert_eq!(entities[0].symbol, "research.client_cursor");
+        // Setting, side, targets, the line when every target opens as
+        // pinned, and the line when none does.
+        let cases: [(&str, Side, Vec<&memory::Target>, &str, &str); 5] = [
+            (
+                "impact_health",
+                Side::SERVER,
+                vec![&health::TARGET],
+                "R17 impact health writes looked at",
+                "R17 off: research.impact_attribute: its bytes at",
+            ),
+            (
+                "skills",
+                Side::SERVER,
+                vec![&skills::TARGET],
+                "R19 skill changes looked at",
+                "R19 off: research.skill_change: its bytes at",
+            ),
+            (
+                "tooltip",
+                Side::CLIENT,
+                tooltip,
+                "R1 10 tooltip functions looked at",
+                "R1 0 tooltip functions looked at",
+            ),
+            (
+                "ui",
+                Side::CLIENT,
+                ui,
+                "R2 R3 R5 5 interface functions looked at",
+                "R2 R3 R5 0 interface functions looked at",
+            ),
+            (
+                "entities",
+                Side::CLIENT,
+                entities,
+                "R11 client sweeps every 5 s in a game",
+                "R11 client side off: research.client_cursor: its bytes at",
+            ),
         ];
-        for (code, symbol, setting, research) in cases {
+        let features = [
+            "tooltip",
+            "ui",
+            "join",
+            "entities",
+            "impact_health",
+            "fibers",
+            "skills",
+            "respawn",
+        ];
+        for (setting, side, targets, on, off) in cases {
             for skew in [0, 1] {
-                let dir = own_dir().join(format!("{research}-{skew}"));
+                let dir = own_dir().join(format!("{setting}-{skew}"));
                 std::fs::create_dir_all(&dir).unwrap();
-                let features = [
-                    "tooltip",
-                    "ui",
-                    "join",
-                    "entities",
-                    "impact_health",
-                    "fibers",
-                    "skills",
-                    "respawn",
-                ];
                 let only = features
                     .iter()
                     .fold("enabled = true\n".to_owned(), |text, f| {
                         format!("{text}{f} = {}\n", *f == setting)
                     });
                 std::fs::write(dir.join("settings.toml"), only).unwrap();
-                let loader = enshwick::test::FakeHost::new()
+                let (code, symbols) = code_of(&targets, skew);
+                let host = enshwick::test::FakeHost::new()
                     .developer_tools(true)
-                    .side(Side::SERVER)
+                    .side(side)
+                    .hosting(side == Side::CLIENT)
                     .mod_dir(dir.to_str().unwrap())
-                    .code(code)
-                    .symbol(symbol, code.as_ptr().addr() as u64 + skew)
+                    .world()
+                    .type_hash(entities::LOCAL_PLAYER, 0x7e57)
+                    .code(code);
+                let loader = symbols
+                    .into_iter()
+                    .fold(host, |host, (name, at)| host.symbol(name, at))
                     .install();
                 // SAFETY: the exports of the `declare_mod!` below.
                 let status = unsafe {
@@ -371,13 +423,16 @@ mod tests {
                 };
                 assert_eq!(status, Status::OK, "{:?}", loader.faults());
                 let logs = loader.logs();
-                let on = logs
-                    .iter()
-                    .any(|(_, line)| line.starts_with(research) && line.ends_with("looked at"));
-                let off = logs.iter().any(|(_, line)| {
-                    line.starts_with(&format!("{research} off: {symbol}: its bytes"))
-                });
-                assert_eq!((on, off), (skew == 0, skew == 1), "{research}: {logs:?}");
+                let logged = |text: &str| logs.iter().any(|(_, line)| line.starts_with(text));
+                if skew == 0 {
+                    assert!(logged(on), "{setting}: {logs:?}");
+                    assert!(
+                        !logs.iter().any(|(_, line)| line.contains("its bytes at")),
+                        "{setting}: {logs:?}"
+                    );
+                } else {
+                    assert!(logged(off), "{setting}: {logs:?}");
+                }
             }
         }
     }

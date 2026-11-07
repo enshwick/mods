@@ -37,7 +37,7 @@ struct Site {
     /// The symbol the manifest pins for the client build.
     symbol: &'static str,
     /// Its first bytes, one entry per prologue the pinned builds have.
-    expected: &'static [[u8; 16]],
+    expected: &'static [[u8; PROLOGUE]],
     kind: Kind,
 }
 
@@ -192,7 +192,7 @@ impl Site {
 
 /// The prologue's bytes at `offset` into `code`, if it holds them all.
 fn prologue(code: &[u8], offset: usize) -> Option<&[u8]> {
-    code.get(offset..offset + PROLOGUE)
+    code.get(offset..)?.get(..PROLOGUE)
 }
 
 /// Hooks every site whose bytes match; returns how many it hooked.
@@ -231,9 +231,9 @@ pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Res
             continue;
         }
         let kind = site.kind;
-        // SAFETY: the site's bytes match a prologue it has on a pinned client
-        // build (1269579 to 1287369), where it starts an instruction; the
-        // handler only reads the registers.
+        // SAFETY: the site's bytes match a prologue it has on the client
+        // builds the manifest pins, found on 1269579, where it starts an
+        // instruction; the handler only reads the registers.
         match unsafe { load.hook_at(address, move |registers| seen(index, kind, registers)) } {
             Ok(()) => hooked += 1,
             Err(off) => enshwick::warn!("R1 {} off: {off}", site.name),
@@ -640,6 +640,7 @@ pub(crate) mod tests {
             assert!(tooltip.matches(prologue(&code, 4)));
             assert!(!tooltip.matches(prologue(&code, 3)));
             assert_eq!(prologue(&code, 5), None);
+            assert_eq!(prologue(&code, usize::MAX), None);
         }
         assert!(!tooltip.matches(Some(&[0xcc; PROLOGUE][..])));
         assert!(!tooltip.matches(None));
@@ -657,20 +658,24 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn every_client_build_pins_each_site_once() {
+    fn every_client_build_pins_each_symbol_any_client_build_pins_once() {
         let pinned = pinned();
         let mut builds: Vec<([u8; 16], u32)> =
             pinned.iter().map(|(_, _, f)| (f.guid, f.age)).collect();
         builds.sort_unstable();
         builds.dedup();
+        let mut names: Vec<&str> = pinned.iter().map(|(name, _, _)| name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
         assert!(!builds.is_empty());
+        assert!(SITES.iter().all(|site| names.contains(&site.symbol)));
         for (guid, age) in builds {
-            for site in &SITES {
+            for name in &names {
                 let rows = pinned
                     .iter()
-                    .filter(|(name, _, f)| name == site.symbol && f.guid == guid && f.age == age)
+                    .filter(|(n, _, f)| n == name && f.guid == guid && f.age == age)
                     .count();
-                assert_eq!(rows, 1, "{} on client build {age}", site.name);
+                assert_eq!(rows, 1, "{name} on client build {age}");
             }
         }
     }

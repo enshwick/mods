@@ -158,7 +158,8 @@ enshwick::detour! {
 /// One function the client side uses.
 struct Site {
     symbol: &'static str,
-    /// Its first bytes on client build 1269579.
+    /// Its first bytes, found on client build 1269579 and the same on every
+    /// client build the manifest pins.
     expected: [u8; 8],
 }
 
@@ -185,7 +186,7 @@ const CALLED: [Site; 4] = [
     },
 ];
 
-/// The address of `site` when its first bytes are those of build 1269579.
+/// The address of `site` when its first bytes are those of the pinned builds.
 fn checked(load: &Load<'_>, code: &[u8], site: &Site) -> Result<usize, Off> {
     let address = usize::try_from(load.symbol(site.symbol)?)
         .map_err(|_| Off::new(format!("{}: address out of range", site.symbol)))?;
@@ -196,7 +197,7 @@ fn checked(load: &Load<'_>, code: &[u8], site: &Site) -> Result<usize, Off> {
         Ok(address)
     } else {
         Err(Off::new(format!(
-            "{}: its bytes at {address:#x} are {found:02x?}, not those of build 1269579",
+            "{}: its bytes at {address:#x} are {found:02x?}, not those of a pinned build",
             site.symbol
         )))
     }
@@ -207,7 +208,7 @@ fn checked(load: &Load<'_>, code: &[u8], site: &Site) -> Result<usize, Off> {
 ///
 /// # Errors
 ///
-/// [`Off`] when a site's bytes differ from build 1269579, a type is not
+/// [`Off`] when a site's bytes differ from the pinned builds, a type is not
 /// reflected or the hook is refused.
 pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> {
     let code = load.code()?;
@@ -226,16 +227,16 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
         .collect();
     let engine = Engine {
         // SAFETY: each address holds the engine function with this
-        // signature on client build 1269579, its first bytes checked above.
+        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
         entities_with: unsafe { core::mem::transmute::<usize, EntitiesWith>(entities_with) },
         // SAFETY: `entity_slot` holds the engine function with this
-        // signature on client build 1269579, its first bytes checked above.
+        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
         entity_slot: unsafe { core::mem::transmute::<usize, EntitySlot>(entity_slot) },
         // SAFETY: `type_index` holds the engine function with this
-        // signature on client build 1269579, its first bytes checked above.
+        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
         type_index: unsafe { core::mem::transmute::<usize, TypeIndex>(type_index) },
         // SAFETY: `read_component` holds the engine function with this
-        // signature on client build 1269579, its first bytes checked above.
+        // signature on the pinned client builds, found on 1269579, its first bytes checked above.
         read_component: unsafe { core::mem::transmute::<usize, ReadComponent>(read_component) },
         transform: world.transform_type().hash(),
         local_player: ComponentType::resolve(load, LOCAL_PLAYER)?.hash(),

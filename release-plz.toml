@@ -80,5 +80,9 @@ name = "enshwick-research"
 release = false
 
 [[package]]
+name = "enshwick-test-content"
+release = false
+
+[[package]]
 name = "xtask"
 release = false

@@ -1,6 +1,6 @@
 [package]
 name = "enshwick-game-rates"
-version = "0.1.0"
+version = "0.1.1"
 description = "Building recipes make more, furniture gives more comfort, and experience, workshops, loot and skill points each have a multiplier"
 keywords = ["enshrouded", "mod", "rates", "recipes", "comfort"]
 categories = ["game-development"]

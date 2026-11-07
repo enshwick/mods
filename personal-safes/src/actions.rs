@@ -3,8 +3,8 @@
 //! the Safe's chest screen, and a list action on Shift+L that names them.
 //!
 //! The Safe at hand is the one the panel names, the open Safe, when the
-//! player may manage it. Without one, from the console or the list key, it
-//! is the one within reach the player may manage: the one they opened last
+//! player may manage it. Without one, from the list key, it is the one
+//! within reach the player may manage: the one they opened last
 //! first, then their own nearest one, else the nearest other they may
 //! manage, as an administrator while `admins_can_open` is on, or one
 //! another mod lets them manage.
@@ -17,11 +17,13 @@ use enshwick::i18n::{Language, Texts};
 use enshwick::world::World;
 use enshwick::{Entity, Load, Off, PlayerKey};
 
-use crate::access::{AllowOutcome, Cell, Safe, Seen, cell, centre, nearest_own, snapshots};
+use crate::access::{
+    AllowOutcome, Cell, Safe, Seen, cell, centre, nearest_own, owner_near, snapshots,
+};
 use crate::texts;
 
-/// How far from the player their Safe may be, in metres; `texts.toml` says
-/// "4 m" in its replies.
+/// How far from the player the Safe at hand may be, in metres, when no Safe
+/// is named; `texts.toml` says "4 m" in its replies.
 pub const REACH: f64 = 4.0;
 
 /// The action that switches players on and off at the Safe at hand.
@@ -114,11 +116,19 @@ fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, FindSubjectError> {
     };
     // The server keeps a target within its reach of the player already.
     if let Some(position) = ask.target.and_then(|target| target.position) {
-        let at = cell(position);
-        let safe = snapshots().owners.load().get(&at).cloned();
-        return match safe.filter(|_| snapshots().may_manage(at, seen, me.entity)) {
-            Some(safe) => Ok(subject(ask, at, &safe)),
-            None => Err(ask.say(texts::COMMAND_NO_SAFE, &[]).into()),
+        let owners = snapshots().owners.load();
+        let target = cell(position);
+        let (at, safe) =
+            owner_near(&owners, target).map_or((target, None), |(at, safe)| (at, Some(safe)));
+        let place = place(at);
+        let here = [(texts::value::AT, place.as_str())];
+        return match safe {
+            Some(safe) if snapshots().may_manage(at, seen, me.entity) => Ok(subject(ask, at, safe)),
+            // An own Safe that another mod's link keeps them from.
+            Some(safe) if safe.owner == me.key => {
+                Err(ask.say(texts::COMMAND_REFUSED, &here).into())
+            }
+            _ => Err(ask.say(texts::COMMAND_NOT_MANAGED, &here).into()),
         };
     }
     let position = world

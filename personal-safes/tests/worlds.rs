@@ -499,6 +499,20 @@ label_language = \"en\"
             access(&ann, 3, false),
             "You may not change who opens your Safe at (1, 0, 0)."
         );
+        let targeted = loader
+            .ask_action_at(
+                &ann,
+                0,
+                "access",
+                "p0000000000000003\tb0",
+                enshwick::actions::ActionTarget::at([1.0, 0.0, 0.0]),
+            )
+            .unwrap();
+        assert_eq!(
+            &targeted[1..],
+            "You may not change who opens your Safe at (1, 0, 0).",
+            "the open Safe names the link's refusal too"
+        );
         let owners = snapshots().owners.load();
         assert_eq!(owners[&(2, 0, 0)].allowed.len(), 1, "Cat stays allowed");
         assert_eq!(owners[&(42, 0, 0)].allowed[0].key, PlayerKey::new(1));

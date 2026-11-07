@@ -235,6 +235,14 @@ mod tests {
             ran.starts_with("1Cat may now open your Safe at (6, 0, 0)."),
             "{ran}"
         );
+        let beside = ActionTarget::at([6.4, 0.0, 0.0]);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, beside)
+            .unwrap();
+        assert_eq!(
+            ran, "0Cat may already open your Safe at (6, 0, 0).",
+            "a target in the next cell finds the Safe kept beside it"
+        );
         let ran = loader
             .ask_actions(ActionCall::RUN, &ann, 0, "access", cat_on)
             .unwrap();
@@ -246,15 +254,18 @@ mod tests {
         let ran = loader
             .ask_action_at(&ann, 0, "access", cat_on, bobs)
             .unwrap();
-        assert!(
-            !ran.starts_with('1'),
-            "never a Safe Ann does not manage: {ran}"
+        assert_eq!(
+            ran, "0You manage no Safe at (0, 0, 6).",
+            "never a Safe Ann does not manage"
         );
         let empty = ActionTarget::at([0.0, 0.0, 1.0]);
         let ran = loader
             .ask_action_at(&ann, 0, "access", cat_on, empty)
             .unwrap();
-        assert!(!ran.starts_with('1'), "never the nearest instead: {ran}");
+        assert_eq!(
+            ran, "0You manage no Safe at (0, 0, 1).",
+            "never the nearest instead"
+        );
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
         let _gone = std::fs::remove_dir_all(&dir);
     }

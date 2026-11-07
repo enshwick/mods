@@ -39,8 +39,7 @@ it or changes who may use it. Switch the player off to take this back, also
 while the player is away. The game confirms each change with a notice.
 
 A switch in the panel acts on the Safe whose screen is open, also when you
-opened it from farther than 4 m. Shift+L and the server console act on the Safe
-at hand: the one you opened last, while it is within 4 m, else the nearest one
+opened it from farther than 4 m. Shift+L acts on the Safe at hand: the one you opened last, while it is within 4 m, else the nearest one
 within 4 m that you may manage, your own first. You may manage your own Safes and the Safes another mod lets you manage
 (see For mod authors). Administrators may manage every Safe while
 `admins_can_open` is on. Nobody else removes a Safe, except administrators while

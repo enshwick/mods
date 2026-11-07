@@ -3,11 +3,9 @@
 A development mod, never released: it logs what a running client does where
 the platform still needs engine facts, to
 `logs/enshwick.research_<date>_<time>.log`. It only reads. The first bytes of
-each function it hooks or calls for tooltips, the interface and the entity
-walk are checked against those it has on the client builds its manifest pins,
-and what depends on a function that differs stays off. The attribute and
-skill writers (R17, R19) are hooked at their pinned addresses without that
-check. Keep it off games people play.
+each function it hooks or calls are checked against those it has on the
+builds its manifest pins, or, for a function the loader finds, against the
+loader's, and what depends on a function that differs stays off. Keep it off games people play.
 
 ## What it logs
 

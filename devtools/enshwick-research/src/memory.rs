@@ -4,6 +4,7 @@
 
 use core::fmt::Write as _;
 
+use enshwick::{Load, Off};
 use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
@@ -61,6 +62,72 @@ fn read_exact(address: usize, out: &mut [u8]) -> bool {
         )
     };
     ok != 0 && done == out.len()
+}
+
+/// A game function the mod hooks or calls, its first bytes checked before
+/// either.
+#[derive(Debug)]
+pub(crate) struct Target {
+    /// The symbol the manifest pins.
+    pub(crate) symbol: &'static str,
+    /// The bytes it opens with, one entry per prologue the pinned builds
+    /// have, each long enough to tell it from every other target.
+    pub(crate) prologues: &'static [&'static [u8]],
+}
+
+impl Target {
+    /// Whether `code` opens with one of the target's prologues.
+    pub(crate) fn opens(&self, code: &[u8]) -> bool {
+        self.prologues
+            .iter()
+            .any(|prologue| !prologue.is_empty() && code.starts_with(prologue))
+    }
+
+    /// The bytes a check reads: the longest prologue's.
+    pub(crate) fn longest(&self) -> usize {
+        self.prologues.iter().map(|p| p.len()).max().unwrap_or(0)
+    }
+
+    /// The target's address, when the game's `code`, as [`Load::code`] gives
+    /// it, opens there with one of its prologues.
+    ///
+    /// # Errors
+    ///
+    /// [`Off`] when the symbol is not pinned for this build or its bytes are
+    /// no prologue of a pinned build.
+    pub(crate) fn checked(&self, load: &Load<'_>, code: &[u8]) -> Result<u64, Off> {
+        let address = load.symbol(self.symbol)?;
+        let found = usize::try_from(address)
+            .ok()
+            .and_then(|at| at.checked_sub(code.as_ptr().addr()))
+            .and_then(|offset| code.get(offset..));
+        match found {
+            Some(found) if self.opens(found) => Ok(address),
+            _ => Err(Off::new(format!(
+                "{}: its bytes at {address:#x} are {:02x?}, no prologue of a pinned build; the game is {}",
+                self.symbol,
+                found.map(|f| &f[..self.longest().min(f.len())]),
+                running_build()
+            ))),
+        }
+    }
+}
+
+/// The running game's build fingerprint, as `guid/age`, for a warning.
+fn running_build() -> String {
+    let Some(host) = enshwick::host() else {
+        return "of an unknown build".to_owned();
+    };
+    let fingerprint = host.build().fingerprint;
+    let mut name = fingerprint
+        .guid
+        .iter()
+        .fold("build ".to_owned(), |mut hex, b| {
+            let _ = write!(hex, "{b:02x}");
+            hex
+        });
+    let _ = write!(name, "/{}", fingerprint.age);
+    name
 }
 
 /// The game image's base in this process.
@@ -144,6 +211,25 @@ pub(crate) fn matches(bytes: &[u8], values: &[u32]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_target_opens_only_code_that_starts_with_one_of_its_prologues() {
+        let target = Target {
+            symbol: "test.target",
+            prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
+        };
+        assert!(target.opens(&[0x48, 0x89, 0x5c, 0xcc]));
+        assert!(target.opens(&[0x40, 0x55]));
+        assert!(!target.opens(&[0x48, 0x89]));
+        assert!(!target.opens(&[0xcc, 0x48, 0x89, 0x5c]));
+        assert!(!target.opens(&[]));
+        assert_eq!(target.longest(), 3);
+        let empty = Target {
+            symbol: "test.empty",
+            prologues: &[&[]],
+        };
+        assert!(!empty.opens(&[0x90]));
+    }
 
     #[test]
     fn a_null_or_kernel_pointer_reads_nothing() {

@@ -32,120 +32,139 @@ enum Kind {
 
 /// One function looked at.
 #[derive(Debug)]
-struct Site {
+pub(crate) struct Site {
     name: &'static str,
-    /// The symbol the manifest pins for the client build.
-    symbol: &'static str,
-    /// Its first bytes, one entry per prologue the pinned builds have.
-    expected: &'static [[u8; PROLOGUE]],
+    pub(crate) target: memory::Target,
     kind: Kind,
 }
 
 /// The sites, found on client build 1269579; from build 1283531 the tooltip
-/// entry also saves `rsi`, so it has two prologues. The tooltip entry has eight callers,
-/// one per window that shows items; the viewers are every caller of the
-/// row drawer.
-const SITES: [Site; 10] = [
+/// entry also saves `rsi`, so it has two prologues, the second opening as
+/// the impact attribute writer does until the frame's setup. The tooltip
+/// entry has eight callers, one per window that shows items; the viewers are
+/// every caller of the row drawer.
+pub(crate) const SITES: [Site; 10] = [
     Site {
         name: "tooltip",
-        symbol: "research.tooltip",
-        expected: &[
-            [
-                0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x55, 0x48, 0x8d, 0xac,
-                0x24, 0x00,
+        target: memory::Target {
+            symbol: "research.tooltip",
+            prologues: &[
+                &[
+                    0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x55, 0x48, 0x8d,
+                    0xac, 0x24, 0x00, 0xff, 0xff, 0xff, 0x48, 0x81, 0xec, 0x00, 0x02, 0x00, 0x00,
+                ],
+                &[
+                    0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89, 0x7c,
+                    0x24, 0x18, 0x55, 0x48, 0x8d, 0xac, 0x24, 0x00, 0xff, 0xff, 0xff, 0x48, 0x81,
+                    0xec, 0x00, 0x02, 0x00, 0x00, 0x48, 0x8b, 0xd9,
+                ],
             ],
-            [
-                0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89, 0x7c, 0x24,
-                0x18, 0x55,
-            ],
-        ],
+        },
         kind: Kind::Show,
     },
     Site {
         name: "tooltip_body",
-        symbol: "research.tooltip_body",
-        expected: &[[
-            0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
-            0x8d, 0xac,
-        ]],
+        target: memory::Target {
+            symbol: "research.tooltip_body",
+            prologues: &[&[
+                0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
+                0x8d, 0xac, 0x24, 0x18, 0xe7, 0xff, 0xff, 0xb8, 0xe8, 0x19, 0x00, 0x00,
+            ]],
+        },
         kind: Kind::Body,
     },
     Site {
         name: "stat_rows",
-        symbol: "research.stat_rows",
-        expected: &[[
-            0x48, 0x8b, 0xc4, 0x48, 0x89, 0x50, 0x10, 0x48, 0x89, 0x48, 0x08, 0x55, 0x53, 0x56,
-            0x57, 0x41,
-        ]],
+        target: memory::Target {
+            symbol: "research.stat_rows",
+            prologues: &[&[
+                0x48, 0x8b, 0xc4, 0x48, 0x89, 0x50, 0x10, 0x48, 0x89, 0x48, 0x08, 0x55, 0x53, 0x56,
+                0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8d, 0xa8, 0x88, 0xf3,
+                0xff, 0xff, 0x48, 0x81, 0xec, 0x38, 0x0d, 0x00, 0x00,
+            ]],
+        },
         kind: Kind::Rows,
     },
     Site {
         name: "viewer_compare",
-        symbol: "research.viewer_compare",
-        expected: &[[
-            0x40, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d, 0xac, 0x24,
-            0xe8, 0xf6,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_compare",
+            prologues: &[&[
+                0x40, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d, 0xac, 0x24,
+                0xe8, 0xf6,
+            ]],
+        },
         kind: Kind::Viewer,
     },
     Site {
         name: "viewer_b562c0",
-        symbol: "research.viewer_b562c0",
-        expected: &[[
-            0x48, 0x8b, 0xc4, 0x55, 0x56, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
-            0x8d, 0xa8,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_b562c0",
+            prologues: &[&[
+                0x48, 0x8b, 0xc4, 0x55, 0x56, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
+                0x8d, 0xa8,
+            ]],
+        },
         kind: Kind::Viewer,
     },
     Site {
         name: "viewer_b56b80",
-        symbol: "research.viewer_b56b80",
-        expected: &[[
-            0x48, 0x8b, 0xc4, 0x55, 0x53, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d,
-            0xa8, 0xa8,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_b56b80",
+            prologues: &[&[
+                0x48, 0x8b, 0xc4, 0x55, 0x53, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d,
+                0xa8, 0xa8,
+            ]],
+        },
         kind: Kind::Viewer,
     },
     Site {
         name: "viewer_beb220",
-        symbol: "research.viewer_beb220",
-        expected: &[[
-            0x48, 0x89, 0x5c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x55, 0x57, 0x41, 0x56,
-            0x48, 0x8d,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_beb220",
+            prologues: &[&[
+                0x48, 0x89, 0x5c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x55, 0x57, 0x41, 0x56,
+                0x48, 0x8d, 0xac, 0x24, 0x40, 0xf7, 0xff, 0xff,
+            ]],
+        },
         kind: Kind::Viewer,
     },
     Site {
         name: "viewer_bebb60",
-        symbol: "research.viewer_bebb60",
-        expected: &[[
-            0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89, 0x7c, 0x24, 0x20, 0x55, 0x41, 0x54, 0x41,
-            0x55, 0x41,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_bebb60",
+            prologues: &[&[
+                0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89, 0x7c, 0x24, 0x20, 0x55, 0x41, 0x54, 0x41,
+                0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8d, 0xac, 0x24, 0x00, 0xf8, 0xff, 0xff, 0x48,
+                0x81, 0xec, 0x00, 0x09, 0x00, 0x00, 0x48, 0x8b, 0x05,
+            ]],
+        },
         kind: Kind::Viewer,
     },
     Site {
         name: "viewer_c3da50",
-        symbol: "research.viewer_c3da50",
-        expected: &[[
-            0x48, 0x8b, 0xc4, 0x48, 0x89, 0x58, 0x20, 0x55, 0x48, 0x8d, 0xa8, 0xd8, 0xfe, 0xff,
-            0xff, 0x48,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_c3da50",
+            prologues: &[&[
+                0x48, 0x8b, 0xc4, 0x48, 0x89, 0x58, 0x20, 0x55, 0x48, 0x8d, 0xa8, 0xd8, 0xfe, 0xff,
+                0xff, 0x48,
+            ]],
+        },
         kind: Kind::Viewer,
     },
     Site {
         name: "viewer_b55140",
-        symbol: "research.viewer_b55140",
-        expected: &[[
-            0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x48, 0x8d, 0xa8, 0x38, 0xfc, 0xff, 0xff,
-            0x48, 0x81,
-        ]],
+        target: memory::Target {
+            symbol: "research.viewer_b55140",
+            prologues: &[&[
+                0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x48, 0x8d, 0xa8, 0x38, 0xfc, 0xff, 0xff,
+                0x48, 0x81,
+            ]],
+        },
         kind: Kind::Viewer,
     },
 ];
 
-/// The bytes of a prologue a site is checked by.
-const PROLOGUE: usize = 16;
 /// The bytes of the tooltip's description: its entry copies this many.
 const DESCRIPTION: usize = 0x180;
 /// The bytes shown behind each argument of a viewer.
@@ -183,21 +202,10 @@ static MARK: AtomicU32 = AtomicU32::new(0);
 static LOOKED_FOR: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 static LOOKED_FOR_COUNT: AtomicU32 = AtomicU32::new(0);
 
-impl Site {
-    /// Whether `found` is one of the site's prologues.
-    fn matches(&self, found: Option<&[u8]>) -> bool {
-        self.expected.iter().any(|bytes| found == Some(&bytes[..]))
-    }
-}
-
-/// The prologue's bytes at `offset` into `code`, if it holds them all.
-fn prologue(code: &[u8], offset: usize) -> Option<&[u8]> {
-    code.get(offset..)?.get(..PROLOGUE)
-}
-
 /// Hooks every site whose bytes match; returns how many it hooked.
 pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Result<usize, Off> {
-    let start = load.code()?.as_ptr().addr();
+    let code = load.code()?;
+    let checked = SITES.each_ref().map(|site| site.target.checked(load, code));
     let _first = SHARED.set(Shared {
         start: Instant::now(),
         base: memory::image_base(),
@@ -209,27 +217,14 @@ pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Res
         mark_seen: Default::default(),
     });
     let mut hooked = 0;
-    for (index, site) in SITES.iter().enumerate() {
-        let address = match load.symbol(site.symbol) {
+    for (index, (site, address)) in SITES.iter().zip(checked).enumerate() {
+        let address = match address {
             Ok(address) => address,
             Err(off) => {
                 enshwick::warn!("R1 {} off: {off}", site.name);
                 continue;
             }
         };
-        let Ok(at) = usize::try_from(address) else {
-            continue;
-        };
-        let found = at
-            .checked_sub(start)
-            .and_then(|offset| prologue(load.code().ok()?, offset));
-        if !site.matches(found) {
-            enshwick::warn!(
-                "R1 {} off: its bytes at {at:#x} are {found:02x?}, no prologue of a pinned build",
-                site.name
-            );
-            continue;
-        }
         let kind = site.kind;
         // SAFETY: the site's bytes match a prologue it has on the client
         // builds the manifest pins, found on 1269579, where it starts an
@@ -492,7 +487,7 @@ fn follow(text: &mut String, region: &Region, base: usize, looked_for: &[u32]) {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
 
     #[test]
@@ -554,149 +549,5 @@ pub(crate) mod tests {
             ..Registers::default()
         };
         assert_ne!(first, signature(&call(Kind::Show, &registers)));
-    }
-
-    /// The client rows the manifest pins, by symbol.
-    pub(crate) fn pinned() -> Vec<(String, u64, enshwick::abi::Fingerprint)> {
-        // SAFETY: `enshwick_mod_query` returns the `'static` manifest of
-        // `declare_mod!`, which no thread writes.
-        let manifest = unsafe { &*crate::enshwick_mod_query() };
-        // SAFETY: `declare_mod!` points at static rows of these counts.
-        let builds = unsafe { core::slice::from_raw_parts(manifest.builds, manifest.build_count) };
-        let mut pinned = Vec::new();
-        for build in builds
-            .iter()
-            .filter(|b| b.side == enshwick::abi::Side::CLIENT)
-        {
-            // SAFETY: `declare_mod!` points each build at static rows of
-            // this count.
-            let symbols = unsafe { core::slice::from_raw_parts(build.symbols, build.symbol_count) };
-            for symbol in symbols {
-                // SAFETY: a static string.
-                let name = unsafe { symbol.name.as_str() }.unwrap_or_default();
-                pinned.push((name.to_owned(), symbol.rva, build.fingerprint));
-            }
-        }
-        pinned
-    }
-
-    /// The client rows the manifest pins for the build of `image`, by symbol.
-    pub(crate) fn pinned_in(image: &enshwick_gamedata::reflect::Image<'_>) -> Vec<(String, u64)> {
-        let build = image.fingerprint();
-        pinned()
-            .into_iter()
-            .filter(|(_, _, f)| {
-                build == Some(enshwick_gamedata::reflect::Fingerprint::new(f.guid, f.age))
-            })
-            .map(|(name, rva, _)| (name, rva))
-            .collect()
-    }
-
-    /// The client in `bytes`, parsed, and its pinned rows; `None`, with the
-    /// reason on stderr, for a build the manifest has no rows for, so a test
-    /// on a newer client skips until it is pinned.
-    pub(crate) fn client_rows(
-        bytes: &[u8],
-    ) -> Option<(enshwick_gamedata::reflect::Image<'_>, Vec<(String, u64)>)> {
-        let Ok(image) = enshwick_gamedata::reflect::Image::parse(
-            bytes,
-            enshwick_gamedata::reflect::Layout::File,
-            None,
-        ) else {
-            unreachable!("the client parses");
-        };
-        let rows = pinned_in(&image);
-        if rows.is_empty() {
-            let build = image.fingerprint().map_or_else(
-                || "without a fingerprint".to_owned(),
-                |f| {
-                    let guid = f.guid().iter().fold(String::new(), |mut hex, b| {
-                        write!(hex, "{b:02x}").unwrap();
-                        hex
-                    });
-                    format!("{guid}/{}", f.age())
-                },
-            );
-            eprintln!(
-                "skipped: client build {build} has no rows in the manifest; pin it to check its sites"
-            );
-            return None;
-        }
-        Some((image, rows))
-    }
-
-    /// The bytes of `ENSH_CLIENT_EXE`; `None` when it is unset or unreadable.
-    pub(crate) fn client_bytes() -> Option<Vec<u8>> {
-        std::fs::read(std::env::var_os("ENSH_CLIENT_EXE")?).ok()
-    }
-
-    #[test]
-    fn a_site_matches_any_of_its_prologues_read_at_its_offset() {
-        let tooltip = &SITES[0];
-        for expected in tooltip.expected {
-            let mut code = vec![0xccu8; 4];
-            code.extend_from_slice(expected);
-            assert_eq!(prologue(&code, 4), Some(&code[4..]));
-            assert!(tooltip.matches(prologue(&code, 4)));
-            assert!(!tooltip.matches(prologue(&code, 3)));
-            assert_eq!(prologue(&code, 5), None);
-            assert_eq!(prologue(&code, usize::MAX), None);
-        }
-        assert!(!tooltip.matches(Some(&[0xcc; PROLOGUE][..])));
-        assert!(!tooltip.matches(None));
-    }
-
-    /// A build without client rows, as a newer client is until it is pinned,
-    /// skips instead of failing; the server's executable is such a build.
-    #[test]
-    fn a_build_without_client_rows_skips_its_site_checks() {
-        let Some(bytes) = std::env::var_os("ENSH_SERVER_EXE").and_then(|p| std::fs::read(p).ok())
-        else {
-            return;
-        };
-        assert!(client_rows(&bytes).is_none());
-    }
-
-    #[test]
-    fn every_client_build_pins_each_symbol_any_client_build_pins_once() {
-        let pinned = pinned();
-        let mut builds: Vec<([u8; 16], u32)> =
-            pinned.iter().map(|(_, _, f)| (f.guid, f.age)).collect();
-        builds.sort_unstable();
-        builds.dedup();
-        let mut names: Vec<&str> = pinned.iter().map(|(name, _, _)| name.as_str()).collect();
-        names.sort_unstable();
-        names.dedup();
-        assert!(!builds.is_empty());
-        assert!(SITES.iter().all(|site| names.contains(&site.symbol)));
-        for (guid, age) in builds {
-            for name in &names {
-                let rows = pinned
-                    .iter()
-                    .filter(|(n, _, f)| n == name && f.guid == guid && f.age == age)
-                    .count();
-                assert_eq!(rows, 1, "{name} on client build {age}");
-            }
-        }
-    }
-
-    /// The bytes each site expects are the client's that `ENSH_CLIENT_EXE`
-    /// names; skipped without it.
-    #[test]
-    fn sites_read_their_bytes_in_the_client() {
-        let Some(bytes) = client_bytes() else {
-            return;
-        };
-        let Some((image, pinned)) = client_rows(&bytes) else {
-            return;
-        };
-        for site in &SITES {
-            let rva = pinned.iter().find(|(name, _)| name == site.symbol);
-            let Some((_, rva)) = rva else {
-                unreachable!("{} is pinned for this client build", site.name);
-            };
-            let found = image.read(image.base() + rva, PROLOGUE as u64);
-            assert!(site.matches(found), "{}: {found:02x?}", site.name);
-        }
     }
 }

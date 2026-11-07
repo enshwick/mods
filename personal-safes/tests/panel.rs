@@ -5,6 +5,7 @@
 #[cfg(test)]
 mod tests {
     use enshwick::abi::{ActionCall, Header, PlayerInfo, Side, Status, UiExtension};
+    use enshwick::actions::ActionTarget;
     use enshwick::content::{EngineFacts, Guid};
     use enshwick::events::WorldLoaded;
     use enshwick::net::Peer;
@@ -190,6 +191,86 @@ mod tests {
     }
 
     #[test]
+    fn a_switch_acts_on_the_safe_its_panel_names_and_a_run_without_one_on_the_nearest() {
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-target-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ann = player(10, 1, "Ann");
+        let host = host();
+        let (transform, here) = (
+            host.hash(facts::CURRENT_TRANSFORM.id()).unwrap(),
+            origin(&host),
+        );
+        let loader = host
+            .player(ann)
+            .player(player(12, 3, "Cat"))
+            .component(Entity(10), transform, &here)
+            .data_dir(dir.join("worlds/world0-pp").to_str().unwrap())
+            .world_key("world0-pp")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
+        // Ann stands at the origin: her Safes 1 m and 6 m away, Bob's 6 m.
+        snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(Entity(701), (12, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(Entity(702), (0, 0, 12), PlayerKey::new(2), "Bob");
+        let cat_on = "p0000000000000003\tb1";
+
+        let far = ActionTarget::at([6.0, 0.0, 0.0]);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, far)
+            .unwrap();
+        assert!(
+            ran.starts_with("1Cat may now open your Safe at (6, 0, 0)."),
+            "{ran}"
+        );
+        let beside = ActionTarget::at([6.4, 0.0, 0.0]);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, beside)
+            .unwrap();
+        assert_eq!(
+            ran, "0Cat may already open your Safe at (6, 0, 0).",
+            "a target in the next cell finds the Safe kept beside it"
+        );
+        let ran = loader
+            .ask_actions(ActionCall::RUN, &ann, 0, "access", cat_on)
+            .unwrap();
+        assert!(
+            ran.starts_with("1Cat may now open your Safe at (1, 0, 0)."),
+            "{ran}"
+        );
+        let bobs = ActionTarget::at([0.0, 0.0, 6.0]);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, bobs)
+            .unwrap();
+        assert_eq!(
+            ran, "0You manage no Safe at (0, 0, 6).",
+            "never a Safe Ann does not manage"
+        );
+        let empty = ActionTarget::at([0.0, 0.0, 1.0]);
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, empty)
+            .unwrap();
+        assert_eq!(
+            ran, "0You manage no Safe at (0, 0, 1).",
+            "never the nearest instead"
+        );
+        assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn the_client_draws_switches_only_for_a_safe_and_a_switch_runs_the_access_action() {
         let loader = host().side(Side::CLIENT).net_peer(Peer::Server).install();
         // SAFETY: the exports of the mod's `declare_mod!`.
@@ -253,6 +334,11 @@ mod tests {
         assert_eq!(
             loader.action_runs(),
             [("access".to_owned(), "p0000000000000002\tb1".to_owned())]
+        );
+        assert_eq!(
+            loader.action_targets(),
+            [Some(ActionTarget::at([1.0, 0.0, 0.0]))],
+            "the open Safe's centre"
         );
         assert_eq!(toggles(&drawn)[0], ("Bob".to_owned(), true));
         assert_eq!(

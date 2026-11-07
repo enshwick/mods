@@ -17,6 +17,9 @@ Each entry says what players notice; a release's notes show its section.
 ### Fixed
 
 - The Ukrainian texts show an apostrophe instead of a box.
+- A switch in the panel acts on the Safe whose screen is open, also when you
+  opened it from farther than 4 m, not on a nearer Safe you manage.
+- A refused switch in the panel names the open Safe's place, not a 4 m reach.
 
 ## [0.1.0] - 2026-11-05
 

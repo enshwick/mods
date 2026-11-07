@@ -20,6 +20,8 @@ Each entry says what players notice; a release's notes show its section.
 - A switch in the panel acts on the Safe whose screen is open, also when you
   opened it from farther than 4 m, not on a nearer Safe you manage.
 - A refused switch in the panel names the open Safe's place, not a 4 m reach.
+- The server refuses a switch for any Safe other than the one you have open, so
+  a panel left on a Safe opened before changes nothing.
 
 ## [0.1.0] - 2026-11-05
 

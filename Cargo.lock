@@ -204,8 +204,8 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "enshwick"
-version = "1.0.0-alpha.12"
-source = "git+https://github.com/enshwick/enshwick?rev=d44d72f332551ab1eba25da56eb07847c09bdea3#d44d72f332551ab1eba25da56eb07847c09bdea3"
+version = "1.0.0-alpha.13"
+source = "git+https://github.com/enshwick/enshwick?rev=945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad#945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -215,6 +215,7 @@ dependencies = [
  "document-features",
  "enshwick-macros",
  "fastrand",
+ "hound",
  "memchr",
  "postcard",
  "rustc-hash",
@@ -272,8 +273,8 @@ dependencies = [
 
 [[package]]
 name = "enshwick-gamedata"
-version = "1.0.0-alpha.12"
-source = "git+https://github.com/enshwick/enshwick?rev=d44d72f332551ab1eba25da56eb07847c09bdea3#d44d72f332551ab1eba25da56eb07847c09bdea3"
+version = "1.0.0-alpha.13"
+source = "git+https://github.com/enshwick/enshwick?rev=945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad#945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad"
 dependencies = [
  "enshwick",
  "iced-x86",
@@ -289,8 +290,8 @@ dependencies = [
 
 [[package]]
 name = "enshwick-luau"
-version = "1.0.0-alpha.12"
-source = "git+https://github.com/enshwick/enshwick?rev=d44d72f332551ab1eba25da56eb07847c09bdea3#d44d72f332551ab1eba25da56eb07847c09bdea3"
+version = "1.0.0-alpha.13"
+source = "git+https://github.com/enshwick/enshwick?rev=945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad#945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad"
 dependencies = [
  "arc-swap",
  "enshwick",
@@ -301,8 +302,8 @@ dependencies = [
 
 [[package]]
 name = "enshwick-macros"
-version = "1.0.0-alpha.12"
-source = "git+https://github.com/enshwick/enshwick?rev=d44d72f332551ab1eba25da56eb07847c09bdea3#d44d72f332551ab1eba25da56eb07847c09bdea3"
+version = "1.0.0-alpha.13"
+source = "git+https://github.com/enshwick/enshwick?rev=945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad#945a1b8f0c9d1971679d9f3bc3dcecc127a5bcad"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -424,6 +425,12 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
+name = "hound"
+version = "3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 
 [[package]]
 name = "iced-x86"

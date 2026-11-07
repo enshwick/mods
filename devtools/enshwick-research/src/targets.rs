@@ -67,6 +67,28 @@ fn build_name(build: Fingerprint) -> String {
     name
 }
 
+fn reported(side: Side, build: Fingerprint) -> bool {
+    let side = if side == Side::CLIENT {
+        enshwick_gamedata::Side::Client
+    } else {
+        enshwick_gamedata::Side::Server
+    };
+    enshwick_gamedata::reported(side, build)
+}
+
+/// A mistyped guid or age names no build, so its rows would never match.
+#[test]
+fn every_row_names_a_reported_build() {
+    for row in pinned() {
+        assert!(
+            reported(row.side, row.build),
+            "{} is pinned on build {}, which has no report",
+            row.symbol,
+            build_name(row.build)
+        );
+    }
+}
+
 #[test]
 fn every_target_is_pinned_once_on_every_build_of_each_side_that_pins_it() {
     let rows = pinned();
@@ -135,12 +157,16 @@ type Opening<'a> = (&'a str, &'a [u8], &'a [u8]);
 /// pinned target's code opens with one of its prologues and no other
 /// target's code does, and any other code opening with one of its prologues
 /// is its twin, so a pin on the wrong function fails the check; skipped
-/// without them, or for a build the manifest does not pin yet.
+/// without them, or for a build with no report yet, and failed for a
+/// reported build the manifest does not pin.
 #[test]
 fn every_pinned_target_opens_with_its_prologue_and_no_other_in_the_executables() {
     let rows = pinned();
     let targets = all();
-    for variable in ["ENSH_CLIENT_EXE", "ENSH_SERVER_EXE"] {
+    for (variable, side) in [
+        ("ENSH_CLIENT_EXE", Side::CLIENT),
+        ("ENSH_SERVER_EXE", Side::SERVER),
+    ] {
         let Some(bytes) = std::env::var_os(variable).and_then(|p| std::fs::read(p).ok()) else {
             continue;
         };
@@ -152,8 +178,13 @@ fn every_pinned_target_opens_with_its_prologue_and_no_other_in_the_executables()
         };
         let here: Vec<&Row> = rows.iter().filter(|row| row.build == build).collect();
         if here.is_empty() {
+            assert!(
+                !reported(side, build),
+                "{variable} is reported build {}, which the manifest does not pin",
+                build_name(build)
+            );
             eprintln!(
-                "skipped: {variable} is build {}, which the manifest does not pin",
+                "skipped: {variable} is build {}, which has no report yet",
                 build_name(build)
             );
             continue;

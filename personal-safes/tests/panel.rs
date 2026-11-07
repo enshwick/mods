@@ -193,7 +193,13 @@ mod tests {
     /// A running server where Ann stands at the origin with her Safes 1 m
     /// and 6 m away and Bob's 6 m away, and the accepted interactions of
     /// her opening the far one and the near one.
-    fn three_safes(dir: &std::path::Path) -> (enshwick::test::Installed, [Vec<u8>; 2]) {
+    fn three_safes() -> (enshwick::test::Installed, [Vec<u8>; 2], std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-target-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         let host = host();
         let opened = [accepted(&host, 10, 701), accepted(&host, 10, 700)];
         let (transform, here) = (
@@ -221,19 +227,13 @@ mod tests {
         snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
         snapshots().placed(Entity(701), (12, 0, 0), PlayerKey::new(1), "Ann");
         snapshots().placed(Entity(702), (0, 0, 12), PlayerKey::new(2), "Bob");
-        (loader, opened)
+        (loader, opened, dir)
     }
 
     #[test]
     fn a_switch_acts_only_on_the_open_safe_and_a_run_without_one_on_the_nearest() {
-        let dir = std::env::temp_dir().join(format!(
-            "enshwick-personal-safes-target-{}",
-            std::process::id()
-        ));
-        let _gone = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
         let ann = player(10, 1, "Ann");
-        let (loader, [open_far, open_near]) = three_safes(&dir);
+        let (loader, [open_far, open_near], dir) = three_safes();
         let cat_on = "p0000000000000003\tb1";
 
         let far = ActionTarget::at([6.0, 0.0, 0.0]);

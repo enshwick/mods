@@ -35,7 +35,8 @@ enum Kind {
     Tabs,
     /// The text input dialog: `rcx` its state.
     TextDialog,
-    /// A text field's start: `rdx` the slice of its text.
+    /// A text field's start: `rdx` the slice of its text. Two copies of it
+    /// serve different callers.
     TextField,
 }
 
@@ -53,6 +54,7 @@ pub(crate) const SITES: [Site; 5] = [
         name: "R2 scroll begin",
         target: memory::Target {
             name: "research.scroll_begin",
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57, 0x48, 0x8d, 0xa8,
                 0xc8, 0xfd, 0xff, 0xff,
@@ -64,6 +66,7 @@ pub(crate) const SITES: [Site; 5] = [
         name: "R2 scroll end",
         target: memory::Target {
             name: "research.scroll_end",
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x53, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8d, 0xa8,
                 0xd8, 0xfc, 0xff, 0xff,
@@ -75,6 +78,7 @@ pub(crate) const SITES: [Site; 5] = [
         name: "R3 tabs",
         target: memory::Target {
             name: "research.tabs",
+            copies: false,
             prologues: &[&[
                 0x48, 0x8b, 0xc4, 0x55, 0x41, 0x55, 0x48, 0x8d, 0xa8, 0x98, 0xfa, 0xff, 0xff,
             ]],
@@ -85,6 +89,7 @@ pub(crate) const SITES: [Site; 5] = [
         name: "R5 text dialog",
         target: memory::Target {
             name: "research.text_dialog",
+            copies: false,
             prologues: &[&[0x48, 0x8b, 0xc4, 0x55, 0x53, 0x41, 0x55, 0x41]],
         },
         kind: Kind::TextDialog,
@@ -93,9 +98,18 @@ pub(crate) const SITES: [Site; 5] = [
         name: "R5 text field",
         target: memory::Target {
             name: "research.text_field",
+            copies: true,
             prologues: &[&[
                 0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x48, 0x83, 0xec,
-                0x60, 0x4c, 0x8b, 0x5a, 0x08,
+                0x60, 0x4c, 0x8b, 0x5a, 0x08, 0x45, 0x33, 0xd2, 0x48, 0x8b, 0x3a, 0x48, 0x8b, 0xf2,
+                0x48, 0x89, 0x7c, 0x24, 0x20, 0x48, 0x8b, 0xd9, 0x4c, 0x89, 0x5c, 0x24, 0x28, 0x48,
+                0xb8, 0x25, 0x23, 0x22, 0x84, 0xe4, 0x9c, 0xf2, 0xcb, 0x4d, 0x85, 0xdb, 0x74, 0x2c,
+                0x48, 0xba, 0xb3, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x0f, 0x1f, 0x40, 0x00,
+                0x66, 0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4a, 0x0f, 0xbe, 0x0c,
+                0x17, 0x49, 0xff, 0xc2, 0x48, 0x33, 0xc1, 0x48, 0x0f, 0xaf, 0xc2, 0x4d, 0x3b, 0xd3,
+                0x72, 0xec, 0x0f, 0x10, 0x44, 0x24, 0x20, 0x48, 0x89, 0x44, 0x24, 0x30, 0x48, 0x8d,
+                0x54, 0x24, 0x40, 0xf2, 0x0f, 0x10, 0x4c, 0x24, 0x30, 0x48, 0x8b, 0xcb, 0x0f, 0x29,
+                0x44, 0x24, 0x40, 0xf2, 0x0f, 0x11, 0x4c, 0x24, 0x50, 0xe8,
             ]],
         },
         kind: Kind::TextField,
@@ -125,7 +139,7 @@ struct Seen {
 
 static SEEN: OnceLock<Seen> = OnceLock::new();
 
-/// Links the sites that read as expected; how many.
+/// Links each site found, and each copy of a site with copies; how many.
 ///
 /// # Errors
 ///
@@ -138,22 +152,40 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
         base: memory::image_base(),
         last: Mutex::new(FxHashMap::default()),
     });
+    let base = code.as_ptr().addr() as u64;
+    let addresses: Vec<Result<Vec<u64>, Off>> = SITES
+        .iter()
+        .zip(checked)
+        .map(|(site, address)| {
+            address.map(|at| {
+                if site.target.copies {
+                    let places = memory::places(&site.target, code);
+                    places.iter().map(|&place| base + place as u64).collect()
+                } else {
+                    vec![at]
+                }
+            })
+        })
+        .collect();
     let mut hooked = 0;
-    for (site, address) in SITES.iter().zip(checked) {
-        let address = match address {
-            Ok(address) => address,
+    for (site, addresses) in SITES.iter().zip(addresses) {
+        let addresses: Vec<u64> = match addresses {
+            Ok(addresses) => addresses,
             Err(off) => {
                 enshwick::warn!("{} off: {off}", site.name);
                 continue;
             }
         };
         let kind = site.kind;
-        // SAFETY: the one place in the code that opens with a prologue the
-        // site has on the kept client builds, found on 1269579, where it
-        // starts an instruction; the handler only reads the registers.
-        match unsafe { load.hook_at(address, move |registers| seen(kind, registers)) } {
-            Ok(()) => hooked += 1,
-            Err(off) => enshwick::warn!("{} off: {off}", site.name),
+        for address in addresses {
+            // SAFETY: the one place in the code that opens with a prologue
+            // the site has on the kept client builds, found on 1269579, or
+            // each copy of it, where it starts an instruction; the handler
+            // only reads the registers.
+            match unsafe { load.hook_at(address, move |registers| seen(kind, registers)) } {
+                Ok(()) => hooked += 1,
+                Err(off) => enshwick::warn!("{} off: {off}", site.name),
+            }
         }
     }
     Ok(hooked)

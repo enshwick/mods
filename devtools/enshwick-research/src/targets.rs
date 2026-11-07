@@ -153,9 +153,9 @@ fn no_prologue_of_one_target_opens_like_one_of_another() {
 }
 
 /// On the executables `ENSH_CLIENT_EXE` and `ENSH_SERVER_EXE` name, each
-/// target of their side is found, as the mod finds it, at one place, the one
-/// it was found at on that build where [`FOUND`] lists the build; skipped
-/// without them.
+/// target of their side is found, as the mod finds it, at one place, or one
+/// of its copies, the one it was found at on that build where [`FOUND`]
+/// lists the build; skipped without them.
 #[test]
 fn every_target_is_found_once_in_the_executables_where_it_was_found_before() {
     for (variable, side) in [
@@ -186,44 +186,23 @@ fn every_target_is_found_once_in_the_executables_where_it_was_found_before() {
         let found = memory::offsets(&targets, code);
         let mut wrong = Vec::new();
         for (n, (target, at)) in targets.iter().zip(found).enumerate() {
+            let places: Vec<u64> = memory::places(target, code).into_iter().map(rva).collect();
             match (at, before) {
-                (Ok(at), Some(before)) if rva(at) != before[n] => wrong.push(format!(
-                    "{} at {:#x}, before at {:#x}",
-                    target.name,
-                    rva(at),
-                    before[n]
-                )),
-                (Ok(_), _) => {}
-                (Err(e), _) => {
-                    let places: Vec<String> = target
-                        .prologues
-                        .iter()
-                        .flat_map(|p| {
-                            code.windows(p.len())
-                                .enumerate()
-                                .filter(move |(_, w)| w == p)
-                                .map(|(at, _)| format!("{:#x}", rva(at)))
-                        })
-                        .collect();
-                    if let Some(before) = before {
-                        let mine = image.read(image.base() + before[n], 0x100).unwrap();
-                        let diffs: Vec<String> = places
-                            .iter()
-                            .map(|p| {
-                                let at = u64::from_str_radix(&p[2..], 16).unwrap();
-                                let other = image.read(image.base() + at, 0x100).unwrap();
-                                let d = mine.iter().zip(other).position(|(a, b)| a != b);
-                                if target.name.ends_with("text_field") {
-                                    eprintln!("OTHER {p}: {:02x?}", &other[..0xc0]);
-                                }
-                                format!("{p}:{d:x?}")
-                            })
-                            .collect();
-                        eprintln!("DIFF {}: {diffs:?}", target.name);
-                        eprintln!("MINE {}: {:02x?}", target.name, &mine[..0xa0]);
-                    }
-                    wrong.push(format!("{}: {e}, at {places:?}", target.name));
+                (Err(e), _) => wrong.push(format!("{}: {e}, at {places:#x?}", target.name)),
+                (Ok(_), Some(before)) if target.copies && !places.contains(&before[n]) => wrong
+                    .push(format!(
+                        "{}: copies at {places:#x?}, before at {:#x}",
+                        target.name, before[n]
+                    )),
+                (Ok(at), Some(before)) if !target.copies && rva(at) != before[n] => {
+                    wrong.push(format!(
+                        "{} at {:#x}, before at {:#x}",
+                        target.name,
+                        rva(at),
+                        before[n]
+                    ));
                 }
+                (Ok(_), _) => {}
             }
         }
         assert!(wrong.is_empty(), "on {}: {wrong:#?}", build_name(build));

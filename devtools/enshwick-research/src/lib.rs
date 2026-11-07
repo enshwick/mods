@@ -320,7 +320,7 @@ mod tests {
     /// traps, each target's first prologue in a slot of its own in each run;
     /// where each target's first copy opens.
     fn code_of(targets: &[&memory::Target], copies: usize) -> (&'static [u8], Vec<u64>) {
-        const SLOT: usize = 64;
+        const SLOT: usize = 256;
         let mut code = vec![0xccu8; SLOT * targets.len() * copies.max(1)];
         for (n, slot) in code.chunks_mut(SLOT).enumerate() {
             if n / targets.len() < copies {
@@ -482,7 +482,9 @@ mod tests {
             ),
         ];
         for (setting, side, targets, hooks, on, off) in cases {
-            for copies in [1, 0, 2] {
+            // The text field has copies, which the interface hooks each.
+            let doubled = if setting == "ui" { 0 } else { 2 };
+            for copies in [1, 0, doubled] {
                 let (code, first) = code_of(&targets, copies);
                 let (logs, hooked) = started_with_only(setting, side, code, &[], &[], &first);
                 let logged = |text: &str| logs.iter().any(|line| line.starts_with(text));
@@ -499,6 +501,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_interface_hooks_each_copy_of_a_site_with_copies_and_no_site_found_twice_otherwise() {
+        let sites: &'static [ui::Site] = &ui::SITES;
+        let targets: Vec<&memory::Target> = sites.iter().map(|site| &site.target).collect();
+        let (code, first) = code_of(&targets, 2);
+        let run = (first[1] - first[0]) * targets.len() as u64;
+        let second: Vec<u64> = first.iter().map(|at| at + run).collect();
+        let watched: Vec<u64> = first.iter().chain(&second).copied().collect();
+        let (logs, hooked) = started_with_only("ui", Side::CLIENT, code, &[], &[], &watched);
+        let twins = targets.iter().filter(|t| t.copies).count();
+        assert!(twins > 0);
+        let line = format!("R2 R3 R5 {} interface functions looked at", 2 * twins);
+        assert!(logs.contains(&line), "{logs:?}");
+        assert_eq!(hooked, 2 * twins, "{logs:?}");
+        let off = logs
+            .iter()
+            .filter(|l| l.contains("more than one place"))
+            .count();
+        assert_eq!(off, targets.len() - twins, "{logs:?}");
     }
 
     #[test]

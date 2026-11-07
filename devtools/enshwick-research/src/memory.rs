@@ -73,6 +73,24 @@ pub(crate) struct Target {
     /// The bytes it opens with, one entry per prologue the kept builds have,
     /// each opening it and no other place in the code of a kept executable.
     pub(crate) prologues: &'static [&'static [u8]],
+    /// Whether other places open with its prologue as copies of it, the same
+    /// code that other callers reach: its prologue then spans what a call to
+    /// any copy or a hook on each relies on, and [`find`] gives the first.
+    pub(crate) copies: bool,
+}
+
+/// Every place in `code`, as offsets from its start, where one of the
+/// prologues of `target` opens, in order.
+pub(crate) fn places(target: &Target, code: &[u8]) -> Vec<usize> {
+    let mut places: Vec<usize> = target
+        .prologues
+        .iter()
+        .filter_map(|p| pattern(p))
+        .flat_map(|p| p.find_all(code).collect::<Vec<_>>())
+        .collect();
+    places.sort_unstable();
+    places.dedup();
+    places
 }
 
 /// The search pattern of `prologue`; `None` for an empty one.
@@ -82,7 +100,8 @@ fn pattern(prologue: &[u8]) -> Option<Pattern> {
 }
 
 /// Where each of `targets` sits in `code`, as offsets from its start: the one
-/// place one of its prologues opens, in one pass for all of them.
+/// place one of its prologues opens, or the first for a target with copies,
+/// in one pass for all of them.
 pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, FindError>> {
     let owned: Vec<(usize, Pattern)> = targets
         .iter()
@@ -104,6 +123,11 @@ pub(crate) fn offsets(targets: &[&Target], code: &[u8]) -> Vec<Result<usize, Fin
             (Ok(at), Ok(next)) if at == next => Ok(at),
             _ => Err(FindError::Many),
         };
+    }
+    for (at, target) in each.iter_mut().zip(targets) {
+        if target.copies && *at == Err(FindError::Many) {
+            *at = places(target, code).first().copied().ok_or(FindError::None);
+        }
     }
     each
 }
@@ -239,14 +263,17 @@ mod tests {
         let two = Target {
             name: "test.two",
             prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
+            copies: false,
         };
         let prefix = Target {
             name: "test.prefix",
             prologues: &[&[0x41, 0x57], &[0x41, 0x57, 0x48]],
+            copies: false,
         };
         let empty = Target {
             name: "test.empty",
             prologues: &[&[]],
+            copies: false,
         };
         let code = [0xcc, 0x48, 0x89, 0x5c, 0xcc, 0x41, 0x57, 0x48, 0xcc];
         assert_eq!(
@@ -258,6 +285,20 @@ mod tests {
         let twice = [0x40, 0x55, 0xcc, 0x40, 0x55];
         assert_eq!(offsets(&[&two], &twice), [Err(FindError::Many)]);
         assert_eq!(offsets(&[&two], &[0x90; 4]), [Err(FindError::None)]);
+    }
+
+    #[test]
+    fn a_target_with_copies_is_found_at_the_first_of_its_places() {
+        let copied = Target {
+            name: "test.copied",
+            prologues: &[&[0x40, 0x55]],
+            copies: true,
+        };
+        let twice = [0xcc, 0x40, 0x55, 0xcc, 0x40, 0x55];
+        assert_eq!(offsets(&[&copied], &twice), [Ok(1)]);
+        assert_eq!(places(&copied, &twice), [1, 4]);
+        assert_eq!(offsets(&[&copied], &[0xcc; 4]), [Err(FindError::None)]);
+        assert!(places(&copied, &[0xcc; 4]).is_empty());
     }
 
     #[test]

@@ -268,7 +268,7 @@ pub struct Access {
     /// Safes seen this session without a recorded owner.
     pub unowned: ArcSwap<FxHashSet<Entity>>,
     /// The Safe each player last opened and may manage, which their panel
-    /// shows and the access action acts on first.
+    /// shows; the only Safe the access action may switch players at.
     pub opened: ArcSwap<FxHashMap<PlayerKey, Cell>>,
 }
 
@@ -522,6 +522,12 @@ impl Access {
             let mut owners = FxHashMap::clone(owners);
             gone = owners.remove(&at);
             owners
+        });
+        // A Safe placed later in the same cell is not the one they opened.
+        self.opened.rcu(|opened| {
+            let mut opened = FxHashMap::clone(opened);
+            opened.retain(|_, open| *open != at);
+            opened
         });
         Some((at, gone.unwrap_or_else(|| Safe::new(owner, ""))))
     }

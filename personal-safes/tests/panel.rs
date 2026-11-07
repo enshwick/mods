@@ -245,6 +245,8 @@ mod tests {
             "never a Safe the server did not see Ann open"
         );
         assert_eq!(told(&loader), [], "no Safe open, so no list to send");
+        let listed = loader.ask_action_at(&ann, 0, "list", "", far).unwrap();
+        assert!(listed.starts_with('1'), "a list changes nothing: {listed}");
         let open_at = |loader: &enshwick::test::Installed| match told(loader).last() {
             Some((_, Shown::Safe { at, .. })) => Some(*at),
             _ => None,
@@ -300,6 +302,15 @@ mod tests {
             open_at(&loader),
             Some((2, 0, 0)),
             "and hears the open Safe's list at once"
+        );
+        assert!(snapshots().removed(Entity(700)).is_some());
+        snapshots().placed(Entity(703), (2, 0, 0), PlayerKey::new(1), "Ann");
+        let ran = loader
+            .ask_action_at(&ann, 0, "access", cat_on, near)
+            .unwrap();
+        assert_eq!(
+            ran, "0Open the Safe at (1, 0, 0) to change who may open it.",
+            "a Safe placed again in the cell was never opened"
         );
         let bobs = ActionTarget::at([0.0, 0.0, 6.0]);
         let ran = loader

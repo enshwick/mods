@@ -106,10 +106,11 @@ fn whose(say: &Say<'_>, safe: &Safe, key: PlayerKey) -> String {
     }
 }
 
-/// The Safe at hand for the player who asks: the one their client named, if
-/// the server saw them open it, or else within reach, one they may manage,
-/// their own first; or why there is none.
-fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, FindSubjectError> {
+/// The Safe at hand for the player who asks: the one their client named, or
+/// else within reach, one they may manage, their own first; or why there is
+/// none. A `switch` takes a named Safe only if the server saw them open it
+/// last; without a name it may act only where they manage within reach.
+fn at_hand(world: World, ask: &Ask<'_>, switch: bool) -> Result<Subject, FindSubjectError> {
     let me = ask.player;
     let seen = Seen {
         key: me.key,
@@ -126,7 +127,7 @@ fn at_hand(world: World, ask: &Ask<'_>) -> Result<Subject, FindSubjectError> {
         return match safe {
             // A client may name any Safe; only the one the server saw them open counts.
             Some(safe) if snapshots().may_manage(at, seen, me.entity) => {
-                if snapshots().opened.load().get(&me.key) == Some(&at) {
+                if !switch || snapshots().opened.load().get(&me.key) == Some(&at) {
                     Ok(subject(ask, at, safe))
                 } else {
                     Err(ask.say(texts::COMMAND_NOT_OPEN, &here).into())
@@ -291,7 +292,7 @@ pub fn declare(
         })
         .help(texts::ACTION_ACCESS_HELP)
         .at(move |ask| {
-            let found = at_hand(world, ask);
+            let found = at_hand(world, ask, true);
             // A switch refused here never runs, so its panel hears the list now, not after a wait.
             // shortcut: the loader asks twice per run (its players, then the run), so the list
             // goes twice; send it once if a refusal ever costs.
@@ -307,7 +308,7 @@ pub fn declare(
         },
     )?;
     actions.add(
-        Action::new(LIST_ACTION, texts::ACTION_LIST).at(move |ask| at_hand(world, ask)),
+        Action::new(LIST_ACTION, texts::ACTION_LIST).at(move |ask| at_hand(world, ask, false)),
         list,
     )?;
     Ok(actions)

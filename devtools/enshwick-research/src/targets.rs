@@ -143,10 +143,18 @@ fn no_prologue_of_one_target_opens_like_one_of_another() {
     }
 }
 
+/// The bytes past which code that opens as a target does is the target's
+/// twin: the same code, so hooking or calling either does the same.
+const TWIN: u64 = 64;
+
+/// A symbol, one of its prologues and its pinned code's first bytes.
+type Opening<'a> = (&'a str, &'a [u8], &'a [u8]);
+
 /// On the executables `ENSH_CLIENT_EXE` and `ENSH_SERVER_EXE` name, each
 /// pinned target's code opens with one of its prologues and no other
-/// target's code does; skipped without them, or for a build the manifest
-/// does not pin yet.
+/// target's code does, and any other code opening with one of its prologues
+/// is its twin, so a pin on the wrong function fails the check; skipped
+/// without them, or for a build the manifest does not pin yet.
 #[test]
 fn every_pinned_target_opens_with_its_prologue_and_no_other_in_the_executables() {
     let rows = pinned();
@@ -188,6 +196,34 @@ fn every_pinned_target_opens_with_its_prologue_and_no_other_in_the_executables()
                         row.symbol, target.symbol
                     );
                 }
+            }
+        }
+        let Some(text) = image.section(".text").map(|s| image.range(s)) else {
+            unreachable!("{variable} has code");
+        };
+        let Some(text_bytes) = image.read(text.start, text.end - text.start) else {
+            unreachable!("{variable} reads its code");
+        };
+        let mut by_first: Vec<Vec<Opening<'_>>> = vec![Vec::new(); 256];
+        for row in &here {
+            let Some(target) = targets.iter().find(|t| t.symbol == row.symbol) else {
+                continue;
+            };
+            let twin = image.read(image.base() + row.rva, TWIN).unwrap_or_default();
+            for prologue in target.prologues {
+                if let Some(&first) = prologue.first() {
+                    by_first[usize::from(first)].push((target.symbol, prologue, twin));
+                }
+            }
+        }
+        for (at, first) in text_bytes.iter().enumerate() {
+            for (symbol, prologue, twin) in &by_first[usize::from(*first)] {
+                let other = &text_bytes[at..];
+                assert!(
+                    !other.starts_with(prologue) || other.starts_with(twin),
+                    "{symbol}: the code at {:#x} opens with {prologue:02x?} but is another function",
+                    text.start - image.base() + at as u64
+                );
             }
         }
     }

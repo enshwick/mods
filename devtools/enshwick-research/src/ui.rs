@@ -130,15 +130,16 @@ static SEEN: OnceLock<Seen> = OnceLock::new();
 ///
 /// [`Off`] when the game's code cannot be read.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
-    load.code()?;
+    let code = load.code()?;
+    let checked = SITES.each_ref().map(|site| site.target.checked(load, code));
     let _first = SEEN.set(Seen {
         start: Instant::now(),
         base: memory::image_base(),
         last: Mutex::new(FxHashMap::default()),
     });
     let mut hooked = 0;
-    for site in &SITES {
-        let address = match site.target.checked(load) {
+    for (site, address) in SITES.iter().zip(checked) {
+        let address = match address {
             Ok(address) => address,
             Err(off) => {
                 enshwick::warn!("{} off: {off}", site.name);

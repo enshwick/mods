@@ -66,7 +66,7 @@ pub(crate) const TARGET: memory::Target = memory::Target {
 
 /// Links the impact programs' attribute writer.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
-    let writer = TARGET.checked(load)?;
+    let writer = TARGET.checked(load, load.code()?)?;
     // SAFETY: the writer `WRITER` declares on the pinned client and server
     // builds, found on 1269579, its first bytes checked above.
     unsafe { load.hook(&WRITER, writer) }

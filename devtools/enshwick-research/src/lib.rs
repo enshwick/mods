@@ -337,53 +337,26 @@ mod tests {
         (code, symbols)
     }
 
-    #[test]
-    fn each_feature_hooks_or_calls_only_code_that_opens_with_a_prologue_of_its_targets() {
-        let tooltip: Vec<&memory::Target> = targets::all()[..10].to_vec();
-        let ui: Vec<&memory::Target> = targets::all()[10..15].to_vec();
-        let entities: Vec<&memory::Target> = targets::all()[15..20].to_vec();
-        assert_eq!(tooltip[0].symbol, "research.tooltip");
-        assert_eq!(ui[0].symbol, "research.scroll_begin");
-        assert_eq!(entities[0].symbol, "research.client_cursor");
-        // Setting, side, targets, the line when every target opens as
-        // pinned, and the line when none does.
-        let cases: [(&str, Side, Vec<&memory::Target>, &str, &str); 5] = [
-            (
-                "impact_health",
-                Side::SERVER,
-                vec![&health::TARGET],
-                "R17 impact health writes looked at",
-                "R17 off: research.impact_attribute: its bytes at",
-            ),
-            (
-                "skills",
-                Side::SERVER,
-                vec![&skills::TARGET],
-                "R19 skill changes looked at",
-                "R19 off: research.skill_change: its bytes at",
-            ),
-            (
-                "tooltip",
-                Side::CLIENT,
-                tooltip,
-                "R1 10 tooltip functions looked at",
-                "R1 0 tooltip functions looked at",
-            ),
-            (
-                "ui",
-                Side::CLIENT,
-                ui,
-                "R2 R3 R5 5 interface functions looked at",
-                "R2 R3 R5 0 interface functions looked at",
-            ),
-            (
-                "entities",
-                Side::CLIENT,
-                entities,
-                "R11 client sweeps every 5 s in a game",
-                "R11 client side off: research.client_cursor: its bytes at",
-            ),
-        ];
+    /// A feature's setting, side, targets, how many of them it hooks, the
+    /// line when every target opens as pinned, and the line when none does.
+    type Case = (
+        &'static str,
+        Side,
+        Vec<&'static memory::Target>,
+        usize,
+        &'static str,
+        &'static str,
+    );
+
+    /// Starts the mod with only `setting` on, over `code` with `symbols` and
+    /// `constants`; its log lines and how many hooks landed on a symbol.
+    fn started_with_only(
+        setting: &str,
+        side: Side,
+        code: &'static [u8],
+        symbols: &[(&str, u64)],
+        constants: &[(&str, u64)],
+    ) -> (Vec<String>, usize) {
         let features = [
             "tooltip",
             "ui",
@@ -394,44 +367,137 @@ mod tests {
             "skills",
             "respawn",
         ];
-        for (setting, side, targets, on, off) in cases {
+        let dir = own_dir().join(format!("{setting}-{:x}", code.as_ptr().addr()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let only = features
+            .iter()
+            .fold("enabled = true\n".to_owned(), |text, f| {
+                format!("{text}{f} = {}\n", *f == setting)
+            });
+        std::fs::write(dir.join("settings.toml"), only).unwrap();
+        let pinned: Vec<u64> = symbols.iter().map(|&(_, at)| at).collect();
+        let host = enshwick::test::FakeHost::new()
+            .developer_tools(true)
+            .side(side)
+            .hosting(side == Side::CLIENT)
+            .mod_dir(dir.to_str().unwrap())
+            .world()
+            .type_hash(entities::LOCAL_PLAYER, 0x7e57)
+            .code(code);
+        let host = symbols
+            .iter()
+            .fold(host, |host, &(name, at)| host.symbol(name, at));
+        let loader = constants
+            .iter()
+            .fold(host, |host, &(name, value)| host.constant(name, value))
+            .install();
+        // SAFETY: the exports of the `declare_mod!` below.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        let hooked = loader
+            .hooks()
+            .iter()
+            .map(|hook| hook.target)
+            .chain(loader.mid_hooks())
+            .filter(|at| pinned.contains(at))
+            .count();
+        let logs = loader.logs().into_iter().map(|(_, line)| line).collect();
+        (logs, hooked)
+    }
+
+    #[test]
+    fn the_join_watches_no_menu_entry_whose_first_bytes_are_not_the_loaders() {
+        let code: &'static [u8] = Vec::leak(vec![0xccu8; 48]);
+        let at = |n: usize| (code.as_ptr().addr() + n * 16) as u64;
+        let traps = u64::from_le_bytes([0xcc; 8]);
+        let symbols = [
+            ("net.join_game", at(0)),
+            ("ui.main_entry", at(1)),
+            ("ui.pause_entry", at(2)),
+        ];
+        for (main, pause, hooks) in [(traps, traps, 3), (traps, !traps, 1), (!traps, traps, 1)] {
+            let constants = [
+                ("net.join_game.bytes", traps),
+                ("ui.main_entry.bytes", main),
+                ("ui.pause_entry.bytes", pause),
+            ];
+            let (logs, hooked) =
+                started_with_only("join", Side::CLIENT, code, &symbols, &constants);
+            assert_eq!(hooked, hooks, "{logs:?}");
+            let off = logs
+                .iter()
+                .any(|line| line.starts_with("R8 off: the code at ui."));
+            assert_eq!(off, hooks == 1, "{logs:?}");
+        }
+    }
+
+    #[test]
+    fn each_feature_hooks_or_calls_only_code_that_opens_with_a_prologue_of_its_targets() {
+        let tooltip_sites: &'static [tooltip::Site] = &tooltip::SITES;
+        let ui_sites: &'static [ui::Site] = &ui::SITES;
+        let called: &'static [memory::Target] = &entities::CALLED;
+        let tooltip = tooltip_sites.iter().map(|site| &site.target).collect();
+        let ui = ui_sites.iter().map(|site| &site.target).collect();
+        let entities = core::iter::once(&entities::CURSOR).chain(called).collect();
+        let cases: [Case; 5] = [
+            (
+                "impact_health",
+                Side::SERVER,
+                vec![&health::TARGET],
+                1,
+                "R17 impact health writes looked at",
+                "R17 off: research.impact_attribute: its bytes at",
+            ),
+            (
+                "skills",
+                Side::SERVER,
+                vec![&skills::TARGET],
+                1,
+                "R19 skill changes looked at",
+                "R19 off: research.skill_change: its bytes at",
+            ),
+            (
+                "tooltip",
+                Side::CLIENT,
+                tooltip,
+                tooltip::SITES.len(),
+                "R1 10 tooltip functions looked at",
+                "R1 0 tooltip functions looked at",
+            ),
+            (
+                "ui",
+                Side::CLIENT,
+                ui,
+                ui::SITES.len(),
+                "R2 R3 R5 5 interface functions looked at",
+                "R2 R3 R5 0 interface functions looked at",
+            ),
+            (
+                "entities",
+                Side::CLIENT,
+                entities,
+                1,
+                "R11 client sweeps every 5 s in a game",
+                "R11 client side off: research.client_cursor: its bytes at",
+            ),
+        ];
+        for (setting, side, targets, hooks, on, off) in cases {
             for skew in [0, 1] {
-                let dir = own_dir().join(format!("{setting}-{skew}"));
-                std::fs::create_dir_all(&dir).unwrap();
-                let only = features
-                    .iter()
-                    .fold("enabled = true\n".to_owned(), |text, f| {
-                        format!("{text}{f} = {}\n", *f == setting)
-                    });
-                std::fs::write(dir.join("settings.toml"), only).unwrap();
                 let (code, symbols) = code_of(&targets, skew);
-                let host = enshwick::test::FakeHost::new()
-                    .developer_tools(true)
-                    .side(side)
-                    .hosting(side == Side::CLIENT)
-                    .mod_dir(dir.to_str().unwrap())
-                    .world()
-                    .type_hash(entities::LOCAL_PLAYER, 0x7e57)
-                    .code(code);
-                let loader = symbols
-                    .into_iter()
-                    .fold(host, |host, (name, at)| host.symbol(name, at))
-                    .install();
-                // SAFETY: the exports of the `declare_mod!` below.
-                let status = unsafe {
-                    loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready)
-                };
-                assert_eq!(status, Status::OK, "{:?}", loader.faults());
-                let logs = loader.logs();
-                let logged = |text: &str| logs.iter().any(|(_, line)| line.starts_with(text));
+                let (logs, hooked) = started_with_only(setting, side, code, &symbols, &[]);
+                let logged = |text: &str| logs.iter().any(|line| line.starts_with(text));
+                let named = logs
+                    .iter()
+                    .filter(|line| line.contains("its bytes at"))
+                    .inspect(|line| assert!(line.contains("; the game is build "), "{line}"))
+                    .count();
                 if skew == 0 {
                     assert!(logged(on), "{setting}: {logs:?}");
-                    assert!(
-                        !logs.iter().any(|(_, line)| line.contains("its bytes at")),
-                        "{setting}: {logs:?}"
-                    );
+                    assert_eq!((named, hooked), (0, hooks), "{setting}: {logs:?}");
                 } else {
                     assert!(logged(off), "{setting}: {logs:?}");
+                    assert_eq!((named, hooked), (hooks, 0), "{setting}: {logs:?}");
                 }
             }
         }

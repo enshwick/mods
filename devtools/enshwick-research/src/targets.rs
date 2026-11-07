@@ -68,25 +68,6 @@ fn build_name(build: Fingerprint) -> String {
 }
 
 #[test]
-fn a_target_opens_only_code_that_starts_with_one_of_its_prologues() {
-    let target = Target {
-        symbol: "test.target",
-        prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
-    };
-    assert!(target.opens(&[0x48, 0x89, 0x5c, 0xcc]));
-    assert!(target.opens(&[0x40, 0x55]));
-    assert!(!target.opens(&[0x48, 0x89]));
-    assert!(!target.opens(&[0xcc, 0x48, 0x89, 0x5c]));
-    assert!(!target.opens(&[]));
-    assert_eq!(target.longest(), 3);
-    let empty = Target {
-        symbol: "test.empty",
-        prologues: &[&[]],
-    };
-    assert!(!empty.opens(&[0x90]));
-}
-
-#[test]
 fn every_target_is_pinned_once_on_every_build_of_each_side_that_pins_it() {
     let rows = pinned();
     let targets = all();
@@ -177,14 +158,15 @@ fn every_pinned_target_opens_with_its_prologue_and_no_other_in_the_executables()
             );
             continue;
         }
-        let code = |row: &Row| {
-            let longest = targets.iter().map(|t| t.longest()).max().unwrap_or(0);
-            image
-                .read(image.base() + row.rva, longest as u64)
-                .unwrap_or_default()
+        let code = |row: &Row, len: u64| {
+            let Some(found) = image.read(image.base() + row.rva, len) else {
+                unreachable!("{} reads {len} bytes at {:#x}", row.symbol, row.rva);
+            };
+            found
         };
+        let longest = targets.iter().map(|t| t.longest()).max().unwrap_or(0);
         for row in &here {
-            let found = code(row);
+            let found = code(row, longest as u64);
             for target in &targets {
                 let opens = target.opens(found);
                 if target.symbol == row.symbol {
@@ -209,7 +191,7 @@ fn every_pinned_target_opens_with_its_prologue_and_no_other_in_the_executables()
             let Some(target) = targets.iter().find(|t| t.symbol == row.symbol) else {
                 continue;
             };
-            let twin = image.read(image.base() + row.rva, TWIN).unwrap_or_default();
+            let twin = code(row, TWIN);
             for prologue in target.prologues {
                 if let Some(&first) = prologue.first() {
                     by_first[usize::from(first)].push((target.symbol, prologue, twin));

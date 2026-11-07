@@ -204,7 +204,8 @@ static LOOKED_FOR_COUNT: AtomicU32 = AtomicU32::new(0);
 
 /// Hooks every site whose bytes match; returns how many it hooked.
 pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Result<usize, Off> {
-    load.code()?;
+    let code = load.code()?;
+    let checked = SITES.each_ref().map(|site| site.target.checked(load, code));
     let _first = SHARED.set(Shared {
         start: Instant::now(),
         base: memory::image_base(),
@@ -216,8 +217,8 @@ pub(crate) fn link(load: &mut Load<'_>, interval_ms: u64, max_dumps: u32) -> Res
         mark_seen: Default::default(),
     });
     let mut hooked = 0;
-    for (index, site) in SITES.iter().enumerate() {
-        let address = match site.target.checked(load) {
+    for (index, (site, address)) in SITES.iter().zip(checked).enumerate() {
+        let address = match address {
             Ok(address) => address,
             Err(off) => {
                 enshwick::warn!("R1 {} off: {off}", site.name);

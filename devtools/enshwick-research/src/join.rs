@@ -61,33 +61,41 @@ enshwick::detour! {
         pause_entry;
 }
 
+/// The address of the loader's `symbol` when its first eight bytes are the
+/// loader's `<symbol>.bytes` for this build.
+fn checked(load: &Load<'_>, symbol: &str) -> Result<u64, Off> {
+    let address = load.symbol(symbol)?;
+    let pinned = load.constant(&format!("{symbol}.bytes"))?;
+    let found = usize::try_from(address).ok().and_then(memory::read_u64);
+    if found == Some(pinned) {
+        Ok(address)
+    } else {
+        Err(Off::new(format!(
+            "the code at {symbol} {address:#x} is {found:x?}, not the pinned {pinned:#018x}"
+        )))
+    }
+}
+
 /// Links the join and the menu entries, and logs refused joins.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
-    let join_game = load.symbol("net.join_game")?;
-    let pinned = load.constant("net.join_game.bytes")?;
-    let found = usize::try_from(join_game).ok().and_then(memory::read_u64);
-    if found != Some(pinned) {
-        return Err(Off::new(format!(
-            "the code at the join {join_game:#x} is {found:x?}, not the pinned {pinned:#018x}"
-        )));
-    }
+    let join_game = checked(load, "net.join_game")?;
     // SAFETY: the table's `net.join_game` is the function `JOIN_GAME`
     // declares, its first bytes checked above.
     unsafe { load.hook(&JOIN_GAME, join_game) }?;
     let (main_entry, pause_entry) = (
-        load.symbol("ui.main_entry")?,
-        load.symbol("ui.pause_entry")?,
+        checked(load, "ui.main_entry")?,
+        checked(load, "ui.pause_entry")?,
     );
     for (hook, symbol) in [
         (
             // SAFETY: the table's `ui.main_entry` is the function
-            // `MAIN_ENTRY` declares.
+            // `MAIN_ENTRY` declares, its first bytes checked above.
             unsafe { load.hook(&MAIN_ENTRY, main_entry) },
             "main menu",
         ),
         (
             // SAFETY: the table's `ui.pause_entry` is the function
-            // `PAUSE_ENTRY` declares.
+            // `PAUSE_ENTRY` declares, its first bytes checked above.
             unsafe { load.hook(&PAUSE_ENTRY, pause_entry) },
             "pause menu",
         ),

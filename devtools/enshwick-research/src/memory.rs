@@ -88,16 +88,15 @@ impl Target {
         self.prologues.iter().map(|p| p.len()).max().unwrap_or(0)
     }
 
-    /// The target's address, when the game's code there opens with one of
-    /// its prologues.
+    /// The target's address, when the game's `code`, as [`Load::code`] gives
+    /// it, opens there with one of its prologues.
     ///
     /// # Errors
     ///
-    /// [`Off`] when the symbol is not pinned for this build, the code cannot
-    /// be read, or its bytes are no prologue of a pinned build.
-    pub(crate) fn checked(&self, load: &Load<'_>) -> Result<u64, Off> {
+    /// [`Off`] when the symbol is not pinned for this build or its bytes are
+    /// no prologue of a pinned build.
+    pub(crate) fn checked(&self, load: &Load<'_>, code: &[u8]) -> Result<u64, Off> {
         let address = load.symbol(self.symbol)?;
-        let code = load.code()?;
         let found = usize::try_from(address)
             .ok()
             .and_then(|at| at.checked_sub(code.as_ptr().addr()))
@@ -105,12 +104,30 @@ impl Target {
         match found {
             Some(found) if self.opens(found) => Ok(address),
             _ => Err(Off::new(format!(
-                "{}: its bytes at {address:#x} are {:02x?}, no prologue of a pinned build",
+                "{}: its bytes at {address:#x} are {:02x?}, no prologue of a pinned build; the game is {}",
                 self.symbol,
-                found.map(|f| &f[..self.longest().min(f.len())])
+                found.map(|f| &f[..self.longest().min(f.len())]),
+                running_build()
             ))),
         }
     }
+}
+
+/// The running game's build fingerprint, as `guid/age`, for a warning.
+fn running_build() -> String {
+    let Some(host) = enshwick::host() else {
+        return "of an unknown build".to_owned();
+    };
+    let fingerprint = host.build().fingerprint;
+    let mut name = fingerprint
+        .guid
+        .iter()
+        .fold("build ".to_owned(), |mut hex, b| {
+            let _ = write!(hex, "{b:02x}");
+            hex
+        });
+    let _ = write!(name, "/{}", fingerprint.age);
+    name
 }
 
 /// The game image's base in this process.
@@ -194,6 +211,25 @@ pub(crate) fn matches(bytes: &[u8], values: &[u32]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_target_opens_only_code_that_starts_with_one_of_its_prologues() {
+        let target = Target {
+            symbol: "test.target",
+            prologues: &[&[0x48, 0x89, 0x5c], &[0x40, 0x55]],
+        };
+        assert!(target.opens(&[0x48, 0x89, 0x5c, 0xcc]));
+        assert!(target.opens(&[0x40, 0x55]));
+        assert!(!target.opens(&[0x48, 0x89]));
+        assert!(!target.opens(&[0xcc, 0x48, 0x89, 0x5c]));
+        assert!(!target.opens(&[]));
+        assert_eq!(target.longest(), 3);
+        let empty = Target {
+            symbol: "test.empty",
+            prologues: &[&[]],
+        };
+        assert!(!empty.opens(&[0x90]));
+    }
 
     #[test]
     fn a_null_or_kernel_pointer_reads_nothing() {

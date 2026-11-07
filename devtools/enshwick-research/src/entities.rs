@@ -157,8 +157,9 @@ enshwick::detour! {
 
 /// The client's cursor system and the engine functions it calls, found on
 /// client build 1269579 and the same on every client build the manifest
-/// pins. The entity and type lookups share their first 17 bytes, so each is
-/// checked through the branch whose distance differs.
+/// pins. Each prologue is as long as it takes for no other function to open
+/// alike but an identical copy, which for the entity and type lookups runs
+/// through their first branch.
 pub(crate) const CURSOR: memory::Target = memory::Target {
     symbol: "research.client_cursor",
     prologues: &[&[
@@ -197,8 +198,8 @@ pub(crate) const CALLED: [memory::Target; 4] = [
 ];
 
 /// The address of a checked target as the function pointer types take it.
-fn address(load: &Load<'_>, target: &memory::Target) -> Result<usize, Off> {
-    usize::try_from(target.checked(load)?)
+fn address(load: &Load<'_>, code: &[u8], target: &memory::Target) -> Result<usize, Off> {
+    usize::try_from(target.checked(load, code)?)
         .map_err(|_| Off::new(format!("{}: address out of range", target.symbol)))
 }
 
@@ -210,9 +211,10 @@ fn address(load: &Load<'_>, target: &memory::Target) -> Result<usize, Off> {
 /// [`Off`] when a site's bytes differ from the pinned builds, a type is not
 /// reflected or the hook is refused.
 pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> {
-    let cursor = address(load, &CURSOR)?;
+    let code = load.code()?;
+    let cursor = address(load, code, &CURSOR)?;
     let [entities_with, entity_slot, type_index, read_component] =
-        CALLED.each_ref().map(|target| address(load, target));
+        CALLED.each_ref().map(|target| address(load, code, target));
     let (entities_with, entity_slot, type_index, read_component) =
         (entities_with?, entity_slot?, type_index?, read_component?);
     let references = REFERENCES
@@ -243,7 +245,8 @@ pub(crate) fn link_client(load: &mut Load<'_>, world: World) -> Result<(), Off> 
     };
     let _first = ENGINE.set(engine);
     // SAFETY: the client's cursor system, of the type `CLIENT_CURSOR`
-    // declares on the pinned client builds, its first bytes checked above.
+    // declares on the pinned client builds, found on 1269579, its first
+    // bytes checked above.
     unsafe { load.hook(&CLIENT_CURSOR, cursor as u64) }
 }
 

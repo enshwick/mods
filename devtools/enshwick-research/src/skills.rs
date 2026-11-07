@@ -44,7 +44,7 @@ pub(crate) const TARGET: memory::Target = memory::Target {
 
 /// Links the skill change.
 pub(crate) fn link(load: &mut Load<'_>) -> Result<(), Off> {
-    let change = TARGET.checked(load)?;
+    let change = TARGET.checked(load, load.code()?)?;
     // SAFETY: the skill change `CHANGE` declares on the pinned client and
     // server builds, found on 1269579, its first bytes checked above.
     unsafe { load.hook(&CHANGE, change) }

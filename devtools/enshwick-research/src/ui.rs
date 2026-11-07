@@ -10,8 +10,8 @@
 //!   text field's text whenever it changes.
 //!
 //! Every hook only reads, at the entry of a function, through reads that
-//! cannot fault. Each site's first bytes are checked against the build the
-//! addresses were found on; a site that differs stays unhooked.
+//! cannot fault. Each site's first bytes are checked against those it has
+//! on the pinned builds; a site that differs stays unhooked.
 
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -43,7 +43,8 @@ enum Kind {
 struct Site {
     name: &'static str,
     symbol: &'static str,
-    /// Its first bytes on client build 1269579.
+    /// Its first bytes, found on client build 1269579 and the same on every
+    /// client build the manifest pins.
     expected: [u8; 8],
     kind: Kind,
 }
@@ -133,13 +134,14 @@ pub(crate) fn link(load: &mut Load<'_>) -> Result<usize, Off> {
             .and_then(|offset| load.code().ok()?.get(offset..offset + site.expected.len()));
         if found != Some(&site.expected[..]) {
             enshwick::warn!(
-                "{} off: its bytes at {at:#x} are {found:02x?}, not those of build 1269579",
+                "{} off: its bytes at {at:#x} are {found:02x?}, not those of a pinned build",
                 site.name
             );
             continue;
         }
         let kind = site.kind;
-        // SAFETY: the site's bytes match build 1269579, where it starts an
+        // SAFETY: the site's bytes match those it has on the client builds
+        // the manifest pins, found on 1269579, where it starts an
         // instruction; the handler only reads the registers.
         match unsafe { load.hook_at(address, move |registers| seen(kind, registers)) } {
             Ok(()) => hooked += 1,
@@ -268,20 +270,12 @@ mod tests {
                 site.name
             );
         }
-        let Ok(path) = std::env::var("ENSH_CLIENT_EXE") else {
+        let Some(bytes) = crate::tooltip::tests::client_bytes() else {
             return;
         };
-        let Ok(bytes) = std::fs::read(path) else {
+        let Some((image, rows)) = crate::tooltip::tests::client_rows(&bytes) else {
             return;
         };
-        let Ok(image) = enshwick_gamedata::reflect::Image::parse(
-            &bytes,
-            enshwick_gamedata::reflect::Layout::File,
-            None,
-        ) else {
-            unreachable!("the client parses");
-        };
-        let rows = crate::tooltip::tests::pinned_in(&image);
         for site in &SITES {
             let rva = rows.iter().find(|(name, _)| name == site.symbol);
             let Some((_, rva)) = rva else {

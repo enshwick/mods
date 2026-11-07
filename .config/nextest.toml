@@ -1,0 +1,4 @@
+# A client site test that skips for a build without rows says so on stderr.
+[[profile.default.overrides]]
+filter = 'package(enshwick-research) & test(/bytes_in_the_client$/)'
+success-output = "immediate"

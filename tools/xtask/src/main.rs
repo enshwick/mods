@@ -25,6 +25,7 @@
 
 #![forbid(unsafe_code)]
 
+mod changelog;
 mod crate_rules;
 mod mod_rules;
 mod notes;

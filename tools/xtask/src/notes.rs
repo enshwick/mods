@@ -9,19 +9,23 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::changelog::{self, CHANGELOG};
 use crate::{Package, packages, say};
 
 const USAGE: &str =
     "usage: cargo xtask notes (--unreleased | --unfinished | --package <name>...) [--out <dir>]";
 /// Where the platform comes from; its tags name the loader's releases.
 pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
+/// The repository the mods are released from, for `gh`.
+const REPOSITORY: &str = "enshwick/mods";
 /// The workspace dependency whose commit names the loader a mod builds on.
 const API: &str = "enshwick";
-pub(crate) const CHANGELOG: &str = "CHANGELOG.md";
 /// Which packages release-plz releases.
 const RELEASE_CONFIG: &str = "release-plz.toml";
 /// Only a mod with a player page ships to players.
-pub(crate) const PLAYER_PAGE: &str = "docs/player.md";
+const PLAYER_PAGE: &str = "docs/player.md";
+/// The file of a release that sums its other files.
+const SUMS: &str = "SHA256SUMS";
 /// The list of the mods a run takes, written beside their notes: the
 /// `release` workflow's jobs run once per entry.
 const RELEASES: &str = "releases.json";
@@ -117,6 +121,8 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
                 "package_name": package.name,
                 "version": package.version,
                 "title": title(&config, package)?,
+                "files": built_files(&package.name),
+                "sums": SUMS,
             }))
         })
         .collect::<Result<Vec<serde_json::Value>, String>>()?;
@@ -152,8 +158,8 @@ fn mod_notes(package: &Package, rev: &str) -> Result<String, String> {
         (changelog, rev.to_owned())
     };
     let loader = loader_tag(&rev)?;
-    let section =
-        closed(&changelog, &package.version).map_err(|e| format!("{}: {e}", path.display()))?;
+    let section = changelog::closed(&changelog, &package.version)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     notes(&package.name, &loader, section)
 }
 
@@ -255,19 +261,19 @@ fn title(config: &[toml::Table], package: &Package) -> Result<String, String> {
     Ok(title)
 }
 
-/// The files the `release` workflow attaches to a mod's release.
-fn release_files(package: &str) -> [String; 4] {
+/// The files the `release` workflow builds for a mod's release, which it
+/// attaches with their [`SUMS`]; `releases.json` hands it this list.
+fn built_files(package: &str) -> [String; 3] {
     [
         format!("{package}.zip"),
         format!("{package}.pdb"),
         format!("{package}.cdx.json"),
-        "SHA256SUMS".to_owned(),
     ]
 }
 
 /// Whether the tag is on the remote and its GitHub release has every file,
 /// read with `gh`.
-fn finished(tag: &str, package: &str) -> Result<bool, String> {
+pub(crate) fn finished(tag: &str, package: &str) -> Result<bool, String> {
     if !released(tag)? {
         return Ok(false);
     }
@@ -276,10 +282,13 @@ fn finished(tag: &str, package: &str) -> Result<bool, String> {
             "release",
             "view",
             tag,
+            "--repo",
+            REPOSITORY,
             "--json",
             "assets",
             "--jq",
-            ".assets[].name",
+            // An upload cut off midway leaves its asset listed but not uploaded.
+            ".assets[] | select(.state == \"uploaded\") | .name",
         ])
         .output()
         .map_err(|error| format!("running gh: {error}"))?;
@@ -298,8 +307,10 @@ fn finished(tag: &str, package: &str) -> Result<bool, String> {
 /// Whether `gh`'s list of a release's files, one a line, holds every file
 /// a release of `package` attaches.
 fn has_files(names: &str, package: &str) -> bool {
-    release_files(package)
+    built_files(package)
         .iter()
+        .map(String::as_str)
+        .chain([SUMS])
         .all(|file| names.lines().any(|name| name == file))
 }
 
@@ -328,10 +339,16 @@ pub(crate) fn released(tag: &str) -> Result<bool, String> {
     )
 }
 
-/// Whether players get the package: a mod with a player page that
+/// Whether players get the package: a mod [`for_players`] that
 /// `release-plz.toml` does not hold back.
 fn ships(package: &Package, held: &[String]) -> bool {
-    package.cdylib && !held.contains(&package.name) && package.dir.join(PLAYER_PAGE).is_file()
+    for_players(&package.dir, package.cdylib) && !held.contains(&package.name)
+}
+
+/// Whether the package in `dir` is made for players: a mod, building a DLL,
+/// with a player page.
+pub(crate) fn for_players(dir: &Path, cdylib: bool) -> bool {
+    cdylib && dir.join(PLAYER_PAGE).is_file()
 }
 
 /// The packages `release-plz.toml` never releases (`release = false`), so a
@@ -422,41 +439,6 @@ fn version_of(tag: &str) -> Option<VersionKey<'_>> {
         })
         .collect();
     Some((major, minor, patch, pre.is_none(), identifiers))
-}
-
-/// The section of `version` in a changelog closed as it: one with changes
-/// still under Unreleased, or without the version's heading or changes, is
-/// refused, so a release never ships changes its notes leave out.
-fn closed<'a>(changelog: &'a str, version: &str) -> Result<&'a str, String> {
-    if section(changelog, "Unreleased").is_some() {
-        return Err(format!(
-            "changes under Unreleased; close them as `## [{version}]` first"
-        ));
-    }
-    section(changelog, version).ok_or_else(|| format!("no changes under `## [{version}]`"))
-}
-
-/// The body of the `## [version]` section of a Keep a Changelog file, up to
-/// the next section or the link definitions at the file's foot, trimmed;
-/// `None` without one or when it is empty.
-pub(crate) fn section<'a>(changelog: &'a str, version: &str) -> Option<&'a str> {
-    let heading = format!("## [{version}]");
-    let mut offset = 0;
-    let mut start = None;
-    for line in changelog.split_inclusive('\n') {
-        if let Some(start) = start {
-            let definition = line.starts_with('[') && line.contains("]: ");
-            if line.starts_with("## ") || definition {
-                return Some(changelog[start..offset].trim()).filter(|s| !s.is_empty());
-            }
-        } else if line.starts_with(&heading) {
-            start = Some(offset + line.len());
-        }
-        offset += line.len();
-    }
-    start
-        .map(|start| changelog[start..].trim())
-        .filter(|s| !s.is_empty())
 }
 
 fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
@@ -591,28 +573,6 @@ mod tests {
         for tag in ["dev", "1.0.0", "v1.0", "v1.0.0.0", "v1.0.0-", "vx.0.0"] {
             assert_eq!(version_of(tag), None, "{tag}");
         }
-    }
-
-    #[test]
-    fn notes_take_the_closed_section_of_the_version() {
-        let changelog = "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-11-05\n\n### Added\n\n- More loot.\n\n## [0.1.0]\n\n- First.\n";
-        assert_eq!(closed(changelog, "0.2.0"), Ok("### Added\n\n- More loot."));
-        assert_eq!(closed(changelog, "0.1.0"), Ok("- First."));
-    }
-
-    #[test]
-    fn the_last_section_stops_at_the_link_definitions() {
-        let changelog = "## [Unreleased]\n\n## [0.1.0]\n\n- First, see [docs].\n\n[docs]: https://example.com/docs\n[0.1.0]: https://example.com/tag\n";
-        assert_eq!(closed(changelog, "0.1.0"), Ok("- First, see [docs]."));
-    }
-
-    #[test]
-    fn notes_refuse_open_changes_and_a_missing_or_empty_section() {
-        let open = "## [Unreleased]\n\n- Next.\n\n## [0.2.0]\n\n- A.\n";
-        assert!(closed(open, "0.2.0").unwrap_err().contains("Unreleased"));
-        let empty = "## [Unreleased]\n\n## [0.2.0]\n\n## [0.1.0]\n\n- A.\n";
-        assert!(closed(empty, "0.2.0").unwrap_err().contains("0.2.0"));
-        assert!(closed(empty, "0.3.0").unwrap_err().contains("0.3.0"));
     }
 
     #[test]

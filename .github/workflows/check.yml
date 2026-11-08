@@ -117,6 +117,7 @@ jobs:
         with:
           tools: cargo-nextest@0.9.151,cargo-deny@0.20.2,cargo-machete@0.9.2
           ast-grep: true
+          gh: ${{ startsWith(github.head_ref || github.ref_name, 'release-plz-') }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -136,11 +137,15 @@ jobs:
           fi
 
       # A release pull request merges only once `release` would take its
-      # notes: each bumped mod's section closed, every mod built for the
-      # pinned loader, the platform on a loader alpha.
+      # notes, choosing the mods as it does: each bumped mod's section
+      # closed, a version tagged without its files finished from its tag,
+      # every other mod built for the pinned loader, the platform on a
+      # loader alpha.
       - name: Notes of the mods to release
         if: startsWith(github.head_ref || github.ref_name, 'release-plz-')
-        run: cargo xtask notes --unreleased
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask notes --unfinished
 
   # The tests of the crates marked `windows-only`, natively on Windows.
   windows:

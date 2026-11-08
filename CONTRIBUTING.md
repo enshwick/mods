@@ -74,13 +74,16 @@ A release goes in three steps:
    for another loader and that has nothing under `## [Unreleased]` gets the
    line `- Built for Enshwick 1.0.0-alpha.14.` there, so its folder changes
    and release-plz bumps it as well: release-plz does not count a changed
-   git commit of a dependency as a change. Merge this in an ordinary pull
-   request.
+   git commit of a dependency as a change. A mod whose version has no tag
+   yet is left alone, and pinning back to the loader a mod was released on
+   drops its line. Merge this in an ordinary pull request.
 2. Run `release-pr`. It opens or updates the release pull request, which
    bumps the mods whose folders changed, and then closes each bumped mod's
    changelog on its branch: the `## [Unreleased]` section becomes
    `## [0.2.0] - 2026-11-05`, with an empty `## [Unreleased]` above it. A
-   bumped mod with nothing under Unreleased keeps its released version.
+   bumped mod with nothing under Unreleased keeps its released version. A
+   version closed already but not released, with new lines under
+   Unreleased, is refused: move those lines into its section by hand.
    Review and merge it. A mod never released has no tag to bump from, so
    release-plz opens no pull request for it: set its version and close its
    section in an ordinary pull request.
@@ -100,7 +103,7 @@ A release goes in three steps:
   `SHA256SUMS` and build provenance. Then the docs site builds again. A run
   that stops partway, after some tags or before the files, is finished by
   running `release` again: a tagged version without its release or its
-  files counts as not released yet.
+  files counts as not released yet, and its notes come from its tag.
 
 `cargo xtask notes` opens each mod's notes with the alpha warning in English
 and Ukrainian, names the loader alpha and gives the mod's section of its

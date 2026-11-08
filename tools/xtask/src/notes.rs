@@ -95,19 +95,10 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
         say("every mod's version is released already");
         return Ok(true);
     }
-    let loader = loader_tag(&rev)?;
     let mut ok = true;
     let mut written = Vec::new();
     for package in &mods {
-        let path = package.dir.join(CHANGELOG);
-        let text = std::fs::read_to_string(&path)
-            .map_err(|e| format!("{}: {e}", path.display()))
-            .and_then(|changelog| {
-                closed(&changelog, &package.version)
-                    .map_err(|e| format!("{}: {e}", path.display()))
-                    .and_then(|section| notes(&package.name, &loader, section))
-            });
-        match text {
+        match mod_notes(package, &rev) {
             Ok(text) => written.push((package, text)),
             Err(error) => {
                 say(&error);
@@ -118,27 +109,52 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     if !ok {
         return Ok(false);
     }
+    let releases = written
+        .iter()
+        .map(|(package, _)| {
+            Ok(serde_json::json!({
+                "tag": tag_of(package),
+                "package_name": package.name,
+                "version": package.version,
+                "title": title(&config, package)?,
+            }))
+        })
+        .collect::<Result<Vec<serde_json::Value>, String>>()?;
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     for (package, text) in &written {
         let file = out.join(format!("{}.md", package.name));
         std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
         say(&format!("wrote {}", file.display()));
     }
-    let releases: Vec<serde_json::Value> = written
-        .iter()
-        .map(|(package, _)| {
-            serde_json::json!({
-                "tag": tag_of(package),
-                "package_name": package.name,
-                "version": package.version,
-                "title": title(&config, package),
-            })
-        })
-        .collect();
     let file = out.join(RELEASES);
     std::fs::write(&file, serde_json::Value::from(releases).to_string())
         .map_err(|e| format!("{}: {e}", file.display()))?;
     Ok(true)
+}
+
+/// The notes of the package's version, built on the pinned `rev`; a version
+/// a stopped run tagged is released as tagged, so its changelog and loader
+/// come from the tag, which `assets` builds.
+fn mod_notes(package: &Package, rev: &str) -> Result<String, String> {
+    let path = package.dir.join(CHANGELOG);
+    let tag = tag_of(package);
+    let (changelog, rev) = if released(&tag)? {
+        let rev =
+            built_on(&tag)?.ok_or_else(|| format!("{tag}: Cargo.toml has no `rev` of {API}"))?;
+        let dir = package.dir.to_string_lossy();
+        (
+            git(&["-C", &dir, "show", &format!("{tag}:./{CHANGELOG}")])?,
+            rev,
+        )
+    } else {
+        let changelog =
+            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        (changelog, rev.to_owned())
+    };
+    let loader = loader_tag(&rev)?;
+    let section =
+        closed(&changelog, &package.version).map_err(|e| format!("{}: {e}", path.display()))?;
+    notes(&package.name, &loader, section)
 }
 
 /// How a run chooses the mods it takes.
@@ -218,17 +234,25 @@ pub(crate) fn shipped(config: &[toml::Table]) -> Result<Vec<Package>, String> {
 }
 
 /// The release's title: the package's `git_release_name` with its version,
-/// else its tag, as release-plz names it.
-fn title(config: &[toml::Table], package: &Package) -> String {
-    config
+/// else its tag; a name with any other template field is refused, since
+/// only `{{ version }}` is filled in here.
+fn title(config: &[toml::Table], package: &Package) -> Result<String, String> {
+    let Some(name) = config
         .iter()
         .find(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(&package.name))
         .and_then(|entry| entry.get("git_release_name"))
         .and_then(toml::Value::as_str)
-        .map_or_else(
-            || tag_of(package),
-            |name| name.replace("{{ version }}", &package.version),
-        )
+    else {
+        return Ok(tag_of(package));
+    };
+    let title = name.replace("{{ version }}", &package.version);
+    if title.contains("{{") {
+        return Err(format!(
+            "{RELEASE_CONFIG}: {}: git_release_name {name:?} may use only `{{{{ version }}}}`",
+            package.name
+        ));
+    }
+    Ok(title)
 }
 
 /// The files the `release` workflow attaches to a mod's release.
@@ -533,8 +557,13 @@ mod tests {
             cdylib: true,
             lib: true,
         };
-        assert_eq!(title(&config, &package("m")), "Mod 0.2.0");
-        assert_eq!(title(&config, &package("n")), "n-v0.2.0");
+        assert_eq!(title(&config, &package("m")).unwrap(), "Mod 0.2.0");
+        assert_eq!(title(&config, &package("n")).unwrap(), "n-v0.2.0");
+        let other = entries(
+            "[[package]]\nname = \"m\"\ngit_release_name = \"{{ package }} {{version}}\"\n",
+        )
+        .unwrap();
+        assert!(title(&other, &package("m")).is_err());
     }
 
     #[test]

@@ -366,6 +366,15 @@ mod tests {
     }
 
     #[test]
+    fn only_a_link_definition_at_a_line_start_ends_the_section() {
+        let changelog = "## [Unreleased]\n\n- Rates: [x]: y.\n[ref] at the start.\n";
+        assert_eq!(
+            close_section(changelog, "0.1.1", "2026-11-08").unwrap(),
+            "## [Unreleased]\n\n## [0.1.1] - 2026-11-08\n\n- Rates: [x]: y.\n[ref] at the start.\n\n"
+        );
+    }
+
+    #[test]
     fn keeping_a_version_changes_only_the_package_line() {
         let manifest = "[package]\nname = \"m\"\nversion = \"0.1.1\"\n\n[dependencies]\nx = { version = \"0.1.1\" }\n";
         assert_eq!(

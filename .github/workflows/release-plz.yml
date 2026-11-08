@@ -82,19 +82,18 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      # A release run goes on when release-plz stops after a tag: the next
-      # step makes every release it left out, or fails on a mod not tagged.
+      # On `release` it only pushes the tags (release-plz.toml); the next
+      # step makes the releases.
       - id: release-plz
         uses: release-plz/action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
-        continue-on-error: ${{ inputs.command == 'release' }}
         with:
           command: ${{ inputs.command }}
         env:
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
 
-      # Every mod with notes gets its release with them, made here when
-      # release-plz did not make it: GitHub answered 422 to a release made
-      # right after its tag was pushed, so a refused one is tried again.
+      # Every mod with notes gets its release with them, or its notes when a
+      # stopped run made it: GitHub answered 422 to a release made right
+      # after its tag was pushed, so a refused one is tried again.
       - name: Finish the releases
         id: finish
         if: inputs.command == 'release'

@@ -17,9 +17,10 @@ publish = false
 # never released has no release pull request to wait for. `cargo xtask notes`
 # refuses the run first when a mod's notes are not ready.
 release_always = true
-# Until the loader's 1.0, every mod release is an alpha built on a loader
-# alpha; then "auto", where only a version like `0.2.0-alpha.1` is one.
-git_release_type = "pre"
+# release-plz only tags: the `release` workflow makes each GitHub release
+# with its notes, as a prerelease until the loader's 1.0. A release made
+# right after its tag was pushed got a 422 from GitHub.
+git_release_enable = false
 changelog_update = false
 git_tag_name = "{{ package }}-v{{ version }}"
 # Renovate moves the dependencies.

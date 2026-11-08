@@ -14,7 +14,7 @@
 use std::fmt::Write as _;
 
 use crate::changelog::{self, CHANGELOG};
-use crate::notes::{self, PLATFORM, Remote};
+use crate::notes::{self, MANIFEST, PLATFORM, Remote};
 use crate::{Package, Step, say};
 
 const PIN_USAGE: &str = "usage: cargo xtask pin <loader tag>";
@@ -45,7 +45,7 @@ pub(crate) fn pin(args: &[String]) -> Result<bool, String> {
         .ok_or_else(|| format!("{PLATFORM} has no tag {tag}"))?
         .to_owned();
     let root = notes::root();
-    let path = root.join("Cargo.toml");
+    let path = root.join(MANIFEST);
     let manifest =
         std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let pinned = repin(&manifest, &commit).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -95,9 +95,7 @@ pub(crate) fn pin(args: &[String]) -> Result<bool, String> {
 /// points to, else the tag's own.
 fn commit_of<'a>(listing: &'a str, tag: &str) -> Option<&'a str> {
     let at = |name: &str| {
-        listing
-            .lines()
-            .filter_map(|line| line.split_once('\t'))
+        notes::refs(listing)
             .find(|(_, reference)| *reference == name)
             .map(|(sha, _)| sha)
     };
@@ -199,16 +197,20 @@ pub(crate) fn close(args: &[String]) -> Result<bool, String> {
     let shipped = notes::shipped(&notes::release_config(&notes::root())?)?;
     let base_manifest = |package: &Package| {
         let dir = package.dir.to_string_lossy();
-        notes::git(&["-C", &dir, "show", &format!("{base}:./Cargo.toml")])
+        notes::git(&["-C", &dir, "show", &format!("{base}:./{MANIFEST}")])
     };
     let closing = close_all(&shipped, date, &notes::GitHub::read()?, &base_manifest);
+    // A failed mod fails the run: nothing of it may reach the pull request.
+    if !closing.ok {
+        return Ok(false);
+    }
     if closing.kept && !Step::new(&["update", "--workspace"]).run(false) {
         return Ok(false);
     }
     if let Some(file) = body_file {
         std::fs::write(file, closing.body).map_err(|e| format!("{file}: {e}"))?;
     }
-    Ok(closing.ok)
+    Ok(true)
 }
 
 /// What `close` did to the shipped mods.
@@ -247,14 +249,14 @@ fn close_all(
             .map_err(String::clone)
             .and_then(|previous| close_one(package, date, previous.as_ref()));
         match done {
-            Ok(Done::Closed) => {
+            Ok(Plan::Close) => {
                 let _ = writeln!(
                     closing.body,
                     "- Released `{}` {}, its changelog closed as that version.",
                     package.name, package.version
                 );
             }
-            Ok(Done::Kept(released, why)) => {
+            Ok(Plan::Kept(released, why)) => {
                 let _ = writeln!(
                     closing.body,
                     "- Kept `{}` at {released}: {why}.",
@@ -271,37 +273,25 @@ fn close_all(
     closing
 }
 
-/// What `close` did with one bumped mod.
-#[derive(Debug, PartialEq, Eq)]
-enum Done<'a> {
-    /// Closed its changelog as the new version.
-    Closed,
-    /// Set it back to this released version, for this reason.
-    Kept(&'a str, &'static str),
-}
-
 /// Closes the bumped package's changelog or sets it back to `previous`,
-/// as [`plan`] says.
+/// as [`plan`] says, and returns that plan.
 fn close_one<'a>(
     package: &Package,
     date: &str,
     previous: Option<&'a Released>,
-) -> Result<Done<'a>, String> {
+) -> Result<Plan<'a>, String> {
     let path = package.dir.join(CHANGELOG);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    match plan(previous, &text, &package.version) {
+    let plan = plan(previous, &text, &package.version)?;
+    match plan {
         Plan::Close => {
             if let Some(closed) = changelog::close(&text, &package.version, date)? {
                 std::fs::write(&path, closed).map_err(|e| format!("{}: {e}", path.display()))?;
             }
-            Ok(Done::Closed)
         }
-        Plan::Kept(released, why) => {
-            set_back(package, released)?;
-            Ok(Done::Kept(released, why))
-        }
-        Plan::Refuse(why) => Err(why),
+        Plan::Kept(released, _) => set_back(package, released)?,
     }
+    Ok(plan)
 }
 
 /// A package's released version on the base.
@@ -327,7 +317,7 @@ fn previous(
     }) else {
         return Ok(None);
     };
-    let tag = format!("{}-v{version}", package.name);
+    let tag = notes::tag(&package.name, &version);
     if version == package.version || !remote.released(&tag) {
         return Ok(None);
     }
@@ -342,23 +332,32 @@ enum Plan<'a> {
     Close,
     /// Set it back to this released version, for this reason.
     Kept(&'a str, &'static str),
-    /// Leave it bumped and fail the run, for this reason.
-    Refuse(String),
 }
 
 /// The [`Plan`] for a mod bumped to `version` past its `previous` release,
 /// from its `changelog`. A version tagged without its files is kept until
 /// `release` finishes it: past the bump no run would take that tag again.
-fn plan<'a>(previous: Option<&'a Released>, changelog: &str, version: &str) -> Plan<'a> {
+///
+/// # Errors
+///
+/// Why the mod can be neither closed nor kept; it stays bumped and the run
+/// fails.
+fn plan<'a>(
+    previous: Option<&'a Released>,
+    changelog: &str,
+    version: &str,
+) -> Result<Plan<'a>, String> {
     let changes = changelog::section(changelog, changelog::UNRELEASED).is_some();
     let closed = changelog::section(changelog, version).is_some();
-    match previous {
+    Ok(match previous {
         Some(Released {
             version: released,
             finished: false,
-        }) if closed => Plan::Refuse(format!(
-            "closed already, but {released} has no finished release; move its section back under Unreleased so the mod is kept at {released}, which the next `release` finishes"
-        )),
+        }) if closed => {
+            return Err(format!(
+                "closed already, but {released} has no finished release; move its section back under Unreleased so the mod is kept at {released}, which the next `release` finishes"
+            ));
+        }
         Some(Released {
             version: released,
             finished: false,
@@ -371,13 +370,13 @@ fn plan<'a>(previous: Option<&'a Released>, changelog: &str, version: &str) -> P
             version: released,
             finished: true,
         }) => Plan::Kept(released, "nothing under Unreleased for players"),
-        None => Plan::Refuse("nothing under Unreleased and no released version to keep".to_owned()),
-    }
+        None => return Err("nothing under Unreleased and no released version to keep".to_owned()),
+    })
 }
 
 /// Sets the package's manifest back to the `released` version.
 fn set_back(package: &Package, released: &str) -> Result<(), String> {
-    let path = package.dir.join("Cargo.toml");
+    let path = package.dir.join(MANIFEST);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let kept = set_version(&text, &package.version, released)
         .ok_or_else(|| format!("{}: no `version = \"{}\"`", path.display(), package.version))?;
@@ -402,6 +401,8 @@ fn is_date(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
     use crate::notes::Fake;
 
     const OLD: &str = "1111111111111111111111111111111111111111";
@@ -467,29 +468,29 @@ mod tests {
         let unfinished = released(false);
         assert!(matches!(
             plan(Some(&unfinished), CHANGES, "0.1.2"),
-            Plan::Kept("0.1.1", why) if why.contains("no files")
+            Ok(Plan::Kept("0.1.1", why)) if why.contains("no files")
         ));
         assert!(matches!(
             plan(Some(&unfinished), NOTHING, "0.1.2"),
-            Plan::Kept("0.1.1", _)
+            Ok(Plan::Kept("0.1.1", _))
         ));
         assert!(matches!(
             plan(Some(&unfinished), CLOSED, "0.1.2"),
-            Plan::Refuse(why) if why.contains("0.1.1")
+            Err(why) if why.contains("0.1.1")
         ));
     }
 
     #[test]
     fn a_bump_past_a_finished_release_closes_unless_nothing_is_new() {
         let finished = released(true);
-        assert_eq!(plan(Some(&finished), CHANGES, "0.1.2"), Plan::Close);
-        assert_eq!(plan(Some(&finished), CLOSED, "0.1.2"), Plan::Close);
+        assert_eq!(plan(Some(&finished), CHANGES, "0.1.2"), Ok(Plan::Close));
+        assert_eq!(plan(Some(&finished), CLOSED, "0.1.2"), Ok(Plan::Close));
         assert!(matches!(
             plan(Some(&finished), NOTHING, "0.1.2"),
-            Plan::Kept("0.1.1", why) if why.contains("nothing")
+            Ok(Plan::Kept("0.1.1", why)) if why.contains("nothing")
         ));
-        assert_eq!(plan(None, CHANGES, "0.1.2"), Plan::Close);
-        assert!(matches!(plan(None, NOTHING, "0.1.2"), Plan::Refuse(_)));
+        assert_eq!(plan(None, CHANGES, "0.1.2"), Ok(Plan::Close));
+        assert!(plan(None, NOTHING, "0.1.2").is_err());
     }
 
     #[test]
@@ -497,7 +498,7 @@ mod tests {
         let stray = "## [Unreleased]\n\n- A.\n\n## [0.1.2]\n\n## [0.1.1]\n\n- Old.\n";
         assert!(matches!(
             plan(Some(&released(false)), stray, "0.1.2"),
-            Plan::Kept("0.1.1", _)
+            Ok(Plan::Kept("0.1.1", _))
         ));
     }
 
@@ -511,8 +512,12 @@ mod tests {
             std::fs::remove_dir_all(&dir).unwrap();
         }
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("Cargo.toml"), manifest(name, version)).unwrap();
+        std::fs::write(dir.join(MANIFEST), manifest(name, version)).unwrap();
         std::fs::write(dir.join(CHANGELOG), changelog).unwrap();
+        package(name, version, dir)
+    }
+
+    fn package(name: &str, version: &str, dir: PathBuf) -> Package {
         Package {
             name: name.to_owned(),
             version: version.to_owned(),
@@ -534,7 +539,7 @@ mod tests {
 
     #[test]
     fn the_previous_version_is_the_base_one_only_when_it_differs_and_is_tagged() {
-        let package = mod_at("previous", "m", "0.1.2", CHANGES);
+        let package = package("m", "0.1.2", PathBuf::new());
         let remote = Fake {
             tags: &["m-v0.1.1", "m-v0.1.0"],
             finished: &["m-v0.1.0"],
@@ -601,14 +606,14 @@ mod tests {
              - Kept `idle` at 0.1.1: nothing under Unreleased for players.\n"
         );
         assert!(file(closes, CHANGELOG).contains("## [0.1.2] - 2026-11-09\n\n- A."));
-        assert_eq!(file(closes, "Cargo.toml"), manifest("closes", "0.1.2"));
+        assert_eq!(file(closes, MANIFEST), manifest("closes", "0.1.2"));
         assert_eq!(file(kept, CHANGELOG), CHANGES);
-        assert_eq!(file(kept, "Cargo.toml"), manifest("kept", "0.1.1"));
-        assert_eq!(file(idle, "Cargo.toml"), manifest("idle", "0.1.1"));
+        assert_eq!(file(kept, MANIFEST), manifest("kept", "0.1.1"));
+        assert_eq!(file(idle, MANIFEST), manifest("idle", "0.1.1"));
         for untouched in [failing, tagged] {
             assert_eq!(file(untouched, CHANGELOG), CHANGES);
             assert_eq!(
-                file(untouched, "Cargo.toml"),
+                file(untouched, MANIFEST),
                 manifest(&untouched.name, "0.1.2")
             );
         }
@@ -638,7 +643,7 @@ mod tests {
     fn setting_a_mod_back_rewrites_its_version_and_refuses_another_one() {
         let package = mod_at("set-back", "m", "0.1.2", CHANGES);
         set_back(&package, "0.1.1").unwrap();
-        assert_eq!(file(&package, "Cargo.toml"), manifest("m", "0.1.1"));
+        assert_eq!(file(&package, MANIFEST), manifest("m", "0.1.1"));
         assert!(set_back(&package, "0.1.0").unwrap_err().contains("0.1.2"));
         std::fs::remove_dir_all(package.dir.parent().unwrap()).unwrap();
     }

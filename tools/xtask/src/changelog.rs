@@ -70,13 +70,13 @@ pub(crate) fn close(changelog: &str, version: &str, date: &str) -> Result<Option
             stripped = format!("{}{}", &changelog[..at], &changelog[end..]);
             stripped.as_str()
         }
-        Some(_) => {
-            return Err(format!(
-                "{version} is closed already and has changes under Unreleased; move them into its section by hand"
-            ));
-        }
-        None => changelog,
+        _ => changelog,
     };
+    if heading(changelog, version).is_some() {
+        return Err(format!(
+            "{version} is closed already and has changes under Unreleased; move them into its section by hand"
+        ));
+    }
     let Some((start, end)) = span(changelog, UNRELEASED) else {
         return Ok(None);
     };
@@ -226,6 +226,12 @@ mod tests {
         );
         let nothing_new = format!("{HEAD}\n## [0.1.1]\n\n{RELEASED}");
         assert_eq!(close(&nothing_new, "0.1.1", "2026-11-09"), Ok(None));
+    }
+
+    #[test]
+    fn a_closed_section_behind_an_empty_heading_of_the_version_is_refused() {
+        let twice = "## [Unreleased]\n\n- A.\n\n## [0.1.1]\n\n## [0.1.1]\n\n- B.\n";
+        assert!(close(twice, "0.1.1", "2026-11-09").is_err());
     }
 
     #[test]

@@ -55,11 +55,9 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         })
         .filter_map(|package| package["name"].as_str())
         .collect();
-    problems.extend(release_entries(
-        &members,
-        &shipping,
-        &crate::notes::release_config(root)?,
-    ));
+    let release_config = crate::notes::release_config(root)?;
+    let held = crate::notes::held_back(&release_config);
+    problems.extend(release_entries(&members, &shipping, &release_config));
     for package in packages {
         let name = package["name"].as_str().unwrap_or_default();
         let path = Path::new(package["manifest_path"].as_str().unwrap_or_default());
@@ -79,7 +77,8 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
         problems.extend(text_apostrophes(name, dir)?);
-        problems.extend(changelog_problem(name, dir, shipping.contains(&name)));
+        let ships = shipping.contains(&name) && !held.iter().any(|held| held == name);
+        problems.extend(changelog_problem(name, dir, ships));
     }
     Ok(problems)
 }
@@ -527,11 +526,19 @@ mod tests {
 
     #[test]
     fn only_a_mod_players_get_needs_a_changelog() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let without = root.join("tools/xtask");
-        assert!(changelog_problem("m", &without, true).is_some());
-        assert_eq!(changelog_problem("m", &without, false), None);
-        assert_eq!(changelog_problem("m", &root.join("area-loot"), true), None);
+        let dir = std::env::temp_dir().join(format!("xtask-changelog-{}", std::process::id()));
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+        std::fs::create_dir_all(&dir).unwrap();
+        let without = changelog_problem("m", &dir, true);
+        let unshipped = changelog_problem("m", &dir, false);
+        std::fs::write(dir.join(crate::changelog::CHANGELOG), "## [Unreleased]\n").unwrap();
+        let with = changelog_problem("m", &dir, true);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(without.is_some());
+        assert_eq!(unshipped, None);
+        assert_eq!(with, None);
     }
 
     #[test]

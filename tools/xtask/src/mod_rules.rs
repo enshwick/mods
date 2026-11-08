@@ -55,11 +55,9 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         })
         .filter_map(|package| package["name"].as_str())
         .collect();
-    problems.extend(release_entries(
-        &members,
-        &shipping,
-        &crate::notes::release_config(root)?,
-    ));
+    let release_config = crate::notes::release_config(root)?;
+    let held = crate::notes::held_back(&release_config);
+    problems.extend(release_entries(&members, &shipping, &release_config));
     for package in packages {
         let name = package["name"].as_str().unwrap_or_default();
         let path = Path::new(package["manifest_path"].as_str().unwrap_or_default());
@@ -79,15 +77,17 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
         problems.extend(text_apostrophes(name, dir)?);
-        // Its release notes come from it (`cargo xtask notes`).
-        if crate::notes::for_players(dir, true) && !dir.join(crate::changelog::CHANGELOG).is_file()
-        {
-            problems.push(format!(
-                "{name}: no CHANGELOG.md; a mod players get keeps one by hand"
-            ));
-        }
+        let ships = shipping.contains(&name) && !held.iter().any(|held| held == name);
+        problems.extend(changelog_problem(name, dir, ships));
     }
     Ok(problems)
+}
+
+/// A mod players get without a changelog, which its release notes come
+/// from (`cargo xtask notes`).
+fn changelog_problem(name: &str, dir: &Path, shipping: bool) -> Option<String> {
+    (shipping && !dir.join(crate::changelog::CHANGELOG).is_file())
+        .then(|| format!("{name}: no CHANGELOG.md; a mod players get keeps one by hand"))
 }
 
 fn manifest(path: &Path) -> Result<toml::Table, String> {
@@ -522,6 +522,23 @@ mod tests {
         assert!(!player_doc("player.UK.md", false));
         assert!(!player_doc("notes", true));
         assert!(!player_doc("images", false));
+    }
+
+    #[test]
+    fn only_a_mod_players_get_needs_a_changelog() {
+        let dir = std::env::temp_dir().join(format!("xtask-changelog-{}", std::process::id()));
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+        std::fs::create_dir_all(&dir).unwrap();
+        let without = changelog_problem("m", &dir, true);
+        let unshipped = changelog_problem("m", &dir, false);
+        std::fs::write(dir.join(crate::changelog::CHANGELOG), "## [Unreleased]\n").unwrap();
+        let with = changelog_problem("m", &dir, true);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(without.is_some());
+        assert_eq!(unshipped, None);
+        assert_eq!(with, None);
     }
 
     #[test]

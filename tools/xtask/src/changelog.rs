@@ -11,21 +11,27 @@ const BUILT_FOR: &str = "- Built for Enshwick ";
 /// heading's line, up to the next section or the link definitions at the
 /// file's foot.
 fn span(changelog: &str, version: &str) -> Option<(usize, usize)> {
+    heading(changelog, version).map(|(_, start, end)| (start, end))
+}
+
+/// Where the `## [version]` heading's line starts, and its section's body
+/// as [`span`] gives it.
+fn heading(changelog: &str, version: &str) -> Option<(usize, usize, usize)> {
     let heading = format!("## [{version}]");
     let mut offset = 0;
-    let mut start = None;
+    let mut at = None;
     for line in changelog.split_inclusive('\n') {
-        if let Some(start) = start {
+        if let Some((at, start)) = at {
             let definition = line.starts_with('[') && line.contains("]: ");
             if line.starts_with("## ") || definition {
-                return Some((start, offset));
+                return Some((at, start, offset));
             }
         } else if line.starts_with(&heading) {
-            start = Some(offset + line.len());
+            at = Some((offset, offset + line.len()));
         }
         offset += line.len();
     }
-    start.map(|start| (start, changelog.len()))
+    at.map(|(at, start)| (at, start, changelog.len()))
 }
 
 /// The body of the `## [version]` section, trimmed; `None` without one or
@@ -51,20 +57,30 @@ pub(crate) fn closed<'a>(changelog: &'a str, version: &str) -> Result<&'a str, S
 /// The `changelog` with what is under Unreleased moved under
 /// `## [version] - date`, Unreleased left empty above it; `None` when
 /// nothing is under Unreleased. A version closed already but not released
-/// is refused: a second heading would hide the first from its notes.
+/// is refused: a second heading would hide the first from its notes. An
+/// empty heading of the version is dropped instead, so a stray one never
+/// blocks the round that releases the version.
 pub(crate) fn close(changelog: &str, version: &str, date: &str) -> Result<Option<String>, String> {
-    let Some((start, end)) = span(changelog, UNRELEASED) else {
-        return Ok(None);
-    };
-    let body = changelog[start..end].trim();
-    if body.is_empty() {
+    if section(changelog, UNRELEASED).is_none() {
         return Ok(None);
     }
-    if span(changelog, version).is_some() {
+    let stripped;
+    let changelog = match heading(changelog, version) {
+        Some((at, start, end)) if changelog[start..end].trim().is_empty() => {
+            stripped = format!("{}{}", &changelog[..at], &changelog[end..]);
+            stripped.as_str()
+        }
+        _ => changelog,
+    };
+    if heading(changelog, version).is_some() {
         return Err(format!(
             "{version} is closed already and has changes under Unreleased; move them into its section by hand"
         ));
     }
+    let Some((start, end)) = span(changelog, UNRELEASED) else {
+        return Ok(None);
+    };
+    let body = changelog[start..end].trim();
     Ok(Some(format!(
         "{}\n## [{version}] - {date}\n\n{body}\n\n{}",
         &changelog[..start],
@@ -80,17 +96,10 @@ pub(crate) fn built_for(changelog: &str, version: Option<&str>) -> Result<String
     let (start, end) = span(changelog, UNRELEASED).ok_or("no `## [Unreleased]` section")?;
     let body = &changelog[start..end];
     let has_line = body.lines().any(|l| l.starts_with(BUILT_FOR));
-    let lines = |lines: &mut dyn Iterator<Item = &str>| {
-        lines.fold(String::new(), |mut text, l| {
-            text.push_str(l);
-            text.push('\n');
-            text
-        })
-    };
     let body = match version {
         Some(version) if has_line => {
             let line = format!("{BUILT_FOR}{version}.");
-            lines(&mut body.lines().map(|l| {
+            join_lines(body.lines().map(|l| {
                 if l.starts_with(BUILT_FOR) {
                     line.as_str()
                 } else {
@@ -110,7 +119,7 @@ pub(crate) fn built_for(changelog: &str, version: Option<&str>) -> Result<String
             {
                 "\n".to_owned()
             } else {
-                lines(&mut rest.into_iter())
+                join_lines(rest)
             }
         }
         _ => return Ok(changelog.to_owned()),
@@ -120,6 +129,15 @@ pub(crate) fn built_for(changelog: &str, version: Option<&str>) -> Result<String
         &changelog[..start],
         &changelog[end..]
     ))
+}
+
+/// The lines, each ended by a newline.
+fn join_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> String {
+    lines.into_iter().fold(String::new(), |mut text, line| {
+        text.push_str(line);
+        text.push('\n');
+        text
+    })
 }
 
 #[cfg(test)]
@@ -192,6 +210,28 @@ mod tests {
     fn a_version_closed_already_is_never_closed_twice() {
         let changelog = format!("{HEAD}\n### Fixed\n\n- Late.\n\n{RELEASED}");
         assert!(close(&changelog, "0.1.0", "2026-11-08").is_err());
+    }
+
+    #[test]
+    fn an_empty_heading_of_the_version_is_replaced_when_it_is_closed() {
+        let stray = format!("{HEAD}\n### Fixed\n\n- A bug.\n\n## [0.1.1]\n\n{RELEASED}");
+        assert_eq!(
+            close(&stray, "0.1.1", "2026-11-09").unwrap().unwrap(),
+            format!("{HEAD}\n## [0.1.1] - 2026-11-09\n\n### Fixed\n\n- A bug.\n\n{RELEASED}")
+        );
+        let at_foot = "## [Unreleased]\n\n- A.\n\n## [0.1.1]\n";
+        assert_eq!(
+            close(at_foot, "0.1.1", "2026-11-09").unwrap().unwrap(),
+            "## [Unreleased]\n\n## [0.1.1] - 2026-11-09\n\n- A.\n\n"
+        );
+        let nothing_new = format!("{HEAD}\n## [0.1.1]\n\n{RELEASED}");
+        assert_eq!(close(&nothing_new, "0.1.1", "2026-11-09"), Ok(None));
+    }
+
+    #[test]
+    fn a_closed_section_behind_an_empty_heading_of_the_version_is_refused() {
+        let twice = "## [Unreleased]\n\n- A.\n\n## [0.1.1]\n\n## [0.1.1]\n\n- B.\n";
+        assert!(close(twice, "0.1.1", "2026-11-09").is_err());
     }
 
     #[test]

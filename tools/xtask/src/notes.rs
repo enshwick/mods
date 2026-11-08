@@ -16,10 +16,12 @@ const USAGE: &str =
     "usage: cargo xtask notes (--unreleased | --unfinished | --package <name>...) [--out <dir>]";
 /// Where the platform comes from; its tags name the loader's releases.
 pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
-/// The repository the mods are released from, for `gh`.
-const REPOSITORY: &str = "enshwick/mods";
 /// The workspace dependency whose commit names the loader a mod builds on.
 const API: &str = "enshwick";
+/// A package's manifest, and the workspace's at its root.
+pub(crate) const MANIFEST: &str = "Cargo.toml";
+/// The remote releases are tagged on.
+const ORIGIN: &str = "origin";
 /// Which packages release-plz releases.
 const RELEASE_CONFIG: &str = "release-plz.toml";
 /// Only a mod with a player page ships to players.
@@ -82,9 +84,8 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     {
         return Err(format!("{missing} is not a mod players get"));
     }
-    let rev =
-        pinned_rev(&std::fs::read_to_string(root.join("Cargo.toml")).map_err(|e| e.to_string())?)
-            .ok_or_else(|| format!("Cargo.toml: no `rev` of {API}"))?;
+    let rev = pinned_rev(&std::fs::read_to_string(root.join(MANIFEST)).map_err(|e| e.to_string())?)
+        .ok_or_else(|| format!("Cargo.toml: no `rev` of {API}"))?;
     let way = if unfinished {
         Way::Unfinished
     } else if unreleased {
@@ -92,7 +93,8 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     } else {
         Way::Chosen(&chosen)
     };
-    let Some(mods) = choose(shipped, way, &rev)? else {
+    let remote = GitHub::read()?;
+    let Some(mods) = choose(shipped, way, &rev, &remote)? else {
         return Ok(false);
     };
     if mods.is_empty() {
@@ -102,7 +104,7 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     let mut ok = true;
     let mut written = Vec::new();
     for package in &mods {
-        match mod_notes(package, &rev) {
+        match mod_notes(package, &rev, &remote) {
             Ok(text) => written.push((package, text)),
             Err(error) => {
                 say(&error);
@@ -141,10 +143,10 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
 /// The notes of the package's version, built on the pinned `rev`; a version
 /// a stopped run tagged is released as tagged, so its changelog and loader
 /// come from the tag, which `assets` builds.
-fn mod_notes(package: &Package, rev: &str) -> Result<String, String> {
+fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<String, String> {
     let path = package.dir.join(CHANGELOG);
     let tag = tag_of(package);
-    let (changelog, rev) = if released(&tag)? {
+    let (changelog, rev) = if remote.released(&tag) {
         let rev =
             built_on(&tag)?.ok_or_else(|| format!("{tag}: Cargo.toml has no `rev` of {API}"))?;
         let dir = package.dir.to_string_lossy();
@@ -176,14 +178,19 @@ enum Way<'a> {
 
 /// The shipped mods `way` takes; `None` when a released mod that is not
 /// taken was built for another loader than `rev`, said on stderr.
-fn choose(shipped: Vec<Package>, way: Way<'_>, rev: &str) -> Result<Option<Vec<Package>>, String> {
+fn choose(
+    shipped: Vec<Package>,
+    way: Way<'_>,
+    rev: &str,
+    remote: &impl Remote,
+) -> Result<Option<Vec<Package>>, String> {
     let mut mods = Vec::new();
     let mut ok = true;
     for package in shipped {
         let tag = tag_of(&package);
         let take = match way {
-            Way::Unfinished => !finished(&tag, &package.name)?,
-            Way::Unreleased => !released(&tag)?,
+            Way::Unfinished => !remote.finished(&tag, &package.name)?,
+            Way::Unreleased => !remote.released(&tag),
             Way::Chosen(chosen) => chosen.contains(&package.name.as_str()),
         };
         if take {
@@ -205,7 +212,12 @@ pub(crate) fn root() -> PathBuf {
 
 /// The tag release-plz gives the package's version.
 pub(crate) fn tag_of(package: &Package) -> String {
-    format!("{}-v{}", package.name, package.version)
+    tag(&package.name, &package.version)
+}
+
+/// The tag release-plz gives `version` of the package `name`.
+pub(crate) fn tag(name: &str, version: &str) -> String {
+    format!("{name}-v{version}")
 }
 
 /// The packages `release-plz.toml` names, as tables.
@@ -271,19 +283,126 @@ fn built_files(package: &str) -> [String; 3] {
     ]
 }
 
-/// Whether the tag is on the remote and its GitHub release has every file,
-/// read with `gh`.
-pub(crate) fn finished(tag: &str, package: &str) -> Result<bool, String> {
-    if !released(tag)? {
-        return Ok(false);
+/// What a release decision reads from the repository's remote; a trait so
+/// tests decide on a fake.
+pub(crate) trait Remote {
+    /// Whether the remote has the tag.
+    fn released(&self, tag: &str) -> bool;
+    /// Whether the tag is on the remote and its GitHub release has every
+    /// file a release of `package` attaches.
+    fn finished(&self, tag: &str, package: &str) -> Result<bool, String>;
+}
+
+pub(crate) struct GitHub {
+    /// `owner/name`, or why it is unknown; only `gh` needs it, so a run
+    /// that never asks for a release's files works with any origin.
+    name: Result<String, String>,
+    /// `git ls-remote --tags origin`.
+    tags: String,
+}
+
+impl GitHub {
+    pub(crate) fn read() -> Result<Self, String> {
+        let url = git(&["remote", "get-url", ORIGIN])?;
+        let name = repository_of(url.trim())
+            .map(str::to_owned)
+            .or_else(|| {
+                std::env::var("GITHUB_REPOSITORY")
+                    .ok()
+                    .filter(|name| !name.is_empty())
+            })
+            // Without the URL, which may carry a token.
+            .ok_or_else(|| {
+                "origin is not a GitHub URL and GITHUB_REPOSITORY is not set".to_owned()
+            });
+        Ok(Self {
+            name,
+            tags: git(&["ls-remote", "--tags", ORIGIN])?,
+        })
     }
+}
+
+impl Remote for GitHub {
+    fn released(&self, tag: &str) -> bool {
+        listed(&self.tags, tag)
+    }
+
+    fn finished(&self, tag: &str, package: &str) -> Result<bool, String> {
+        if !self.released(tag) {
+            return Ok(false);
+        }
+        assets_complete(tag, self.name.as_ref().map_err(String::clone)?, package)
+    }
+}
+
+/// A remote with these tags, these finished, and a `gh` failing on these.
+#[cfg(test)]
+pub(crate) struct Fake {
+    pub(crate) tags: &'static [&'static str],
+    pub(crate) finished: &'static [&'static str],
+    pub(crate) failing: &'static [&'static str],
+}
+
+#[cfg(test)]
+impl Remote for Fake {
+    fn released(&self, tag: &str) -> bool {
+        self.tags.contains(&tag)
+    }
+
+    fn finished(&self, tag: &str, _: &str) -> Result<bool, String> {
+        if self.failing.contains(&tag) {
+            return Err(format!("gh release view {tag}: HTTP 502"));
+        }
+        Ok(self.released(tag) && self.finished.contains(&tag))
+    }
+}
+
+/// The `owner/name` of a GitHub remote URL, over HTTPS or SSH, with or
+/// without a user or token before the host and a port after it.
+fn repository_of(url: &str) -> Option<&str> {
+    let path = if let Some(path) = url.strip_prefix("git@github.com:") {
+        path
+    } else {
+        let rest = ["https://", "http://", "ssh://"]
+            .iter()
+            .find_map(|scheme| url.strip_prefix(scheme))?;
+        let (authority, path) = rest.split_once('/')?;
+        let host = authority
+            .rsplit_once('@')
+            .map_or(authority, |(_, host)| host);
+        let host = host.split_once(':').map_or(host, |(host, _)| host);
+        ["github.com", "ssh.github.com"]
+            .iter()
+            .any(|github| host.eq_ignore_ascii_case(github))
+            .then_some(path)?
+    };
+    let path = path.trim_end_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let (owner, name) = path.split_once('/')?;
+    (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some(path)
+}
+
+/// Whether a `git ls-remote --tags` listing holds the tag.
+fn listed(listing: &str, tag: &str) -> bool {
+    let reference = format!("refs/tags/{tag}");
+    refs(listing).any(|(_, name)| name == reference)
+}
+
+/// The (commit, reference) pairs of a `git ls-remote` listing.
+pub(crate) fn refs(listing: &str) -> impl Iterator<Item = (&str, &str)> {
+    listing.lines().filter_map(|line| line.split_once('\t'))
+}
+
+/// Whether the GitHub release of the tag in `repository` has every file,
+/// read with `gh`.
+fn assets_complete(tag: &str, repository: &str, package: &str) -> Result<bool, String> {
     let output = Command::new("gh")
         .args([
             "release",
             "view",
             tag,
             "--repo",
-            REPOSITORY,
+            repository,
             "--json",
             "assets",
             "--jq",
@@ -320,23 +439,14 @@ pub(crate) fn built_on(tag: &str) -> Result<Option<String>, String> {
     let local = format!("refs/tags/{tag}");
     if git(&["rev-parse", "--verify", "--quiet", &local]).is_err() {
         let refspec = format!("{local}:{local}");
-        let mut fetch = vec!["fetch", "--no-tags", "origin", refspec.as_str()];
+        let mut fetch = vec!["fetch", "--no-tags", ORIGIN, refspec.as_str()];
         // A shallow clone stays shallow; a full one must not become so.
         if git(&["rev-parse", "--is-shallow-repository"])?.trim() == "true" {
             fetch.push("--depth=1");
         }
         git(&fetch)?;
     }
-    Ok(pinned_rev(&git(&["show", &format!("{local}:Cargo.toml")])?))
-}
-
-/// Whether the repository's remote has the tag already.
-pub(crate) fn released(tag: &str) -> Result<bool, String> {
-    Ok(
-        !git(&["ls-remote", "--tags", "origin", &format!("refs/tags/{tag}")])?
-            .trim()
-            .is_empty(),
-    )
+    Ok(pinned_rev(&git(&["show", &format!("{local}:{MANIFEST}")])?))
 }
 
 /// Whether players get the package: a mod [`for_players`] that
@@ -402,9 +512,7 @@ pub(crate) fn git(args: &[&str]) -> Result<String, String> {
 /// The version tag `git ls-remote --tags` lists at commit `rev`, an
 /// annotated tag by the commit it points to; the newest when several do.
 fn release_at<'a>(listing: &'a str, rev: &str) -> Option<&'a str> {
-    listing
-        .lines()
-        .filter_map(|line| line.split_once('\t'))
+    refs(listing)
         .filter(|(sha, _)| sha.eq_ignore_ascii_case(rev))
         .filter_map(|(_, name)| name.strip_prefix("refs/tags/"))
         .map(|name| name.strip_suffix("^{}").unwrap_or(name))
@@ -512,6 +620,88 @@ mod tests {
         assert_eq!(pinned_rev(&manifest).as_deref(), Some(REV));
         assert_eq!(pinned_rev("[workspace]\n"), None);
         assert_eq!(pinned_rev("[workspace"), None);
+    }
+
+    #[test]
+    fn the_repository_is_named_by_its_github_remote_over_https_or_ssh() {
+        for url in [
+            "https://github.com/enshwick/mods",
+            "https://github.com/enshwick/mods.git",
+            "https://github.com/enshwick/mods/",
+            "git@github.com:enshwick/mods.git",
+            "ssh://git@github.com/enshwick/mods.git",
+            "https://x-access-token:secret@github.com/enshwick/mods.git",
+            "https://GitHub.com/enshwick/mods",
+            "http://github.com/enshwick/mods",
+            "ssh://git@ssh.github.com:443/enshwick/mods.git",
+        ] {
+            assert_eq!(repository_of(url), Some("enshwick/mods"), "{url}");
+        }
+        for url in [
+            "https://gitlab.com/enshwick/mods",
+            "https://github.com.evil.example/enshwick/mods",
+            "https://github.com@evil.example/enshwick/mods",
+            "https://github.com/enshwick",
+            "https://github.com/enshwick/mods/tree/main",
+            "/d/clones/mods",
+            "",
+        ] {
+            assert_eq!(repository_of(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn a_run_takes_every_mod_the_remote_has_not_released_or_finished() {
+        let package = |name: &str| Package {
+            name: name.to_owned(),
+            version: "0.1.1".to_owned(),
+            dir: PathBuf::new(),
+            id: name.to_owned(),
+            windows_only: false,
+            cdylib: true,
+            lib: true,
+        };
+        let remote = Fake {
+            tags: &["n-v0.1.1"],
+            finished: &[],
+            failing: &[],
+        };
+        let names = |way| {
+            choose(vec![package("m"), package("n")], way, REV, &remote)
+                .unwrap()
+                .unwrap()
+                .into_iter()
+                .map(|p| p.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(Way::Unfinished), ["m", "n"]);
+        assert_eq!(names(Way::Chosen(&["n"])), ["n"]);
+        let untagged = || vec![package("m"), package("o")];
+        let taken = choose(untagged(), Way::Unreleased, REV, &remote).unwrap();
+        assert_eq!(taken.map(|mods| mods.len()), Some(2));
+    }
+
+    #[test]
+    fn a_tag_is_released_only_when_the_remote_lists_it_by_its_whole_name() {
+        let listing = format!(
+            "{REV}\trefs/tags/m-v0.1.1\n{REV}\trefs/tags/m-v0.1.1^{{}}\n{REV}\trefs/tags/m-v0.1.10\n"
+        );
+        assert!(listed(&listing, "m-v0.1.1"));
+        assert!(listed(&listing, "m-v0.1.10"));
+        assert!(!listed(&listing, "m-v0.1"));
+        assert!(!listed(&listing, "m-v0.1.2"));
+        assert!(!listed("", "m-v0.1.1"));
+    }
+
+    #[test]
+    fn a_remote_without_a_github_name_fails_only_when_gh_is_needed() {
+        let remote = GitHub {
+            name: Err("origin is not a GitHub URL".to_owned()),
+            tags: format!("{REV}\trefs/tags/m-v0.1.1\n"),
+        };
+        assert!(remote.released("m-v0.1.1"));
+        assert_eq!(remote.finished("m-v0.1.2", "m"), Ok(false));
+        assert!(remote.finished("m-v0.1.1", "m").is_err());
     }
 
     #[test]

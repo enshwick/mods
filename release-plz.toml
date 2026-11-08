@@ -36,13 +36,6 @@ pr_body = """
 {% for release in releases -%}
 - Released `{{ release.package }}` {{ release.next_version }}{% if release.previous_version and release.previous_version != release.next_version %} (was {{ release.previous_version }}){% endif %}.
 {% endfor %}"""
-## Chores
-
-{% for release in releases -%}
-- Released `{{ release.package }}` {{ release.next_version }}{% if release.previous_version and release.previous_version != release.next_version %} (was {{ release.previous_version }}){% endif %}.
-{% endfor %}
-Before merging, close each released mod's `## [Unreleased]` in its `CHANGELOG.md` as its new version.
-"""
 
 [[package]]
 name = "enshwick-area-loot"

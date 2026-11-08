@@ -287,7 +287,8 @@ pub(crate) fn finished(tag: &str, package: &str) -> Result<bool, String> {
             "--json",
             "assets",
             "--jq",
-            ".assets[].name",
+            // An upload cut off midway leaves its asset listed but not uploaded.
+            ".assets[] | select(.state == \"uploaded\") | .name",
         ])
         .output()
         .map_err(|error| format!("running gh: {error}"))?;

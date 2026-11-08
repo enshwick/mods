@@ -212,7 +212,7 @@ pub(crate) fn close(args: &[String]) -> Result<bool, String> {
             previous
                 .as_ref()
                 .map(|(version, finished)| (version.as_str(), *finished)),
-            changelog::section(&text, "Unreleased").is_some(),
+            changelog::section(&text, changelog::UNRELEASED).is_some(),
             changelog::section(&text, &package.version).is_some(),
         );
         let refusal = match plan {
@@ -293,7 +293,7 @@ enum Plan<'a> {
 fn plan(previous: Option<(&str, bool)>, changes: bool, closed: bool) -> Plan<'_> {
     match previous {
         Some((released, false)) if closed => Plan::Refuse(format!(
-            "closed already, but {released} has no finished release; run `release` to finish it, then `release-pr` again"
+            "closed already, but {released} has no finished release; move its section back under Unreleased so the mod is kept at {released}, which the next `release` finishes"
         )),
         Some((released, false)) => Plan::Kept(
             released,

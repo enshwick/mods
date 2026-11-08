@@ -84,7 +84,9 @@ A release goes in three steps:
    bumped mod with nothing under Unreleased keeps its released version, and
    so does a mod whose released version was tagged by a `release` run that
    stopped before its files: the next `release` finishes that version, and
-   the release pull request after it bumps the mod. A
+   the release pull request after it bumps the mod; if the bumped version
+   was closed already, it is refused: move that section back under
+   Unreleased by hand. A
    version closed already but not released, with new lines under
    Unreleased, is refused: move those lines into its section by hand.
    Review and merge it. A mod never released has no tag to bump from, so

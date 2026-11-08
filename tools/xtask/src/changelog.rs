@@ -3,7 +3,7 @@
 //! `cargo xtask pin` and `cargo xtask close`.
 
 pub(crate) const CHANGELOG: &str = "CHANGELOG.md";
-const UNRELEASED: &str = "Unreleased";
+pub(crate) const UNRELEASED: &str = "Unreleased";
 /// The changelog line of a release with no other change.
 const BUILT_FOR: &str = "- Built for Enshwick ";
 

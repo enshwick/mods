@@ -16,8 +16,6 @@ const USAGE: &str =
     "usage: cargo xtask notes (--unreleased | --unfinished | --package <name>...) [--out <dir>]";
 /// Where the platform comes from; its tags name the loader's releases.
 pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
-/// The repository the mods are released from, for `gh`.
-const REPOSITORY: &str = "enshwick/mods";
 /// The workspace dependency whose commit names the loader a mod builds on.
 const API: &str = "enshwick";
 /// Which packages release-plz releases.
@@ -92,7 +90,8 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     } else {
         Way::Chosen(&chosen)
     };
-    let Some(mods) = choose(shipped, way, &rev)? else {
+    let remote = GitHub::read()?;
+    let Some(mods) = choose(shipped, way, &rev, &remote)? else {
         return Ok(false);
     };
     if mods.is_empty() {
@@ -102,7 +101,7 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     let mut ok = true;
     let mut written = Vec::new();
     for package in &mods {
-        match mod_notes(package, &rev) {
+        match mod_notes(package, &rev, &remote) {
             Ok(text) => written.push((package, text)),
             Err(error) => {
                 say(&error);
@@ -141,10 +140,10 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
 /// The notes of the package's version, built on the pinned `rev`; a version
 /// a stopped run tagged is released as tagged, so its changelog and loader
 /// come from the tag, which `assets` builds.
-fn mod_notes(package: &Package, rev: &str) -> Result<String, String> {
+fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<String, String> {
     let path = package.dir.join(CHANGELOG);
     let tag = tag_of(package);
-    let (changelog, rev) = if released(&tag)? {
+    let (changelog, rev) = if remote.released(&tag) {
         let rev =
             built_on(&tag)?.ok_or_else(|| format!("{tag}: Cargo.toml has no `rev` of {API}"))?;
         let dir = package.dir.to_string_lossy();
@@ -176,14 +175,19 @@ enum Way<'a> {
 
 /// The shipped mods `way` takes; `None` when a released mod that is not
 /// taken was built for another loader than `rev`, said on stderr.
-fn choose(shipped: Vec<Package>, way: Way<'_>, rev: &str) -> Result<Option<Vec<Package>>, String> {
+fn choose(
+    shipped: Vec<Package>,
+    way: Way<'_>,
+    rev: &str,
+    remote: &impl Remote,
+) -> Result<Option<Vec<Package>>, String> {
     let mut mods = Vec::new();
     let mut ok = true;
     for package in shipped {
         let tag = tag_of(&package);
         let take = match way {
-            Way::Unfinished => !finished(&tag, &package.name)?,
-            Way::Unreleased => !released(&tag)?,
+            Way::Unfinished => !remote.finished(&tag, &package.name)?,
+            Way::Unreleased => !remote.released(&tag),
             Way::Chosen(chosen) => chosen.contains(&package.name.as_str()),
         };
         if take {
@@ -271,19 +275,97 @@ fn built_files(package: &str) -> [String; 3] {
     ]
 }
 
-/// Whether the tag is on the remote and its GitHub release has every file,
-/// read with `gh`.
-pub(crate) fn finished(tag: &str, package: &str) -> Result<bool, String> {
-    if !released(tag)? {
-        return Ok(false);
+/// What a release decision reads from the repository's remote; a trait so
+/// tests decide on a fake.
+pub(crate) trait Remote {
+    /// Whether the remote has the tag.
+    fn released(&self, tag: &str) -> bool;
+    /// Whether the tag is on the remote and its GitHub release has every
+    /// file a release of `package` attaches.
+    fn finished(&self, tag: &str, package: &str) -> Result<bool, String>;
+}
+
+/// The repository behind `origin`: its tags, listed once per run so every
+/// decision of a run sees one state, and its GitHub name, for `gh`.
+#[derive(Debug)]
+pub(crate) struct GitHub {
+    /// `owner/name`.
+    name: String,
+    /// `git ls-remote --tags origin`.
+    tags: String,
+}
+
+impl GitHub {
+    /// Reads `origin`'s tags and its GitHub name, from its URL or else
+    /// from `GITHUB_REPOSITORY`.
+    pub(crate) fn read() -> Result<Self, String> {
+        let url = git(&["remote", "get-url", "origin"])?;
+        let name = match repository_of(url.trim()) {
+            Some(name) => name.to_owned(),
+            None => std::env::var("GITHUB_REPOSITORY")
+                .ok()
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    format!(
+                        "origin {} is not on GitHub and GITHUB_REPOSITORY is not set",
+                        url.trim()
+                    )
+                })?,
+        };
+        Ok(Self {
+            name,
+            tags: git(&["ls-remote", "--tags", "origin"])?,
+        })
     }
+}
+
+impl Remote for GitHub {
+    fn released(&self, tag: &str) -> bool {
+        listed(&self.tags, tag)
+    }
+
+    fn finished(&self, tag: &str, package: &str) -> Result<bool, String> {
+        if !self.released(tag) {
+            return Ok(false);
+        }
+        assets_complete(tag, &self.name, package)
+    }
+}
+
+/// The `owner/name` of a GitHub remote URL, over HTTPS or SSH.
+fn repository_of(url: &str) -> Option<&str> {
+    let path = [
+        "https://github.com/",
+        "ssh://git@github.com/",
+        "git@github.com:",
+    ]
+    .iter()
+    .find_map(|prefix| url.strip_prefix(prefix))?;
+    let path = path.trim_end_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let (owner, name) = path.split_once('/')?;
+    (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some(path)
+}
+
+/// Whether a `git ls-remote --tags` listing holds the tag.
+fn listed(listing: &str, tag: &str) -> bool {
+    let reference = format!("refs/tags/{tag}");
+    listing
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .any(|(_, name)| name == reference)
+}
+
+/// Whether the GitHub release of the tag in `repository` has every file,
+/// read with `gh`.
+fn assets_complete(tag: &str, repository: &str, package: &str) -> Result<bool, String> {
     let output = Command::new("gh")
         .args([
             "release",
             "view",
             tag,
             "--repo",
-            REPOSITORY,
+            repository,
             "--json",
             "assets",
             "--jq",
@@ -328,15 +410,6 @@ pub(crate) fn built_on(tag: &str) -> Result<Option<String>, String> {
         git(&fetch)?;
     }
     Ok(pinned_rev(&git(&["show", &format!("{local}:Cargo.toml")])?))
-}
-
-/// Whether the repository's remote has the tag already.
-pub(crate) fn released(tag: &str) -> Result<bool, String> {
-    Ok(
-        !git(&["ls-remote", "--tags", "origin", &format!("refs/tags/{tag}")])?
-            .trim()
-            .is_empty(),
-    )
 }
 
 /// Whether players get the package: a mod [`for_players`] that
@@ -512,6 +585,40 @@ mod tests {
         assert_eq!(pinned_rev(&manifest).as_deref(), Some(REV));
         assert_eq!(pinned_rev("[workspace]\n"), None);
         assert_eq!(pinned_rev("[workspace"), None);
+    }
+
+    #[test]
+    fn the_repository_is_named_by_its_github_remote_over_https_or_ssh() {
+        for url in [
+            "https://github.com/enshwick/mods",
+            "https://github.com/enshwick/mods.git",
+            "https://github.com/enshwick/mods/",
+            "git@github.com:enshwick/mods.git",
+            "ssh://git@github.com/enshwick/mods.git",
+        ] {
+            assert_eq!(repository_of(url), Some("enshwick/mods"), "{url}");
+        }
+        for url in [
+            "https://gitlab.com/enshwick/mods",
+            "https://github.com/enshwick",
+            "https://github.com/enshwick/mods/tree/main",
+            "/d/clones/mods",
+            "",
+        ] {
+            assert_eq!(repository_of(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn a_tag_is_released_only_when_the_remote_lists_it_by_its_whole_name() {
+        let listing = format!(
+            "{REV}\trefs/tags/m-v0.1.1\n{REV}\trefs/tags/m-v0.1.1^{{}}\n{REV}\trefs/tags/m-v0.1.10\n"
+        );
+        assert!(listed(&listing, "m-v0.1.1"));
+        assert!(listed(&listing, "m-v0.1.10"));
+        assert!(!listed(&listing, "m-v0.1"));
+        assert!(!listed(&listing, "m-v0.1.2"));
+        assert!(!listed("", "m-v0.1.1"));
     }
 
     #[test]

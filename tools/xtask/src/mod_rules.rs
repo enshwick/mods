@@ -79,15 +79,16 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         }
         problems.extend(docs_files(name, &dir.join("docs"))?);
         problems.extend(text_apostrophes(name, dir)?);
-        // Its release notes come from it (`cargo xtask notes`).
-        if crate::notes::for_players(dir, true) && !dir.join(crate::changelog::CHANGELOG).is_file()
-        {
-            problems.push(format!(
-                "{name}: no CHANGELOG.md; a mod players get keeps one by hand"
-            ));
-        }
+        problems.extend(changelog_problem(name, dir, shipping.contains(&name)));
     }
     Ok(problems)
+}
+
+/// A mod players get without a changelog, which its release notes come
+/// from (`cargo xtask notes`).
+fn changelog_problem(name: &str, dir: &Path, shipping: bool) -> Option<String> {
+    (shipping && !dir.join(crate::changelog::CHANGELOG).is_file())
+        .then(|| format!("{name}: no CHANGELOG.md; a mod players get keeps one by hand"))
 }
 
 fn manifest(path: &Path) -> Result<toml::Table, String> {
@@ -522,6 +523,15 @@ mod tests {
         assert!(!player_doc("player.UK.md", false));
         assert!(!player_doc("notes", true));
         assert!(!player_doc("images", false));
+    }
+
+    #[test]
+    fn only_a_mod_players_get_needs_a_changelog() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let without = root.join("tools/xtask");
+        assert!(changelog_problem("m", &without, true).is_some());
+        assert_eq!(changelog_problem("m", &without, false), None);
+        assert_eq!(changelog_problem("m", &root.join("area-loot"), true), None);
     }
 
     #[test]

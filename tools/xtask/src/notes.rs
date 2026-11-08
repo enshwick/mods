@@ -2,23 +2,29 @@
 //! released: the warning that anything may change before 1.0, the loader
 //! alpha the mod builds on, how to install it, and the hand-written section
 //! of its version in the mod's `CHANGELOG.md`. A mod is about to be released
-//! when its tag `<package>-v<version>` is not on the remote yet.
+//! when its tag `<package>-v<version>` is not on the remote yet; with
+//! `--unfinished`, also when its tag has no GitHub release with every file
+//! yet, so a release run that stopped partway is finished by the next.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::{Package, packages, say};
 
-const USAGE: &str = "usage: cargo xtask notes (--unreleased | --package <name>...) [--out <dir>]";
+const USAGE: &str =
+    "usage: cargo xtask notes (--unreleased | --unfinished | --package <name>...) [--out <dir>]";
 /// Where the platform comes from; its tags name the loader's releases.
-const PLATFORM: &str = "https://github.com/enshwick/enshwick";
+pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
 /// The workspace dependency whose commit names the loader a mod builds on.
 const API: &str = "enshwick";
-const CHANGELOG: &str = "CHANGELOG.md";
+pub(crate) const CHANGELOG: &str = "CHANGELOG.md";
 /// Which packages release-plz releases.
 const RELEASE_CONFIG: &str = "release-plz.toml";
 /// Only a mod with a player page ships to players.
-const PLAYER_PAGE: &str = "docs/player.md";
+pub(crate) const PLAYER_PAGE: &str = "docs/player.md";
+/// The list of the mods a run takes, written beside their notes: the
+/// `release` workflow's jobs run once per entry.
+const RELEASES: &str = "releases.json";
 /// GitHub refuses a release body longer than this, in characters.
 const MAX_BODY: usize = 125_000;
 const WARNING: &str = "\
@@ -34,60 +40,64 @@ const WARNING: &str = "\
 ";
 
 /// Writes `<package>.md` into `--out` (`target/notes` by default) for each
-/// chosen mod, or for every mod not released yet with `--unreleased`; the
+/// chosen mod, or for every mod not released yet with `--unreleased` or
+/// not finished with `--unfinished`, and `releases.json` listing them; the
 /// files there are the mods a release takes, so a run that refuses one
-/// writes none.
+/// writes none. With either flag, a released mod built for another loader
+/// than the pinned one is refused too: a loader alpha releases every mod.
 pub(crate) fn run(args: &[String]) -> Result<bool, String> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = root();
     let mut out = root.join("target").join("notes");
     let mut unreleased = false;
+    let mut unfinished = false;
     let mut chosen: Vec<&str> = Vec::new();
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--unreleased" => unreleased = true,
+            "--unfinished" => unfinished = true,
             "--package" => chosen.push(rest.next().ok_or(USAGE)?),
             "--out" => out = PathBuf::from(rest.next().ok_or(USAGE)?),
             _ => return Err(USAGE.to_owned()),
         }
     }
-    // Exactly one of the two ways to choose.
-    if unreleased != chosen.is_empty() {
+    // Exactly one of the three ways to choose.
+    if [unreleased, unfinished, !chosen.is_empty()]
+        .iter()
+        .filter(|way| **way)
+        .count()
+        != 1
+    {
         return Err(USAGE.to_owned());
     }
-    let config = root.join(RELEASE_CONFIG);
-    let held = std::fs::read_to_string(&config)
-        .map_err(|e| e.to_string())
-        .and_then(|text| held_back(&text))
-        .map_err(|e| format!("{}: {e}", config.display()))?;
-    let shipped: Vec<Package> = packages()?
-        .into_iter()
-        .filter(|p| ships(p, &held))
-        .collect();
+    let config = release_config(&root)?;
+    let shipped = shipped(&config)?;
     if let Some(missing) = chosen
         .iter()
         .find(|name| !shipped.iter().any(|p| p.name == **name))
     {
         return Err(format!("{missing} is not a mod players get"));
     }
-    let mut mods = Vec::new();
-    for package in shipped {
-        let take = if unreleased {
-            !released(&format!("{}-v{}", package.name, package.version))?
-        } else {
-            chosen.contains(&package.name.as_str())
-        };
-        if take {
-            mods.push(package);
-        }
-    }
+    let rev =
+        pinned_rev(&std::fs::read_to_string(root.join("Cargo.toml")).map_err(|e| e.to_string())?)
+            .ok_or_else(|| format!("Cargo.toml: no `rev` of {API}"))?;
+    let way = if unfinished {
+        Way::Unfinished
+    } else if unreleased {
+        Way::Unreleased
+    } else {
+        Way::Chosen(&chosen)
+    };
+    let Some(mods) = choose(shipped, way, &rev)? else {
+        return Ok(false);
+    };
     if mods.is_empty() {
         say("every mod's version is released already");
         return Ok(true);
     }
-    let loader = loader_tag(&root)?;
-    let mut written = Vec::new();
+    let loader = loader_tag(&rev)?;
     let mut ok = true;
+    let mut written = Vec::new();
     for package in &mods {
         let path = package.dir.join(CHANGELOG);
         let text = std::fs::read_to_string(&path)
@@ -98,7 +108,7 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
                     .and_then(|section| notes(&package.name, &loader, section))
             });
         match text {
-            Ok(text) => written.push((package.name.as_str(), text)),
+            Ok(text) => written.push((package, text)),
             Err(error) => {
                 say(&error);
                 ok = false;
@@ -109,16 +119,184 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
         return Ok(false);
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
-    for (name, text) in written {
-        let file = out.join(format!("{name}.md"));
+    for (package, text) in &written {
+        let file = out.join(format!("{}.md", package.name));
         std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
         say(&format!("wrote {}", file.display()));
     }
+    let releases: Vec<serde_json::Value> = written
+        .iter()
+        .map(|(package, _)| {
+            serde_json::json!({
+                "tag": tag_of(package),
+                "package_name": package.name,
+                "version": package.version,
+                "title": title(&config, package),
+            })
+        })
+        .collect();
+    let file = out.join(RELEASES);
+    std::fs::write(&file, serde_json::Value::from(releases).to_string())
+        .map_err(|e| format!("{}: {e}", file.display()))?;
     Ok(true)
 }
 
+/// How a run chooses the mods it takes.
+#[derive(Debug, Clone, Copy)]
+enum Way<'a> {
+    /// Those whose tag is not on the remote.
+    Unreleased,
+    /// Those whose tag is not on the remote or has no finished release.
+    Unfinished,
+    /// The named ones.
+    Chosen(&'a [&'a str]),
+}
+
+/// The shipped mods `way` takes; `None` when a released mod that is not
+/// taken was built for another loader than `rev`, said on stderr.
+fn choose(shipped: Vec<Package>, way: Way<'_>, rev: &str) -> Result<Option<Vec<Package>>, String> {
+    let mut mods = Vec::new();
+    let mut ok = true;
+    for package in shipped {
+        let tag = tag_of(&package);
+        let take = match way {
+            Way::Unfinished => !finished(&tag, &package.name)?,
+            Way::Unreleased => !released(&tag)?,
+            Way::Chosen(chosen) => chosen.contains(&package.name.as_str()),
+        };
+        if take {
+            mods.push(package);
+        } else if !matches!(way, Way::Chosen(_)) && built_on(&tag)?.as_deref() != Some(rev) {
+            say(&format!(
+                "{tag} was built for another loader than the pinned one; run `cargo xtask pin <loader tag>` so release-pr bumps it"
+            ));
+            ok = false;
+        }
+    }
+    Ok(ok.then_some(mods))
+}
+
+/// The workspace root.
+pub(crate) fn root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// The tag release-plz gives the package's version.
+pub(crate) fn tag_of(package: &Package) -> String {
+    format!("{}-v{}", package.name, package.version)
+}
+
+/// The packages `release-plz.toml` names, as tables.
+pub(crate) fn release_config(root: &Path) -> Result<Vec<toml::Table>, String> {
+    let path = root.join(RELEASE_CONFIG);
+    std::fs::read_to_string(&path)
+        .map_err(|e| e.to_string())
+        .and_then(|text| entries(&text))
+        .map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// The `[[package]]` tables of a release-plz configuration.
+pub(crate) fn entries(config: &str) -> Result<Vec<toml::Table>, String> {
+    let config: toml::Table = toml::from_str(config).map_err(|e| e.to_string())?;
+    Ok(config
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_table)
+        .cloned()
+        .collect())
+}
+
+/// The mods players get, by [`ships`].
+pub(crate) fn shipped(config: &[toml::Table]) -> Result<Vec<Package>, String> {
+    let held = held_back(config);
+    Ok(packages()?
+        .into_iter()
+        .filter(|p| ships(p, &held))
+        .collect())
+}
+
+/// The release's title: the package's `git_release_name` with its version,
+/// else its tag, as release-plz names it.
+fn title(config: &[toml::Table], package: &Package) -> String {
+    config
+        .iter()
+        .find(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(&package.name))
+        .and_then(|entry| entry.get("git_release_name"))
+        .and_then(toml::Value::as_str)
+        .map_or_else(
+            || tag_of(package),
+            |name| name.replace("{{ version }}", &package.version),
+        )
+}
+
+/// The files the `release` workflow attaches to a mod's release.
+fn release_files(package: &str) -> [String; 4] {
+    [
+        format!("{package}.zip"),
+        format!("{package}.pdb"),
+        format!("{package}.cdx.json"),
+        "SHA256SUMS".to_owned(),
+    ]
+}
+
+/// Whether the tag is on the remote and its GitHub release has every file,
+/// read with `gh`.
+fn finished(tag: &str, package: &str) -> Result<bool, String> {
+    if !released(tag)? {
+        return Ok(false);
+    }
+    let output = Command::new("gh")
+        .args([
+            "release",
+            "view",
+            tag,
+            "--json",
+            "assets",
+            "--jq",
+            ".assets[].name",
+        ])
+        .output()
+        .map_err(|error| format!("running gh: {error}"))?;
+    let error = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        return if error.contains("release not found") {
+            Ok(false)
+        } else {
+            Err(format!("gh release view {tag}: {}", error.trim()))
+        };
+    }
+    let names = String::from_utf8_lossy(&output.stdout);
+    Ok(has_files(&names, package))
+}
+
+/// Whether `gh`'s list of a release's files, one a line, holds every file
+/// a release of `package` attaches.
+fn has_files(names: &str, package: &str) -> bool {
+    release_files(package)
+        .iter()
+        .all(|file| names.lines().any(|name| name == file))
+}
+
+/// The platform commit the root manifest at `tag` pins, fetching the tag
+/// first when this clone lacks it; `None` when that manifest pins none.
+pub(crate) fn built_on(tag: &str) -> Result<Option<String>, String> {
+    let local = format!("refs/tags/{tag}");
+    if git(&["rev-parse", "--verify", "--quiet", &local]).is_err() {
+        let refspec = format!("{local}:{local}");
+        let mut fetch = vec!["fetch", "--no-tags", "origin", refspec.as_str()];
+        // A shallow clone stays shallow; a full one must not become so.
+        if git(&["rev-parse", "--is-shallow-repository"])?.trim() == "true" {
+            fetch.push("--depth=1");
+        }
+        git(&fetch)?;
+    }
+    Ok(pinned_rev(&git(&["show", &format!("{local}:Cargo.toml")])?))
+}
+
 /// Whether the repository's remote has the tag already.
-fn released(tag: &str) -> Result<bool, String> {
+pub(crate) fn released(tag: &str) -> Result<bool, String> {
     Ok(
         !git(&["ls-remote", "--tags", "origin", &format!("refs/tags/{tag}")])?
             .trim()
@@ -134,42 +312,38 @@ fn ships(package: &Package, held: &[String]) -> bool {
 
 /// The packages `release-plz.toml` never releases (`release = false`), so a
 /// mod held back there gets no notes and does not stop the others.
-fn held_back(config: &str) -> Result<Vec<String>, String> {
-    let config: toml::Table = toml::from_str(config).map_err(|e| e.to_string())?;
-    Ok(config
-        .get("package")
-        .and_then(toml::Value::as_array)
-        .into_iter()
-        .flatten()
+pub(crate) fn held_back(config: &[toml::Table]) -> Vec<String> {
+    config
+        .iter()
         .filter(|package| package.get("release").and_then(toml::Value::as_bool) == Some(false))
         .filter_map(|package| package.get("name").and_then(toml::Value::as_str))
         .map(str::to_owned)
-        .collect())
+        .collect()
+}
+
+/// The commit a root manifest pins the API to.
+pub(crate) fn pinned_rev(manifest: &str) -> Option<String> {
+    let manifest: toml::Table = toml::from_str(manifest).ok()?;
+    manifest
+        .get("workspace")?
+        .get("dependencies")?
+        .get(API)?
+        .get("rev")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// The loader release whose commit the workspace pins the API to.
-fn loader_tag(root: &Path) -> Result<String, String> {
-    let path = root.join("Cargo.toml");
-    let manifest: toml::Table = std::fs::read_to_string(&path)
-        .map_err(|e| e.to_string())
-        .and_then(|text| toml::from_str(&text).map_err(|e| e.to_string()))
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    let rev = manifest
-        .get("workspace")
-        .and_then(|w| w.get("dependencies"))
-        .and_then(|d| d.get(API))
-        .and_then(|spec| spec.get("rev"))
-        .and_then(toml::Value::as_str)
-        .ok_or_else(|| format!("{}: no `rev` of {API}", path.display()))?;
+fn loader_tag(rev: &str) -> Result<String, String> {
     let listing = git(&["ls-remote", "--tags", PLATFORM, "refs/tags/v*"])?;
     release_at(&listing, rev).map(str::to_owned).ok_or_else(|| {
         format!(
-            "{API} is pinned to {rev}, which no loader release tags; pin it to the commit of the loader alpha the mods are built for"
+            "{API} is pinned to {rev}, which no loader release tags; run `cargo xtask pin <loader tag>` with the loader alpha the mods are built for"
         )
     })
 }
 
-fn git(args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
         .args(args)
         .output()
@@ -241,7 +415,7 @@ fn closed<'a>(changelog: &'a str, version: &str) -> Result<&'a str, String> {
 /// The body of the `## [version]` section of a Keep a Changelog file, up to
 /// the next section or the link definitions at the file's foot, trimmed;
 /// `None` without one or when it is empty.
-fn section<'a>(changelog: &'a str, version: &str) -> Option<&'a str> {
+pub(crate) fn section<'a>(changelog: &'a str, version: &str) -> Option<&'a str> {
     let heading = format!("## [{version}]");
     let mut offset = 0;
     let mut start = None;
@@ -319,9 +493,48 @@ mod tests {
             [[package]]\nname = \"a\"\ngit_release_name = \"A {{ version }}\"\n\n\
             [[package]]\nname = \"b\"\nrelease = false\n\n\
             [[package]]\nname = \"c\"\nrelease = true\n";
-        assert_eq!(held_back(config), Ok(vec!["b".to_owned()]));
-        assert_eq!(held_back("[workspace]\n"), Ok(Vec::new()));
-        assert!(held_back("[[package]\n").is_err());
+        assert_eq!(held_back(&entries(config).unwrap()), ["b"]);
+        assert_eq!(entries("[workspace]\n"), Ok(Vec::new()));
+        assert!(entries("[[package]\n").is_err());
+    }
+
+    #[test]
+    fn the_pinned_commit_is_the_rev_of_the_api_in_the_workspace() {
+        let manifest = format!(
+            "[workspace.dependencies]\nenshwick = {{ git = \"{PLATFORM}\", rev = \"{REV}\" }}\n"
+        );
+        assert_eq!(pinned_rev(&manifest).as_deref(), Some(REV));
+        assert_eq!(pinned_rev("[workspace]\n"), None);
+        assert_eq!(pinned_rev("[workspace"), None);
+    }
+
+    #[test]
+    fn a_release_is_finished_only_with_every_file_attached() {
+        let all = "m.cdx.json\nm.pdb\nm.zip\nSHA256SUMS\n";
+        assert!(has_files(all, "m"));
+        assert!(!has_files("m.pdb\nm.zip\nSHA256SUMS\n", "m"));
+        assert!(!has_files("", "m"));
+        assert!(!has_files("n.cdx.json\nn.pdb\nn.zip\nSHA256SUMS\n", "m"));
+    }
+
+    #[test]
+    fn a_release_is_titled_by_its_release_name_or_else_its_tag() {
+        let config = entries(
+            "[[package]]\nname = \"m\"\ngit_release_name = \"Mod {{ version }}\"\n\
+             [[package]]\nname = \"n\"\n",
+        )
+        .unwrap();
+        let package = |name: &str| Package {
+            name: name.to_owned(),
+            version: "0.2.0".to_owned(),
+            dir: PathBuf::new(),
+            id: name.to_owned(),
+            windows_only: false,
+            cdylib: true,
+            lib: true,
+        };
+        assert_eq!(title(&config, &package("m")), "Mod 0.2.0");
+        assert_eq!(title(&config, &package("n")), "n-v0.2.0");
     }
 
     #[test]

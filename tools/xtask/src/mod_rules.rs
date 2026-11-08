@@ -40,6 +40,25 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         .filter(|package| builds_a_dll(package))
         .filter_map(|package| package["name"].as_str())
         .collect();
+    let members: Vec<&str> = packages
+        .iter()
+        .filter_map(|package| package["name"].as_str())
+        .collect();
+    let shipping: Vec<&str> = packages
+        .iter()
+        .filter(|package| builds_a_dll(package))
+        .filter(|package| {
+            Path::new(package["manifest_path"].as_str().unwrap_or_default())
+                .with_file_name(crate::notes::PLAYER_PAGE)
+                .is_file()
+        })
+        .filter_map(|package| package["name"].as_str())
+        .collect();
+    problems.extend(release_entries(
+        &members,
+        &shipping,
+        &crate::notes::release_config(root)?,
+    ));
     for package in packages {
         let name = package["name"].as_str().unwrap_or_default();
         let path = Path::new(package["manifest_path"].as_str().unwrap_or_default());
@@ -159,13 +178,47 @@ fn platform_pins(manifest: &toml::Table) -> Vec<String> {
 
 /// Whether the dependency `spec` takes the platform from git, its URL
 /// written with or without `.git` and a trailing slash.
-fn from_the_platform(spec: &toml::Value) -> bool {
+pub(crate) fn from_the_platform(spec: &toml::Value) -> bool {
     spec.get("git")
         .and_then(toml::Value::as_str)
         .is_some_and(|url| {
             let url = url.trim_end_matches('/');
             url.strip_suffix(".git").unwrap_or(url) == PLATFORM
         })
+}
+
+/// What `release-plz.toml` leaves out or gets wrong: every workspace member
+/// has an entry there, released or `release = false`, so release-plz never
+/// releases a developer mod by default; every entry names a member; and a
+/// released one is a mod players get, whose notes `cargo xtask notes` writes.
+fn release_entries(members: &[&str], shipping: &[&str], entries: &[toml::Table]) -> Vec<String> {
+    fn name(entry: &toml::Table) -> Option<&str> {
+        entry.get("name").and_then(toml::Value::as_str)
+    }
+    let mut problems: Vec<String> = members
+        .iter()
+        .filter_map(|member| {
+            let Some(entry) = entries.iter().find(|entry| name(entry) == Some(*member)) else {
+                return Some(format!(
+                    "{member}: no [[package]] in release-plz.toml; name it there, with `release = false` unless players get it"
+                ));
+            };
+            let released = entry.get("release").and_then(toml::Value::as_bool) != Some(false);
+            (released && !shipping.contains(member)).then(|| {
+                format!(
+                    "{member}: release-plz.toml releases it, but players get only a mod with docs/player.md; set `release = false`"
+                )
+            })
+        })
+        .collect();
+    problems.extend(
+        entries
+            .iter()
+            .map(|entry| name(entry).unwrap_or_default())
+            .filter(|entry| !members.contains(entry))
+            .map(|entry| format!("release-plz.toml: {entry:?} is no workspace member")),
+    );
+    problems
 }
 
 /// A platform crate a member's `manifest` takes from git itself rather than
@@ -399,6 +452,26 @@ mod tests {
             platform_outside_workspace("a", &member),
             ["a: enshwick-gamedata comes from [workspace.dependencies], the one platform pin"]
         );
+    }
+
+    #[test]
+    fn every_member_has_a_release_entry_and_only_a_shipped_mod_is_released() {
+        let entries = crate::notes::entries(
+            "[[package]]\nname = \"loot\"\n\
+             [[package]]\nname = \"probe\"\nrelease = false\n\
+             [[package]]\nname = \"tool\"\n\
+             [[package]]\nname = \"gone\"\nrelease = false\n",
+        )
+        .unwrap();
+        assert_eq!(
+            release_entries(&["loot", "probe", "tool", "content"], &["loot"], &entries),
+            [
+                "tool: release-plz.toml releases it, but players get only a mod with docs/player.md; set `release = false`",
+                "content: no [[package]] in release-plz.toml; name it there, with `release = false` unless players get it",
+                "release-plz.toml: \"gone\" is no workspace member",
+            ]
+        );
+        assert!(release_entries(&["loot", "probe"], &["loot"], &entries[..2]).is_empty());
     }
 
     #[test]

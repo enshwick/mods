@@ -20,12 +20,15 @@
 //!
 //! `cargo xtask notes` writes the release notes of each mod about to be
 //! released ([`notes`]), and refuses a mod whose notes are not ready.
+//! `cargo xtask pin` and `cargo xtask close` take the steps of a release
+//! release-plz cannot ([`release`]).
 
 #![forbid(unsafe_code)]
 
 mod crate_rules;
 mod mod_rules;
 mod notes;
+mod release;
 mod wine;
 
 use std::io::{Cursor, Write as _};
@@ -34,7 +37,7 @@ use std::process::{Command, ExitCode};
 use std::thread;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--package <name>]... [--out <dir>] | cargo xtask notes (--unreleased | --package <name>...) [--out <dir>]";
+const USAGE: &str = "usage: cargo xtask check [--all] [--windows | --no-wine] [--base <git ref>] | cargo xtask dist [--package <name>]... [--out <dir>] | cargo xtask notes (--unreleased | --unfinished | --package <name>...) [--out <dir>] | cargo xtask pin <loader tag> | cargo xtask close --date <YYYY-MM-DD> [--base <git ref>] [--body <file>]";
 const WINDOWS_TARGET: &str = "x86_64-pc-windows-msvc";
 
 fn main() -> ExitCode {
@@ -54,6 +57,8 @@ fn run(args: &[String]) -> Result<bool, String> {
     match task.as_str() {
         "dist" => return dist(rest),
         "notes" => return notes::run(rest),
+        "pin" => return release::pin(rest),
+        "close" => return release::close(rest),
         "wine-run" => return wine::run_one(rest),
         "check" => {}
         _ => return Err(USAGE.to_owned()),

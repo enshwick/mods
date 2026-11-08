@@ -332,6 +332,28 @@ impl Remote for GitHub {
     }
 }
 
+/// A remote with these tags, these finished, and a `gh` failing on these.
+#[cfg(test)]
+pub(crate) struct Fake {
+    pub(crate) tags: &'static [&'static str],
+    pub(crate) finished: &'static [&'static str],
+    pub(crate) failing: &'static [&'static str],
+}
+
+#[cfg(test)]
+impl Remote for Fake {
+    fn released(&self, tag: &str) -> bool {
+        self.tags.contains(&tag)
+    }
+
+    fn finished(&self, tag: &str, _: &str) -> Result<bool, String> {
+        if self.failing.contains(&tag) {
+            return Err(format!("gh release view {tag}: HTTP 502"));
+        }
+        Ok(self.finished.contains(&tag))
+    }
+}
+
 /// The `owner/name` of a GitHub remote URL, over HTTPS or SSH.
 fn repository_of(url: &str) -> Option<&str> {
     let path = [
@@ -607,6 +629,37 @@ mod tests {
         ] {
             assert_eq!(repository_of(url), None, "{url}");
         }
+    }
+
+    #[test]
+    fn a_run_takes_every_mod_the_remote_has_not_released_or_finished() {
+        let package = |name: &str| Package {
+            name: name.to_owned(),
+            version: "0.1.1".to_owned(),
+            dir: PathBuf::new(),
+            id: name.to_owned(),
+            windows_only: false,
+            cdylib: true,
+            lib: true,
+        };
+        let remote = Fake {
+            tags: &["n-v0.1.1"],
+            finished: &[],
+            failing: &[],
+        };
+        let names = |way| {
+            choose(vec![package("m"), package("n")], way, REV, &remote)
+                .unwrap()
+                .unwrap()
+                .into_iter()
+                .map(|p| p.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(Way::Unfinished), ["m", "n"]);
+        assert_eq!(names(Way::Chosen(&["n"])), ["n"]);
+        let untagged = || vec![package("m"), package("o")];
+        let taken = choose(untagged(), Way::Unreleased, REV, &remote).unwrap();
+        assert_eq!(taken.map(|mods| mods.len()), Some(2));
     }
 
     #[test]

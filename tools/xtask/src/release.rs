@@ -402,6 +402,7 @@ fn is_date(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::notes::Fake;
 
     const OLD: &str = "1111111111111111111111111111111111111111";
     const NEW: &str = "2222222222222222222222222222222222222222";
@@ -498,27 +499,6 @@ mod tests {
             plan(Some(&released(false)), stray, "0.1.2"),
             Plan::Kept("0.1.1", _)
         ));
-    }
-
-    /// A remote with these tags, these finished, and a `gh` failing on
-    /// these.
-    struct Fake {
-        tags: &'static [&'static str],
-        finished: &'static [&'static str],
-        failing: &'static [&'static str],
-    }
-
-    impl Remote for Fake {
-        fn released(&self, tag: &str) -> bool {
-            self.tags.contains(&tag)
-        }
-
-        fn finished(&self, tag: &str, _: &str) -> Result<bool, String> {
-            if self.failing.contains(&tag) {
-                return Err(format!("gh release view {tag}: HTTP 502"));
-            }
-            Ok(self.finished.contains(&tag))
-        }
     }
 
     /// A mod `name` at `version` in a fresh folder under the temp folder,

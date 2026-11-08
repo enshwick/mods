@@ -46,11 +46,12 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         .collect();
     let shipping: Vec<&str> = packages
         .iter()
-        .filter(|package| builds_a_dll(package))
         .filter(|package| {
-            Path::new(package["manifest_path"].as_str().unwrap_or_default())
-                .with_file_name(crate::notes::PLAYER_PAGE)
-                .is_file()
+            let manifest = Path::new(package["manifest_path"].as_str().unwrap_or_default());
+            crate::notes::for_players(
+                manifest.parent().unwrap_or(Path::new(".")),
+                builds_a_dll(package),
+            )
         })
         .filter_map(|package| package["name"].as_str())
         .collect();
@@ -79,7 +80,8 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         problems.extend(docs_files(name, &dir.join("docs"))?);
         problems.extend(text_apostrophes(name, dir)?);
         // Its release notes come from it (`cargo xtask notes`).
-        if dir.join("docs/player.md").is_file() && !dir.join("CHANGELOG.md").is_file() {
+        if crate::notes::for_players(dir, true) && !dir.join(crate::changelog::CHANGELOG).is_file()
+        {
             problems.push(format!(
                 "{name}: no CHANGELOG.md; a mod players get keeps one by hand"
             ));

@@ -81,7 +81,10 @@ A release goes in three steps:
    bumps the mods whose folders changed, and then closes each bumped mod's
    changelog on its branch: the `## [Unreleased]` section becomes
    `## [0.2.0] - 2026-11-05`, with an empty `## [Unreleased]` above it. A
-   bumped mod with nothing under Unreleased keeps its released version. A
+   bumped mod with nothing under Unreleased keeps its released version, and
+   so does a mod whose released version was tagged by a `release` run that
+   stopped before its files: the next `release` finishes that version, and
+   the release pull request after it bumps the mod. A
    version closed already but not released, with new lines under
    Unreleased, is refused: move those lines into its section by hand.
    Review and merge it. A mod never released has no tag to bump from, so

@@ -161,6 +161,10 @@ jobs:
     env:
       TAG: ${{ matrix.release.tag }}
       PACKAGE: ${{ matrix.release.package_name }}
+      # The files the build writes, as `cargo xtask notes` lists them, and the
+      # file summing them; a finished release has all of them.
+      FILES: ${{ join(matrix.release.files, ' ') }}
+      SUMS: ${{ matrix.release.sums }}
     steps:
       - name: Where the files go
         run: echo "OUT=$RUNNER_TEMP/release" >> "$GITHUB_ENV" # zizmor: ignore[github-env] a fixed path
@@ -200,14 +204,14 @@ jobs:
       - name: Sums
         working-directory: ${{ env.OUT }}
         run: |
-          files=("$PACKAGE.zip" "$PACKAGE.pdb" "$PACKAGE.cdx.json")
-          sha256sum "${files[@]}" > SHA256SUMS
+          read -ra files <<< "$FILES"
+          sha256sum "${files[@]}" > "$SUMS"
           {
             echo "### Release files of $TAG"
             echo
             echo "| File | Bytes | SHA-256 |"
             echo "| --- | ---: | --- |"
-            for file in "${files[@]}" SHA256SUMS; do
+            for file in "${files[@]}" "$SUMS"; do
               echo "| $file | $(stat -c %s "$file") | \`$(sha256sum "$file" | cut -d' ' -f1)\` |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
@@ -221,7 +225,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         working-directory: ${{ env.OUT }}
-        run: gh release upload "$TAG" ./* --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          read -ra files <<< "$FILES"
+          gh release upload "$TAG" "${files[@]}" "$SUMS" --clobber --repo "$GITHUB_REPOSITORY"
 
   # The DLL attached to each release reports its tag's version, read through
   # its manifest as the loader reads it, which needs Windows.

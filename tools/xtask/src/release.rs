@@ -7,19 +7,19 @@
 //!
 //! `cargo xtask close --date <YYYY-MM-DD>` runs on the release pull request's
 //! branch: it closes each bumped mod's Unreleased section as its new version,
-//! sets a bumped mod with nothing for players back to its released version,
-//! and writes the pull request's body.
+//! sets a bumped mod back to its released version when it has nothing for
+//! players or that version's release has no files yet, and writes the pull
+//! request's body.
 
 use std::fmt::Write as _;
 
-use crate::notes::{self, CHANGELOG, PLATFORM};
+use crate::changelog::{self, CHANGELOG};
+use crate::notes::{self, PLATFORM};
 use crate::{Package, Step, say};
 
 const PIN_USAGE: &str = "usage: cargo xtask pin <loader tag>";
 const CLOSE_USAGE: &str =
     "usage: cargo xtask close --date <YYYY-MM-DD> [--base <git ref>] [--body <file>]";
-/// The changelog line of a release with no other change.
-const BUILT_FOR: &str = "- Built for Enshwick ";
 
 /// Pins every platform crate to the commit of `<loader tag>` and adds or
 /// updates the line naming the loader in the changelog of each shipped mod
@@ -74,8 +74,8 @@ pub(crate) fn pin(args: &[String]) -> Result<bool, String> {
         let path = package.dir.join(CHANGELOG);
         let changelog =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let updated =
-            built_for(&changelog, line).map_err(|e| format!("{}: {e}", path.display()))?;
+        let updated = changelog::built_for(&changelog, line)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
         if updated != changelog {
             std::fs::write(&path, updated).map_err(|e| format!("{}: {e}", path.display()))?;
             say(&format!(
@@ -165,103 +165,6 @@ fn loader_line<'a>(
     }
 }
 
-/// The `changelog` with its Unreleased section naming the loader `version`,
-/// or without that line for `None`: an existing line is updated or dropped,
-/// an empty section gets one under `### Changed`, and a section with other
-/// changes stays as it is, since those changes bump the mod already.
-fn built_for(changelog: &str, version: Option<&str>) -> Result<String, String> {
-    let (start, end) = unreleased(changelog).ok_or("no `## [Unreleased]` section")?;
-    let body = &changelog[start..end];
-    let has_line = body.lines().any(|l| l.starts_with(BUILT_FOR));
-    let body = match version {
-        Some(version) if has_line => {
-            let line = format!("{BUILT_FOR}{version}.");
-            body.lines()
-                .map(|l| {
-                    if l.starts_with(BUILT_FOR) {
-                        line.as_str()
-                    } else {
-                        l
-                    }
-                })
-                .fold(String::new(), |mut text, l| {
-                    text.push_str(l);
-                    text.push('\n');
-                    text
-                })
-        }
-        Some(version) if body.trim().is_empty() => {
-            format!("\n### Changed\n\n{BUILT_FOR}{version}.\n\n")
-        }
-        None if has_line => {
-            let rest: Vec<&str> = body.lines().filter(|l| !l.starts_with(BUILT_FOR)).collect();
-            // Only headings left: the line was the section's one change.
-            if rest
-                .iter()
-                .all(|l| l.trim().is_empty() || l.starts_with("### "))
-            {
-                "\n".to_owned()
-            } else {
-                rest.iter().fold(String::new(), |mut text, l| {
-                    text.push_str(l);
-                    text.push('\n');
-                    text
-                })
-            }
-        }
-        _ => return Ok(changelog.to_owned()),
-    };
-    Ok(format!(
-        "{}{body}{}",
-        &changelog[..start],
-        &changelog[end..]
-    ))
-}
-
-/// Where the body of `## [Unreleased]` starts and ends: after its heading's
-/// line, up to the next section or the link definitions at the file's foot.
-fn unreleased(changelog: &str) -> Option<(usize, usize)> {
-    let mut offset = 0;
-    let mut start = None;
-    for line in changelog.split_inclusive('\n') {
-        if let Some(start) = start {
-            let definition = line.starts_with('[') && line.contains("]: ");
-            if line.starts_with("## ") || definition {
-                return Some((start, offset));
-            }
-        } else if line.starts_with("## [Unreleased]") {
-            start = Some(offset + line.len());
-        }
-        offset += line.len();
-    }
-    start.map(|start| (start, changelog.len()))
-}
-
-/// The `changelog` with what is under Unreleased moved under
-/// `## [version] - date`, Unreleased left empty above it; `None` when
-/// nothing is under Unreleased. A version closed already but not released
-/// is refused: a second heading would hide the first from its notes.
-fn close_section(changelog: &str, version: &str, date: &str) -> Result<Option<String>, String> {
-    let Some((start, end)) = unreleased(changelog) else {
-        return Ok(None);
-    };
-    let body = changelog[start..end].trim();
-    if body.is_empty() {
-        return Ok(None);
-    }
-    let heading = format!("## [{version}]");
-    if changelog.lines().any(|line| line.starts_with(&heading)) {
-        return Err(format!(
-            "{version} is closed already and has changes under Unreleased; move them into its section by hand"
-        ));
-    }
-    Ok(Some(format!(
-        "{}\n## [{version}] - {date}\n\n{body}\n\n{}",
-        &changelog[..start],
-        &changelog[end..]
-    )))
-}
-
 /// The manifest with its `[package]` version `from` set to `to`.
 fn set_version(manifest: &str, from: &str, to: &str) -> Option<String> {
     let line = format!("version = \"{from}\"\n");
@@ -274,9 +177,9 @@ fn set_version(manifest: &str, from: &str, to: &str) -> Option<String> {
 }
 
 /// Closes the changelog of each shipped mod whose version has no tag yet,
-/// sets a mod bumped with nothing under Unreleased back to its version on
-/// `--base` (`origin/main`) when that one is released, and writes the
-/// release pull request's body to `--body`.
+/// sets a bumped mod back to its version on `--base` (`origin/main`) when
+/// that one is released and has nothing new under Unreleased or no finished
+/// release yet, and writes the release pull request's body to `--body`.
 pub(crate) fn close(args: &[String]) -> Result<bool, String> {
     let mut date = None;
     let mut base = "origin/main".to_owned();
@@ -302,40 +205,44 @@ pub(crate) fn close(args: &[String]) -> Result<bool, String> {
             continue;
         }
         let path = package.dir.join(CHANGELOG);
-        let changelog =
+        let text =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let closed = match close_section(&changelog, &package.version, date) {
-            Ok(closed) => closed,
-            Err(error) => {
-                say(&format!("{}: {error}", package.name));
-                ok = false;
-                continue;
-            }
-        };
-        if let Some(closed) = closed {
-            std::fs::write(&path, closed).map_err(|e| format!("{}: {e}", path.display()))?;
-        } else if notes::section(&changelog, &package.version).is_none() {
-            if let Some(released) = keep(&package, &base)? {
-                let _ = writeln!(
-                    body,
-                    "- Kept `{}` at {released}: nothing under Unreleased for players.",
-                    package.name
-                );
-                kept = true;
-            } else {
-                say(&format!(
-                    "{}: {} has nothing under Unreleased and no released version to keep",
-                    package.name, package.version
-                ));
-                ok = false;
-            }
-            continue;
-        }
-        let _ = writeln!(
-            body,
-            "- Released `{}` {}, its changelog closed as that version.",
-            package.name, package.version
+        let previous = previous(&package, &base)?;
+        let plan = plan(
+            previous
+                .as_ref()
+                .map(|(version, finished)| (version.as_str(), *finished)),
+            changelog::section(&text, "Unreleased").is_some(),
+            changelog::section(&text, &package.version).is_some(),
         );
+        let refusal = match plan {
+            Plan::Close => match changelog::close(&text, &package.version, date) {
+                Ok(closed) => {
+                    if let Some(closed) = closed {
+                        std::fs::write(&path, closed)
+                            .map_err(|e| format!("{}: {e}", path.display()))?;
+                    }
+                    let _ = writeln!(
+                        body,
+                        "- Released `{}` {}, its changelog closed as that version.",
+                        package.name, package.version
+                    );
+                    None
+                }
+                Err(error) => Some(error),
+            },
+            Plan::Kept(released, why) => {
+                set_back(&package, released)?;
+                let _ = writeln!(body, "- Kept `{}` at {released}: {why}.", package.name);
+                kept = true;
+                None
+            }
+            Plan::Refuse(why) => Some(why),
+        };
+        if let Some(refusal) = refusal {
+            say(&format!("{} {}: {refusal}", package.name, package.version));
+            ok = false;
+        }
     }
     if kept && !Step::new(&["update", "--workspace"]).run(false) {
         return Ok(false);
@@ -346,9 +253,9 @@ pub(crate) fn close(args: &[String]) -> Result<bool, String> {
     Ok(ok)
 }
 
-/// Sets the package's manifest back to its version on `base` when that
-/// version is released, and returns it.
-fn keep(package: &Package, base: &str) -> Result<Option<String>, String> {
+/// The package's version on `base` when it is another one and released,
+/// with whether its release has every file.
+fn previous(package: &Package, base: &str) -> Result<Option<(String, bool)>, String> {
     let dir = package.dir.to_string_lossy();
     let manifest = notes::git(&["-C", &dir, "show", &format!("{base}:./Cargo.toml")])?;
     let Some(released) = manifest.parse::<toml::Table>().ok().and_then(|m| {
@@ -363,13 +270,50 @@ fn keep(package: &Package, base: &str) -> Result<Option<String>, String> {
     if released == package.version || !notes::released(&tag)? {
         return Ok(None);
     }
+    let finished = notes::finished(&tag, &package.name)?;
+    Ok(Some((released, finished)))
+}
+
+/// What `close` does with a bumped mod.
+#[derive(Debug, PartialEq, Eq)]
+enum Plan<'a> {
+    /// Close its changelog as the new version.
+    Close,
+    /// Set it back to this released version, for this reason.
+    Kept(&'a str, &'static str),
+    /// Leave it bumped and fail the run, for this reason.
+    Refuse(String),
+}
+
+/// The [`Plan`] for a bumped mod, from its `previous` released version and
+/// whether that release has every file, whether it has `changes` under
+/// Unreleased and whether its new version is `closed` already. A version
+/// tagged without its files is kept until `release` finishes it: past the
+/// bump no run would take that tag again.
+fn plan(previous: Option<(&str, bool)>, changes: bool, closed: bool) -> Plan<'_> {
+    match previous {
+        Some((released, false)) if closed => Plan::Refuse(format!(
+            "closed already, but {released} has no finished release; run `release` to finish it, then `release-pr` again"
+        )),
+        Some((released, false)) => Plan::Kept(
+            released,
+            "its release has no files yet; `release` finishes it first",
+        ),
+        _ if changes || closed => Plan::Close,
+        Some((released, true)) => Plan::Kept(released, "nothing under Unreleased for players"),
+        None => Plan::Refuse("nothing under Unreleased and no released version to keep".to_owned()),
+    }
+}
+
+/// Sets the package's manifest back to the `released` version.
+fn set_back(package: &Package, released: &str) -> Result<(), String> {
     let path = package.dir.join("Cargo.toml");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let kept = set_version(&text, &package.version, &released)
+    let kept = set_version(&text, &package.version, released)
         .ok_or_else(|| format!("{}: no `version = \"{}\"`", path.display(), package.version))?;
     std::fs::write(&path, kept).map_err(|e| format!("{}: {e}", path.display()))?;
     say(&format!("{}: kept at {released}", package.name));
-    Ok(Some(released))
+    Ok(())
 }
 
 /// Whether `text` is a date as `YYYY-MM-DD`.
@@ -391,8 +335,6 @@ mod tests {
 
     const OLD: &str = "1111111111111111111111111111111111111111";
     const NEW: &str = "2222222222222222222222222222222222222222";
-    const HEAD: &str = "# Changelog\n\nIntro.\n\n## [Unreleased]\n";
-    const RELEASED: &str = "## [0.1.0] - 2026-11-05\n\n### Added\n\n- First.\n";
 
     #[test]
     fn an_annotated_tag_names_the_commit_it_points_to() {
@@ -436,81 +378,31 @@ mod tests {
     }
 
     #[test]
-    fn pinning_back_drops_a_loader_line_and_keeps_other_changes() {
-        let changelog = format!("{HEAD}\n{RELEASED}");
-        let built = built_for(&changelog, Some("1.0.0-alpha.14")).unwrap();
-        assert_eq!(built_for(&built, None).unwrap(), changelog);
-        let mixed = format!(
-            "{HEAD}\n### Changed\n\n- Built for Enshwick 1.0.0-alpha.14.\n- Other.\n\n{RELEASED}"
-        );
-        assert_eq!(
-            built_for(&mixed, None).unwrap(),
-            format!("{HEAD}\n### Changed\n\n- Other.\n\n{RELEASED}")
-        );
-        assert_eq!(built_for(&changelog, None).unwrap(), changelog);
+    fn a_bump_past_a_release_without_its_files_is_kept_until_the_release_is_finished() {
+        assert!(matches!(
+            plan(Some(("0.1.1", false)), true, false),
+            Plan::Kept("0.1.1", why) if why.contains("no files")
+        ));
+        assert!(matches!(
+            plan(Some(("0.1.1", false)), false, false),
+            Plan::Kept("0.1.1", _)
+        ));
+        assert!(matches!(
+            plan(Some(("0.1.1", false)), false, true),
+            Plan::Refuse(why) if why.contains("0.1.1")
+        ));
     }
 
     #[test]
-    fn an_empty_unreleased_section_names_the_loader() {
-        let changelog = format!("{HEAD}\n{RELEASED}");
-        let built = built_for(&changelog, Some("1.0.0-alpha.14")).unwrap();
-        assert_eq!(
-            built,
-            format!("{HEAD}\n### Changed\n\n- Built for Enshwick 1.0.0-alpha.14.\n\n{RELEASED}")
-        );
-        let again = built_for(&built, Some("1.0.0-alpha.15")).unwrap();
-        assert_eq!(again, built.replace("alpha.14", "alpha.15"));
-        assert_eq!(
-            built_for(&format!("{HEAD}\n"), Some("1.0.0")).unwrap(),
-            format!("{HEAD}\n### Changed\n\n- Built for Enshwick 1.0.0.\n\n")
-        );
-    }
-
-    #[test]
-    fn unreleased_changes_keep_the_section_as_it_is() {
-        let changelog = format!("{HEAD}\n### Fixed\n\n- A bug.\n\n{RELEASED}");
-        assert_eq!(
-            built_for(&changelog, Some("1.0.0-alpha.14")).unwrap(),
-            changelog
-        );
-        assert!(built_for(RELEASED, Some("1.0.0-alpha.14")).is_err());
-    }
-
-    #[test]
-    fn closing_moves_the_unreleased_changes_under_the_version() {
-        let changelog = format!("{HEAD}\n### Fixed\n\n- A bug.\n\n{RELEASED}");
-        assert_eq!(
-            close_section(&changelog, "0.1.1", "2026-11-08")
-                .unwrap()
-                .unwrap(),
-            format!("{HEAD}\n## [0.1.1] - 2026-11-08\n\n### Fixed\n\n- A bug.\n\n{RELEASED}")
-        );
-        let foot = "## [Unreleased]\n\n- A.\n[0.1.0]: https://example.com\n";
-        assert_eq!(
-            close_section(foot, "0.1.1", "2026-11-08").unwrap().unwrap(),
-            "## [Unreleased]\n\n## [0.1.1] - 2026-11-08\n\n- A.\n\n[0.1.0]: https://example.com\n"
-        );
-        assert_eq!(
-            close_section(&format!("{HEAD}\n{RELEASED}"), "0.1.1", "2026-11-08"),
-            Ok(None)
-        );
-    }
-
-    #[test]
-    fn a_version_closed_already_is_never_closed_twice() {
-        let changelog = format!("{HEAD}\n### Fixed\n\n- Late.\n\n{RELEASED}");
-        assert!(close_section(&changelog, "0.1.0", "2026-11-08").is_err());
-    }
-
-    #[test]
-    fn only_a_link_definition_at_a_line_start_ends_the_section() {
-        let changelog = "## [Unreleased]\n\n- Rates: [x]: y.\n[ref] at the start.\n";
-        assert_eq!(
-            close_section(changelog, "0.1.1", "2026-11-08")
-                .unwrap()
-                .unwrap(),
-            "## [Unreleased]\n\n## [0.1.1] - 2026-11-08\n\n- Rates: [x]: y.\n[ref] at the start.\n\n"
-        );
+    fn a_bump_past_a_finished_release_closes_unless_nothing_is_new() {
+        assert_eq!(plan(Some(("0.1.1", true)), true, false), Plan::Close);
+        assert_eq!(plan(Some(("0.1.1", true)), false, true), Plan::Close);
+        assert!(matches!(
+            plan(Some(("0.1.1", true)), false, false),
+            Plan::Kept("0.1.1", why) if why.contains("nothing")
+        ));
+        assert_eq!(plan(None, true, false), Plan::Close);
+        assert!(matches!(plan(None, false, false), Plan::Refuse(_)));
     }
 
     #[test]

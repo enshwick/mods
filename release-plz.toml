@@ -1,5 +1,9 @@
 # release-plz: each mod's version from the conventional commits that touch
-# its folder, so a change to one mod releases only it. Each mod is tagged
+# its folder, so a change to one mod releases only it. A new loader alpha
+# releases every mod: `cargo xtask pin` adds a line to each mod's changelog,
+# since release-plz does not count a changed git `rev` as a change. Every
+# workspace member has an entry here; `cargo xtask check` refuses one
+# without. Each mod is tagged
 # `<package>-v<version>` and gets its own GitHub release. Its CHANGELOG.md is
 # written by hand for players, and `cargo xtask notes` makes the release
 # notes from it.
@@ -13,25 +17,26 @@ publish = false
 # never released has no release pull request to wait for. `cargo xtask notes`
 # refuses the run first when a mod's notes are not ready.
 release_always = true
-# Until the loader's 1.0, every mod release is an alpha built on a loader
-# alpha; then "auto", where only a version like `0.2.0-alpha.1` is one.
-git_release_type = "pre"
+# release-plz only tags: the `release` workflow makes each GitHub release
+# with its notes, as a prerelease until the loader's 1.0. A release made
+# right after its tag was pushed got a 422 from GitHub.
+git_release_enable = false
 changelog_update = false
 git_tag_name = "{{ package }}-v{{ version }}"
 # Renovate moves the dependencies.
 dependencies_update = false
 pr_labels = ["release"]
+# A pull request title is a conventional commit with a scope.
+pr_name = "chore(release): release the mods"
 # The pull request body follows the repository's form: outcome bullets.
-# Before it merges, each bumped mod's CHANGELOG.md closes its Unreleased
-# section as the new version; its CI refuses it until then.
+# The `release-pr` run then closes each bumped mod's changelog on the
+# branch with `cargo xtask close` and writes the body again from it.
 pr_body = """
 ## Chores
 
 {% for release in releases -%}
 - Released `{{ release.package }}` {{ release.next_version }}{% if release.previous_version and release.previous_version != release.next_version %} (was {{ release.previous_version }}){% endif %}.
-{% endfor %}
-Before merging, close each released mod's `## [Unreleased]` in its `CHANGELOG.md` as its new version.
-"""
+{% endfor %}"""
 
 [[package]]
 name = "enshwick-area-loot"

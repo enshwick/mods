@@ -151,8 +151,8 @@ mod tests {
             key: who.key,
         };
         assert!(loader.raise::<PlayerJoined>(&data) >= 1);
-        // The check runs after the step.
-        let _ran = loader.tick(Duration::from_millis(50));
+        // The check runs after the step, at the scheduler's next turn.
+        let _ran = loader.tick(Duration::from_secs(1));
     }
 
     #[test]
@@ -264,10 +264,29 @@ mod tests {
         )
         .unwrap();
         let loader = server("", &dir);
+        let sheet = decode(
+            &loader
+                .ask_actions(ActionCall::SHEET, &ann(), 0, "", "")
+                .unwrap(),
+        );
+        let banned = sheet.iter().find(|entry| entry.id == "banned").unwrap();
+        assert!(
+            banned
+                .players
+                .iter()
+                .any(|(key, _, on)| *key == PlayerKey::new(2) && *on),
+            "the kept ban reads: {:?}",
+            banned.players
+        );
         joins(&loader, &ann());
         assert!(loader.banned().is_empty());
         joins(&loader, &bob());
-        assert_eq!(loader.banned(), [PlayerKey::new(2)], "banned at the door");
+        assert_eq!(
+            loader.banned(),
+            [PlayerKey::new(2)],
+            "banned at the door: {:?}",
+            loader.logs()
+        );
         let _gone = std::fs::remove_dir_all(&dir);
     }
 

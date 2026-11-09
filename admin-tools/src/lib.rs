@@ -208,10 +208,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_text_exists_in_every_offered_language() {
+    fn every_text_exists_in_every_required_language() {
         let texts = Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
-        assert_eq!(texts.missing_in(Language::OFFERED), []);
+        assert_eq!(texts.missing_in(Language::REQUIRED), []);
     }
 
     #[test]

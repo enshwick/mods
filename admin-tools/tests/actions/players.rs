@@ -66,6 +66,38 @@ fn the_world_s_rights_give_an_action_to_a_permission_and_take_one_away() {
 }
 
 #[test]
+fn the_players_online_read_as_one_line_in_the_interface_and_a_line_each_in_chat() {
+    let dir = scratch("online-lines");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "online", ""),
+        "1Admin Tools: 2 online Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)"
+    );
+    assert_eq!(
+        loader.type_in_chat(&ann(), 0, "/adm online").as_deref(),
+        Some(
+            "1Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"
+        )
+    );
+}
+
+#[test]
+fn the_audit_log_tells_a_refused_run_from_a_done_one() {
+    let dir = scratch("audit-refused");
+    let loader = server("audit = \"on\"\n", &dir);
+    assert!(run(&loader, &ann(), "kick", "p0000000000000001").starts_with('0'));
+    assert!(run(&loader, &ann(), "kick", "p0000000000000002").starts_with('1'));
+    let audit = file_until(&dir, "audit.log", |text| text.lines().count() == 2);
+    let lines: Vec<&str> = audit.lines().collect();
+    assert!(lines[0].contains("\tkick\tAnn\t"), "{audit}");
+    assert!(lines[0].ends_with("\trefused"), "{audit}");
+    assert!(
+        lines[1].ends_with("\tkick\tBob\tBob was kicked.\tdone"),
+        "{audit}"
+    );
+}
+
+#[test]
 fn an_administrator_kicks_a_player_but_not_another_administrator() {
     let dir = scratch("kick");
     let loader = server("", &dir);

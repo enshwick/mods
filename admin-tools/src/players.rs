@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use enshwick::actions::{Action, Arg, Outcome, Request, Value};
+use enshwick::actions::{Action, Arg, Outcome, Request, Value, Via};
 use enshwick::effects::Teleport;
 use enshwick::world::{AccountAction, Player};
 use enshwick::{Entity, Off, PlayerKey, Relock as _, WorldError};
@@ -16,6 +16,14 @@ use crate::{Tools, ids, journal, texts};
 /// How far a position may lie from the world's origin, in metres, on each
 /// axis; well past the edge of any map.
 const REACH: f64 = 100_000.0;
+
+/// Between the players of a list read on one line.
+const LISTED: &str = ", ";
+
+/// The argument for one axis of a position, in metres.
+pub(crate) fn axis(label: &'static str) -> Arg {
+    Arg::number(label, -REACH..=REACH, 0.0)
+}
 
 /// Declares the actions on players.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -102,7 +110,6 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
             .arg(Arg::player(texts::ARG_TO)),
         send,
     )?;
-    let axis = |label| Arg::number(label, -REACH..=REACH, 0.0);
     tools.add(
         Action::new(ids::PLACE, texts::ACTION_PLACE)
             .help(texts::ACTION_PLACE_HELP)
@@ -115,7 +122,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
 }
 
 /// The refusal for a run without a player online.
-fn no_player(request: &Request<'_>) -> Outcome {
+pub(crate) fn no_player(request: &Request<'_>) -> Outcome {
     Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]))
 }
 
@@ -150,15 +157,14 @@ fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
         })
         .collect();
     let count = players.len().to_string();
-    Outcome::done(request.say(
-        texts::REPLY_ONLINE,
-        &[
-            (texts::value::COUNT, &count),
-            // One player a line: a reply of several lines goes to chat, where
-            // it stays, and one line only to a passing notice.
-            (texts::value::PLAYERS, &rows.join("\n")),
-        ],
-    ))
+    let head = request.say(texts::REPLY_ONLINE, &[(texts::value::COUNT, &count)]);
+    // A player a line where the caller reads lines; the interface shows one.
+    let between = if matches!(request.via, Via::Interface) {
+        LISTED
+    } else {
+        crate::LINE
+    };
+    Outcome::done(crate::lines(request, &[head, rows.join(between)]))
 }
 
 /// Removes a player from the game; administrators and the host stay.
@@ -419,7 +425,7 @@ impl Tools {
         match self.world.account_action(refusal, key) {
             Ok(()) => {
                 enshwick::info!("{who} refused at the door: {what}");
-                self.log(&["server", "join", what, &who, "refused"]);
+                self.log(&["server", "join", what, &who, journal::REFUSED]);
             }
             Err(why) => enshwick::warn!("{who} not refused ({what}): {why}"),
         }

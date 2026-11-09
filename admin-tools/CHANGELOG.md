@@ -47,11 +47,18 @@ Each entry says what players notice; a release's notes show its section.
 - Administrators place a wooden chest of items beside a player or at a
   position.
 - Administrators clear a player's inventory or copy one player's inventory
-  to another.
+  to another. A copy gives what fits, says how many items stayed out, and
+  leaves the look and currency slots out.
+- A chest the game does not place is taken back, so no empty chest follows.
+- A count or a value with a fraction is refused, and `learn` refuses
+  knowledge that belongs to the world.
 - Administrators set a player's health, stamina or mana, and teach a player
   a recipe or any knowledge by its number.
 - God mode keeps all damage off a player until they leave or the world
   stops.
 - `/adm online` lists the players in chat, one player a line.
 - The audit log also keeps every refused run of an action that changes
-  something.
+  something, and ends each line with `done` or `refused`.
+- A give, a chest, a clear or a copy the game later turns down, in whole or
+  in part, adds a line to the audit log, so the console and RCON tools see
+  it too.

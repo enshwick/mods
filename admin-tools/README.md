@@ -15,8 +15,8 @@ Every action is a command in chat and in the dedicated server's console:
 `/adm help` lists the actions the caller may use. Each world decides who may
 use each action, by the permissions of the game's user groups. A ban holds
 when the account comes back, and the allow-list keeps out accounts not on it.
-Changes go to `audit.log` and chat lines to `chat.log` beside the world's
-save. `/adm backup` copies the world while the server runs. On a dedicated
+Every run of an action that changes something goes to `audit.log`, done or
+refused, and chat lines go to `chat.log` beside the world's save. `/adm backup` copies the world while the server runs. On a dedicated
 server, RCON tools such as BattleMetrics or rcon-cli run every command on
 port 25575 with the password Admin Tools generates; RCON is not encrypted,
 so open the port only to hosts you trust. The

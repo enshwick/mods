@@ -106,8 +106,8 @@ The console and RCON tools may use every action.
 | `/adm give <player> <count> <item>` | Gives a player new items, in as many stacks as they need; you read how many did not fit. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
 | `/adm chest <player> <count> <item>` | Places a wooden chest beside a player and fills it with items, named as for `give`. A chest outside every base is not saved. |
 | `/adm chestat <x> <y> <z> <count> <item>` | Places a wooden chest at a position and fills it with items. A chest outside every base is not saved. |
-| `/adm clear <player>` | Destroys everything a player carries, equipment and action bar included. |
-| `/adm copy <player> <player>` | Gives the second player new items of every stack the first carries. The items start new, without wear or level. What does not fit stays out. |
+| `/adm clear <player>` | Destroys every stack in every slot a player has, equipment, action bar and look slots included. |
+| `/adm copy <player> <player>` | Gives the second player new items of every stack the first carries or wears. The items start new, without wear or level. What does not fit stays out, and you read how many; the look and currency slots are not copied. |
 | `/adm goto <player>` | Takes you to a player. |
 | `/adm bring <player>` | Brings a player to you. |
 | `/adm send <player> <player>` | Moves the first player to the second. |
@@ -207,9 +207,12 @@ beside the world's save.
 
 Both are in `<save>-mod-data/enshwick.admin-tools/` beside the world's save.
 
-- `audit.log` holds one line per change an administrator made: the time in
-  UTC, who acted, from where, the action, its values and the result.
-  Reads such as `online` are not written. RCON logins are written too.
+- `audit.log` holds one line per run of an action that changes something,
+  done or refused. A line has the time in UTC, who acted, from where, the
+  action, its values, the answer, and `done` or `refused`. Reads such as
+  `online` are not written.
+- A change the game makes after the answer, such as a give, adds a line to
+  `audit.log` when part of it failed. RCON logins are written too.
 - `chat.log` holds one line per chat line: the time in UTC, the player's
   name and account id, the kind of line and its text.
 

@@ -3,10 +3,13 @@
 //! refusals, which the audit log keeps too.
 
 use enshwick::ItemId;
-use enshwick::abi::{InventoryOp, InventoryOpResult, InventoryResult};
+use enshwick::abi::{
+    InventoryOp, InventoryOpResult, InventoryRequest, InventoryResult, TransactionInfo,
+};
 
 use super::game::{
-    CHEST, GLIDER, WOOD, ann, bob, file_until, run, said, scratch, server, tick_until,
+    BACKPACK, CHEST, GLIDER, LOOKS, WOOD, ann, bob, file_until, run, said, scratch, server,
+    tick_until,
 };
 
 /// The gives the mod submitted so far: each one's inventory, item and count.
@@ -18,6 +21,29 @@ fn gives(loader: &enshwick::test::Installed) -> Vec<(u64, ItemId, u32)> {
         .filter(|op| op.kind == InventoryOp::GIVE)
         .map(|op| (op.target, op.item, op.count))
         .collect()
+}
+
+/// Whether every open request commits what fits and leaves the rest out.
+fn partial(loader: &enshwick::test::Installed) -> bool {
+    loader
+        .inventory_requests()
+        .iter()
+        .all(|request| request.flags & InventoryRequest::ALLOW_PARTIAL != 0)
+}
+
+/// An operation that ran and left `remaining` of its count out.
+fn left(remaining: u32) -> InventoryOpResult {
+    InventoryOpResult {
+        error: 0,
+        remaining,
+    }
+}
+
+/// Whether Ann was told a line that starts with `start`.
+fn ann_hears(loader: &enshwick::test::Installed, start: &str) -> bool {
+    tick_until(loader, || {
+        said(loader, 1).iter().any(|line| line.starts_with(start))
+    })
 }
 
 /// Whether two positions are the same to a millimetre.
@@ -35,7 +61,7 @@ fn give_hands_a_player_an_item_named_as_the_game_names_it_once() {
         "give",
         "p0000000000000002\tn1\tttool_glider_t1",
     );
-    assert_eq!(reply, "1Gave Tool_Glider_T1 × 1 to Bob.");
+    assert_eq!(reply, "1Giving Tool_Glider_T1 × 1 to Bob.");
     let bob = u64::from(bob().entity.0);
     assert_eq!(gives(&loader), [(bob, ItemId::from_guid(GLIDER), 1)]);
 }
@@ -57,32 +83,33 @@ fn give_takes_an_item_s_guid_or_number_and_more_than_a_stack() {
             "give",
             "p0000000000000002\tn5\ttTool_Glider_T1"
         ),
-        "1Gave Tool_Glider_T1 × 5 to Bob."
+        "1Giving Tool_Glider_T1 × 5 to Bob."
     );
     let bob = u64::from(bob().entity.0);
     assert_eq!(
         gives(&loader),
         [(bob, wood, 100), (bob, wood, 5), (bob, glider, 5)]
     );
-    assert!(
-        loader
-            .inventory_requests()
-            .iter()
-            .all(|request| request.flags != 0),
-        "every give takes what fits"
-    );
+    assert!(partial(&loader), "every give takes what fits");
 }
 
 #[test]
-fn an_unknown_name_answers_in_chat_with_the_names_near_it_and_goes_to_the_audit_log() {
+fn an_unknown_name_answers_with_the_names_near_it_and_goes_to_the_audit_log() {
     let dir = scratch("give-refused");
     let loader = server("audit = \"on\"\n", &dir);
     let reply = run(&loader, &ann(), "give", "p0000000000000002\tn1\ttGlider");
     assert!(
-        reply.starts_with("0Admin Tools: nothing is named «Glider».\nNear: "),
-        "{reply}"
+        reply.starts_with("0Admin Tools: nothing is named «Glider». Near: "),
+        "one line in the interface: {reply}"
     );
     assert!(reply.contains("Tool_Glider_T1"), "{reply}");
+    let typed = loader
+        .type_in_chat(&ann(), 0, "/adm give Bob 1 Glider")
+        .unwrap();
+    assert!(
+        typed.starts_with("0Admin Tools: nothing is named «Glider».\nNear: "),
+        "lines in chat: {typed}"
+    );
     assert!(
         run(
             &loader,
@@ -94,13 +121,17 @@ fn an_unknown_name_answers_in_chat_with_the_names_near_it_and_goes_to_the_audit_
     );
     assert!(gives(&loader).is_empty());
     let audit = file_until(&dir, "audit.log", |text| text.contains("Glider"));
-    assert!(audit.contains("give"), "{audit}");
+    assert!(audit.contains("\tgive\tBob 1 Glider\t"), "{audit}");
+    assert!(
+        audit.lines().all(|line| line.ends_with("\trefused")),
+        "{audit}"
+    );
 }
 
 #[test]
-fn a_give_the_game_turns_down_is_told_to_the_administrator() {
+fn a_give_the_game_turns_down_is_told_to_the_administrator_and_kept_in_the_audit_log() {
     let dir = scratch("give-full");
-    let loader = server("", &dir);
+    let loader = server("audit = \"on\"\n", &dir);
     assert!(
         run(
             &loader,
@@ -111,9 +142,184 @@ fn a_give_the_game_turns_down_is_told_to_the_administrator() {
         .starts_with('1')
     );
     assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
-    assert!(tick_until(&loader, || said(&loader, 1).iter().any(
-        |line| line.starts_with("Bob got 0 of Tool_Glider_T1 × 1: 1 did not fit")
-    )));
+    assert!(ann_hears(
+        &loader,
+        "Bob got 0 of Tool_Glider_T1 × 1: 1 did not fit"
+    ));
+    let audit = file_until(&dir, "audit.log", |text| text.contains("0 of"));
+    let outcome = audit.lines().find(|line| line.contains("0 of")).unwrap();
+    assert!(outcome.contains("\tinterface\tgive\t"), "{audit}");
+    assert!(outcome.ends_with("\trefused"), "{audit}");
+}
+
+#[test]
+fn a_count_with_a_fraction_is_refused_and_gives_nothing() {
+    let dir = scratch("give-fraction");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "give",
+            "p0000000000000002\tn1.5\ttTool_Glider_T1"
+        ),
+        "01.5 is not a whole number."
+    );
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "chestat",
+            "n10\tn20\tn30\tn2.5\ttResource_Wood"
+        ),
+        "02.5 is not a whole number."
+    );
+    assert!(loader.inventory_requests().is_empty());
+    assert!(loader.transactions().is_empty());
+}
+
+#[test]
+fn copy_gives_what_fits_leaves_the_look_slots_out_and_tells_how_many_stayed_out() {
+    let dir = scratch("copy");
+    let loader = server("audit = \"on\"\n", &dir);
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "copy",
+            "p0000000000000001\tp0000000000000002"
+        ),
+        "1Copying what Ann carries to Bob."
+    );
+    let bob = u64::from(bob().entity.0);
+    assert_eq!(
+        gives(&loader),
+        [
+            (bob, ItemId::from_guid(WOOD), 30),
+            (bob, ItemId::from_guid(GLIDER), 1)
+        ]
+    );
+    assert!(partial(&loader), "what does not fit stays out");
+    assert!(loader.finish_inventory(InventoryResult::COMMITTED, &[left(3), left(0)]));
+    assert!(ann_hears(&loader, "3 items did not reach Bob"));
+    let audit = file_until(&dir, "audit.log", |text| text.contains("did not reach"));
+    assert!(
+        audit.contains("\tcopy\tAnn Bob\t3 items did not reach Bob"),
+        "{audit}"
+    );
+}
+
+#[test]
+fn a_copy_the_game_turns_down_whole_tells_every_item_stayed_out() {
+    let dir = scratch("copy-refused");
+    let loader = server("", &dir);
+    assert!(
+        run(
+            &loader,
+            &ann(),
+            "copy",
+            "p0000000000000001\tp0000000000000002"
+        )
+        .starts_with('1')
+    );
+    assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
+    assert!(ann_hears(&loader, "31 items did not reach Bob"));
+}
+
+#[test]
+fn clear_destroys_every_stack_whole_and_a_part_the_game_turns_down_is_told_and_logged() {
+    let dir = scratch("clear-filled");
+    let loader = server("audit = \"on\"\n", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "clear", "p0000000000000001"),
+        "1Clearing what Ann carries."
+    );
+    let requests = loader.inventory_requests();
+    let destroyed: Vec<u64> = requests
+        .iter()
+        .flat_map(|request| request.ops.iter())
+        .filter(|op| op.kind == InventoryOp::DESTROY_SLOT)
+        .map(|op| op.target)
+        .collect();
+    let slot = |inventory: u32, index: u64| u64::from(inventory) | index << 32;
+    assert_eq!(
+        destroyed,
+        [slot(BACKPACK, 0), slot(BACKPACK, 1), slot(LOOKS, 0)],
+        "looks included"
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.flags & InventoryRequest::ALLOW_PARTIAL == 0),
+        "each part is whole or not at all"
+    );
+    assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
+    let turned_down = "The game turned down part of the change to what Ann carries.";
+    assert!(ann_hears(&loader, turned_down));
+    let audit = file_until(&dir, "audit.log", |text| text.contains(turned_down));
+    let outcome = audit.lines().last().unwrap();
+    assert!(outcome.contains("\tclear\tAnn\t"), "{audit}");
+    assert!(outcome.ends_with("\trefused"), "{audit}");
+}
+
+#[test]
+fn a_chest_the_game_never_places_is_undone_and_gets_no_items() {
+    let dir = scratch("chest-pending");
+    let loader = server("", &dir);
+    assert!(
+        run(
+            &loader,
+            &ann(),
+            "chestat",
+            "n10\tn20\tn30\tn5\ttResource_Wood"
+        )
+        .starts_with('1')
+    );
+    // No `run_transactions`: the placement stays queued for every look,
+    // which the scheduler times by the clock: ten seconds.
+    let lost = |loader: &enshwick::test::Installed| {
+        said(loader, 1)
+            .iter()
+            .any(|line| line.starts_with("No chest went up at 10, 20, 30"))
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while !lost(&loader) && std::time::Instant::now() < deadline {
+        let _ran = loader.tick(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(lost(&loader), "{:?}", said(&loader, 1));
+    assert!(gives(&loader).is_empty());
+    let state = loader.transactions()[0].info.state;
+    assert!(
+        [TransactionInfo::UNDOING, TransactionInfo::UNDONE].contains(&state),
+        "no empty chest follows: {state}"
+    );
+}
+
+#[test]
+fn a_chest_whose_placement_fails_is_told_kept_in_the_audit_log_and_gets_no_items() {
+    let dir = scratch("chest-failed");
+    let loader = server("audit = \"on\"\n", &dir);
+    assert!(
+        run(
+            &loader,
+            &ann(),
+            "chestat",
+            "n10\tn20\tn30\tn5\ttResource_Wood"
+        )
+        .starts_with('1')
+    );
+    let placed = loader.transactions()[0].id;
+    loader.fail_transaction(placed, enshwick::abi::Status::NOT_LOADED);
+    assert!(ann_hears(&loader, "No chest went up at 10, 20, 30"));
+    assert!(gives(&loader).is_empty());
+    let audit = file_until(&dir, "audit.log", |text| text.contains("No chest"));
+    let outcome = audit.lines().last().unwrap();
+    assert!(
+        outcome.contains("\tchestat\t10 20 30 5 Resource_Wood\t"),
+        "{audit}"
+    );
+    assert!(outcome.ends_with("\trefused"), "{audit}");
 }
 
 #[test]
@@ -134,9 +340,10 @@ fn what_did_not_fit_is_told_with_how_many_arrived() {
         remaining: 50,
     };
     assert!(loader.finish_inventory(InventoryResult::COMMITTED, &[short]));
-    assert!(tick_until(&loader, || said(&loader, 1).iter().any(
-        |line| line.starts_with("Bob got 200 of Resource_Wood × 250: 50 did not fit")
-    )));
+    assert!(ann_hears(
+        &loader,
+        "Bob got 200 of Resource_Wood × 250: 50 did not fit"
+    ));
 }
 
 #[test]

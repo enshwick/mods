@@ -4,16 +4,16 @@
 use std::sync::Arc;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
-use enshwick::inventory::{Batch, Inventories, Op, Outcome as Given, Slot};
-use enshwick::world::Player;
+use enshwick::inventory::{Batch, InventoryCategory, Op, Outcome as Given, Slot};
 use enshwick::{Entity, Off, WorldError};
 
-use crate::items::{self, Unknown};
+use crate::players::no_player;
+use crate::{Late, Tools, ids, items, texts};
 
-use crate::{Tools, ids, texts};
-
-/// The most items one give hands over, in as many stacks as they need.
-pub(crate) const MAX_COUNT: f64 = 9_999.0;
+/// The slots a copy reads: those whose stacks a give hands over as items.
+/// What the look and currency slots hold in game is not known yet, so a
+/// copy leaves them out.
+const COPIED: [InventoryCategory; 2] = [InventoryCategory::EQUIPMENT, InventoryCategory::GENERIC];
 
 /// Declares the actions on what players carry.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -24,8 +24,8 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
         Action::new(ids::GIVE, texts::ACTION_GIVE)
             .help(texts::ACTION_GIVE_HELP)
             .arg(Arg::player(texts::ARG_PLAYER))
-            .arg(Arg::number(texts::ARG_COUNT, 1.0..=MAX_COUNT, 1.0))
-            .arg(Arg::text(texts::ARG_ITEM, items::MAX_NAME)),
+            .arg(items::count_arg())
+            .arg(items::item_arg()),
         give,
     )?;
     tools.add(
@@ -43,7 +43,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
     )
 }
 
-/// Destroys every stack in `slots`.
+/// Destroys every stack in `slots`, whatever its slot holds.
 fn clear_ops(slots: &[Slot]) -> Vec<Op> {
     slots
         .iter()
@@ -52,11 +52,12 @@ fn clear_ops(slots: &[Slot]) -> Vec<Op> {
         .collect()
 }
 
-/// Gives `to` new items of each stack in `slots`, as many as it holds.
+/// Gives `to` new items of each stack in the [`COPIED`] slots of `slots`,
+/// as many as it holds.
 fn copy_ops(slots: &[Slot], to: Entity) -> Vec<Op> {
     slots
         .iter()
-        .filter(|slot| !slot.is_empty())
+        .filter(|slot| !slot.is_empty() && COPIED.contains(&slot.category))
         .map(|slot| Op::Give {
             to,
             item: slot.item,
@@ -66,52 +67,61 @@ fn copy_ops(slots: &[Slot], to: Entity) -> Vec<Op> {
         .collect()
 }
 
-/// Submits `ops` in as many transactions as they need; a part the game
-/// turns down is logged and told to the caller as `failed`.
-fn submit(
-    tools: &Tools,
-    inventories: &Inventories,
-    request: &Request<'_>,
-    ops: &[Op],
-    failed: &str,
-) {
-    let mut batch = Batch::new();
-    for op in ops {
-        batch.push(*op);
+/// How many items the gives among `ops` hand over.
+fn asked(ops: &[Op]) -> u32 {
+    ops.iter().fold(0, |sum, op| match op {
+        Op::Give { count, .. } => sum.saturating_add(*count),
+        _ => sum,
+    })
+}
+
+/// How many of the `asked` items a request left out: all of them when the
+/// game turned it down, else what its operations could not place.
+fn shortfall(outcome: &Given, asked: u32) -> u32 {
+    if !outcome.is_committed() {
+        return asked;
     }
-    for part in batch.split() {
-        let (caller, world, failed) = (request.player.clone(), tools.world, failed.to_owned());
-        let _ticket = inventories.submit(&part, move |outcome| {
-            if !outcome.is_committed() {
-                enshwick::warn!("inventory change turned down: {:?}", outcome.done);
-                tell(world, &caller, &failed);
-            }
-        });
-    }
+    let left = |sum: u32, op: &enshwick::inventory::OpResult| sum.saturating_add(op.remaining);
+    outcome.ops.iter().fold(0, left).min(asked)
 }
 
 /// Destroys everything a player carries, equipment and action bar
-/// included.
+/// included; each transaction the stacks need is whole or not at all.
 fn clear(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+        return no_player(request);
     };
-    let (Some(inventories), Some(player)) = (&tools.inventories, tools.world.player_by_key(*key))
-    else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+    let (Some(inventories), Some(player), Some(late)) = (
+        &tools.inventories,
+        tools.world.player_by_key(*key),
+        Late::new(tools, request, ids::CLEAR),
+    ) else {
+        return no_player(request);
     };
     let values = [(texts::value::NAME, name.as_str())];
     let ops = clear_ops(&inventories.slots(player.entity));
     if ops.is_empty() {
         return Outcome::refused(request.say(texts::REPLY_NOTHING_CARRIED, &values));
     }
-    let failed = request.say(texts::REPLY_NOT_CHANGED, &values);
-    submit(tools, inventories, request, &ops, &failed);
+    for part in ops.into_iter().fold(Batch::new(), Batch::with).split() {
+        let (late, name) = (Arc::clone(&late), name.clone());
+        let _ticket = inventories.submit(&part, move |outcome| {
+            if !outcome.is_committed() {
+                enshwick::warn!("clear of {name} turned down: {:?}", outcome.done);
+                late.report(
+                    false,
+                    texts::REPLY_NOT_CHANGED,
+                    &[(texts::value::NAME, &name)],
+                );
+            }
+        });
+    }
     Outcome::done(request.say(texts::REPLY_CLEARED, &values))
 }
 
 /// Gives a player new items of every stack another carries; what does not
-/// fit stays out, and the items start new, without their wear or level.
+/// fit stays out and is told to the caller, and the items start new,
+/// without their wear or level.
 fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [
         Value::Player { key, name },
@@ -121,14 +131,15 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
         },
     ] = request.args
     else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+        return no_player(request);
     };
-    let (Some(inventories), Some(from), Some(target)) = (
+    let (Some(inventories), Some(from), Some(target), Some(late)) = (
         &tools.inventories,
         tools.world.player_by_key(*key),
         tools.world.player_by_key(*to),
+        Late::new(tools, request, ids::COPY),
     ) else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+        return no_player(request);
     };
     let values = [
         (texts::value::NAME, name.as_str()),
@@ -141,36 +152,58 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
     if ops.is_empty() {
         return Outcome::refused(request.say(texts::REPLY_NOTHING_CARRIED, &values));
     }
-    let failed = request.say(texts::REPLY_NOT_CHANGED, &[(texts::value::NAME, to_name)]);
-    submit(tools, inventories, request, &ops, &failed);
+    let batch = ops.into_iter().fold(Batch::new(), Batch::with);
+    for part in batch.allow_partial().split() {
+        let (late, to, asked) = (Arc::clone(&late), to_name.clone(), asked(part.ops()));
+        let _ticket = inventories.submit(&part, move |outcome| {
+            let short = shortfall(outcome, asked);
+            if short == 0 {
+                return;
+            }
+            enshwick::warn!(
+                "{short} of {asked} items for {to} not copied: {:?}",
+                outcome.done
+            );
+            late.report(
+                short < asked,
+                texts::REPLY_COPY_SHORT,
+                &[
+                    (texts::value::TO, &to),
+                    (texts::value::SHORT, &short.to_string()),
+                ],
+            );
+        });
+    }
     Outcome::done(request.say(texts::REPLY_COPIED, &values))
 }
 
 /// Gives a player `count` new items in as many stacks as they need; what
 /// does not fit, or a give the game turns down, is told to the caller.
 fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
+    try_give(tools, request).unwrap_or_else(|refused| refused)
+}
+
+/// [`give`], with a refusal as its error.
+fn try_give(tools: &Tools, request: &Request<'_>) -> Result<Outcome, Outcome> {
     let [
         Value::Player { key, name },
         Value::Number(count),
         Value::Text(text),
     ] = request.args
     else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+        return Err(no_player(request));
     };
     let Some(inventories) = &tools.inventories else {
-        return Tools::failed(request, name, &WorldError::Missing);
+        return Err(Tools::failed(request, name, &WorldError::Missing));
     };
-    let (item, shown) = match items::item(text) {
-        Ok(found) => found,
-        Err(why) => return items::refused(request, text, &why),
+    let count = crate::whole(request, *count)?;
+    let (item, shown) = items::known_item(tools, request, text)?;
+    let (Some(player), Some(late)) = (
+        tools.world.player_by_key(*key),
+        Late::new(tools, request, ids::GIVE),
+    ) else {
+        return Err(no_player(request));
     };
-    if inventories.item_info(item).is_none() {
-        return items::refused(request, text, &Unknown::Name { near: Vec::new() });
-    }
-    let Some(player) = tools.world.player_by_key(*key) else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
-    };
-    let count = whole(*count);
     let batch = Batch::new()
         .with(Op::Give {
             to: player.entity,
@@ -187,41 +220,18 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
             (texts::value::ITEM, &shown),
         ],
     );
-    let _ticket = inventories.submit(&batch, report(tools, request, shown, count, name.clone()));
-    Outcome::done(reply)
-}
-
-/// `count`, an action's whole-number argument in `1..=MAX_COUNT`.
-pub(crate) fn whole(count: f64) -> u32 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "the argument's range and step make it a whole number in 1..=MAX_COUNT"
-    )]
-    let count = count.clamp(1.0, MAX_COUNT) as u32;
-    count
-}
-
-/// How many of `count` items a give left out: all of them when the game
-/// turned it down, else what its one operation could not place.
-fn shortfall(outcome: &Given, count: u32) -> u32 {
-    if !outcome.is_committed() {
-        return count;
-    }
-    outcome.ops.first().map_or(0, |op| op.remaining).min(count)
+    let _ticket = inventories.submit(&batch, report(late, shown, count, name.clone()));
+    Ok(Outcome::done(reply))
 }
 
 /// What runs once a give of `count` items, shown as `item`, to `to` ends:
 /// the caller reads, in their language, how many did not arrive.
 pub(crate) fn report(
-    tools: &Tools,
-    request: &Request<'_>,
+    late: Arc<Late>,
     item: String,
     count: u32,
     to: String,
 ) -> impl FnOnce(&Given) + Send + 'static {
-    let (world, lines, language) = (tools.world, tools.texts.clone(), request.language);
-    let caller = request.player.clone();
     move |outcome| {
         let short = shortfall(outcome, count);
         if short == 0 {
@@ -231,9 +241,9 @@ pub(crate) fn report(
             "{short} of {count} {item} for {to} not given: {:?}",
             outcome.done
         );
-        let line = lines.fill(
+        late.report(
+            short < count,
             texts::REPLY_SHORT,
-            language,
             &[
                 (texts::value::NAME, &to),
                 (texts::value::ITEM, &item),
@@ -242,21 +252,13 @@ pub(crate) fn report(
                 (texts::value::SHORT, &short.to_string()),
             ],
         );
-        tell(world, &caller, &line);
-    }
-}
-
-/// Tells `caller` `text` in chat, when the caller is a player in the game.
-pub(crate) fn tell(world: enshwick::world::World, caller: &Player, text: &str) {
-    if caller.key.0 != 0 {
-        world.tell(caller, text);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use enshwick::ItemId;
-    use enshwick::inventory::{InventoryCategory, SlotRef};
+    use enshwick::inventory::{Done, OpResult, SlotRef};
 
     use super::*;
 
@@ -267,6 +269,15 @@ mod tests {
             item: ItemId::new(item),
             count,
             pide: None,
+        }
+    }
+
+    fn give(item: u32, count: u32) -> Op {
+        Op::Give {
+            to: Entity(2),
+            item: ItemId::new(item),
+            count,
+            fill: None,
         }
     }
 
@@ -282,12 +293,42 @@ mod tests {
     #[test]
     fn copying_gives_each_stack_s_item_and_count_to_the_other_player() {
         let slots = [slot(0, 7, 3), slot(1, 7, 0), slot(2, 8, 1)];
-        let give = |item, count| Op::Give {
-            to: Entity(2),
-            item: ItemId::new(item),
-            count,
-            fill: None,
-        };
         assert_eq!(copy_ops(&slots, Entity(2)), [give(7, 3), give(8, 1)]);
+    }
+
+    #[test]
+    fn copying_leaves_out_the_look_and_currency_slots_and_takes_what_is_worn() {
+        let in_category = |index, category| Slot {
+            category,
+            ..slot(index, 7, 1)
+        };
+        let slots = [
+            in_category(0, InventoryCategory::CUSTOMIZATION),
+            in_category(1, InventoryCategory::CURRENCY),
+            in_category(2, InventoryCategory::EQUIPMENT),
+        ];
+        assert_eq!(copy_ops(&slots, Entity(2)), [give(7, 1)]);
+        assert_eq!(clear_ops(&slots).len(), 3, "a clear takes every slot");
+    }
+
+    #[test]
+    fn what_stayed_out_is_every_operation_s_rest_or_all_of_a_request_turned_down() {
+        let ops = [give(7, 30), Op::DestroySlot(SlotRef::new(Entity(9), 0))];
+        assert_eq!(asked(&ops), 30);
+        let rest = |remaining| OpResult {
+            error: None,
+            remaining,
+        };
+        let committed = Given {
+            done: Done::Committed,
+            ops: vec![rest(3), rest(4)],
+        };
+        assert_eq!(shortfall(&committed, 30), 7);
+        assert_eq!(shortfall(&committed, 5), 5, "never more than asked");
+        let turned_down = Given {
+            done: Done::RolledBack,
+            ops: Vec::new(),
+        };
+        assert_eq!(shortfall(&turned_down, 30), 30);
     }
 }

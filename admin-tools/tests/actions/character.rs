@@ -90,6 +90,32 @@ fn known(id: u32, kind: u8, value: u32) -> (Option<Entity>, KnowledgeInfo) {
 }
 
 #[test]
+fn stats_refuses_a_value_with_a_fraction() {
+    let dir = scratch("stats-fraction");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "stats", "p0000000000000002\tc0\tn1.5"),
+        "01.5 is not a whole number."
+    );
+    let bytes = loader.component_bytes(bob().entity, HEALTH).unwrap();
+    assert_eq!(i32::from_le_bytes(bytes[8..12].try_into().unwrap()), 150);
+}
+
+#[test]
+fn learn_refuses_a_knowledge_of_the_world_and_grants_nobody() {
+    let dir = scratch("learn-world");
+    let loader = server("", &dir);
+    let (holder, mut shared) = known(21, KnowledgeInfo::BOOL, 0);
+    shared.scope = KnowledgeInfo::WORLD;
+    loader.set_knowledge(&[(holder, shared)], &[]);
+    assert_eq!(
+        run(&loader, &ann(), "learn", "p0000000000000002\tt21"),
+        "021 belongs to the world, not to one player."
+    );
+    assert!(loader.grants().is_empty());
+}
+
+#[test]
 fn learn_unlocks_a_recipe_by_its_first_flag_and_sets_a_bool() {
     let dir = scratch("learn");
     let loader = server("", &dir);

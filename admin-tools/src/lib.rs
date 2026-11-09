@@ -11,6 +11,7 @@
 
 mod accounts;
 mod backup;
+mod character;
 mod ids;
 mod inventory;
 mod items;
@@ -38,7 +39,7 @@ use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
 use enshwick::world::World;
-use enshwick::{Load, Mod, Off, PlayerKey, Relock as _};
+use enshwick::{Entity, Load, Mod, Off, PlayerKey, Relock as _};
 use rustc_hash::FxHashMap;
 
 use accounts::Accounts;
@@ -77,6 +78,9 @@ pub(crate) struct Tools {
     audit: Journal,
     chat: Journal,
     ticker: Mutex<Ticker>,
+    /// The players in god mode and their characters, read without a lock
+    /// by the damage filter.
+    gods: ArcSwap<Vec<(PlayerKey, Entity)>>,
     /// When each player online joined, for the time online.
     joined: Mutex<FxHashMap<PlayerKey, Instant>>,
     /// When the mod started, for the server's uptime.
@@ -131,6 +135,7 @@ impl Mod for AdminTools {
             audit: Journal::new(journal::AUDIT),
             chat: Journal::new(journal::CHAT),
             ticker: Mutex::new(Ticker::default()),
+            gods: ArcSwap::from_pointee(Vec::new()),
             joined: Mutex::new(FxHashMap::default()),
             started: Instant::now(),
             backing_up: AtomicBool::new(false),
@@ -145,6 +150,7 @@ impl Mod for AdminTools {
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
         players::add(&tools)?;
         inventory::add(&tools)?;
+        character::add(&tools, load)?;
         server::add(&tools)?;
         backup::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
@@ -162,6 +168,7 @@ impl Mod for AdminTools {
         let leaves = Arc::clone(&tools);
         load.on::<PlayerLeft>(move |left| {
             leaves.joined.relock().remove(&left.key);
+            leaves.set_god(left.key, None);
         })?;
         let ticks = Arc::clone(&tools);
         load.on_tick(TICK, move |tick| {
@@ -209,6 +216,7 @@ impl Tools {
         self.running.store(false, Ordering::Relaxed);
         *self.ticker.relock() = Ticker::default();
         self.joined.relock().clear();
+        self.gods.store(Arc::new(Vec::new()));
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);

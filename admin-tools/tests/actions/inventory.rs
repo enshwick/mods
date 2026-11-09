@@ -4,7 +4,7 @@
 use enshwick::ItemId;
 use enshwick::abi::{InventoryOp, InventoryResult};
 
-use super::game::{GLIDER, WOOD, ann, bob, run, said, scratch, server, tick_until};
+use super::game::{CHEST, GLIDER, WOOD, ann, bob, run, said, scratch, server, tick_until};
 
 /// The gives the mod submitted so far: each one's inventory, item and count.
 fn gives(loader: &enshwick::test::Installed) -> Vec<(u64, ItemId, u32)> {
@@ -128,4 +128,46 @@ fn clear_and_copy_refuse_an_empty_inventory_and_copy_refuses_one_player_twice() 
     );
     assert!(run(&loader, &bob(), "clear", "p0000000000000002").starts_with('0'));
     assert!(loader.inventory_requests().is_empty());
+}
+
+#[test]
+fn a_chest_goes_up_at_a_position_and_then_gets_its_items() {
+    let dir = scratch("chest-at");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "chestat",
+            "n10\tn20\tn30\tn250\ttResource_Wood"
+        ),
+        "1A chest with 250 × Resource_Wood goes up at 10, 20, 30."
+    );
+    let chest = ItemId::from_guid(CHEST);
+    assert!(tick_until(&loader, || loader.props().iter().any(
+        |(_, item, at)| *item == chest && *at == [10.0, 20.0, 30.0]
+    )));
+    let (entity, _, _) = loader.props()[0];
+    assert!(tick_until(&loader, || gives(&loader)
+        == [(u64::from(entity.0), ItemId::from_guid(WOOD), 250)]));
+}
+
+#[test]
+fn a_chest_at_a_player_stands_beside_them_and_bob_may_not_place_one() {
+    let dir = scratch("chest");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "chest",
+            "p0000000000000002\tn1\ttTool_Glider_T1"
+        ),
+        "1A chest with 1 × Tool_Glider_T1 goes up at Bob."
+    );
+    assert!(tick_until(&loader, || loader
+        .props()
+        .iter()
+        .any(|(_, _, at)| *at == [2.0, 20.0, 7.0])));
+    assert!(run(&loader, &bob(), "chestat", "n0\tn0\tn0\tn1\ttResource_Wood").starts_with('0'));
 }

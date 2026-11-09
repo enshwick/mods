@@ -49,8 +49,8 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
     )?;
     let axis = |label| Arg::number(label, -REACH..=REACH, 0.0);
     tools.add(
-        Action::new(ids::CHEST_AT, texts::ACTION_CHEST_AT)
-            .help(texts::ACTION_CHEST_AT_HELP)
+        Action::new(ids::CHEST_AT, texts::ACTION_CHESTAT)
+            .help(texts::ACTION_CHESTAT_HELP)
             .arg(axis(texts::ARG_X))
             .arg(axis(texts::ARG_Y))
             .arg(axis(texts::ARG_Z))

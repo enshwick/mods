@@ -23,6 +23,9 @@ pub(crate) const GLIDER: Guid = Guid([0x61; 16]);
 /// Wood in the fake's item registry, a hundred to a stack.
 pub(crate) const WOOD: Guid = Guid([0x62; 16]);
 
+/// The wooden chest in the fake's item registry.
+pub(crate) const CHEST: Guid = Guid([0x63; 16]);
+
 /// The fake's type hash of a health attribute set; past the world
 /// preset's own hashes.
 pub(crate) const HEALTH: u32 = 0x4000_0001;
@@ -153,10 +156,17 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         .items()
         .recipes()
         .workshops()
+        .props()
         .inventory()
-        .vanilla_items(&[(GLIDER, "Tool_Glider_T1"), (WOOD, "Resource_Wood")])
+        .vanilla_items(&[
+            (GLIDER, "Tool_Glider_T1"),
+            (WOOD, "Resource_Wood"),
+            (CHEST, "Prop_Storage_32_T2_Chest_Wood"),
+        ])
         .item(ItemId::from_guid(GLIDER), 1, 0)
         .item(ItemId::from_guid(WOOD), 100, 0)
+        .item(ItemId::from_guid(CHEST), 1, 0)
+        .item_places(ItemId::from_guid(CHEST), [5; 16])
         .type_hash("attribute_set.health", HEALTH)
         .type_hash("attribute_set.stamina", HEALTH + 1)
         .type_hash("attribute_set.mana", HEALTH + 2)
@@ -188,6 +198,8 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         host = host.player(*who);
     }
     let loader = host.install();
+    // Transactions need a world with terrain.
+    loader.set_terrain(&[]);
     // SAFETY: the exports of the mod under test.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
@@ -242,6 +254,8 @@ pub(crate) fn tick_until(loader: &Installed, done: impl Fn() -> bool) -> bool {
             return true;
         }
         let _ran = loader.tick(Duration::from_secs(1));
+        // The game writes committed transactions between its steps.
+        loader.run_transactions();
         std::thread::sleep(Duration::from_millis(10));
     }
     done()

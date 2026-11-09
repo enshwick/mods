@@ -103,6 +103,8 @@ The console and RCON tools may use every action.
 | `/adl learn <player> <recipe>` | Unlocks a recipe for a player. Name it by the game's name, such as `Tool_Torch01`, in any case; by its GUID; or by a mod's content id. A number grants any knowledge the game keeps for the player. |
 | `/adl god <player> on` or `off` | Nothing damages a player in god mode. It ends when the player leaves or the world stops. |
 | `/adl give <player> <count> <item>` | Gives a player new items, up to one stack. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
+| `/adl chest <player> <count> <item>` | Places a wooden chest beside a player and fills it with items, named as for `give`. A chest outside every base is not saved. |
+| `/adl chestat <x> <y> <z> <count> <item>` | Places a wooden chest at a position and fills it with items. A chest outside every base is not saved. |
 | `/adl clear <player>` | Destroys everything a player carries, equipment and action bar included. |
 | `/adl copy <player> <player>` | Gives the second player new items of every stack the first carries. The items start new, without wear or level. What does not fit stays out. |
 | `/adl goto <player>` | Takes you to a player. |

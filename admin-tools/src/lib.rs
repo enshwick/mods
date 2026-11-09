@@ -357,6 +357,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_audit_log_writes_a_text_argument_as_typed() {
+        assert_eq!(word(&Value::Text("Stone Axe".to_owned())), "Stone Axe");
+    }
+
+    #[test]
     fn every_text_exists_in_every_required_language() {
         let texts = Texts::parse(texts::TOML).unwrap();
         assert_eq!(texts.missing_in(Language::REQUIRED), []);

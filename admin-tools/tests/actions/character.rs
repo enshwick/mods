@@ -126,6 +126,7 @@ fn learn_refuses_what_the_player_knows_a_count_and_an_unknown_id() {
     loader.set_knowledge(
         &[
             known(17, KnowledgeInfo::FLAGS, 1),
+            known(18, KnowledgeInfo::BOOL, 1),
             known(19, KnowledgeInfo::COUNTER, 0),
         ],
         &[],
@@ -133,6 +134,10 @@ fn learn_refuses_what_the_player_knows_a_count_and_an_unknown_id() {
     assert_eq!(
         run(&loader, &ann(), "learn", "p0000000000000002\tt17"),
         "0Bob already knows 17."
+    );
+    assert_eq!(
+        run(&loader, &ann(), "learn", "p0000000000000002\tt18"),
+        "0Bob already knows 18."
     );
     assert_eq!(
         run(&loader, &ann(), "learn", "p0000000000000002\tt19"),

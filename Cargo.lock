@@ -214,7 +214,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a#3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a"
+source = "git+https://github.com/enshwick/enshwick?rev=8fa382949551f0256a6505ed161cb28e5a0ea8f5#8fa382949551f0256a6505ed161cb28e5a0ea8f5"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -288,13 +288,14 @@ dependencies = [
 [[package]]
 name = "enshwick-gamedata"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a#3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a"
+source = "git+https://github.com/enshwick/enshwick?rev=8fa382949551f0256a6505ed161cb28e5a0ea8f5#8fa382949551f0256a6505ed161cb28e5a0ea8f5"
 dependencies = [
  "enshwick",
  "iced-x86",
  "memchr",
  "rustc-hash",
  "ruzstd",
+ "semver",
  "serde",
  "serde_json",
  "thiserror",
@@ -305,7 +306,7 @@ dependencies = [
 [[package]]
 name = "enshwick-luau"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a#3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a"
+source = "git+https://github.com/enshwick/enshwick?rev=8fa382949551f0256a6505ed161cb28e5a0ea8f5#8fa382949551f0256a6505ed161cb28e5a0ea8f5"
 dependencies = [
  "arc-swap",
  "enshwick",
@@ -317,7 +318,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a#3e109c95cece2996b0cf6ea1fb5da8ea88b85a9a"
+source = "git+https://github.com/enshwick/enshwick?rev=8fa382949551f0256a6505ed161cb28e5a0ea8f5#8fa382949551f0256a6505ed161cb28e5a0ea8f5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -741,6 +742,12 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "serde"

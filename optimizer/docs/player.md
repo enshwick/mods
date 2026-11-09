@@ -56,9 +56,9 @@ shows.
 
 A dedicated server needs Optimizer most. Players who join a game need nothing.
 
-In a game you host, Optimizer runs too, but every change stays off by default,
-because none was measured there yet. The `exact_waits` and `server_wait_cap_ms`
-settings turn their change on there too.
+In a game you host, Optimizer runs too. There, every change stays off by
+default, because none was measured yet. The `exact_waits` and
+`server_wait_cap_ms` settings turn their change on there too.
 
 ## Problems
 

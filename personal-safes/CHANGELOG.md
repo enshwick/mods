@@ -6,6 +6,11 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Fixed
+
+- The panel no longer shows the list of a chest you closed when you open
+  another chest at once, or the same chest again after a slow frame.
+
 ## [0.2.0] - 2026-11-07
 
 ### Added

@@ -212,11 +212,15 @@ pub fn open(load: &mut Load<'_>, world: World, last: Arc<Last>) -> Result<Channe
     }
 }
 
-/// The open screen's host as the frames see it, and how often it changed.
+/// The open screen's host as the frames see it, how often it changed, and
+/// the interface's frames so far.
 #[derive(Debug, Default)]
 struct Hosts {
     last: AtomicU32,
     changes: AtomicU64,
+    /// Counted every frame whatever the screen; zero while the loader runs
+    /// no frame callback.
+    frames: AtomicU64,
 }
 
 impl Hosts {
@@ -230,6 +234,25 @@ impl Hosts {
             self.changes.fetch_add(1, Ordering::Relaxed) + 1
         }
     }
+
+    /// Counts one frame of the interface, whose open screen has `host`.
+    fn frame(&self, host: Option<Entity>) {
+        self.frames.fetch_add(1, Ordering::Relaxed);
+        let _count = self.see(host);
+    }
+
+    /// The host changes and frames so far, as a panel drawing with `host`
+    /// marks them.
+    fn mark(&self, host: Option<Entity>) -> (u64, u64) {
+        (self.see(host), self.frames.load(Ordering::Relaxed))
+    }
+
+    /// Whether the chest screen opened again between the draws marked
+    /// `drawn` and `now`: another host, or a frame without the panel, which
+    /// still tells a reopened chest on a build without the host read.
+    fn reopened(drawn: Option<(u64, u64)>, now: (u64, u64)) -> bool {
+        drawn.is_none_or(|(changes, frames)| changes != now.0 || now.1.wrapping_sub(frames) > 1)
+    }
 }
 
 /// What the panel draws, kept between frames.
@@ -242,8 +265,8 @@ struct Panel {
     hosts: Arc<Hosts>,
     /// When the chest screen last opened.
     opened: Instant,
-    /// The count of host changes when the panel last drew.
-    drawn: Option<u64>,
+    /// The host changes and frames when the panel last drew.
+    drawn: Option<(u64, u64)>,
     /// When the message drawn came, to tell a new one.
     since: Option<Instant>,
     /// When the message drawn while the screen was open before came: it
@@ -260,13 +283,12 @@ struct Panel {
 impl Panel {
     fn draw(&mut self, frame: &mut Frame<'_>) {
         let now = Instant::now();
-        let count = self.hosts.see(frame.screen_host());
-        // Another chest, or the same one after the screen closed between.
-        if self.drawn != Some(count) {
+        let mark = self.hosts.mark(frame.screen_host());
+        if Hosts::reopened(self.drawn, mark) {
             self.opened = now;
             self.stale = self.since.take();
         }
-        self.drawn = Some(count);
+        self.drawn = Some(mark);
         let Some(last) = self.last.load_full() else {
             return;
         };
@@ -327,7 +349,7 @@ pub fn extend(
     let hosts = Arc::new(Hosts::default());
     let seen = Arc::clone(&hosts);
     if let Err(off) = load.on_frame(move |frame| {
-        let _count = seen.see(frame.screen_host());
+        seen.frame(frame.screen_host());
     }) {
         enshwick::warn!(
             "the Safe's panel tells only another chest, not the same one reopened: {off}"
@@ -395,6 +417,23 @@ mod tests {
         let again = hosts.see(chest);
         assert_ne!(again, first, "closed and opened again");
         assert_ne!(hosts.see(Some(Entity(513))), again, "another chest");
+    }
+
+    #[test]
+    fn a_chest_closed_for_a_frame_counts_as_reopened_on_a_build_without_the_host_read() {
+        let hosts = Hosts::default();
+        hosts.frame(None);
+        let drawn = hosts.mark(None);
+        hosts.frame(None);
+        let next = hosts.mark(None);
+        assert!(!Hosts::reopened(Some(drawn), next), "the next frame");
+        hosts.frame(None);
+        hosts.frame(None);
+        assert!(
+            Hosts::reopened(Some(next), hosts.mark(None)),
+            "a frame without the panel"
+        );
+        assert!(Hosts::reopened(None, next), "never drawn");
     }
 
     #[test]

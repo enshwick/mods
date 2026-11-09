@@ -1,6 +1,5 @@
-//! Admin Tools: actions for a server's administrators in the game's
-//! interface. "Muted in chat" lists the players online with a switch each;
-//! a muted player's chat lines reach nobody.
+//! Admin Tools: actions for a server's administrators. "Muted in chat"
+//! switches a player's mute; a muted player's chat lines reach nobody.
 
 use enshwick::actions::{Action, Outcome, Request, Value};
 use enshwick::world::World;

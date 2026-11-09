@@ -1,6 +1,6 @@
 [en]
 "mod.name" = "Admin Tools"
-"mod.description" = "Lets a server's administrators mute players in chat from the game's interface."
+"mod.description" = "Lets a server's administrators mute players in chat from the dedicated server's console."
 "action.muted" = "Muted in chat"
 "action.muted.help" = "A muted player's chat lines reach nobody. Administrators and the host are never muted."
 "reply.muted" = "{name} is muted in chat."
@@ -11,7 +11,7 @@
 
 [uk]
 "mod.name" = "Admin Tools"
-"mod.description" = "Дає адміністраторам сервера вимикати гравцям чат в інтерфейсі гри."
+"mod.description" = "Дає адміністраторам сервера вимикати гравцям чат через консоль виділеного сервера."
 "action.muted" = "Чат вимкнено"
 "action.muted.help" = "Рядки гравця з вимкненим чатом не бачить ніхто. Адміністраторам і хосту чат не вимикається."
 "reply.muted" = "{name}: чат вимкнено."

@@ -34,13 +34,13 @@ character. The experience a character gains here goes with it to other worlds.
 
 Shared Experience comes in its own archive, enshwick-shared-experience.zip. It
 needs Enshwick, which comes in enshwick.zip. The
-[install guide](https://enshwick.github.io/docs/guides/install/) shows where to
+[install guide](https://enshwick.com/guides/install/) shows where to
 put both archives.
 
 ## Settings
 
 You change this value in the game, as the
-[settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
+[settings guide](https://enshwick.com/guides/change-mod-settings/)
 shows.
 
 ## Multiplayer

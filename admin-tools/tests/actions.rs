@@ -1,5 +1,5 @@
 //! The mute action through the fake loader, as an administrator and a
-//! player use it from the game's interface.
+//! player run it.
 
 #[cfg(test)]
 mod tests {

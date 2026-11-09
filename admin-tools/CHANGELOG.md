@@ -8,5 +8,5 @@ Each entry says what players notice; a release's notes show its section.
 
 ### Added
 
-- First alpha. A server's administrators mute players in chat from the game's
-  interface, with a switch per player.
+- First alpha. A server's administrators mute players in chat from the
+  dedicated server's console.

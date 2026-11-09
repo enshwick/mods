@@ -1,18 +1,17 @@
 # Admin Tools
 
 Admin Tools lets a server's administrators mute players in chat from the
-game's interface.
+dedicated server's console.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
-## In the game
+## On the server
 
-An administrator opens the pause menu, **Mods**, **Actions** and **Muted in
-chat**: a list of the players online with a switch each. A muted player's chat
-lines reach no other player, and the muted player sees a notice that says so.
-Administrators and the host are never muted, and a mute lasts in its world
-across restarts until it is lifted. Other players never see the list, and the server checks
-every switch again.
+An administrator types `enshwick.admin-tools muted <player> on` or `off` in
+the dedicated server's console window. A muted player's chat lines reach no
+other player, and the muted player sees a notice that says so. Administrators
+and the host are never muted, and a mute lasts in its world across restarts
+until it is lifted. Admin Tools has no window in the game.
 
 ## Install
 
@@ -26,6 +25,6 @@ to the next. Back up your saves before you update.
 
 ## Who needs it
 
-Only the server. Players need Enshwick to see the list.
+Only the server.
 
 Licensed under [MIT](LICENSE).

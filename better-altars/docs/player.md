@@ -46,13 +46,13 @@ first 16 altar zones work as bases.
 
 Better Altars comes in its own archive, enshwick-better-altars.zip. It needs
 Enshwick, which comes in enshwick.zip. The
-[install guide](https://enshwick.github.io/docs/guides/install/) shows where to
+[install guide](https://enshwick.com/guides/install/) shows where to
 put both archives.
 
 ## Settings
 
 The
-[settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
+[settings guide](https://enshwick.com/guides/change-mod-settings/)
 shows how to change them in the game.
 
 ## Problems

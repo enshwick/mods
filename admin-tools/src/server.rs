@@ -1,18 +1,20 @@
 //! Actions on the whole server: the message of the day, restart warnings,
-//! the time of day, the weather and the audit log; and the tick that runs
-//! the schedule.
+//! the time of day, the weather, saves, the status, the world's settings
+//! and the logs; the tick that runs the schedule and the chat log.
 
 use core::time::Duration;
 use std::sync::Arc;
 
-use enshwick::Off;
-use enshwick::Relock as _;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
+use enshwick::chat::{ChatKind, ChatLine};
+use enshwick::config::{Config as _, Schema};
+use enshwick::game_settings::GameSettings;
 use enshwick::weather::Forecast;
+use enshwick::{Off, Relock as _, WorldError};
 
 use crate::schedule::Say;
 use crate::settings::Settings;
-use crate::{Tools, audit, ids, texts};
+use crate::{Tools, ids, journal, texts};
 
 /// The weather an admin picks: its word, its label's key, and the forecast.
 /// `Forecast` is the API's own list of what it starts.
@@ -26,8 +28,8 @@ const FORECASTS: [(&str, &str, Forecast); 4] = [
 /// The longest restart warning, in minutes.
 const MAX_RESTART_MINUTES: f64 = 180.0;
 
-/// The most audit lines one read shows.
-const MAX_AUDIT_LINES: f64 = 50.0;
+/// The most lines one read of a log shows.
+const MAX_LOG_LINES: f64 = 50.0;
 
 /// Declares the actions on the server.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -61,8 +63,26 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
     tools.add(
         Action::new(ids::AUDIT, texts::ACTION_AUDIT)
             .help(texts::ACTION_AUDIT_HELP)
-            .arg(Arg::number(texts::ARG_LINES, 1.0..=MAX_AUDIT_LINES, 1.0)),
+            .arg(Arg::number(texts::ARG_LINES, 1.0..=MAX_LOG_LINES, 1.0)),
         read_audit,
+    )?;
+    tools.add(
+        Action::new(ids::CHAT, texts::ACTION_CHAT)
+            .help(texts::ACTION_CHAT_HELP)
+            .arg(Arg::number(texts::ARG_LINES, 1.0..=MAX_LOG_LINES, 1.0)),
+        read_chat,
+    )?;
+    tools.add(
+        Action::new(ids::STATUS, texts::ACTION_STATUS).help(texts::ACTION_STATUS_HELP),
+        status,
+    )?;
+    tools.add(
+        Action::new(ids::SAVE, texts::ACTION_SAVE).help(texts::ACTION_SAVE_HELP),
+        save,
+    )?;
+    tools.add(
+        Action::new(ids::WORLD, texts::ACTION_WORLD).help(texts::ACTION_WORLD_HELP),
+        world,
     )
 }
 
@@ -151,14 +171,33 @@ fn restart(tools: &Tools, request: &Request<'_>) -> Outcome {
 
 /// The last lines of the audit log.
 fn read_audit(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let on = tools.settings.load().audit_on(tools.dedicated);
+    read_log(tools, request, journal::AUDIT, on, texts::REPLY_AUDIT_OFF)
+}
+
+/// The last lines of the chat log.
+fn read_chat(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let on = tools.settings.load().chat_log_on(tools.dedicated);
+    read_log(tools, request, journal::CHAT, on, texts::REPLY_CHAT_OFF)
+}
+
+/// The last lines of the log `files`, refused with the text `off` while
+/// the world's settings keep it off.
+fn read_log(
+    tools: &Tools,
+    request: &Request<'_>,
+    files: journal::Files,
+    on: bool,
+    off: &str,
+) -> Outcome {
     let [Value::Number(count)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_AUDIT_NONE, &[]));
+        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
     };
-    if !tools.settings.load().audit_on(tools.dedicated) {
-        return Outcome::refused(request.say(texts::REPLY_AUDIT_OFF, &[]));
+    if !on {
+        return Outcome::refused(request.say(off, &[]));
     }
     let Some(dir) = tools.world.data_dir() else {
-        return Outcome::refused(request.say(texts::REPLY_AUDIT_NONE, &[]));
+        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
     };
     #[expect(
         clippy::cast_possible_truncation,
@@ -166,10 +205,116 @@ fn read_audit(tools: &Tools, request: &Request<'_>) -> Outcome {
         reason = "the argument's range is 1 to 50 in whole steps"
     )]
     let count = count.round() as usize;
-    match audit::tail(&dir, count) {
-        Ok(lines) if lines.is_empty() => Outcome::done(request.say(texts::REPLY_AUDIT_NONE, &[])),
+    match files.tail(&dir, count) {
+        Ok(lines) if lines.is_empty() => Outcome::done(request.say(texts::REPLY_LOG_NONE, &[])),
         Ok(lines) => Outcome::done(lines.join("\n")),
-        Err(why) => Tools::failed(request, audit::FILE, &why),
+        Err(why) => Tools::failed(request, files.now, &why),
+    }
+}
+
+/// The loader's and every mod's version, the uptime and the world.
+fn status(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let up = tools.started.elapsed().as_secs() / 60;
+    let world = tools
+        .world
+        .key()
+        .unwrap_or_else(|| request.say(texts::REPLY_STATUS_NO_WORLD, &[]));
+    let mods: Vec<String> = enshwick::mods::all()
+        .iter()
+        .map(|entry| {
+            let key = if entry.running {
+                texts::REPLY_STATUS_MOD
+            } else {
+                texts::REPLY_STATUS_MOD_OFF
+            };
+            request.say(
+                key,
+                &[
+                    (texts::value::NAME, &entry.label()),
+                    (texts::value::VERSION, &entry.version),
+                ],
+            )
+        })
+        .collect();
+    Outcome::done(request.say(
+        texts::REPLY_STATUS,
+        &[
+            (texts::value::HOURS, &(up / 60).to_string()),
+            (texts::value::MINUTES, &(up % 60).to_string()),
+            (texts::value::WORLD, &world),
+            (texts::value::MODS, &mods.join(", ")),
+        ],
+    ))
+}
+
+/// Saves the world now.
+fn save(tools: &Tools, request: &Request<'_>) -> Outcome {
+    match tools.world.save() {
+        Ok(()) => Outcome::done(request.say(texts::REPLY_SAVED, &[])),
+        Err(WorldError::Refused) => Outcome::refused(request.say(texts::REPLY_SAVE_REFUSED, &[])),
+        Err(why) => Tools::failed(request, ids::SAVE, &why),
+    }
+}
+
+/// The world, its last save and its game settings, one per line.
+fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let Some((settings, preset)) = tools.game_settings.as_ref().and_then(GameSettings::read) else {
+        return Outcome::refused(request.say(texts::REPLY_WORLD_NONE, &[]));
+    };
+    let saved = tools.world.save_info().map_or_else(
+        || request.say(texts::REPLY_WORLD_UNSAVED, &[]),
+        |info| journal::utc(info.saved_at.as_secs()),
+    );
+    let world = tools
+        .world
+        .key()
+        .unwrap_or_else(|| request.say(texts::REPLY_STATUS_NO_WORLD, &[]));
+    let head = request.say(
+        texts::REPLY_WORLD,
+        &[
+            (texts::value::WORLD, &world),
+            (texts::value::PRESET, &format!("{preset:?}")),
+            (texts::value::TIME, &saved),
+        ],
+    );
+    Outcome::done(
+        core::iter::once(head)
+            .chain(fields(&format!("{settings:#?}")))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+/// The `name = value` lines of a struct's pretty `Debug` text.
+fn fields(debug: &str) -> impl Iterator<Item = String> {
+    debug
+        .lines()
+        .filter_map(|line| line.strip_prefix("    "))
+        .filter(|line| !line.starts_with(' '))
+        .map(|line| line.trim_end_matches(',').replacen(": ", " = ", 1))
+}
+
+impl Tools {
+    /// Writes a line the server's chat heard to the chat log while the
+    /// world's settings keep it on: the sender's name and account, what
+    /// the line is and its text.
+    pub(crate) fn heard(&self, line: &ChatLine) {
+        if !self.settings.load().chat_log_on(self.dedicated) {
+            return;
+        }
+        let Some(dir) = self.world.data_dir() else {
+            return;
+        };
+        let (name, account) = line.player.map_or_else(Default::default, |key| {
+            let name = self.world.player_by_key(key).map(|player| player.name);
+            (name.unwrap_or_default(), format!("{:016x}", key.0))
+        });
+        let kind = match line.kind {
+            ChatKind::Player => "say",
+            ChatKind::Emote => "emote",
+            _ => "notice",
+        };
+        self.chat.record(dir, &[&name, &account, kind, &line.text]);
     }
 }
 
@@ -204,7 +349,13 @@ impl Tools {
                 texts::NOTICE_RESTART,
                 &[(texts::value::MINUTES, &minutes.to_string())],
             )),
-            Say::RestartNow => with_text(self.say(texts::NOTICE_RESTART_NOW, &[])),
+            Say::RestartNow => {
+                // The save the restart would make, so the host's restart loses nothing.
+                if let Err(why) = self.world.save() {
+                    enshwick::warn!("no save before the restart: {why}");
+                }
+                with_text(self.say(texts::NOTICE_RESTART_NOW, &[]))
+            }
         };
         enshwick::info!("announced: {line}");
         self.world.notify_all(&line);
@@ -212,25 +363,34 @@ impl Tools {
 }
 
 /// The settings `new` changes from `old`, as `key = value`, dotted for a
-/// group's.
+/// group's; a secret setting by its key alone.
 pub(crate) fn changed_keys(old: &Settings, new: &Settings) -> Vec<String> {
     let (Ok(old), Ok(new)) = (toml::Table::try_from(old), toml::Table::try_from(new)) else {
         return Vec::new();
     };
+    let schema = Settings::schema();
     let mut changed = Vec::new();
-    diff("", &old, &new, &mut changed);
+    diff("", &old, &new, &schema, &mut changed);
     changed
 }
 
 /// Adds to `changed` each key of `new` whose value differs in `old`.
-fn diff(prefix: &str, old: &toml::Table, new: &toml::Table, changed: &mut Vec<String>) {
+fn diff(
+    prefix: &str,
+    old: &toml::Table,
+    new: &toml::Table,
+    schema: &Schema,
+    changed: &mut Vec<String>,
+) {
     for (key, value) in new {
+        let full = format!("{prefix}{key}");
         match (old.get(key), value) {
             (Some(toml::Value::Table(old)), toml::Value::Table(new)) => {
-                diff(&format!("{prefix}{key}."), old, new, changed);
+                diff(&format!("{full}."), old, new, schema, changed);
             }
             (Some(was), now) if was == now => {}
-            (_, now) => changed.push(format!("{prefix}{key} = {now}")),
+            _ if schema.field(&full).is_some_and(|field| field.secret) => changed.push(full),
+            (_, now) => changed.push(format!("{full} = {now}")),
         }
     }
 }
@@ -259,5 +419,15 @@ mod tests {
             ["motd = \"Welcome\"", "rights.kick = \"nobody\""]
         );
         assert!(changed_keys(&old, &old).is_empty());
+    }
+
+    #[test]
+    fn a_changed_secret_is_named_by_its_key_and_never_its_value() {
+        let old = Settings::default();
+        let new = Settings {
+            rcon_password: "hunter2".into(),
+            ..old.clone()
+        };
+        assert_eq!(changed_keys(&old, &new), ["rcon_password"]);
     }
 }

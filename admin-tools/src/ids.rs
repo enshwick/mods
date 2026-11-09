@@ -31,15 +31,25 @@ pub(crate) const WEATHER: &str = "weather";
 pub(crate) const RESTART: &str = "restart";
 /// Reads the audit log.
 pub(crate) const AUDIT: &str = "audit";
+/// The versions, the uptime and the world.
+pub(crate) const STATUS: &str = "status";
+/// Saves the world now.
+pub(crate) const SAVE: &str = "save";
+/// The world's game settings.
+pub(crate) const WORLD: &str = "world";
+/// Copies the world's save aside.
+pub(crate) const BACKUP: &str = "backup";
+/// Reads the chat log.
+pub(crate) const CHAT: &str = "chat";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 15] = [
-    ONLINE, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, GOTO, BRING, SEND, PLACE, TIME, WEATHER,
-    RESTART, AUDIT,
+pub(crate) const ALL: [&str; 20] = [
+    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, GOTO, BRING, SEND, PLACE, TIME,
+    WEATHER, RESTART, SAVE, BACKUP, WORLD, AUDIT, CHAT,
 ];
 
 /// The actions that only read, which the audit log leaves out.
-pub(crate) const READS: [&str; 3] = [ONLINE, MOTD, AUDIT];
+pub(crate) const READS: [&str; 6] = [ONLINE, STATUS, MOTD, WORLD, AUDIT, CHAT];
 
 /// The mod's command name, the part of its id after the author.
 pub(crate) const COMMAND: &str = "admin-tools";

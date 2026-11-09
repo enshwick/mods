@@ -6,6 +6,10 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Changed
+
+- The mod page says that a game you host never gets the worker thread limit.
+
 ## [0.1.1] - 2026-11-07
 
 ### Added

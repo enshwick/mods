@@ -52,12 +52,13 @@ You change these values in the game, as the
 [settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
 shows.
 
-## Multiplayer
+## Who needs it?
 
-A dedicated server needs Optimizer most. In a game you host, Optimizer runs
-too, but every change stays off by default, because none was measured there
-yet. The `exact_waits` and `server_wait_cap_ms` settings turn their change on
-there too. Players who join a game need nothing.
+A dedicated server needs Optimizer most. Players who join a game need nothing.
+
+In a game you host, every change of Optimizer is off by default. The worker
+thread limit does not apply there. The `exact_waits` and `server_wait_cap_ms`
+settings turn their change on.
 
 ## Problems
 

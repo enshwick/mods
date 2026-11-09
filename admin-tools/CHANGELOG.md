@@ -41,3 +41,17 @@ Each entry says what players notice; a release's notes show its section.
   its game settings.
 - A restart warning saves the world when its time is up; a game a player
   hosts offers no restart warning.
+- Administrators give a player items by the game's name in any case, its
+  GUID, a mod's content id or its number, in as many stacks as needed, and
+  read how many did not fit. An unknown name answers with the names near it.
+- Administrators place a wooden chest of items beside a player or at a
+  position.
+- Administrators clear a player's inventory or copy one player's inventory
+  to another.
+- Administrators set a player's health, stamina or mana, and teach a player
+  a recipe or any knowledge by its number.
+- God mode keeps all damage off a player until they leave or the world
+  stops.
+- `/adl online` lists the players in chat, one player a line.
+- The audit log also keeps every refused run of an action that changes
+  something.

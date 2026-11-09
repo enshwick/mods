@@ -7,6 +7,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
+  # The merge queue checks each group of pull requests on top of main.
+  merge_group:
   workflow_dispatch:
 
 permissions: {}

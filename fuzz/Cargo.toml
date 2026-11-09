@@ -13,6 +13,10 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
+# The packet module a target compiles with `#[path]` uses it.
+[package.metadata.cargo-machete]
+ignored = ["thiserror"]
+
 [dependencies]
 libfuzzer-sys = { version = "0.4.13", default-features = false, features = ["link_libfuzzer"] }
 

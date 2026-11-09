@@ -77,6 +77,7 @@ fn a_hosted_game_offers_no_restart_warning() {
 fn the_chat_log_keeps_each_line_with_its_sender_and_reads_back() {
     let dir = scratch("chat-log");
     let loader = server("", &dir);
+    assert_eq!(run(&loader, &ann(), "chat", "n5"), "1The log is empty.");
     assert_eq!(
         loader.say(PlayerKey::new(2), "hello all").as_deref(),
         Some("hello all")

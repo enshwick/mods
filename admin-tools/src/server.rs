@@ -214,7 +214,7 @@ fn read_log(
 
 /// The loader's and every mod's version, the uptime and the world.
 fn status(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let up = tools.started.elapsed().as_secs() / 60;
+    let (hours, minutes) = hours_minutes(tools.started.elapsed().as_secs());
     let world = tools
         .world
         .key()
@@ -239,12 +239,18 @@ fn status(tools: &Tools, request: &Request<'_>) -> Outcome {
     Outcome::done(request.say(
         texts::REPLY_STATUS,
         &[
-            (texts::value::HOURS, &(up / 60).to_string()),
-            (texts::value::MINUTES, &(up % 60).to_string()),
+            (texts::value::HOURS, &hours.to_string()),
+            (texts::value::MINUTES, &minutes.to_string()),
             (texts::value::WORLD, &world),
             (texts::value::MODS, &mods.join(", ")),
         ],
     ))
+}
+
+/// `seconds` as whole hours and the minutes past them.
+fn hours_minutes(seconds: u64) -> (u64, u64) {
+    let minutes = seconds / 60;
+    (minutes / 60, minutes % 60)
 }
 
 /// Saves the world now.
@@ -419,6 +425,32 @@ mod tests {
             ["motd = \"Welcome\"", "rights.kick = \"nobody\""]
         );
         assert!(changed_keys(&old, &old).is_empty());
+    }
+
+    #[test]
+    fn the_uptime_reads_as_whole_hours_and_the_minutes_past_them() {
+        assert_eq!(hours_minutes(0), (0, 0));
+        assert_eq!(hours_minutes(59), (0, 0));
+        assert_eq!(hours_minutes(3_599), (0, 59));
+        assert_eq!(hours_minutes(3_600 * 26 + 125), (26, 2));
+    }
+
+    #[test]
+    fn the_world_view_takes_each_top_level_field_as_name_and_value() {
+        #[derive(Debug)]
+        #[expect(dead_code, reason = "the fields are read through Debug alone")]
+        struct Shown {
+            factor: f32,
+            on: bool,
+            length: Duration,
+        }
+        let shown = Shown {
+            factor: 2.0,
+            on: true,
+            length: Duration::from_secs(600),
+        };
+        let lines: Vec<String> = fields(&format!("{shown:#?}")).collect();
+        assert_eq!(lines, ["factor = 2.0", "on = true", "length = 600s"]);
     }
 
     #[test]

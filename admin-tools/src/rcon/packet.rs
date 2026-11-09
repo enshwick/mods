@@ -191,7 +191,8 @@ mod tests {
 
     #[test]
     fn a_long_answer_splits_at_character_boundaries_and_an_empty_one_is_one_packet() {
-        let text = "ї".repeat(MAX_REPLY_BODY);
+        // Three bytes each, so a part's end falls inside a character.
+        let text = "€".repeat(MAX_REPLY_BODY);
         let packets = Packet::answer(3, &text);
         assert!(packets.len() > 1);
         assert!(packets.iter().all(|p| p.body.len() <= MAX_REPLY_BODY));

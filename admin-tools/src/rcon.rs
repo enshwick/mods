@@ -481,6 +481,21 @@ mod tests {
     }
 
     #[test]
+    fn connections_past_the_limit_get_no_slot_until_one_closes() {
+        let shared = Shared {
+            password: String::new(),
+            stop: AtomicBool::new(false),
+            connections: AtomicUsize::new(0),
+            waiting: Mutex::new(FxHashMap::default()),
+            tools: Weak::new(),
+        };
+        assert!((0..MAX_CONNECTIONS).all(|_| shared.take_slot()));
+        assert!(!shared.take_slot());
+        shared.connections.fetch_sub(1, Ordering::AcqRel);
+        assert!(shared.take_slot());
+    }
+
+    #[test]
     fn a_connection_past_its_packet_rate_is_refused() {
         let mut pace = Pace {
             since: Instant::now(),

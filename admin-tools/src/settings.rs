@@ -514,7 +514,18 @@ mod tests {
 
     #[test]
     fn texts_and_announcements_at_their_limits_pass_the_check() {
+        let long_password = Settings {
+            rcon_password: "p".repeat(MAX_PASSWORD + 1),
+            ..Settings::default()
+        };
+        assert!(long_password.check().is_err());
+        let bad_address = Settings {
+            rcon_ip: "localhost".into(),
+            ..Settings::default()
+        };
+        assert!(bad_address.check().is_err());
         let full = Settings {
+            rcon_password: "p".repeat(MAX_PASSWORD),
             motd: "a".repeat(MAX_TEXT),
             announcements: vec!["hi".into(); MAX_ANNOUNCEMENTS],
             ..Settings::default()

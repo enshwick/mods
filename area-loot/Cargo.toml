@@ -27,7 +27,7 @@ rustc-hash.workspace = true
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test", "unstable"] }
-toml = { version = "=1.2.0", default-features = false, features = ["std", "parse", "display", "serde"] }
+toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 [lints]
 workspace = true

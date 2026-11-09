@@ -140,7 +140,7 @@ fn learn_refuses_what_the_player_knows_a_count_and_an_unknown_id() {
     );
     assert_eq!(
         run(&loader, &ann(), "learn", "p0000000000000002\tt20"),
-        "0Nothing is named 20."
+        "0Admin Tools: nothing is named «20»."
     );
     assert!(loader.grants().is_empty());
 }

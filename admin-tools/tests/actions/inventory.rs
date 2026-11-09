@@ -1,10 +1,13 @@
 //! Actions on what players carry: giving items by the game's name, GUID or
-//! number, within a stack, once, and the refusals.
+//! number, in as many stacks as they need, once; what did not fit; the
+//! refusals, which the audit log keeps too.
 
 use enshwick::ItemId;
-use enshwick::abi::{InventoryOp, InventoryResult};
+use enshwick::abi::{InventoryOp, InventoryOpResult, InventoryResult};
 
-use super::game::{CHEST, GLIDER, WOOD, ann, bob, run, said, scratch, server, tick_until};
+use super::game::{
+    CHEST, GLIDER, WOOD, ann, bob, file_until, run, said, scratch, server, tick_until,
+};
 
 /// The gives the mod submitted so far: each one's inventory, item and count.
 fn gives(loader: &enshwick::test::Installed) -> Vec<(u64, ItemId, u32)> {
@@ -32,45 +35,51 @@ fn give_hands_a_player_an_item_named_as_the_game_names_it_once() {
         "give",
         "p0000000000000002\tn1\tttool_glider_t1",
     );
-    assert_eq!(reply, "11 × tool_glider_t1 on the way to Bob.");
+    assert_eq!(reply, "1Gave Tool_Glider_T1 × 1 to Bob.");
     let bob = u64::from(bob().entity.0);
     assert_eq!(gives(&loader), [(bob, ItemId::from_guid(GLIDER), 1)]);
 }
 
 #[test]
-fn give_takes_an_item_s_guid_or_number_and_counts_up_to_a_stack() {
+fn give_takes_an_item_s_guid_or_number_and_more_than_a_stack() {
     let dir = scratch("give-ids");
     let loader = server("", &dir);
-    let wood = ItemId::from_guid(WOOD);
+    let (wood, glider) = (ItemId::from_guid(WOOD), ItemId::from_guid(GLIDER));
     let guid = format!("p0000000000000002\tn100\tt{WOOD}");
     assert!(run(&loader, &ann(), "give", &guid).starts_with('1'));
     let number = format!("p0000000000000002\tn5\tt{}", wood.get());
     assert!(run(&loader, &ann(), "give", &number).starts_with('1'));
-    let bob = u64::from(bob().entity.0);
-    assert_eq!(gives(&loader), [(bob, wood, 100), (bob, wood, 5)]);
-}
-
-#[test]
-fn give_refuses_more_than_a_stack_and_an_unknown_name_with_the_names_near_it() {
-    let dir = scratch("give-refused");
-    let loader = server("", &dir);
+    // A glider stacks to one; five of them take five slots.
     assert_eq!(
         run(
             &loader,
             &ann(),
             "give",
-            "p0000000000000002\tn2\ttTool_Glider_T1"
+            "p0000000000000002\tn5\ttTool_Glider_T1"
         ),
-        "0Tool_Glider_T1 stacks up to 1; give at most that many at once."
+        "1Gave Tool_Glider_T1 × 5 to Bob."
     );
-    let reply = run(
-        &loader,
-        &ann(),
-        "give",
-        "p0000000000000002\tn1\ttTool_Glider",
+    let bob = u64::from(bob().entity.0);
+    assert_eq!(
+        gives(&loader),
+        [(bob, wood, 100), (bob, wood, 5), (bob, glider, 5)]
     );
     assert!(
-        reply.starts_with("0Nothing is named Tool_Glider. Near: "),
+        loader
+            .inventory_requests()
+            .iter()
+            .all(|request| request.flags != 0),
+        "every give takes what fits"
+    );
+}
+
+#[test]
+fn an_unknown_name_answers_in_chat_with_the_names_near_it_and_goes_to_the_audit_log() {
+    let dir = scratch("give-refused");
+    let loader = server("audit = \"on\"\n", &dir);
+    let reply = run(&loader, &ann(), "give", "p0000000000000002\tn1\ttGlider");
+    assert!(
+        reply.starts_with("0Admin Tools: nothing is named «Glider».\nNear: "),
         "{reply}"
     );
     assert!(reply.contains("Tool_Glider_T1"), "{reply}");
@@ -84,6 +93,8 @@ fn give_refuses_more_than_a_stack_and_an_unknown_name_with_the_names_near_it() {
         .starts_with('0')
     );
     assert!(gives(&loader).is_empty());
+    let audit = file_until(&dir, "audit.log", |text| text.contains("Glider"));
+    assert!(audit.contains("give"), "{audit}");
 }
 
 #[test]
@@ -101,7 +112,30 @@ fn a_give_the_game_turns_down_is_told_to_the_administrator() {
     );
     assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
     assert!(tick_until(&loader, || said(&loader, 1).iter().any(
-        |line| line.starts_with("Bob did not get 1 × Tool_Glider_T1")
+        |line| line.starts_with("Bob got 0 of Tool_Glider_T1 × 1: 1 did not fit")
+    )));
+}
+
+#[test]
+fn what_did_not_fit_is_told_with_how_many_arrived() {
+    let dir = scratch("give-short");
+    let loader = server("", &dir);
+    assert!(
+        run(
+            &loader,
+            &ann(),
+            "give",
+            "p0000000000000002\tn250\ttResource_Wood"
+        )
+        .starts_with('1')
+    );
+    let short = InventoryOpResult {
+        error: 0,
+        remaining: 50,
+    };
+    assert!(loader.finish_inventory(InventoryResult::COMMITTED, &[short]));
+    assert!(tick_until(&loader, || said(&loader, 1).iter().any(
+        |line| line.starts_with("Bob got 200 of Resource_Wood × 250: 50 did not fit")
     )));
 }
 
@@ -146,7 +180,7 @@ fn a_chest_goes_up_at_a_position_and_then_gets_its_items() {
             "chestat",
             "n10\tn20\tn30\tn250\ttResource_Wood"
         ),
-        "1A chest with 250 × Resource_Wood goes up at 10, 20, 30."
+        "1A chest with Resource_Wood × 250 goes up at 10, 20, 30."
     );
     let chest = ItemId::from_guid(CHEST);
     assert!(tick_until(&loader, || loader.props().iter().any(
@@ -168,7 +202,7 @@ fn a_chest_at_a_player_stands_beside_them_and_bob_may_not_place_one() {
             "chest",
             "p0000000000000002\tn1\ttTool_Glider_T1"
         ),
-        "1A chest with 1 × Tool_Glider_T1 goes up at Bob."
+        "1A chest with Tool_Glider_T1 × 1 goes up at Bob."
     );
     assert!(tick_until(&loader, || loader
         .props()

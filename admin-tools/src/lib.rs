@@ -42,7 +42,7 @@ enshwick::texts!();
 /// How often the schedule and a restart warning move on.
 const TICK: core::time::Duration = core::time::Duration::from_secs(1);
 
-/// The mod; its state lives in [`Tools`], which its handlers share.
+/// The mod; its state lives in the handlers it declares, which share it.
 #[derive(Debug)]
 pub struct AdminTools;
 

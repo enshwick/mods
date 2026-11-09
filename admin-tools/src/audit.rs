@@ -87,6 +87,7 @@ fn spawn() -> Sender<Entry> {
 /// Appends `line` to the log in `dir`, first moving a log past
 /// [`MAX_BYTES`] to [`OLD_FILE`].
 pub(crate) fn append(dir: &Path, line: &str) -> io::Result<()> {
+    fs::create_dir_all(dir)?;
     let path = dir.join(FILE);
     if fs::metadata(&path).is_ok_and(|meta| meta.len() >= MAX_BYTES) {
         fs::rename(&path, dir.join(OLD_FILE))?;

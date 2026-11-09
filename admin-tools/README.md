@@ -1,17 +1,20 @@
 # Admin Tools
 
-Admin Tools lets a server's administrators mute players in chat from the
-dedicated server's console.
+Admin Tools gives a server's administrators what the game lacks: a player
+list, kicks, bans, an allow-list, chat mutes, announcements, restart
+warnings, time and weather, healing, teleports and an audit log.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
 ## On the server
 
-An administrator types `enshwick.admin-tools muted <player> on` or `off` in
-the dedicated server's console window. A muted player's chat lines reach no
-other player, and the muted player sees a notice that says so. Administrators
-and the host are never muted, and a mute lasts in its world across restarts
-until it is lifted. Admin Tools has no window in the game.
+Every action is a command in chat and in the dedicated server's console:
+`/adl <action>` or `/admin-tools <action>`, such as `/adl kick Bob`.
+`/adl help` lists the actions the caller may use. Each world decides who may
+use each action, by the permissions of the game's user groups. A ban holds
+when the account comes back, and the allow-list keeps out accounts not on it.
+Changes go to `audit.log` beside the world's save. The
+[player page](docs/player.md) lists every command and setting.
 
 ## Install
 

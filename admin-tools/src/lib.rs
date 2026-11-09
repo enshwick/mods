@@ -200,4 +200,49 @@ fn word(value: &Value) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use enshwick::config::Config as _;
+    use enshwick::i18n::{Language, Texts};
+
+    use super::*;
+
+    #[test]
+    fn every_text_exists_in_every_offered_language() {
+        let texts = Texts::parse(texts::TOML).unwrap();
+        assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(Language::OFFERED), []);
+    }
+
+    #[test]
+    fn every_setting_and_group_has_its_label_and_description() {
+        let schema = Settings::schema();
+        let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
+        let keys = schema
+            .groups
+            .iter()
+            .map(|group| group.text.clone())
+            .chain(schema.fields.iter().map(|field| field.text.clone()))
+            .flat_map(|key| [format!("{key}.doc"), key]);
+        for key in keys {
+            for (language, table) in &tables {
+                assert!(
+                    table.as_table().unwrap().contains_key(&key),
+                    "{language}: {key}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_action_s_label_and_help_are_texts() {
+        let texts = Texts::parse(texts::TOML).unwrap();
+        for id in ids::ALL {
+            for key in [format!("action.{id}"), format!("action.{id}.help")] {
+                assert!(texts.get(&key, Language::FALLBACK).is_some(), "{key}");
+            }
+        }
+    }
+}
+
 enshwick::declare_mod!(AdminTools);

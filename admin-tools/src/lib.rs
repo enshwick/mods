@@ -15,6 +15,7 @@ mod schedule;
 mod server;
 mod settings;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -23,7 +24,7 @@ use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Outcome, Request, Value, Via};
 use enshwick::daytime::Clock;
 use enshwick::effects::Effects;
-use enshwick::events::{PlayerJoined, PlayerLeft};
+use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
 use enshwick::i18n::{Language, Texts};
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
@@ -61,6 +62,8 @@ pub(crate) struct Tools {
     joined: Mutex<FxHashMap<PlayerKey, Instant>>,
     /// Whether this is a dedicated server, for the audit log's default.
     dedicated: bool,
+    /// Whether a world runs, from its load to its shutdown.
+    running: AtomicBool,
 }
 
 /// A handler of one of the mod's actions.
@@ -82,7 +85,12 @@ impl Mod for AdminTools {
             ticker: Mutex::new(Ticker::default()),
             joined: Mutex::new(FxHashMap::default()),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
+            running: AtomicBool::new(false),
         });
+        let loaded = Arc::clone(&tools);
+        load.on::<WorldLoaded>(move |()| loaded.running.store(true, Ordering::Relaxed))?;
+        let stopped = Arc::clone(&tools);
+        load.on::<ShutdownStarted>(move |()| stopped.running.store(false, Ordering::Relaxed))?;
         players::add(&tools)?;
         server::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
@@ -161,6 +169,10 @@ impl Tools {
             && let Err(why) = self.actions.rules_changed()
         {
             enshwick::warn!("rights not carried again: {why}");
+        }
+        // A world's first settings arrive before it runs: no one changed them.
+        if !self.running.load(Ordering::Relaxed) {
+            return;
         }
         let changed = server::changed_keys(&old, settings);
         if !changed.is_empty() {

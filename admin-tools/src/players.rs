@@ -202,12 +202,18 @@ fn banned(tools: &Tools, request: &Request<'_>) -> Outcome {
             None => store_shut(tools, request),
         };
     }
-    if let Err(why) = tools.world.account_action(AccountAction::UnBan, *key) {
-        return Tools::failed(request, name, &why);
+    // The mod's own ban goes first, so the account is never banned again at
+    // the door, whatever the game answers.
+    if tools
+        .accounts
+        .update(|accounts| accounts.unban(*key))
+        .is_none()
+    {
+        return store_shut(tools, request);
     }
-    match tools.accounts.update(|accounts| accounts.unban(*key)) {
-        Some(_) => Outcome::done(request.say(texts::REPLY_UNBANNED, &values)),
-        None => store_shut(tools, request),
+    match tools.world.account_action(AccountAction::UnBan, *key) {
+        Ok(()) => Outcome::done(request.say(texts::REPLY_UNBANNED, &values)),
+        Err(why) => Tools::failed(request, name, &why),
     }
 }
 
@@ -257,11 +263,10 @@ fn heal(tools: &Tools, request: &Request<'_>) -> Outcome {
     let Some(player) = tools.world.player_by_key(*key) else {
         return no_player(request);
     };
-    let max = tools
-        .world
-        .vitals(player.entity)
-        .map_or(0, |vitals| vitals.health.max);
-    match tools.world.set_health(player.entity, max) {
+    let Some(vitals) = tools.world.vitals(player.entity) else {
+        return Tools::failed(request, name, &WorldError::Missing);
+    };
+    match tools.world.set_health(player.entity, vitals.health.max) {
         Ok(_) => Outcome::done(request.say(texts::REPLY_HEALED, &[(texts::value::NAME, name)])),
         Err(why) => Tools::failed(request, name, &why),
     }

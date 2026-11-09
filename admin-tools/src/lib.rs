@@ -1,7 +1,9 @@
 //! Admin Tools: what a server's administrators need in game. The player
 //! list, kicks, bans, the allow-list and chat mutes; the message of the
 //! day, scheduled announcements and restart warnings; the time of day and
-//! the weather; healing and teleports; saves, backups and the world's
+//! the weather; healing and teleports; items, chests of items and
+//! inventories; health, stamina and mana, recipes and god mode; saves,
+//! backups and the world's
 //! settings; who may use each, per world; an audit log of what was done
 //! and a chat log.
 //!

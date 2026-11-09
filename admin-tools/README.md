@@ -2,8 +2,9 @@
 
 Admin Tools gives a server's administrators what the game lacks: a player
 list, kicks, bans, an allow-list, chat mutes, announcements, restart
-warnings, time and weather, healing, teleports, saves and backups, a remote
-console, and audit and chat logs.
+warnings, time and weather, healing, teleports, items and chests of items,
+inventories, health, stamina and mana, recipes, god mode, saves and backups,
+a remote console, and audit and chat logs.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 

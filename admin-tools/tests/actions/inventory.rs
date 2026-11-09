@@ -17,6 +17,11 @@ fn gives(loader: &enshwick::test::Installed) -> Vec<(u64, ItemId, u32)> {
         .collect()
 }
 
+/// Whether two positions are the same to a millimetre.
+fn near(a: [f64; 3], b: [f64; 3]) -> bool {
+    a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-3)
+}
+
 #[test]
 fn give_hands_a_player_an_item_named_as_the_game_names_it_once() {
     let dir = scratch("give");
@@ -145,7 +150,7 @@ fn a_chest_goes_up_at_a_position_and_then_gets_its_items() {
     );
     let chest = ItemId::from_guid(CHEST);
     assert!(tick_until(&loader, || loader.props().iter().any(
-        |(_, item, at)| *item == chest && *at == [10.0, 20.0, 30.0]
+        |(_, item, at)| *item == chest && near(*at, [10.0, 20.0, 30.0])
     )));
     let (entity, _, _) = loader.props()[0];
     assert!(tick_until(&loader, || gives(&loader)
@@ -168,6 +173,6 @@ fn a_chest_at_a_player_stands_beside_them_and_bob_may_not_place_one() {
     assert!(tick_until(&loader, || loader
         .props()
         .iter()
-        .any(|(_, _, at)| *at == [2.0, 20.0, 7.0])));
+        .any(|(_, _, at)| near(*at, [2.0, 20.0, 7.0]))));
     assert!(run(&loader, &bob(), "chestat", "n0\tn0\tn0\tn1\ttResource_Wood").starts_with('0'));
 }

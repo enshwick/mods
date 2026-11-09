@@ -1,6 +1,6 @@
 [en]
 "mod.name" = "Admin Tools"
-"mod.description" = "Gives a server's administrators a player list, kicks, bans, an allow-list, chat mutes, announcements, restart warnings, time and weather, healing, teleports, saves and backups, a remote console, and audit and chat logs."
+"mod.description" = "Gives a server's administrators a player list, kicks, bans, an allow-list, chat mutes, announcements, restart warnings, time and weather, healing, teleports, items and chests of items, inventories, health, stamina and mana, recipes, god mode, saves and backups, a remote console, and audit and chat logs."
 "action.online" = "Players online"
 "action.online.help" = "Each player online, with their time online and whether they are muted."
 "action.motd" = "Message of the day"
@@ -254,7 +254,7 @@
 
 [uk]
 "mod.name" = "Admin Tools"
-"mod.description" = "Дає адміністраторам сервера список гравців, вигнання, бани, список дозволених, вимкнення чату, оголошення, попередження про перезапуск, час і погоду, лікування, телепорти, збереження й резервні копії, віддалену консоль, журнал дій і журнал чату."
+"mod.description" = "Дає адміністраторам сервера список гравців, вигнання, бани, список дозволених, вимкнення чату, оголошення, попередження про перезапуск, час і погоду, лікування, телепорти, предмети й скрині з предметами, інвентарі, здоров'я, витривалість і ману, рецепти, режим бога, збереження й резервні копії, віддалену консоль, журнал дій і журнал чату."
 "action.online" = "Гравці в мережі"
 "action.online.help" = "Кожен гравець у мережі, скільки він у грі і чи вимкнено йому чат."
 "action.motd" = "Повідомлення дня"

@@ -201,4 +201,28 @@ mod tests {
             [(server::SPAWN.to_owned(), String::new())]
         );
     }
+
+    #[test]
+    fn a_placement_within_5_m_of_an_altar_is_refused_with_the_reason() {
+        use enshwick::abi::{AltarInfo, BuildCheck, Header};
+
+        let (_, loader) = start(Side::SERVER, false);
+        let mut altar = AltarInfo::EMPTY;
+        altar.entity = enshwick::Entity(1);
+        altar.position = [10.0, 0.0, 0.0];
+        loader.set_altars(&[altar]);
+        let at = |x: f64| BuildCheck {
+            header: Header::of::<BuildCheck>(),
+            player: enshwick::Entity(2),
+            item: enshwick::ItemId::new(7),
+            position: enshwick::ecs::fixed([x, 0.0, 0.0]),
+            reason: core::ptr::null_mut(),
+        };
+        assert_eq!(
+            loader.build(&at(14.9)),
+            Err(Some("Too close to the altar".to_owned()))
+        );
+        assert_eq!(loader.build(&at(15.1)), Ok(()));
+        assert_eq!(loader.build(&at(4.0)), Ok(()));
+    }
 }

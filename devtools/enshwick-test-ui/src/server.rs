@@ -179,6 +179,7 @@ mod tests {
     #[test]
     fn the_two_chests_stand_four_metres_apart() {
         let me = [10.0, 5.0, -3.0];
+        assert_eq!(offset(me, KEPT_AT), [12.0, 5.0, 0.0]);
         let apart = distance(offset(me, KEPT_AT), offset(me, UNSAVED_AT));
         assert!((apart - 4.0).abs() < 1e-9, "{apart}");
     }

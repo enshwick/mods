@@ -115,6 +115,19 @@ mod tests {
     }
 
     #[test]
+    fn altars_the_game_has_not_levelled_are_named_in_the_log_once() {
+        let loader = started(Side::CLIENT, &Settings::template());
+        let mut unleveled = AltarInfo::EMPTY;
+        unleveled.entity = Entity(2);
+        loader.set_altars(&[altar(Entity(1), 0), unleveled]);
+        assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
+        assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
+        let line = "1 altars have no Flame level yet; they keep their vanilla zone";
+        let logged = loader.logs().iter().filter(|(_, l)| l == line).count();
+        assert_eq!(logged, 1, "{:?}", loader.logs());
+    }
+
+    #[test]
     fn the_default_settings_parse_into_both_groups() {
         let settings: Settings = toml::from_str(&Settings::template()).unwrap();
         assert_eq!(

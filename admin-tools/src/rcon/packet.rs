@@ -154,7 +154,7 @@ mod tests {
             body: b"secret".to_vec(),
         }
         .encode();
-        assert_eq!(&bytes[..4], &20i32.to_le_bytes());
+        assert_eq!(&bytes[..4], &16i32.to_le_bytes());
         let (packet, used) = parse(&bytes).unwrap().unwrap();
         assert_eq!(used, bytes.len());
         assert_eq!((packet.id, packet.kind), (7, AUTH));

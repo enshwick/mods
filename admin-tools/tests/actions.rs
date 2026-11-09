@@ -18,6 +18,25 @@ mod tests {
 
     const ADMIN: u8 = PlayerInfo::CAN_KICK_BAN;
 
+    /// The fake's type hash of a health attribute set; past the world
+    /// preset's own hashes.
+    const HEALTH: u32 = 0x4000_0001;
+
+    /// A health attribute set at `current` of `max`, in the fake's layout:
+    /// its id, the values' offset at 4, flags at 6, count at 7, then the
+    /// values with the maximum in slot 7.
+    fn health(current: i32, max: i32) -> Vec<u8> {
+        let mut bytes = 10u32.to_le_bytes().to_vec();
+        bytes.extend(8u16.to_le_bytes());
+        bytes.extend([1, 8]);
+        bytes.extend(
+            [current, 0, 0, 0, 0, 0, 0, max]
+                .iter()
+                .flat_map(|v| v.to_le_bytes()),
+        );
+        bytes
+    }
+
     fn player(entity: u32, key: u64, name: &str, permissions: u8) -> PlayerInfo {
         let mut info = PlayerInfo {
             header: Header::of::<PlayerInfo>(),
@@ -59,15 +78,32 @@ mod tests {
         let host = enshwick::test::FakeHost::new().side(Side::SERVER).world();
         let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
         let mut host = host
+            .type_hash("attribute_set.health", HEALTH)
+            .type_hash("attribute_set.stamina", HEALTH + 1)
+            .type_hash("attribute_set.mana", HEALTH + 2)
+            .type_hash("attribute_set.level", HEALTH + 3)
+            .type_hash("attribute_set.experience", HEALTH + 4)
+            .constant("ecs.level_data_offset", 4)
+            .constant("ecs.level_flags", 6)
+            .constant("ecs.attribute_count", 7)
+            .constant("attribute.health", 10)
+            .constant("attribute.health_max_slot", 7)
+            .constant("attribute.stamina", 20)
+            .constant("attribute.stamina_max_slot", 2)
+            .constant("attribute.mana", 30)
+            .constant("attribute.mana_max_slot", 1)
+            .constant("attribute.level", 40)
+            .constant("attribute.experience", 50)
+            .constant("attribute.experience_needed_slot", 2)
             .world_key("world0")
             .data_dir(dir.to_str().unwrap())
             .settings(settings);
         for (who, place) in [(ann(), [40, 12, -3]), (bob(), [0, 20, 7])] {
-            host = host.player(who).template(who.entity, [7; 16]).component(
-                who.entity,
-                transform,
-                &standing(place),
-            );
+            host = host
+                .player(who)
+                .template(who.entity, [7; 16])
+                .component(who.entity, transform, &standing(place))
+                .component(who.entity, HEALTH, &health(150, 200));
         }
         for who in more {
             host = host.player(*who);
@@ -161,6 +197,11 @@ mod tests {
             console::run("enshwick.admin-tools online").as_deref(),
             Ok("2 online: Ann (0 min), Bob (0 min)"),
             "the console always may"
+        );
+        assert_eq!(
+            console::run("adl online").as_deref(),
+            Ok("2 online: Ann (0 min), Bob (0 min)"),
+            "the alias names the mod on the console"
         );
     }
 
@@ -359,6 +400,20 @@ mod tests {
             console::run("enshwick.admin-tools goto Bob").as_deref(),
             Ok("Run this as a player in the world: the console has no character.")
         );
+    }
+
+    #[test]
+    fn heal_restores_a_player_to_their_full_health_and_no_more() {
+        let dir = scratch("heal");
+        let loader = server("", &dir);
+        assert_eq!(
+            run(&loader, &ann(), "heal", "p0000000000000002"),
+            "1Bob has full health."
+        );
+        let bytes = loader.component_bytes(bob().entity, HEALTH).unwrap();
+        let current = i32::from_le_bytes(bytes[8..12].try_into().unwrap());
+        assert_eq!(current, 200);
+        assert!(run(&loader, &bob(), "heal", "p0000000000000002").starts_with('0'));
     }
 
     #[test]

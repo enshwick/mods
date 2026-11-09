@@ -400,6 +400,7 @@ dependencies = [
 name = "enshwick-test-ui"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "enshwick",
  "toml",
 ]

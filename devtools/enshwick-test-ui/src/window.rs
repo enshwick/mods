@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use enshwick::actions::Actions;
-use enshwick::content::{Guid, id};
+use enshwick::content::id;
 use enshwick::controls::{Control, Key};
 use enshwick::sound::{NewSound, SoundChange, SoundContainerId, SoundContainerScene};
 use enshwick::typed::input_mapping::runtime::GameplayAction;
@@ -45,15 +45,12 @@ fn tone(load: &mut Load<'_>) -> Result<SoundContainerId, Off> {
 
 /// The container a setting names, or `None` with the reason in the log.
 fn container(setting: &str, name: &str) -> Option<SoundContainerId> {
-    if setting.is_empty() {
-        enshwick::info!("no {name} in settings.toml");
-        return None;
-    }
-    let guid = Guid::try_parse(setting);
-    if guid.is_none() {
-        enshwick::warn!("{name} {setting} is no GUID");
-    }
-    guid.map(SoundContainerId::from_guid)
+    crate::guid(setting, name).map(SoundContainerId::from_guid)
+}
+
+/// Whether the window shows: only in a game, where its key fires.
+const fn shows(open: bool, screen: Screen) -> bool {
+    open && matches!(screen, Screen::InGame)
 }
 
 /// Logs `result` of playing `what`.
@@ -84,20 +81,25 @@ struct Window {
     tone: Option<SoundContainerId>,
     creature: Option<SoundContainerId>,
     hints: String,
-    read_at: Instant,
+    read_at: Option<Instant>,
     last: String,
 }
 
 impl Window {
     /// Logs the reads once a second, when they changed.
     fn read(&mut self, frame: &Frame<'_>) {
-        if frame.screen() != Screen::InGame || self.read_at.elapsed() < READ_EVERY {
+        let waits = self.read_at.is_some_and(|at| at.elapsed() < READ_EVERY);
+        if frame.screen() != Screen::InGame || waits {
             return;
         }
-        self.read_at = Instant::now();
+        self.read_at = Some(Instant::now());
+        let held = self
+            .input
+            .and_then(enshwick::input::Input::local_held)
+            .map(|held| held.iter().collect::<Vec<_>>());
         let line = format!(
             "held {:?}, screen {:?}, host {:?} template {:?}, prompt {:?}, hints {}",
-            self.input.and_then(enshwick::input::Input::local_held),
+            held,
             frame.open_screen(),
             frame.screen_host(),
             frame.screen_host_template(),
@@ -118,7 +120,12 @@ impl Window {
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
         self.read(frame);
-        if !self.open.load(Ordering::Relaxed) {
+        let open = self.open.load(Ordering::Relaxed);
+        if !shows(open, frame.screen()) {
+            // Left open, it would cover the menus, where no key closes it.
+            if open {
+                self.open.store(false, Ordering::Relaxed);
+            }
             return;
         }
         let mut close = false;
@@ -187,14 +194,27 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settin
     let mut window = Window {
         open,
         actions: actions.clone(),
-        input: load.input().ok(),
+        input: load.feature("input read", Load::input),
         tone,
         creature: container(&settings.creature_sound, "creature_sound"),
         hints: "not drawn yet".to_owned(),
-        read_at: Instant::now(),
+        read_at: None,
         last: String::new(),
     };
     let _window = load.feature("window", |load| {
         load.on_frame(move |frame| window.draw(frame))
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_window_shows_only_in_a_game() {
+        assert!(shows(true, Screen::InGame));
+        assert!(!shows(false, Screen::InGame));
+        assert!(!shows(true, Screen::Menu), "its key cannot close it there");
+        assert!(!shows(true, Screen::Loading));
+    }
 }

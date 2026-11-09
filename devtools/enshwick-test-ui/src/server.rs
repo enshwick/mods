@@ -1,14 +1,17 @@
 //! The server's part: the actions the client's panels and window run, and
 //! the build refusal near Flame Altars.
 
+use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use enshwick::actions::{Action, Actions, Outcome};
 use enshwick::effects::{Effects, Spawn};
+use enshwick::events::AltarsChanged;
 use enshwick::schedule::Scheduler;
 use enshwick::vetoes::BuildVerdict;
-use enshwick::world::{ContainerKinds, World};
-use enshwick::{Load, Off};
+use enshwick::world::{ContainerKinds, Placed, World};
+use enshwick::{Entity, Load, Off};
 
 use crate::SURVIVOR;
 
@@ -23,7 +26,10 @@ pub(crate) const SPAWN: &str = "spawn-kept-and-unsaved";
 const ALTAR_DISTANCE: f64 = 5.0;
 /// Why a placement near an altar is refused.
 const TOO_CLOSE: &str = "Too close to the altar";
-/// Where the two chests stand from the player, in metres: 4 m apart.
+/// How far from the player a survivor is still marked, in metres.
+const MARK_REACH: f64 = 10.0;
+/// Where the two chests stand from the player, in metres along the world's
+/// axes, whichever way the player faces: 4 m apart.
 const KEPT_AT: [f64; 3] = [2.0, 0.0, 3.0];
 const UNSAVED_AT: [f64; 3] = [-2.0, 0.0, 3.0];
 /// How long after the spawn the unsaved chest leaves the save: a few
@@ -50,18 +56,34 @@ fn offset(at: [f64; 3], by: [f64; 3]) -> [f64; 3] {
     [at[0] + by[0], at[1] + by[1], at[2] + by[2]]
 }
 
-/// Names the survivor nearest `player` [`SURVIVOR`], so its prompt says so.
-fn mark(server: Server, player: enshwick::Entity) -> Outcome {
+/// The one of `places` nearest `me`, no further than `reach` metres.
+fn nearest_within(places: Vec<Placed>, me: [f64; 3], reach: f64) -> Option<Placed> {
+    places
+        .into_iter()
+        .filter(|placed| placed.distance(me) <= reach)
+        .min_by(|a, b| a.distance(me).total_cmp(&b.distance(me)))
+}
+
+/// What the player hears of marking `survivor`.
+fn marked(survivor: Entity, labelled: bool) -> Outcome {
+    if labelled {
+        Outcome::done(format!("survivor {survivor} marked"))
+    } else {
+        Outcome::refused(format!(
+            "the game did not rename survivor {survivor}; see the log"
+        ))
+    }
+}
+
+/// Names the survivor nearest `player`, within [`MARK_REACH`], [`SURVIVOR`],
+/// so its prompt says so.
+fn mark(server: Server, player: Entity) -> Outcome {
     let Some(me) = server.world.position(player) else {
         return Outcome::refused("your character has no position");
     };
-    let nearest = server
-        .world
-        .containers(ContainerKinds::NPCS)
-        .into_iter()
-        .min_by(|a, b| distance(a.position, me).total_cmp(&distance(b.position, me)));
-    let Some(survivor) = nearest else {
-        return Outcome::refused("no survivor in the world");
+    let npcs = server.world.containers(ContainerKinds::NPCS);
+    let Some(survivor) = nearest_within(npcs, me, MARK_REACH) else {
+        return Outcome::refused(format!("no survivor within {MARK_REACH} m"));
     };
     let labelled = server.world.set_label(survivor.entity, SURVIVOR);
     enshwick::info!(
@@ -69,28 +91,37 @@ fn mark(server: Server, player: enshwick::Entity) -> Outcome {
         survivor.entity,
         survivor.position
     );
-    Outcome::done(format!("survivor {} marked: {labelled}", survivor.entity))
+    marked(survivor.entity, labelled)
+}
+
+/// What the player hears of the two spawns.
+fn spawn_outcome(kept: Option<Entity>, unsaved: Option<Entity>) -> Outcome {
+    match (kept, unsaved) {
+        (Some(kept), Some(unsaved)) => {
+            Outcome::done(format!("Kept {kept} and Unsaved {unsaved} spawned"))
+        }
+        (Some(kept), None) => Outcome::refused(format!(
+            "Kept {kept} spawned and stays; Unsaved did not spawn, see the log"
+        )),
+        (None, Some(unsaved)) => Outcome::refused(format!(
+            "Unsaved {unsaved} spawned; Kept did not spawn, see the log"
+        )),
+        (None, None) => Outcome::refused("the chests did not spawn; see the log"),
+    }
 }
 
 /// Spawns two chests of the template of the placed container nearest
 /// `player`, Kept and Unsaved, and takes Unsaved out of the save a few steps
 /// later.
-fn spawn(server: Server, player: enshwick::Entity) -> Outcome {
+fn spawn(server: Server, player: Entity) -> Outcome {
     let Some(me) = server.world.position(player) else {
         return Outcome::refused("your character has no position");
     };
-    let template = server
-        .world
-        .containers(ContainerKinds::PLACED)
-        .into_iter()
-        .filter_map(|placed| {
-            Some((
-                server.world.template(placed.entity)?,
-                distance(placed.position, me),
-            ))
-        })
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(template, _)| template);
+    let mut placed = server.world.containers(ContainerKinds::PLACED);
+    placed.sort_by(|a, b| a.distance(me).total_cmp(&b.distance(me)));
+    let template = placed
+        .iter()
+        .find_map(|placed| server.world.template(placed.entity));
     let Some(template) = template else {
         return Outcome::refused("build a storage chest first: its template is copied");
     };
@@ -101,15 +132,24 @@ fn spawn(server: Server, player: enshwick::Entity) -> Outcome {
         entity.ok()
     };
     let kept = spawned("Kept", KEPT_AT);
-    let Some(unsaved) = spawned("Unsaved", UNSAVED_AT) else {
-        return Outcome::refused("the chests did not spawn; see the log");
-    };
-    let world = server.world;
-    server.scheduler.after(SETTLE, move || {
-        let result = world.set_saved(unsaved, false);
-        enshwick::info!("set_saved(Unsaved {unsaved}, false): {result:?}");
-    });
-    Outcome::done(format!("Kept {kept:?} and Unsaved {unsaved} spawned"))
+    let unsaved = spawned("Unsaved", UNSAVED_AT);
+    if let Some(unsaved) = unsaved {
+        let world = server.world;
+        server.scheduler.after(SETTLE, move || {
+            let result = world.set_saved(unsaved, false);
+            enshwick::info!("set_saved(Unsaved {unsaved}, false): {result:?}");
+        });
+    }
+    spawn_outcome(kept, unsaved)
+}
+
+/// The services of a server, or why this side has none.
+fn services(load: &mut Load<'_>) -> Result<Server, Off> {
+    Ok(Server {
+        world: load.world()?,
+        effects: load.effects(),
+        scheduler: load.scheduler()?,
+    })
 }
 
 /// Declares the actions on every side, so a client runs them; they act
@@ -119,14 +159,8 @@ fn spawn(server: Server, player: enshwick::Entity) -> Outcome {
 ///
 /// [`Off`] when the loader refuses an action.
 pub(crate) fn register(load: &mut Load<'_>, actions: &Actions) -> Result<(), Off> {
-    let server = load.world().ok().and_then(|world| {
-        Some(Server {
-            world,
-            effects: load.effects(),
-            scheduler: load.scheduler().ok()?,
-        })
-    });
-    let on_server = move |act: fn(Server, enshwick::Entity) -> Outcome| {
+    let server = load.feature("server actions", services);
+    let on_server = move |act: fn(Server, Entity) -> Outcome| {
         move |request: &enshwick::actions::Request<'_>| {
             server.map_or_else(
                 || Outcome::refused("no server runs here"),
@@ -157,13 +191,19 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions) -> Result<(), Off
 /// [`Off`] where the loader follows no altars or refuses the filter.
 pub(crate) fn refuse_near_altars(load: &mut Load<'_>) -> Result<(), Off> {
     let altars = load.altars()?;
+    // The cursor check runs every frame on worker threads and must not
+    // allocate or lock, so it reads the positions kept at the last change.
+    let kept = Arc::new(ArcSwap::from_pointee(Vec::<[f64; 3]>::new()));
+    let changed = Arc::clone(&kept);
+    load.on::<AltarsChanged>(move |()| {
+        let positions = altars.list().iter().map(|altar| altar.position).collect();
+        changed.store(Arc::new(positions));
+    })?;
     load.on_build(move |placement| {
-        // shortcut: lists the altars on each cursor check; cache them on
-        // AltarsChanged if this tool ever runs where frames matter.
-        let near = altars
-            .list()
+        let near = kept
+            .load()
             .iter()
-            .any(|altar| distance(altar.position, placement.position) < ALTAR_DISTANCE);
+            .any(|&altar| distance(altar, placement.position) < ALTAR_DISTANCE);
         if near {
             BuildVerdict::refuse_because(TOO_CLOSE)
         } else {
@@ -182,5 +222,49 @@ mod tests {
         assert_eq!(offset(me, KEPT_AT), [12.0, 5.0, 0.0]);
         let apart = distance(offset(me, KEPT_AT), offset(me, UNSAVED_AT));
         assert!((apart - 4.0).abs() < 1e-9, "{apart}");
+    }
+
+    fn placed(entity: u32, x: f64) -> Placed {
+        Placed {
+            entity: Entity(entity),
+            position: [x, 0.0, 0.0],
+        }
+    }
+
+    #[test]
+    fn only_a_survivor_within_reach_is_marked() {
+        let near = nearest_within(vec![placed(1, 30.0), placed(2, 9.0)], [0.0; 3], MARK_REACH);
+        assert_eq!(near.map(|placed| placed.entity.0), Some(2));
+        assert_eq!(
+            nearest_within(vec![placed(1, 30.0)], [0.0; 3], MARK_REACH),
+            None
+        );
+    }
+
+    #[test]
+    fn a_label_the_game_refused_is_not_reported_as_marked() {
+        assert!(marked(Entity(7), true).is_done());
+        assert!(!marked(Entity(7), false).is_done());
+    }
+
+    #[test]
+    fn a_spawn_that_half_failed_says_which_chest_stands() {
+        let (kept, unsaved) = (Entity(1), Entity(2));
+        assert_eq!(
+            spawn_outcome(Some(kept), Some(unsaved)),
+            Outcome::done("Kept 1 and Unsaved 2 spawned")
+        );
+        assert_eq!(
+            spawn_outcome(Some(kept), None),
+            Outcome::refused("Kept 1 spawned and stays; Unsaved did not spawn, see the log")
+        );
+        assert_eq!(
+            spawn_outcome(None, Some(unsaved)),
+            Outcome::refused("Unsaved 2 spawned; Kept did not spawn, see the log")
+        );
+        assert_eq!(
+            spawn_outcome(None, None),
+            Outcome::refused("the chests did not spawn; see the log")
+        );
     }
 }

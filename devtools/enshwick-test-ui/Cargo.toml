@@ -23,6 +23,7 @@ developer = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+arc-swap = { version = "1.9.3", default-features = false }
 enshwick = { workspace = true, features = ["typed", "unstable"] }
 toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "serde"] }
 

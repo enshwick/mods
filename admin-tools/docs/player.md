@@ -1,7 +1,7 @@
 ---
 id: enshwick.admin-tools
 name: Admin Tools
-summary: Server administrators kick, ban and mute players, keep an allow-list, announce, set time and weather, teleport players, save and back up the world, use a remote console and read audit and chat logs.
+summary: Server admins manage players, bans and the allow-list, set time and weather, save and back up the world, and use RCON and audit and chat logs.
 needs: server
 settings:
   - key: motd
@@ -145,10 +145,12 @@ applies within two seconds.
 
 Type `/adl restart 10`. Every player reads that the server restarts in
 10 minutes. The warning comes again at 5, 2 and 1 minutes left, and once more
-when the time is up. Then Admin Tools saves the world.
+when the time is up.
 
-Admin Tools does not stop the server. Your host's panel or script stops it,
-so set the warning to end when the panel restarts the server.
+When the time is up, Admin Tools saves the world. It does not stop the
+server: your host's panel or script stops it, so set the warning to end when
+the panel restarts the server.
+
 Type `/adl restart 0` to call the restart off. A game a player hosts has no
 restart warning.
 
@@ -175,10 +177,10 @@ connection closes, and its address waits a minute.
 
 ## How do I back up the world?
 
-Type `/adl backup`. Admin Tools holds the world's saves, copies the save, the
-world's mod settings and mod data to a folder named by the time in UTC, and
-lets the saves go again, also when the copy fails. Players keep playing. You
-read where the backup went when it is done.
+Type `/adl backup`. Admin Tools holds the world's saves and copies the save,
+its mod settings and its mod data to a folder named by the UTC time. Then it lets the saves go again, also when the copy fails.
+
+Players keep playing. You read where the backup went when it is done.
 
 Backups go to `backups/` in `<save>-mod-data/enshwick.admin-tools/`, or to
 the folder you set in **Backup folder**. Admin Tools keeps the newest 10, or

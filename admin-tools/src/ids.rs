@@ -17,6 +17,10 @@ pub(crate) const MUTED: &str = "muted";
 pub(crate) const HEAL: &str = "heal";
 /// Gives a player items.
 pub(crate) const GIVE: &str = "give";
+/// Places a chest of items beside a player.
+pub(crate) const CHEST: &str = "chest";
+/// Places a chest of items at a position.
+pub(crate) const CHEST_AT: &str = "chestat";
 /// Clears what a player carries.
 pub(crate) const CLEAR: &str = "clear";
 /// Copies what one player carries to another.
@@ -55,9 +59,10 @@ pub(crate) const BACKUP: &str = "backup";
 pub(crate) const CHAT: &str = "chat";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 26] = [
-    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, STATS, LEARN, GOD, GIVE, CLEAR, COPY,
-    GOTO, BRING, SEND, PLACE, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, AUDIT, CHAT,
+pub(crate) const ALL: [&str; 28] = [
+    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, STATS, LEARN, GOD, GIVE, CHEST,
+    CHEST_AT, CLEAR, COPY, GOTO, BRING, SEND, PLACE, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD,
+    AUDIT, CHAT,
 ];
 
 /// The actions that only read, which the audit log leaves out.

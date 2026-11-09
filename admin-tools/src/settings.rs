@@ -292,6 +292,10 @@ pub(crate) struct Rights {
     pub god: String,
     /// Giving a player items.
     pub give: String,
+    /// Placing a chest of items beside a player.
+    pub chest: String,
+    /// Placing a chest of items at a position.
+    pub chestat: String,
     /// Clearing what a player carries.
     pub clear: String,
     /// Copying what one player carries to another.
@@ -339,6 +343,8 @@ impl Default for Rights {
             learn: admins(),
             god: admins(),
             give: admins(),
+            chest: admins(),
+            chestat: admins(),
             clear: admins(),
             copy: admins(),
             goto: admins(),
@@ -374,6 +380,8 @@ impl Rights {
             ids::LEARN => &self.learn,
             ids::GOD => &self.god,
             ids::GIVE => &self.give,
+            ids::CHEST => &self.chest,
+            ids::CHEST_AT => &self.chestat,
             ids::CLEAR => &self.clear,
             ids::COPY => &self.copy,
             ids::GOTO => &self.goto,

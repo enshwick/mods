@@ -12,6 +12,7 @@
 mod accounts;
 mod backup;
 mod character;
+mod chest;
 mod ids;
 mod inventory;
 mod items;
@@ -154,6 +155,7 @@ impl Mod for AdminTools {
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
         players::add(&tools)?;
         inventory::add(&tools)?;
+        chest::add(&tools)?;
         character::add(&tools, load)?;
         server::add(&tools)?;
         backup::add(&tools)?;

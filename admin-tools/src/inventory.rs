@@ -209,7 +209,7 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
 }
 
 /// Tells `caller` `text` in chat, when the caller is a player in the game.
-fn tell(world: enshwick::world::World, caller: &Player, text: &str) {
+pub(crate) fn tell(world: enshwick::world::World, caller: &Player, text: &str) {
     if caller.key.0 != 0 {
         world.tell(caller, text);
     }

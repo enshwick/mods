@@ -6,6 +6,7 @@ mod tests {
     use enshwick::PlayerKey;
     use enshwick::abi::{ActionCall, Header, PlayerInfo, Status};
     use enshwick::actions::sheet::decode;
+    use enshwick::console;
     use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
 
     fn player(entity: u32, key: u64, name: &str, permissions: u8) -> PlayerInfo {
@@ -83,6 +84,31 @@ mod tests {
 
         let ran = ask(ActionCall::RUN, &admin, "muted", "p0000000000000002\tb0");
         assert_eq!(ran, "1Bob can write in chat again.");
+        assert!(loader.muted().is_empty());
+    }
+
+    #[test]
+    fn the_console_lines_the_player_page_gives_mute_and_unmute_a_player() {
+        let bob = player(11, 2, "Bob", 0);
+        let loader = enshwick::test::FakeHost::new()
+            .world()
+            .world_key("world0")
+            .player(bob)
+            .install();
+        // SAFETY: both functions are the exports of the mod under test.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK);
+
+        assert_eq!(
+            console::run("enshwick.admin-tools muted Bob on").as_deref(),
+            Ok("Bob is muted in chat.")
+        );
+        assert_eq!(loader.muted(), [PlayerKey::new(2)]);
+        assert_eq!(
+            console::run("enshwick.admin-tools muted Bob off").as_deref(),
+            Ok("Bob can write in chat again.")
+        );
         assert!(loader.muted().is_empty());
     }
 }

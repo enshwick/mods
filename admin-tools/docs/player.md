@@ -69,12 +69,10 @@ settings:
 ---
 
 - Administrators see who is online, and kick, ban or mute players. A ban holds after a restart.
-- An allow-list lets only chosen accounts and administrators join.
+- An allow-list lets only chosen accounts and administrators join, and each world decides who may use each action.
 - Players read a message of the day, scheduled announcements and restart warnings.
-- Administrators set the time and the weather, heal players and teleport them.
-- Administrators save the world now, back it up while the server runs, and read its game settings.
-- RCON tools such as BattleMetrics or rcon-cli run every command on a dedicated server.
-- Each world decides who may use each action, an audit log keeps every change, and a chat log keeps the chat.
+- Administrators set the time and the weather, heal and teleport players, save the world and back it up while the server runs.
+- RCON tools such as BattleMetrics run every command on a dedicated server, and audit and chat logs keep what happened.
 
 ## How do I use an action?
 

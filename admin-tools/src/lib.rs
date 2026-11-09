@@ -35,6 +35,7 @@ use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
 use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
 use enshwick::inventory::Inventories;
+use enshwick::knowledge::Knowledge;
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
@@ -64,6 +65,7 @@ pub(crate) struct Tools {
     effects: Effects,
     clock: Clock,
     weather: Weather,
+    knowledge: Knowledge,
     /// The inventories, `None` on a build without them.
     inventories: Option<Inventories>,
     /// The game settings, `None` on a build without them.
@@ -112,6 +114,7 @@ impl Mod for AdminTools {
             .inspect_err(|why| enshwick::warn!("the world action is off: {why}"))
             .ok();
         let scheduler = load.scheduler()?;
+        let knowledge = load.knowledge();
         let inventories = load
             .inventories()
             .inspect_err(|why| enshwick::warn!("the inventory actions are off: {why}"))
@@ -124,6 +127,7 @@ impl Mod for AdminTools {
             effects,
             clock,
             weather,
+            knowledge,
             inventories,
             game_settings,
             scheduler,

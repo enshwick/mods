@@ -100,6 +100,7 @@ The console and RCON tools may use every action.
 | `/adl muted <player> on` or `off` | Mutes a player in chat or lifts the mute. |
 | `/adl heal <player>` | Gives a player their full health. |
 | `/adl stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. The game keeps the value within the maximum. |
+| `/adl learn <player> <recipe>` | Unlocks a recipe for a player. Name it by the game's name, such as `Tool_Torch01`, in any case; by its GUID; or by a mod's content id. A number grants any knowledge the game keeps for the player. |
 | `/adl god <player> on` or `off` | Nothing damages a player in god mode. It ends when the player leaves or the world stops. |
 | `/adl give <player> <count> <item>` | Gives a player new items, up to one stack. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
 | `/adl clear <player>` | Destroys everything a player carries, equipment and action bar included. |

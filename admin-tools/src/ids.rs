@@ -23,6 +23,8 @@ pub(crate) const CLEAR: &str = "clear";
 pub(crate) const COPY: &str = "copy";
 /// Sets a player's health, stamina or mana.
 pub(crate) const STATS: &str = "stats";
+/// Grants a player a recipe or other knowledge.
+pub(crate) const LEARN: &str = "learn";
 /// God mode: nothing damages a player.
 pub(crate) const GOD: &str = "god";
 /// Takes the caller to a player.
@@ -53,9 +55,9 @@ pub(crate) const BACKUP: &str = "backup";
 pub(crate) const CHAT: &str = "chat";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 25] = [
-    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, STATS, GOD, GIVE, CLEAR, COPY, GOTO,
-    BRING, SEND, PLACE, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, AUDIT, CHAT,
+pub(crate) const ALL: [&str; 26] = [
+    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, STATS, LEARN, GOD, GIVE, CLEAR, COPY,
+    GOTO, BRING, SEND, PLACE, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, AUDIT, CHAT,
 ];
 
 /// The actions that only read, which the audit log leaves out.

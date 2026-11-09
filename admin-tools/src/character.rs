@@ -1,5 +1,6 @@
 //! Actions on a player's character: health, stamina and mana set to a
-//! value, and god mode, in which nothing damages the character.
+//! value, recipes and other knowledge learnt, and god mode, in which
+//! nothing damages the character.
 
 use std::sync::Arc;
 
@@ -7,7 +8,9 @@ use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::world::{Meter, World};
 use enshwick::{Entity, Load, Off, PlayerKey, WorldError};
 
-use crate::{Tools, ids, texts};
+use enshwick::knowledge::{Grant, KnowledgeType};
+
+use crate::{Tools, ids, items, texts};
 
 /// The highest value the stats action takes; the game keeps each pool at
 /// its maximum anyway.
@@ -34,6 +37,13 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
             .arg(Arg::choice(texts::ARG_POOL, &pools))
             .arg(Arg::number(texts::ARG_VALUE, 0.0..=MAX_STAT, 1.0)),
         stats,
+    )?;
+    tools.add(
+        Action::new(ids::LEARN, texts::ACTION_LEARN)
+            .help(texts::ACTION_LEARN_HELP)
+            .arg(Arg::player(texts::ARG_PLAYER))
+            .arg(Arg::text(texts::ARG_KNOWLEDGE, items::MAX_NAME)),
+        learn,
     )?;
     let filtered = Arc::clone(tools);
     let god = load.on_damage(move |damage| {
@@ -102,6 +112,43 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
                 ],
             ))
         }
+        Err(why) => Tools::failed(request, name, &why),
+    }
+}
+
+/// Grants a player a recipe or another piece of knowledge as the game
+/// grants it: a recipe or flags their first bit, a bool set; a counter is
+/// refused, since unlocking does not count.
+fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [Value::Player { key, name }, Value::Text(text)] = request.args else {
+        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+    };
+    let id = match items::knowledge(text) {
+        Ok(id) => id,
+        Err(why) => return items::refused(request, text, &why),
+    };
+    let Some(player) = tools.world.player_by_key(*key) else {
+        return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
+    };
+    let values = [
+        (texts::value::NAME, name.as_str()),
+        (texts::value::ITEM, text.as_str()),
+    ];
+    let Some(known) = tools.knowledge.get(player.entity, id) else {
+        return items::refused(request, text, &items::Unknown::Name { near: Vec::new() });
+    };
+    let grant = match known.r#type {
+        KnowledgeType::Bool if known.is_set() => None,
+        KnowledgeType::Bool => Some(Grant::Set),
+        KnowledgeType::Flags if known.has_flag(0) => None,
+        KnowledgeType::Flags => Some(Grant::Flag(0)),
+        _ => return Outcome::refused(request.say(texts::REPLY_NOT_UNLOCKED, &values)),
+    };
+    let Some(grant) = grant else {
+        return Outcome::refused(request.say(texts::REPLY_KNOWN, &values));
+    };
+    match tools.knowledge.grant(player.entity, id, grant) {
+        Ok(()) => Outcome::done(request.say(texts::REPLY_LEARNED, &values)),
         Err(why) => Tools::failed(request, name, &why),
     }
 }

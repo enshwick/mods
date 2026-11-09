@@ -11,8 +11,6 @@
 //! players or that version's release has no files yet, and writes the pull
 //! request's body.
 
-use std::fmt::Write as _;
-
 use crate::changelog::{self, CHANGELOG};
 use crate::notes::{self, MANIFEST, PLATFORM, Remote};
 use crate::{Package, Step, say};
@@ -175,10 +173,11 @@ fn set_version(manifest: &str, from: &str, to: &str) -> Option<String> {
     ))
 }
 
-/// Closes the changelog of each shipped mod whose version has no tag yet,
-/// sets a bumped mod back to its version on `--base` (`origin/main`) when
-/// that one is released and has nothing new under Unreleased or no finished
-/// release yet, and writes the release pull request's body to `--body`.
+/// Closes the changelog of each shipped mod whose version on `HEAD` has no
+/// tag yet, sets a bumped mod back to its version on `--base`
+/// (`origin/main`) when that one is released and has nothing new under
+/// Unreleased or no finished release yet, and writes the release pull
+/// request's body to `--body`.
 pub(crate) fn close(args: &[String]) -> Result<bool, String> {
     let mut date = None;
     let mut base = "origin/main".to_owned();
@@ -195,11 +194,17 @@ pub(crate) fn close(args: &[String]) -> Result<bool, String> {
     }
     let date = date.filter(|d| is_date(d)).ok_or(CLOSE_USAGE)?;
     let shipped = notes::shipped(&notes::release_config(&notes::root())?)?;
-    let base_manifest = |package: &Package| {
+    let manifest_at = |rev: &str, package: &Package| {
         let dir = package.dir.to_string_lossy();
-        notes::git(&["-C", &dir, "show", &format!("{base}:./{MANIFEST}")])
+        notes::git(&["-C", &dir, "show", &format!("{rev}:./{MANIFEST}")])
     };
-    let closing = close_all(&shipped, date, &notes::GitHub::read()?, &base_manifest);
+    let closing = close_all(
+        &shipped,
+        date,
+        &notes::GitHub::read()?,
+        &|package| manifest_at("HEAD", package),
+        &|package| manifest_at(&base, package),
+    );
     // A failed mod fails the run: nothing of it may reach the pull request.
     if !closing.ok {
         return Ok(false);
@@ -225,12 +230,15 @@ struct Closing {
     ok: bool,
 }
 
-/// Closes or keeps each mod of `shipped` whose version `remote` has no
-/// tag for, reading its manifest on the base with `base_manifest`.
+/// Closes or keeps each mod of `shipped` whose version on the head, read
+/// with `head_manifest`, `remote` has no tag for, reading its manifest on
+/// the base with `base_manifest`. The head, not the working tree, gives the
+/// version, so a rerun keeps a mod an earlier partial run set back.
 fn close_all(
     shipped: &[Package],
     date: &str,
     remote: &impl Remote,
+    head_manifest: &dyn Fn(&Package) -> Result<String, String>,
     base_manifest: &dyn Fn(&Package) -> Result<String, String>,
 ) -> Closing {
     let mut closing = Closing {
@@ -239,31 +247,12 @@ fn close_all(
         ok: true,
     };
     for package in shipped {
-        if remote.released(&notes::tag_of(package)) {
-            continue;
-        }
-        let previous =
-            base_manifest(package).and_then(|manifest| previous(package, &manifest, remote));
-        let done = previous
-            .as_ref()
-            .map_err(String::clone)
-            .and_then(|previous| close_one(package, date, previous.as_ref()));
-        match done {
-            Ok(Plan::Close) => {
-                let _ = writeln!(
-                    closing.body,
-                    "- Released `{}` {}, its changelog closed as that version.",
-                    package.name, package.version
-                );
+        match close_bumped(package, date, remote, head_manifest, base_manifest) {
+            Ok(Some((kept, line))) => {
+                closing.body.push_str(&line);
+                closing.kept |= kept;
             }
-            Ok(Plan::Kept(released, why)) => {
-                let _ = writeln!(
-                    closing.body,
-                    "- Kept `{}` at {released}: {why}.",
-                    package.name
-                );
-                closing.kept = true;
-            }
+            Ok(None) => {}
             Err(error) => {
                 say(&format!("{} {}: {error}", package.name, package.version));
                 closing.ok = false;
@@ -271,6 +260,40 @@ fn close_all(
         }
     }
     closing
+}
+
+/// Closes or keeps the mod at its version on the head unless `remote` has
+/// its tag, and returns whether it was kept and its line of the body.
+fn close_bumped(
+    package: &Package,
+    date: &str,
+    remote: &impl Remote,
+    head_manifest: &dyn Fn(&Package) -> Result<String, String>,
+    base_manifest: &dyn Fn(&Package) -> Result<String, String>,
+) -> Result<Option<(bool, String)>, String> {
+    let version = version_in(&head_manifest(package)?)
+        .ok_or_else(|| format!("no package version in its {MANIFEST} on the head"))?;
+    let package = Package {
+        version,
+        ..package.clone()
+    };
+    if remote.released(&notes::tag_of(&package)) {
+        return Ok(None);
+    }
+    let previous = previous(&package, &base_manifest(&package)?, remote)?;
+    Ok(Some(match close_one(&package, date, previous.as_ref())? {
+        Plan::Close => (
+            false,
+            format!(
+                "- Released `{}` {}, its changelog closed as that version.\n",
+                package.name, package.version
+            ),
+        ),
+        Plan::Kept(released, why) => (
+            true,
+            format!("- Kept `{}` at {released}: {why}.\n", package.name),
+        ),
+    }))
 }
 
 /// Closes the bumped package's changelog or sets it back to `previous`,
@@ -309,12 +332,7 @@ fn previous(
     base_manifest: &str,
     remote: &impl Remote,
 ) -> Result<Option<Released>, String> {
-    let Some(version) = base_manifest.parse::<toml::Table>().ok().and_then(|m| {
-        m.get("package")?
-            .get("version")?
-            .as_str()
-            .map(str::to_owned)
-    }) else {
+    let Some(version) = version_in(base_manifest) else {
         return Ok(None);
     };
     let tag = notes::tag(&package.name, &version);
@@ -323,6 +341,17 @@ fn previous(
     }
     let finished = remote.finished(&tag, &package.name)?;
     Ok(Some(Released { version, finished }))
+}
+
+/// The `[package]` version in `manifest`.
+fn version_in(manifest: &str) -> Option<String> {
+    manifest
+        .parse::<toml::Table>()
+        .ok()?
+        .get("package")?
+        .get("version")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// What `close` does with a bumped mod.
@@ -379,6 +408,8 @@ fn set_back(package: &Package, released: &str) -> Result<(), String> {
     let path = package.dir.join(MANIFEST);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let kept = set_version(&text, &package.version, released)
+        // An earlier run that failed on another mod set this one back already.
+        .or_else(|| set_version(&text, released, released))
         .ok_or_else(|| format!("{}: no `version = \"{}\"`", path.display(), package.version))?;
     std::fs::write(&path, kept).map_err(|e| format!("{}: {e}", path.display()))?;
     say(&format!("{}: kept at {released}", package.name));
@@ -592,9 +623,7 @@ mod tests {
             failing: &["failing-v0.1.1"],
         };
         let shipped = [failing, closes, kept, idle, tagged];
-        let closing = close_all(&shipped, "2026-11-09", &remote, &|package| {
-            Ok(manifest(&package.name, "0.1.1"))
-        });
+        let closing = close_all(&shipped, "2026-11-09", &remote, &at("0.1.2"), &at("0.1.1"));
         let [failing, closes, kept, idle, tagged] = &shipped;
         assert!(!closing.ok);
         assert!(closing.kept);
@@ -620,6 +649,50 @@ mod tests {
         std::fs::remove_dir_all(closes.dir.parent().unwrap()).unwrap();
     }
 
+    /// A manifest reader giving each package `version`, as on one revision.
+    fn at(version: &str) -> impl Fn(&Package) -> Result<String, String> {
+        move |package| Ok(manifest(&package.name, version))
+    }
+
+    #[test]
+    fn a_rerun_after_a_failed_run_keeps_the_mods_the_first_run_set_back() {
+        let test = "rerun";
+        let shipped = [
+            mod_at(test, "kept", "0.1.2", CHANGES),
+            mod_at(test, "idle", "0.1.2", NOTHING),
+            mod_at(test, "closes", "0.1.2", CHANGES),
+            mod_at(test, "failing", "0.1.2", CHANGES),
+        ];
+        let remote = Fake {
+            tags: &[
+                "kept-v0.1.1",
+                "idle-v0.1.1",
+                "closes-v0.1.1",
+                "failing-v0.1.1",
+            ],
+            finished: &["idle-v0.1.1", "closes-v0.1.1"],
+            failing: &["failing-v0.1.1"],
+        };
+        let first = close_all(&shipped, "2026-11-09", &remote, &at("0.1.2"), &at("0.1.1"));
+        assert!(!first.ok);
+        let [kept, idle, closes, failing] = &shipped;
+        let rerun = [
+            package("kept", "0.1.1", kept.dir.clone()),
+            package("idle", "0.1.1", idle.dir.clone()),
+            package("closes", "0.1.2", closes.dir.clone()),
+            package("failing", "0.1.2", failing.dir.clone()),
+        ];
+        let second = close_all(&rerun, "2026-11-09", &remote, &at("0.1.2"), &at("0.1.1"));
+        assert!(!second.ok);
+        assert!(second.kept);
+        assert_eq!(second.body, first.body);
+        assert!(second.body.contains("- Kept `kept` at 0.1.1"));
+        assert!(second.body.contains("- Kept `idle` at 0.1.1"));
+        assert_eq!(file(kept, MANIFEST), manifest("kept", "0.1.1"));
+        assert_eq!(file(closes, CHANGELOG).matches("## [0.1.2]").count(), 1);
+        std::fs::remove_dir_all(kept.dir.parent().unwrap()).unwrap();
+    }
+
     #[test]
     fn close_fails_without_touching_a_mod_it_must_refuse() {
         let refused = mod_at("refuse", "refused", "0.1.2", CLOSED);
@@ -629,9 +702,7 @@ mod tests {
             failing: &[],
         };
         let shipped = [refused];
-        let closing = close_all(&shipped, "2026-11-09", &remote, &|package| {
-            Ok(manifest(&package.name, "0.1.1"))
-        });
+        let closing = close_all(&shipped, "2026-11-09", &remote, &at("0.1.2"), &at("0.1.1"));
         assert!(!closing.ok);
         assert!(!closing.kept);
         assert_eq!(closing.body, "## Chores\n\n");

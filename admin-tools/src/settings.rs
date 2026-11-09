@@ -21,8 +21,14 @@ const NOBODY: &str = "nobody";
 /// otherwise: the server's administrators.
 const ADMINS: &str = "CanKickBan";
 
-/// When the audit log is on: by the kind of server, always, or never.
-pub(crate) const AUDIT_CHOICES: [&str; 3] = ["auto", "on", "off"];
+/// The audit log is on for a dedicated server and off for a hosted game.
+const AUDIT_AUTO: &str = "auto";
+
+/// The audit log is always on.
+const AUDIT_ON: &str = "on";
+
+/// The audit log is always off.
+const AUDIT_OFF: &str = "off";
 
 /// Admin Tools settings for this world.
 #[enshwick::config(validate = Settings::check)]
@@ -40,7 +46,7 @@ pub(crate) struct Settings {
     /// A line players read after each restart warning's time; empty for none.
     pub restart_text: String,
     /// Whether admin actions go to `audit.log` in this world's data folder: auto is on for a dedicated server and off for a game a player hosts.
-    #[config(choices = ["auto", "on", "off"])]
+    #[config(choices = [AUDIT_AUTO, AUDIT_ON, AUDIT_OFF])]
     pub audit: String,
     /// Who may use each action: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
     #[config(group)]
@@ -55,7 +61,7 @@ impl Default for Settings {
             announcements: Vec::new(),
             announce_minutes: 30,
             restart_text: String::new(),
-            audit: AUDIT_CHOICES[0].to_owned(),
+            audit: AUDIT_AUTO.to_owned(),
             rights: Rights::default(),
         }
     }
@@ -90,10 +96,9 @@ impl Settings {
     /// Whether the audit log is on, `dedicated` saying whether this is a
     /// dedicated server.
     pub(crate) fn audit_on(&self, dedicated: bool) -> bool {
-        let [_, on, off] = AUDIT_CHOICES;
         match self.audit.as_str() {
-            word if word == on => true,
-            word if word == off => false,
+            AUDIT_ON => true,
+            AUDIT_OFF => false,
             _ => dedicated,
         }
     }
@@ -223,16 +228,36 @@ impl Rights {
         }
     }
 
-    /// Whether `player` may use the action `id`. The console and remote
-    /// callers, which have no account, always may.
+    /// Each action's rule, parsed once; a rule the check would refuse lets
+    /// no player use its action.
+    pub(crate) fn rules(&self) -> Rules {
+        Rules(ids::ALL.map(|id| Who::parse(self.rule(id)).unwrap_or(Who::Nobody)))
+    }
+}
+
+/// The rule of each action, in the order of [`ids::ALL`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Rules([Who; ids::ALL.len()]);
+
+impl Rules {
+    /// Whether `player` may use the action `id`; an id of no action takes
+    /// the administrators' rule. The server's console, which has no account
+    /// and every permission, always may; a remote caller with no account
+    /// passes only by its permissions.
     pub(crate) fn admits(&self, id: &str, player: &Player) -> bool {
-        if player.key.0 == 0 {
+        if player.key.0 == 0 && player.permissions == PlayerPermissions::ALL_BITS {
             return true;
         }
-        match Who::parse(self.rule(id)) {
-            Some(Who::Everyone) => true,
-            Some(Who::Permission(permission)) => player.has(permission),
-            Some(Who::Nobody) | None => false,
+        let who = ids::ALL
+            .iter()
+            .position(|known| *known == id)
+            .map_or(Who::Permission(PlayerPermissions::CanKickBan), |at| {
+                self.0[at]
+            });
+        match who {
+            Who::Everyone => true,
+            Who::Permission(permission) => player.has(permission),
+            Who::Nobody => false,
         }
     }
 }
@@ -300,26 +325,43 @@ mod tests {
 
     #[test]
     fn reads_are_for_everyone_and_changes_for_administrators_by_default() {
-        let rights = Rights::default();
+        let rules = Rights::default().rules();
         let admin = player(1, PlayerPermissions::CanKickBan.bit());
         let guest = player(2, PlayerPermissions::CanEditBase.bit());
-        assert!(rights.admits(ids::ONLINE, &guest));
-        assert!(!rights.admits(ids::KICK, &guest));
-        assert!(rights.admits(ids::KICK, &admin));
+        assert!(rules.admits(ids::ONLINE, &guest));
+        assert!(!rules.admits(ids::KICK, &guest));
+        assert!(rules.admits(ids::KICK, &admin));
     }
 
     #[test]
     fn a_rule_names_a_permission_in_any_case_or_nobody_and_the_console_always_passes() {
-        let rights = Rights {
+        let rules = Rights {
             heal: "caneditbase".into(),
             kick: "Nobody".into(),
             ..Rights::default()
-        };
+        }
+        .rules();
         let builder = player(2, PlayerPermissions::CanEditBase.bit());
         let admin = player(1, PlayerPermissions::ALL_BITS);
-        assert!(rights.admits(ids::HEAL, &builder));
-        assert!(!rights.admits(ids::KICK, &admin));
-        assert!(rights.admits(ids::KICK, &player(0, 0)));
+        assert!(rules.admits(ids::HEAL, &builder));
+        assert!(!rules.admits(ids::KICK, &admin));
+        assert!(rules.admits(ids::KICK, &player(0, PlayerPermissions::ALL_BITS)));
+    }
+
+    #[test]
+    fn a_caller_with_no_account_passes_only_with_every_permission() {
+        let rules = Rights::default().rules();
+        assert!(!rules.admits(ids::KICK, &player(0, 0)));
+        assert!(!rules.admits(ids::AUDIT, &player(0, 0)));
+        assert!(rules.admits(ids::ONLINE, &player(0, 0)), "everyone");
+        let moderator = player(0, PlayerPermissions::CanKickBan.bit());
+        assert!(rules.admits(ids::KICK, &moderator));
+        let nobody = Rights {
+            kick: "nobody".into(),
+            ..Rights::default()
+        }
+        .rules();
+        assert!(!nobody.admits(ids::KICK, &moderator));
     }
 
     #[test]

@@ -35,7 +35,7 @@ use rustc_hash::FxHashMap;
 use accounts::Accounts;
 use audit::Audit;
 use schedule::Ticker;
-use settings::Settings;
+use settings::{Rules, Settings};
 
 enshwick::texts!();
 
@@ -55,6 +55,8 @@ pub(crate) struct Tools {
     texts: Texts,
     actions: Actions,
     settings: ArcSwap<Settings>,
+    /// The rights of the world's settings, parsed once as they arrive.
+    rules: ArcSwap<Rules>,
     accounts: WorldStore<Accounts>,
     audit: Audit,
     ticker: Mutex<Ticker>,
@@ -80,6 +82,7 @@ impl Mod for AdminTools {
             actions: load.actions(texts.clone())?,
             texts,
             settings: ArcSwap::from_pointee(Settings::default()),
+            rules: ArcSwap::from_pointee(Settings::default().rights.rules()),
             accounts: load.world_store(accounts::STORE)?,
             audit: Audit::new(),
             ticker: Mutex::new(Ticker::default()),
@@ -90,7 +93,7 @@ impl Mod for AdminTools {
         let loaded = Arc::clone(&tools);
         load.on::<WorldLoaded>(move |()| loaded.running.store(true, Ordering::Relaxed))?;
         let stopped = Arc::clone(&tools);
-        load.on::<ShutdownStarted>(move |()| stopped.running.store(false, Ordering::Relaxed))?;
+        load.on::<ShutdownStarted>(move |()| stopped.stop())?;
         players::add(&tools)?;
         server::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
@@ -126,7 +129,7 @@ impl Tools {
         let rule_id = id.clone();
         let tools = Arc::clone(self);
         self.actions.add(
-            action.allow(move |player| rules.settings.load().rights.admits(&rule_id, player)),
+            action.allow(move |player| rules.rules.load().admits(&rule_id, player)),
             move |request| {
                 let outcome = handler(&tools, request);
                 if outcome.is_done() && !ids::READS.contains(&id.as_str()) {
@@ -137,9 +140,35 @@ impl Tools {
         )
     }
 
+    /// Ends the running game: a restart warning, the schedule and the times
+    /// online do not carry into the next hosted game, and the audit lines
+    /// still on their way are written before the process may exit.
+    fn stop(&self) {
+        self.running.store(false, Ordering::Relaxed);
+        *self.ticker.relock() = Ticker::default();
+        self.joined.relock().clear();
+        self.audit.finish();
+    }
+
+    /// Writes the ban list and allow-list now, on a thread of their own, so
+    /// a change holds even when the server stops before the world saves.
+    fn keep_accounts(&self) {
+        let accounts = self.accounts.clone();
+        let spawned = std::thread::Builder::new()
+            .name("admin-tools accounts".into())
+            .spawn(move || {
+                if let Err(why) = accounts.flush() {
+                    enshwick::warn!("accounts not written yet: {why}");
+                }
+            });
+        if let Err(why) = spawned {
+            enshwick::warn!("accounts written when the world saves: {why}");
+        }
+    }
+
     /// Writes a run of the action `id` to the audit log while it is on.
     fn record(&self, request: &Request<'_>, id: &str, outcome: &Outcome) {
-        let who = format!("{} ({:016x})", request.player.name, request.player.key.0);
+        let who = account(&request.player.name, request.player.key);
         let via = match request.via {
             Via::Interface => "interface",
             Via::Console => "console",
@@ -153,7 +182,12 @@ impl Tools {
     /// Writes `fields` to the audit log while the world's settings keep it
     /// on.
     fn log(&self, fields: &[&str]) {
-        if !self.settings.load().audit_on(self.dedicated) {
+        self.log_if(self.settings.load().audit_on(self.dedicated), fields);
+    }
+
+    /// Writes `fields` to the audit log when `on`.
+    fn log_if(&self, on: bool, fields: &[&str]) {
+        if !on {
             return;
         }
         if let Some(dir) = self.world.data_dir() {
@@ -165,18 +199,21 @@ impl Tools {
     /// player may run, and a change goes to the audit log.
     fn apply(&self, settings: &Settings) {
         let old = self.settings.swap(Arc::new(settings.clone()));
-        if old.rights != settings.rights
-            && let Err(why) = self.actions.rules_changed()
-        {
-            enshwick::warn!("rights not carried again: {why}");
+        if old.rights != settings.rights {
+            self.rules.store(Arc::new(settings.rights.rules()));
+            if let Err(why) = self.actions.rules_changed() {
+                enshwick::warn!("rights not carried again: {why}");
+            }
         }
         // A world's first settings arrive before it runs: no one changed them.
         if !self.running.load(Ordering::Relaxed) {
             return;
         }
         let changed = server::changed_keys(&old, settings);
+        // The change that turns the log off is its last line.
+        let on = old.audit_on(self.dedicated) || settings.audit_on(self.dedicated);
         if !changed.is_empty() {
-            self.log(&["settings", "", "settings", &changed.join(", "), ""]);
+            self.log_if(on, &["settings", "", "settings", &changed.join(", "), ""]);
         }
     }
 
@@ -199,6 +236,12 @@ impl Tools {
 /// The language lines to every player are in: the server's own.
 fn language() -> Language {
     enshwick::i18n::language()
+}
+
+/// An account as the audit log and the server's log name it: the player's
+/// name and the key.
+fn account(name: &str, key: PlayerKey) -> String {
+    format!("{name} ({:016x})", key.0)
 }
 
 /// A value as a console line writes it, for the audit log.

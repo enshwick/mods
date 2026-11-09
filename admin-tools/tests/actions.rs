@@ -10,10 +10,12 @@ mod tests {
     use enshwick::PlayerKey;
     use enshwick::abi::{ActionCall, DaytimeInfo, Header, PlayerData, PlayerInfo, Side, Status};
     use enshwick::actions::sheet::decode;
+    use enshwick::commands::{self, Caller};
     use enshwick::console;
     use enshwick::content::EngineFacts as _;
-    use enshwick::events::{PlayerJoined, SettingsReplaced, WorldLoaded};
+    use enshwick::events::{PlayerJoined, SettingsReplaced, ShutdownStarted, WorldLoaded};
     use enshwick::test::{Installed, facts};
+    use enshwick::world::PlayerPermissions;
     use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
 
     const ADMIN: u8 = PlayerInfo::CAN_KICK_BAN;
@@ -59,11 +61,46 @@ mod tests {
         player(11, 2, "Bob", 0)
     }
 
-    /// A fresh data folder for one test.
-    fn scratch(name: &str) -> PathBuf {
+    /// A fresh data folder for one test, removed when the test ends.
+    struct Scratch(PathBuf);
+
+    impl std::ops::Deref for Scratch {
+        type Target = Path;
+
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl AsRef<Path> for Scratch {
+        fn as_ref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _gone = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn scratch(name: &str) -> Scratch {
         let dir = std::env::temp_dir().join(format!("admin-tools-{name}-{}", std::process::id()));
         let _gone = std::fs::remove_dir_all(&dir);
-        dir
+        Scratch(dir)
+    }
+
+    /// Waits up to five seconds for the file `name` in `dir` to satisfy
+    /// `holds`; its last text.
+    fn file_until(dir: &Path, name: &str, holds: impl Fn(&str) -> bool) -> String {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let text = std::fs::read_to_string(dir.join(name)).unwrap_or_default();
+            if holds(&text) || std::time::Instant::now() >= deadline {
+                return text;
+            }
+            std::thread::yield_now();
+        }
     }
 
     /// A dedicated server with Ann (admin) and Bob online, `settings` for
@@ -251,7 +288,6 @@ mod tests {
             run(&loader, &ann(), "banned", "p0000000000000001\tb1"),
             "0Ann is an administrator or the host and cannot be removed."
         );
-        let _gone = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -287,7 +323,6 @@ mod tests {
             "banned at the door: {:?}",
             loader.logs()
         );
-        let _gone = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -311,7 +346,6 @@ mod tests {
             run(&loader, &ann(), "allowed", "p0000000000000002\tb0"),
             "1Bob is off the allow-list."
         );
-        let _gone = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -496,7 +530,6 @@ mod tests {
             assert!(read.contains(part), "{part}: {read}");
         }
         assert!(!read.contains("\tonline\t"), "reads stay out: {read}");
-        let _gone = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -539,7 +572,6 @@ mod tests {
             !read.contains("\"Hi\""),
             "the world's load is no change: {read}"
         );
-        let _gone = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -574,5 +606,100 @@ mod tests {
         let refused = loader.type_in_chat(&bob(), 0, "/adl kick Ann").unwrap();
         assert!(refused.starts_with('0'), "{refused}");
         assert!(loader.removed().is_empty());
+    }
+
+    #[test]
+    fn a_remote_caller_runs_only_what_its_permissions_allow_and_nobody_leaves_the_console() {
+        let dir = scratch("remote");
+        let loader = server("[rights]\nweather = \"nobody\"\n", &dir);
+        let bridge = Caller::new("bridge");
+        let kicked = commands::run("adl kick Bob", &bridge).unwrap();
+        assert!(!kicked.is_done(), "{}", kicked.text());
+        assert!(loader.removed().is_empty(), "no permission, no kick");
+        let help = commands::run("adl help", &bridge).unwrap();
+        assert!(!help.text().contains("kick"), "{}", help.text());
+
+        let moderator = Caller::new("moderator").with(PlayerPermissions::CanKickBan);
+        assert!(commands::run("adl kick Bob", &moderator).unwrap().is_done());
+        assert_eq!(loader.removed(), [2]);
+        let weather = commands::run("adl weather rain", &moderator).unwrap();
+        assert!(!weather.is_done(), "nobody: {}", weather.text());
+
+        assert_eq!(
+            console::run("adl weather rain").as_deref(),
+            Ok("The weather changes to Rain."),
+            "the server's console may use an action for nobody"
+        );
+    }
+
+    #[test]
+    fn a_ban_and_its_lifting_reach_the_world_s_file_before_the_world_saves() {
+        let dir = scratch("ban-file");
+        let loader = server("", &dir);
+        assert!(run(&loader, &ann(), "banned", "p0000000000000002\tb1").starts_with('1'));
+        let text = file_until(&dir, "accounts.toml", |text| {
+            text.contains("0000000000000002")
+        });
+        assert!(text.contains("0000000000000002"), "{text}");
+        assert!(run(&loader, &ann(), "banned", "p0000000000000002\tb0").starts_with('1'));
+        let text = file_until(&dir, "accounts.toml", |text| {
+            !text.contains("0000000000000002")
+        });
+        assert!(!text.contains("0000000000000002"), "{text}");
+        assert!(run(&loader, &ann(), "allowed", "p0000000000000001\tb1").starts_with('1'));
+        let text = file_until(&dir, "accounts.toml", |text| text.contains("[[allowed]]"));
+        assert!(text.contains("0000000000000001"), "{text}");
+    }
+
+    #[test]
+    fn lists_that_do_not_read_ban_no_one_in_the_game_and_keep_the_door_shut() {
+        let dir = scratch("lists-shut");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("accounts.toml"), "bans = 3\n").unwrap();
+        let loader = server("", &dir);
+        let reply = run(&loader, &ann(), "banned", "p0000000000000002\tb1");
+        assert!(reply.starts_with('0'), "{reply}");
+        assert!(
+            loader.banned().is_empty(),
+            "nothing changed means the game banned no one either"
+        );
+        joins(&loader, &ann());
+        assert!(loader.removed().is_empty(), "administrators always get in");
+        joins(&loader, &bob());
+        assert_eq!(loader.removed(), [2], "a ban that does not read may hold");
+    }
+
+    #[test]
+    fn a_restart_warning_and_the_schedule_end_with_the_game_that_started_them() {
+        let dir = scratch("restart-ends");
+        let loader = server("", &dir);
+        assert!(run(&loader, &ann(), "restart", "n2").starts_with('1'));
+        assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+        assert!(loader.raise::<WorldLoaded>(&()) >= 1);
+        let before = loader.notices().len() + loader.chat().len();
+        for _ in 0..130 {
+            let _ran = loader.tick(Duration::from_secs(1));
+        }
+        let said: Vec<String> = loader
+            .chat()
+            .into_iter()
+            .chain(loader.notices())
+            .map(|(_, text)| text)
+            .collect();
+        assert_eq!(said.len(), before, "the next game hears nothing: {said:?}");
+        assert_eq!(
+            run(&loader, &ann(), "restart", "n0"),
+            "0No restart warning is under way."
+        );
+    }
+
+    #[test]
+    fn a_settings_change_that_turns_the_audit_log_off_is_the_last_line_it_writes() {
+        let dir = scratch("audit-turned-off");
+        let loader = server("audit = \"on\"\n", &dir);
+        loader.set_settings("settings", "audit = \"off\"\n");
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        let text = file_until(&dir, "audit.log", |text| text.contains("audit = \"off\""));
+        assert!(text.contains("settings\taudit = \"off\""), "{text}");
     }
 }

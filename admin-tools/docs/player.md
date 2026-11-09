@@ -54,8 +54,7 @@ dedicated server. Every command starts with `/adl` or `/admin-tools`.
 The answer shows only to you. In the console window of a dedicated server,
 type the same line without the `/`, such as `adl kick Bob`.
 
-The console may use every action. Windows for these actions in the game come
-in a later release.
+The console may use every action.
 
 | Command | What it does |
 | --- | --- |
@@ -87,8 +86,8 @@ Administrators and the host cannot be kicked, banned or muted. `goto` and
    server's settings.
 
 From then on, an account not on the list is kicked as it joins.
-Administrators always get in. To add a player, have them join while the
-allow-list is off, or let an administrator add them.
+Administrators always get in. To add a player, turn the allow-list off, add
+them while they are online, and turn it on again.
 
 ## How do I decide who may use each action?
 
@@ -96,7 +95,7 @@ Each action has a rule in the world's settings, under **Who may use each
 action**. A rule is one of these:
 
 - `everyone`
-- `nobody`. Only the console may then use the action.
+- `nobody`. Only the server's console may then use the action.
 - A permission of the player's user group in `enshrouded_server.json`:
   `CanKickBan` for administrators, `CanAccessInventories`, `CanEditBase`,
   `CanEditWorld`, `CanExtendBase` or `CanReceiveExp`.

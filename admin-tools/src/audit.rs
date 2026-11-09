@@ -1,12 +1,13 @@
 //! The audit log: one line per admin action, written to `audit.log` in the
 //! world's data folder by a thread of its own, so the game thread never
-//! waits on the disk.
+//! waits on a write.
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::mpsc::{self, Sender};
+use std::thread::JoinHandle;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use enshwick::Relock as _;
@@ -33,14 +34,21 @@ struct Entry {
 /// The log's writer: lines go to a thread that appends them.
 #[derive(Debug)]
 pub(crate) struct Audit {
-    lines: Mutex<Option<Sender<Entry>>>,
+    writer: Mutex<Option<Writer>>,
+}
+
+/// The thread that appends lines and the way to hand it one.
+#[derive(Debug)]
+struct Writer {
+    lines: Sender<Entry>,
+    thread: Option<JoinHandle<()>>,
 }
 
 impl Audit {
     /// A writer whose thread starts with the first line.
     pub(crate) const fn new() -> Self {
         Self {
-            lines: Mutex::new(None),
+            writer: Mutex::new(None),
         }
     }
 
@@ -53,18 +61,29 @@ impl Audit {
             line.extend(field.chars().map(|c| if c.is_control() { ' ' } else { c }));
         }
         line.push('\n');
-        let mut lines = self.lines.relock();
-        let sender = lines.get_or_insert_with(spawn);
-        if let Err(lost) = sender.send(Entry { dir, line }) {
+        let mut writer = self.writer.relock();
+        let started = writer.get_or_insert_with(spawn);
+        if let Err(lost) = started.lines.send(Entry { dir, line }) {
             // The thread ended: start another and hand it the line.
-            let sender = lines.insert(spawn());
-            let _sent = sender.send(lost.0);
+            let _sent = writer.insert(spawn()).lines.send(lost.0);
+        }
+    }
+
+    /// Writes every line still on its way and ends the thread; the next
+    /// line starts another.
+    pub(crate) fn finish(&self) {
+        let Some(Writer { lines, thread }) = self.writer.relock().take() else {
+            return;
+        };
+        drop(lines);
+        if thread.is_some_and(|thread| thread.join().is_err()) {
+            enshwick::warn!("audit: the writer thread panicked");
         }
     }
 }
 
 /// Starts the writer thread; its lines arrive through the sender.
-fn spawn() -> Sender<Entry> {
+fn spawn() -> Writer {
     let (sender, lines) = mpsc::channel::<Entry>();
     let started = std::thread::Builder::new()
         .name("admin-tools audit".into())
@@ -78,10 +97,13 @@ fn spawn() -> Sender<Entry> {
                 }
             }
         });
-    if let Err(why) = started {
-        enshwick::warn!("audit: no writer thread: {why}");
+    let thread = started
+        .inspect_err(|why| enshwick::warn!("audit: no writer thread: {why}"))
+        .ok();
+    Writer {
+        lines: sender,
+        thread,
     }
-    sender
 }
 
 /// Appends `line` to the log in `dir`, first moving a log past
@@ -99,14 +121,27 @@ pub(crate) fn append(dir: &Path, line: &str) -> io::Result<()> {
         .write_all(line.as_bytes())
 }
 
-/// The last `count` lines of the log in `dir`, oldest first; empty when
-/// there is no log.
+/// The last `count` lines of the log in `dir`, oldest first, taking the
+/// rest from [`OLD_FILE`] when the log moved aside lately; empty when there
+/// is no log.
 ///
 /// # Errors
 ///
 /// The reason a log that is there does not read.
 pub(crate) fn tail(dir: &Path, count: usize) -> io::Result<Vec<String>> {
-    let Some(mut file) = fs::File::open(dir.join(FILE)).map(Some).or_else(|why| {
+    let mut lines = tail_of(&dir.join(FILE), count)?;
+    if lines.len() < count {
+        let mut older = tail_of(&dir.join(OLD_FILE), count - lines.len())?;
+        older.append(&mut lines);
+        lines = older;
+    }
+    Ok(lines)
+}
+
+/// The last `count` lines of the file at `path`; empty when it is not
+/// there.
+fn tail_of(path: &Path, count: usize) -> io::Result<Vec<String>> {
+    let Some(mut file) = fs::File::open(path).map(Some).or_else(|why| {
         if why.kind() == io::ErrorKind::NotFound {
             Ok(None)
         } else {
@@ -224,6 +259,31 @@ mod tests {
         }
         let last = tail(&dir, 5000).unwrap();
         assert!(last.iter().all(|l| l.len() == 99));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_tail_right_after_a_move_aside_takes_the_rest_from_the_older_file() {
+        let dir = scratch("tail-rotated");
+        fs::write(dir.join(OLD_FILE), "old 1\nold 2\nold 3\n").unwrap();
+        append(&dir, "new 1\n").unwrap();
+        assert_eq!(tail(&dir, 3).unwrap(), ["old 2", "old 3", "new 1"]);
+        assert_eq!(tail(&dir, 1).unwrap(), ["new 1"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn finish_writes_every_line_still_on_its_way_before_it_returns() {
+        let dir = scratch("finish");
+        let audit = Audit::new();
+        for n in 0..200 {
+            audit.record(dir.clone(), &[&format!("line {n}")]);
+        }
+        audit.finish();
+        assert_eq!(tail(&dir, 500).unwrap().len(), 200);
+        audit.record(dir.clone(), &["after"]);
+        audit.finish();
+        assert!(tail(&dir, 1).unwrap()[0].ends_with("\tafter"));
         fs::remove_dir_all(&dir).unwrap();
     }
 

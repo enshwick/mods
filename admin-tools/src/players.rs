@@ -174,47 +174,53 @@ fn kick(tools: &Tools, request: &Request<'_>) -> Outcome {
 }
 
 /// Bans a player online, or lifts a ban, online or offline; the mod keeps
-/// the ban so it holds when the account comes back.
+/// the ban so it holds when the account comes back. The mod's list changes
+/// first and goes back when the game refuses, so a refusal changed nothing.
 fn banned(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
         return no_player(request);
     };
     let values = [(texts::value::NAME, name.as_str())];
-    if *on {
-        let online = tools.world.player_by_key(*key).is_some();
-        if online {
-            match tools.world.account_action(AccountAction::Ban, *key) {
-                Ok(()) => {}
-                Err(WorldError::Refused) => {
-                    return Outcome::refused(request.say(texts::REPLY_PROTECTED_REMOVE, &values));
-                }
-                Err(why) => return Tools::failed(request, name, &why),
-            }
-        }
+    let older = if *on {
         let ban = Ban {
             key: *key,
             name: name.clone(),
             by: request.player.name.clone(),
             at: audit::now(),
         };
-        return match tools.accounts.update(|accounts| accounts.ban(ban)) {
-            Some(()) => Outcome::done(request.say(texts::REPLY_BANNED, &values)),
-            None => store_shut(tools, request),
+        tools.accounts.update(|accounts| accounts.ban(ban))
+    } else {
+        tools.accounts.update(|accounts| accounts.unban(*key))
+    };
+    let Some(older) = older else {
+        return store_shut(tools, request);
+    };
+    // The game takes a ban only of a player online; a lift always.
+    let game = if !*on {
+        Some(AccountAction::UnBan)
+    } else if tools.world.player_by_key(*key).is_some() {
+        Some(AccountAction::Ban)
+    } else {
+        None
+    };
+    if let Some(Err(why)) = game.map(|action| tools.world.account_action(action, *key)) {
+        let _restored = tools
+            .accounts
+            .update(|accounts| accounts.restore(*key, older));
+        return match why {
+            WorldError::Refused if *on => {
+                Outcome::refused(request.say(texts::REPLY_PROTECTED_REMOVE, &values))
+            }
+            why => Tools::failed(request, name, &why),
         };
     }
-    // The mod's own ban goes first, so the account is never banned again at
-    // the door, whatever the game answers.
-    if tools
-        .accounts
-        .update(|accounts| accounts.unban(*key))
-        .is_none()
-    {
-        return store_shut(tools, request);
-    }
-    match tools.world.account_action(AccountAction::UnBan, *key) {
-        Ok(()) => Outcome::done(request.say(texts::REPLY_UNBANNED, &values)),
-        Err(why) => Tools::failed(request, name, &why),
-    }
+    tools.keep_accounts();
+    let reply = if *on {
+        texts::REPLY_BANNED
+    } else {
+        texts::REPLY_UNBANNED
+    };
+    Outcome::done(request.say(reply, &values))
 }
 
 /// Puts an account on the allow-list or takes it off.
@@ -223,14 +229,20 @@ fn allowed(tools: &Tools, request: &Request<'_>) -> Outcome {
         return no_player(request);
     };
     let values = [(texts::value::NAME, name.as_str())];
-    match tools
+    if tools
         .accounts
         .update(|accounts| accounts.allow(*key, name, *on))
+        .is_none()
     {
-        Some(()) if *on => Outcome::done(request.say(texts::REPLY_ALLOWED, &values)),
-        Some(()) => Outcome::done(request.say(texts::REPLY_DISALLOWED, &values)),
-        None => store_shut(tools, request),
+        return store_shut(tools, request);
     }
+    tools.keep_accounts();
+    let reply = if *on {
+        texts::REPLY_ALLOWED
+    } else {
+        texts::REPLY_DISALLOWED
+    };
+    Outcome::done(request.say(reply, &values))
 }
 
 /// The refusal while the world's lists do not read.
@@ -380,10 +392,11 @@ impl Tools {
         let lists = self
             .accounts
             .with(|accounts| (accounts.banned(key), accounts.allowed(key)));
+        // Lists that do not read keep the door shut: a ban in them may hold.
+        let unread = lists.is_none() && self.accounts.shut_reason().is_some();
         let refusal = match lists {
             Some((true, _)) => Some(AccountAction::Ban),
-            // A list that does not read keeps the door shut.
-            Some((false, false)) | None if settings.allowlist && !player.is_admin() => {
+            Some((false, false)) | None if (settings.allowlist || unread) && !player.is_admin() => {
                 Some(AccountAction::Kick)
             }
             _ => None,
@@ -399,21 +412,13 @@ impl Tools {
         } else {
             ids::ALLOWED
         };
+        let who = crate::account(&player.name, key);
         match self.world.account_action(refusal, key) {
             Ok(()) => {
-                enshwick::info!(
-                    "{} ({:016x}) refused at the door: {what}",
-                    player.name,
-                    key.0
-                );
-                let who = format!("{} ({:016x})", player.name, key.0);
+                enshwick::info!("{who} refused at the door: {what}");
                 self.log(&["server", "join", what, &who, "refused"]);
             }
-            Err(why) => enshwick::warn!(
-                "{} ({:016x}) not refused ({what}): {why}",
-                player.name,
-                key.0
-            ),
+            Err(why) => enshwick::warn!("{who} not refused ({what}): {why}"),
         }
     }
 }

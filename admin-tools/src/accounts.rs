@@ -51,17 +51,24 @@ impl Accounts {
         self.allowed.iter().any(|known| known.key == key)
     }
 
-    /// Bans `ban.key`, replacing an older ban of it.
-    pub(crate) fn ban(&mut self, ban: Ban) {
-        self.unban(ban.key);
+    /// Bans `ban.key`, replacing an older ban of it; the older ban.
+    pub(crate) fn ban(&mut self, ban: Ban) -> Option<Ban> {
+        let older = self.unban(ban.key);
         self.bans.push(ban);
+        older
     }
 
-    /// Lifts the ban of `key`; whether there was one.
-    pub(crate) fn unban(&mut self, key: PlayerKey) -> bool {
-        let before = self.bans.len();
-        self.bans.retain(|ban| ban.key != key);
-        self.bans.len() != before
+    /// Lifts the ban of `key`; the ban there was.
+    pub(crate) fn unban(&mut self, key: PlayerKey) -> Option<Ban> {
+        let at = self.bans.iter().position(|ban| ban.key == key)?;
+        Some(self.bans.remove(at))
+    }
+
+    /// Puts the bans of `key` back as they were before a change the game
+    /// refused: `older`, or none.
+    pub(crate) fn restore(&mut self, key: PlayerKey, older: Option<Ban>) {
+        self.unban(key);
+        self.bans.extend(older);
     }
 
     /// Puts `key` on the allow-list or takes it off.
@@ -128,12 +135,33 @@ mod tests {
             by: by.into(),
             at: 0,
         };
-        accounts.ban(ban("Ann"));
-        accounts.ban(ban("Cid"));
+        assert_eq!(accounts.ban(ban("Ann")), None);
+        assert_eq!(accounts.ban(ban("Cid")), Some(ban("Ann")));
         assert_eq!(accounts.bans, [ban("Cid")]);
         assert!(accounts.banned(PlayerKey::new(7)));
-        assert!(accounts.unban(PlayerKey::new(7)));
-        assert!(!accounts.unban(PlayerKey::new(7)));
+        assert_eq!(accounts.unban(PlayerKey::new(7)), Some(ban("Cid")));
+        assert_eq!(accounts.unban(PlayerKey::new(7)), None);
+    }
+
+    #[test]
+    fn restore_puts_back_the_ban_a_refused_change_replaced_or_lifted() {
+        let mut accounts = Accounts::default();
+        let ban = |by: &str| Ban {
+            key: PlayerKey::new(7),
+            name: "Bob".into(),
+            by: by.into(),
+            at: 0,
+        };
+        let older = accounts.ban(ban("Ann"));
+        accounts.restore(PlayerKey::new(7), older);
+        assert!(!accounts.banned(PlayerKey::new(7)), "a new ban goes again");
+        accounts.ban(ban("Ann"));
+        let older = accounts.ban(ban("Cid"));
+        accounts.restore(PlayerKey::new(7), older);
+        assert_eq!(accounts.bans, [ban("Ann")]);
+        let lifted = accounts.unban(PlayerKey::new(7));
+        accounts.restore(PlayerKey::new(7), lifted);
+        assert_eq!(accounts.bans, [ban("Ann")]);
     }
 
     #[test]

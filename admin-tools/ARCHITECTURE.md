@@ -15,9 +15,18 @@ rights and writes a run that changed something to the audit log.
 | `src/lib.rs` | the mod's start, the state its handlers share, and the rights and audit wrapper |
 | `src/ids.rs` | the actions' ids and the command names |
 | `src/players.rs` | actions on players, and the check of each player who joins |
-| `src/server.rs` | actions on the whole server, and the tick that runs the schedule |
+| `src/server.rs` | actions on the whole server, the tick that runs the schedule, and the chat log's lines |
 | `src/settings.rs` | the world's settings and who may use each action |
 | `src/accounts.rs` | the ban list and the allow-list, kept in the world's data |
 | `src/schedule.rs` | announcements and restart warnings as plain state |
-| `src/audit.rs` | the audit log, written by a thread of its own |
+| `src/journal.rs` | the audit and chat logs, each written by a thread of its own |
+| `src/backup.rs` | backups: the saves held, the copy on a thread of its own, old backups removed |
+| `src/rcon.rs` | the remote console: a Source RCON listener, logins and its bounds |
+| `src/rcon/packet.rs` | RCON packets, read and written without I/O |
 | `tests/` | each action through the fake loader |
+| `../fuzz/` | the fuzz target of the RCON packet reader |
+
+The remote console runs on threads of its own and never touches the game:
+each command line goes to the game thread through the API's
+`commands::run_later`, with the rights of the server's console, as a
+command typed there.

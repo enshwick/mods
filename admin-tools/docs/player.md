@@ -1,7 +1,7 @@
 ---
 id: enshwick.admin-tools
 name: Admin Tools
-summary: Server administrators kick, ban and mute players, keep an allow-list, announce, set time and weather, teleport players and read an audit log.
+summary: Server administrators kick, ban and mute players, keep an allow-list, announce, set time and weather, teleport players, save and back up the world, use a remote console and read audit and chat logs.
 needs: server
 settings:
   - key: motd
@@ -30,8 +30,40 @@ settings:
     choices: auto, on, off
     meaning: Whether admin actions go to audit.log. Auto is on for a dedicated server and off for a game a player hosts.
     applies: at-once
+  - key: chat_log
+    default: auto
+    choices: auto, on, off
+    meaning: Whether chat lines go to chat.log. Auto is on for a dedicated server and off for a game a player hosts.
+    applies: at-once
+  - key: backups_kept
+    default: 10
+    range: 1 to 100
+    meaning: How many backups the backup action keeps. The oldest go first.
+    applies: at-once
+  - key: backup_dir
+    default: ""
+    meaning: The folder backups go to, beside the world's save when it is not a full path. Empty uses backups in the world's data folder.
+    applies: at-once
+  - key: rcon
+    default: auto
+    choices: auto, on, off
+    meaning: Whether RCON tools may connect. Auto is on for a dedicated server and off for a game a player hosts.
+    applies: at-once
+  - key: rcon_ip
+    default: 0.0.0.0
+    meaning: The address the remote console listens on. 127.0.0.1 is this computer only.
+    applies: at-once
+  - key: rcon_port
+    default: 25575
+    range: 1 to 65535
+    meaning: The TCP port the remote console listens on.
+    applies: at-once
+  - key: rcon_password
+    default: ""
+    meaning: The password RCON tools log in with. Empty uses the generated one in rcon-password.txt. Never shown or logged.
+    applies: at-once
   - key: rights.<action>
-    default: CanKickBan, and everyone for online and motd
+    default: CanKickBan, and everyone for online, status and motd
     meaning: Who may use each action. everyone, nobody, or a permission of the player's user group.
     applies: at-once
 ---
@@ -40,7 +72,9 @@ settings:
 - An allow-list lets only chosen accounts and administrators join.
 - Players read a message of the day, scheduled announcements and restart warnings.
 - Administrators set the time and the weather, heal players and teleport them.
-- Each world decides who may use each action, and an audit log keeps every change.
+- Administrators save the world now, back it up while the server runs, and read its game settings.
+- RCON tools such as BattleMetrics or rcon-cli run every command on a dedicated server.
+- Each world decides who may use each action, an audit log keeps every change, and a chat log keeps the chat.
 
 ## How do I use an action?
 
@@ -54,11 +88,12 @@ dedicated server. Every command starts with `/adl` or `/admin-tools`.
 The answer shows only to you. In the console window of a dedicated server,
 type the same line without the `/`, such as `adl kick Bob`.
 
-The console may use every action.
+The console and RCON tools may use every action.
 
 | Command | What it does |
 | --- | --- |
-| `/adl online` | Lists the players online, how long each has played, and who is muted. |
+| `/adl online` | Lists the players online, their account ids, how long each has played, and who is muted. |
+| `/adl status` | Shows how long the server runs, the world, and the Enshwick and mod versions. |
 | `/adl motd` | Shows the message of the day. |
 | `/adl kick <player>` | Removes a player from the game. They may join again. |
 | `/adl banned <player> on` | Bans a player who is online. |
@@ -72,8 +107,12 @@ The console may use every action.
 | `/adl place <player> <x> <y> <z>` | Moves a player to a position in metres, on free ground near it. |
 | `/adl time <hour>` | Sets the time of day, such as `6.5` for 06:30. |
 | `/adl weather clear` | Starts the weather: `clear`, `rain`, `blizzard`, or `any` for the game's choice. |
-| `/adl restart <minutes>` | Warns every player of a restart. `0` stops the warning. |
+| `/adl restart <minutes>` | Warns every player of a restart, and saves the world when the time is up. `0` stops the warning. Only on a dedicated server. |
+| `/adl save` | Saves the world now. |
+| `/adl backup` | Copies the world to a backup folder while the server runs. |
+| `/adl world` | Shows the world, its last save and its game settings. |
 | `/adl audit <lines>` | Shows the last lines of the audit log, up to 50. |
+| `/adl chat <lines>` | Shows the last lines of the chat log, up to 50. |
 
 Administrators and the host cannot be kicked, banned or muted. `goto` and
 `bring` need a character, so the console cannot use them.
@@ -100,27 +139,69 @@ action**. A rule is one of these:
   `CanKickBan` for administrators, `CanAccessInventories`, `CanEditBase`,
   `CanEditWorld`, `CanExtendBase` or `CanReceiveExp`.
 
-By default, `online` and `motd` are for everyone and every other action is for
-administrators. A player sees only the actions their rule allows. A change
+By default, `online`, `status` and `motd` are for everyone and every other
+action is for administrators. A player sees only the actions their rule allows. A change
 applies within two seconds.
 
 ## How do I warn players before a restart?
 
 Type `/adl restart 10`. Every player reads that the server restarts in
 10 minutes. The warning comes again at 5, 2 and 1 minutes left, and once more
-when the time is up.
+when the time is up. Then Admin Tools saves the world.
 
-Admin Tools does not stop the server. Your host's panel or script stops it.
-Type `/adl restart 0` to call the restart off.
+Admin Tools does not stop the server. Your host's panel or script stops it,
+so set the warning to end when the panel restarts the server.
+Type `/adl restart 0` to call the restart off. A game a player hosts has no
+restart warning.
 
-## Where is the audit log?
+## How do I connect an RCON tool?
 
-It is `audit.log` in `<save>-mod-data/enshwick.admin-tools/` beside the
-world's save. Each line holds the time in UTC, who acted, from where, the
-action, its values and the result.
+On a dedicated server the remote console is on from the first start. It
+speaks Source RCON, which tools such as BattleMetrics, rcon-cli and mcrcon
+use.
 
-Past 1 MB the log moves to `audit.1.log` and starts again. Reads such as
-`online` are not written.
+1. Open `rcon-password.txt` in `<save>-mod-data/enshwick.admin-tools/` beside
+   the world's save. Admin Tools writes a random password there at the first
+   start, and the server's log names the file.
+2. In the tool, enter the server's address, port `25575` and that password.
+3. Send a command without the `/`, such as `adl online`. Send `help` to list
+   the commands of every mod.
+
+To choose the password yourself, set **Remote console password** in the
+world's settings. To turn the console off, set **Remote console** to off.
+
+RCON is not encrypted: the password and commands cross the network as
+plain text. Open the port only to computers you trust, with a firewall rule,
+or reach it through an SSH tunnel or a VPN. After three wrong passwords a
+connection closes, and its address waits a minute.
+
+## How do I back up the world?
+
+Type `/adl backup`. Admin Tools holds the world's saves, copies the save, the
+world's mod settings and mod data to a folder named by the time in UTC, and
+lets the saves go again, also when the copy fails. Players keep playing. You
+read where the backup went when it is done.
+
+Backups go to `backups/` in `<save>-mod-data/enshwick.admin-tools/`, or to
+the folder you set in **Backup folder**. Admin Tools keeps the newest 10, or
+as many as **Backups kept** says, and removes older ones. To restore a
+backup, stop the server and copy the files from the backup folder back
+beside the world's save.
+
+## Where are the audit log and the chat log?
+
+Both are in `<save>-mod-data/enshwick.admin-tools/` beside the world's save.
+
+- `audit.log` holds one line per change an administrator made: the time in
+  UTC, who acted, from where, the action, its values and the result.
+  Reads such as `online` are not written. RCON logins are written too.
+- `chat.log` holds one line per chat line: the time in UTC, the player's
+  name and account id, the kind of line and its text.
+
+When the chat log is on, everything players write in chat is kept on the
+server. It is on for a dedicated server and off for a game a player hosts,
+unless the world's **Chat log** setting says otherwise. Past 1 MB a log moves
+to `audit.1.log` or `chat.1.log` and starts again.
 
 ## Install
 
@@ -145,6 +226,10 @@ Type the name as the game shows it.
 **A player is kicked as they join.** The allow-list is on, and the player is
 not on it, or the player is banned. Lift a ban with
 `/adl banned <player> off`.
+
+**An RCON tool cannot connect.** Check that the port is open in the
+firewall, and that the server's log says the remote console listens. When
+another program uses the port, set another in **Remote console port**.
 
 **Something else goes wrong.** Open an issue in the
 [mods repository](https://github.com/enshwick/mods/issues). Attach

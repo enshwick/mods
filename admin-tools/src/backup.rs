@@ -19,6 +19,9 @@ use crate::{Tools, ids, journal, texts};
 /// another.
 const FOLDER: &str = "backups";
 
+/// The suffix of a backup's folder while it is copied.
+const PARTIAL: &str = ".partial";
+
 /// The suffix of the world's mod data folder beside its save.
 const DATA_SUFFIX: &str = "-mod-data";
 
@@ -85,6 +88,8 @@ impl Tools {
         let settings = self.settings.load();
         let root = if settings.backup_dir.is_empty() {
             data.join(FOLDER)
+        } else if !crate::settings::beside_the_save(&settings.backup_dir) {
+            return None;
         } else {
             mod_data.parent()?.join(&settings.backup_dir)
         };
@@ -191,15 +196,28 @@ fn belongs(name: &str, stem: &str) -> bool {
 
 /// Copies the world's files of `plan` into a new folder `name` under its
 /// root, leaving the root out where it lies inside them; the new folder.
-/// A copy that fails part-way removes its folder, so no half backup counts
-/// as one.
+/// The copy is made under a [`PARTIAL`] name and renamed when whole, so a
+/// copy that fails or a server that stops part-way leaves no folder that
+/// counts as a backup.
 pub(crate) fn copy(plan: &Plan, name: &str) -> io::Result<PathBuf> {
     fs::create_dir_all(&plan.root)?;
     let into = plan.root.join(name);
-    fs::create_dir(&into)?;
-    copy_into(plan, &into).inspect_err(|_| {
-        let _removed = fs::remove_dir_all(&into);
-    })?;
+    if into.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("{} is there already", into.display()),
+        ));
+    }
+    let partial = plan.root.join(format!("{name}{PARTIAL}"));
+    if partial.exists() {
+        fs::remove_dir_all(&partial)?;
+    }
+    fs::create_dir(&partial)?;
+    copy_into(plan, &partial)
+        .and_then(|()| fs::rename(&partial, &into))
+        .inspect_err(|_| {
+            let _removed = fs::remove_dir_all(&partial);
+        })?;
     Ok(into)
 }
 
@@ -358,6 +376,31 @@ mod tests {
         assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
         assert_eq!(fs::read_dir(&plan.root).unwrap().count(), 0);
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_copy_gets_its_backup_name_only_once_whole_and_a_crashed_one_never_counts() {
+        let saves = scratch("atomic");
+        fs::write(saves.join("w.ksd"), "save").unwrap();
+        let plan = Plan {
+            saves: saves.clone(),
+            stem: "w".into(),
+            root: saves.join("out"),
+            kept: 1,
+        };
+        let name = "2026-01-01_00-00-00";
+        let crashed = plan.root.join(format!("{name}{PARTIAL}"));
+        fs::create_dir_all(crashed.join("half")).unwrap();
+        assert!(!is_backup(&format!("{name}{PARTIAL}")));
+        let into = copy(&plan, name).unwrap();
+        assert_eq!(into, plan.root.join(name));
+        assert_eq!(fs::read_to_string(into.join("w.ksd")).unwrap(), "save");
+        assert!(
+            !into.join("half").exists(),
+            "the crashed copy is not mixed in"
+        );
+        assert!(!crashed.exists());
+        fs::remove_dir_all(&saves).unwrap();
     }
 
     #[test]

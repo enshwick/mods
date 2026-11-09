@@ -60,8 +60,13 @@ fn connect(port: u16) -> std::net::TcpStream {
     }
 }
 
+/// The world's own remote console password in these tests.
+const PASSWORD: &str = "correct horse battery";
+
 fn rcon_settings(port: u16) -> String {
-    format!("rcon = \"on\"\nrcon_ip = \"127.0.0.1\"\nrcon_port = {port}\nrcon_password = \"pw\"\n")
+    format!(
+        "rcon = \"on\"\nrcon_ip = \"127.0.0.1\"\nrcon_port = {port}\nrcon_password = \"{PASSWORD}\"\n"
+    )
 }
 
 #[test]
@@ -75,7 +80,7 @@ fn an_rcon_tool_logs_in_and_runs_a_command_with_the_console_s_rights() {
         stream.write_all(&packet(5, 3, "nope")).unwrap();
         assert_eq!(read_packet(&mut stream).unwrap(), (5, 0, String::new()));
         assert_eq!(read_packet(&mut stream).unwrap(), (-1, 2, String::new()));
-        stream.write_all(&packet(6, 3, "pw")).unwrap();
+        stream.write_all(&packet(6, 3, PASSWORD)).unwrap();
         assert_eq!(read_packet(&mut stream).unwrap(), (6, 0, String::new()));
         assert_eq!(read_packet(&mut stream).unwrap(), (6, 2, String::new()));
         stream.write_all(&packet(7, 2, "adl online")).unwrap();
@@ -107,7 +112,7 @@ fn an_rcon_tool_logs_in_and_runs_a_command_with_the_console_s_rights() {
         audit.contains("rcon 127.0.0.1\trcon\tlogin\t\tok"),
         "{audit}"
     );
-    assert!(!audit.contains("\tpw"), "{audit}");
+    assert!(!audit.contains(PASSWORD), "{audit}");
 }
 
 #[test]
@@ -133,7 +138,7 @@ fn rcon_closes_on_a_hostile_size_a_command_before_login_and_repeated_failures() 
         }
         let after = read_packet(&mut guessing);
         let mut again = connect(port);
-        let _sent = again.write_all(&packet(4, 3, "pw"));
+        let _sent = again.write_all(&packet(4, 3, PASSWORD));
         let waiting = read_packet(&mut again);
         (huge, early, after, waiting)
     });

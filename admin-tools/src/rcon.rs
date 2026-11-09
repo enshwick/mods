@@ -39,11 +39,21 @@ const ALPHABET: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx
 /// Clients connected at once; a client past it is closed at once.
 const MAX_CONNECTIONS: usize = 4;
 
-/// Failed logins on one connection before it closes and its address waits.
+/// Failed logins from one address, over any number of connections, before
+/// its connection closes and the address waits.
 const MAX_FAILURES: u32 = 3;
 
-/// How long an address waits after too many failed logins.
+/// How long an address waits after too many failed logins, and how long a
+/// failed login counts against it.
 const PENALTY: Duration = Duration::from_secs(60);
+
+/// How long a new connection may take to log in before it closes, so
+/// silent clients cannot hold every slot.
+const LOGIN_TIME: Duration = if cfg!(test) {
+    Duration::from_millis(300)
+} else {
+    Duration::from_secs(10)
+};
 
 /// Packets one connection may send a second; past it, the connection closes.
 const MAX_PACKETS_PER_SECOND: u32 = 20;
@@ -87,9 +97,16 @@ struct Shared {
     password: String,
     stop: AtomicBool,
     connections: AtomicUsize,
-    /// Addresses that failed to log in too often, and until when they wait.
-    waiting: Mutex<FxHashMap<IpAddr, Instant>>,
+    /// The failed logins of each address within [`PENALTY`].
+    strikes: Mutex<FxHashMap<IpAddr, Strikes>>,
     tools: Weak<Tools>,
+}
+
+/// An address's failed logins and when the last one came.
+#[derive(Clone, Copy, Debug)]
+struct Strikes {
+    count: u32,
+    last: Instant,
 }
 
 impl core::fmt::Debug for Shared {
@@ -111,7 +128,7 @@ impl Listener {
             password: config.password.clone(),
             stop: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
-            waiting: Mutex::new(FxHashMap::default()),
+            strikes: Mutex::new(FxHashMap::default()),
             tools,
         });
         let accepting = Arc::clone(&shared);
@@ -188,12 +205,35 @@ fn accept(socket: &TcpListener, shared: &Arc<Shared>) {
 }
 
 impl Shared {
-    /// Whether `ip` still waits after failed logins.
+    /// Whether `ip` still waits after [`MAX_FAILURES`] failed logins.
     fn waits(&self, ip: IpAddr) -> bool {
-        let mut waiting = self.waiting.relock();
+        let mut strikes = self.strikes.relock();
         let now = Instant::now();
-        waiting.retain(|_, until| *until > now);
-        waiting.contains_key(&ip)
+        strikes.retain(|_, strikes| now < strikes.last + PENALTY);
+        strikes
+            .get(&ip)
+            .is_some_and(|strikes| strikes.count >= MAX_FAILURES)
+    }
+
+    /// Counts a failed login from `ip`; whether the address now waits.
+    fn strike(&self, ip: IpAddr) -> bool {
+        let now = Instant::now();
+        let mut strikes = self.strikes.relock();
+        let strikes = strikes.entry(ip).or_insert(Strikes {
+            count: 0,
+            last: now,
+        });
+        if now >= strikes.last + PENALTY {
+            strikes.count = 0;
+        }
+        strikes.count += 1;
+        strikes.last = now;
+        strikes.count >= MAX_FAILURES
+    }
+
+    /// Forgets the failed logins of `ip` after it logged in.
+    fn forgive(&self, ip: IpAddr) {
+        self.strikes.relock().remove(&ip);
     }
 
     /// Counts one more connection unless [`MAX_CONNECTIONS`] are open.
@@ -241,13 +281,17 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
     let label = format!("rcon {ip}");
     let mut buffer = Vec::new();
     let mut chunk = [0u8; 1024];
-    let mut last = Instant::now();
+    let opened = Instant::now();
+    let mut last = opened;
     let mut pace = Pace {
-        since: Instant::now(),
+        since: opened,
         count: 0,
     };
-    let (mut logged_in, mut failures) = (false, 0);
+    let mut logged_in = false;
     while !shared.stop.load(Ordering::Acquire) {
+        if !logged_in && opened.elapsed() >= LOGIN_TIME {
+            return Err(io::Error::other("no login in time"));
+        }
         match stream.read(&mut chunk) {
             Ok(0) => return Ok(()),
             Ok(read) => {
@@ -286,12 +330,10 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
                         }],
                     )?;
                     shared.log_login(&label, if logged_in { "ok" } else { "refused" });
-                    if !logged_in {
-                        failures += 1;
-                        if failures >= MAX_FAILURES {
-                            shared.waiting.relock().insert(ip, Instant::now() + PENALTY);
-                            return Err(io::Error::other("too many failed logins"));
-                        }
+                    if logged_in {
+                        shared.forgive(ip);
+                    } else if shared.strike(ip) {
+                        return Err(io::Error::other("too many failed logins"));
                     }
                 }
                 _ if !logged_in => return Err(io::Error::other("a command before a login")),
@@ -480,15 +522,72 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    #[test]
-    fn connections_past_the_limit_get_no_slot_until_one_closes() {
-        let shared = Shared {
-            password: String::new(),
+    fn shared(password: &str) -> Shared {
+        Shared {
+            password: password.to_owned(),
             stop: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
-            waiting: Mutex::new(FxHashMap::default()),
+            strikes: Mutex::new(FxHashMap::default()),
             tools: Weak::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn failed_logins_count_per_address_across_connections() {
+        let shared = shared("pw");
+        let (ip, other): (IpAddr, IpAddr) =
+            ("10.0.0.1".parse().unwrap(), "10.0.0.2".parse().unwrap());
+        for _ in 1..MAX_FAILURES {
+            assert!(!shared.strike(ip), "a new connection would not reset it");
+        }
+        assert!(!shared.waits(ip));
+        assert!(shared.strike(ip));
+        assert!(shared.waits(ip));
+        assert!(!shared.waits(other));
+    }
+
+    /// A connected client and the server's end of it, served on a thread.
+    fn client(shared: Arc<Shared>) -> (TcpStream, JoinHandle<io::Result<()>>) {
+        let socket = TcpListener::bind("127.0.0.1:0").unwrap();
+        let client = TcpStream::connect(socket.local_addr().unwrap()).unwrap();
+        let (stream, from) = socket.accept().unwrap();
+        let served = std::thread::spawn(move || serve(stream, from.ip(), &shared));
+        (client, served)
+    }
+
+    #[test]
+    fn a_client_that_does_not_log_in_in_time_loses_its_connection() {
+        let (mut client, served) = client(Arc::new(shared("pw")));
+        let started = Instant::now();
+        let mut rest = Vec::new();
+        assert_eq!(client.read_to_end(&mut rest).unwrap_or(0), 0);
+        assert!(served.join().unwrap().is_err());
+        assert!(
+            started.elapsed() < IDLE,
+            "closed by the login time, not idleness"
+        );
+    }
+
+    #[test]
+    fn a_client_that_reconnects_after_each_failure_still_waits() {
+        let shared = Arc::new(shared("right password"));
+        for _ in 0..MAX_FAILURES {
+            let (mut client, served) = client(Arc::clone(&shared));
+            let login = Packet {
+                id: 1,
+                kind: packet::AUTH,
+                body: b"wrong".to_vec(),
+            };
+            client.write_all(&login.encode()).unwrap();
+            client.shutdown(std::net::Shutdown::Write).unwrap();
+            let _closed = served.join().unwrap();
+        }
+        assert!(shared.waits("127.0.0.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn connections_past_the_limit_get_no_slot_until_one_closes() {
+        let shared = shared("");
         assert!((0..MAX_CONNECTIONS).all(|_| shared.take_slot()));
         assert!(!shared.take_slot());
         shared.connections.fetch_sub(1, Ordering::AcqRel);

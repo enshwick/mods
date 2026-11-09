@@ -29,8 +29,10 @@ Each entry says what players notice; a release's notes show its section.
 - The players list shows each player's account id, and `/adl status` shows
   the uptime, the world and the Enshwick and mod versions.
 - RCON tools such as BattleMetrics or rcon-cli run every command on a
-  dedicated server, on port 25575 with a password Admin Tools generates; a
-  game a player hosts has it off unless the world turns it on.
+  dedicated server, on port 25575 of the server's own computer with a
+  password Admin Tools generates; a world setting opens it to other
+  addresses, and a game a player hosts has it off unless the world turns it
+  on.
 - A chat log beside the world's save keeps every chat line with the
   player's name and account id; it is on for a dedicated server.
 - `/adl backup` copies the world's save, mod settings and mod data while the

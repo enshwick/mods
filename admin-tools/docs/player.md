@@ -42,7 +42,7 @@ settings:
     applies: at-once
   - key: backup_dir
     default: ""
-    meaning: The folder backups go to, beside the world's save when it is not a full path. Empty uses backups in the world's data folder.
+    meaning: The folder backups go to, beside the world's save. A full path or .. is refused. Empty uses backups in the world's data folder.
     applies: at-once
   - key: rcon
     default: auto
@@ -50,8 +50,8 @@ settings:
     meaning: Whether RCON tools may connect. Auto is on for a dedicated server and off for a game a player hosts.
     applies: at-once
   - key: rcon_ip
-    default: 0.0.0.0
-    meaning: The address the remote console listens on. 127.0.0.1 is this computer only.
+    default: 127.0.0.1
+    meaning: The address the remote console listens on. 127.0.0.1 is this computer only. 0.0.0.0 is every network.
     applies: at-once
   - key: rcon_port
     default: 25575
@@ -60,7 +60,7 @@ settings:
     applies: at-once
   - key: rcon_password
     default: ""
-    meaning: The password RCON tools log in with. Empty uses the generated one in rcon-password.txt. Never shown or logged.
+    meaning: The password RCON tools log in with, at least 16 characters. Empty uses the generated one in rcon-password.txt. Never shown or logged.
     applies: at-once
   - key: rights.<action>
     default: CanKickBan, and everyone for online, status and motd
@@ -157,13 +157,14 @@ restart warning.
 ## How do I connect an RCON tool?
 
 On a dedicated server the remote console is on from the first start. It
-speaks Source RCON, which tools such as BattleMetrics, rcon-cli and mcrcon
-use.
+listens on the server's own computer only. It speaks Source RCON, which tools
+such as BattleMetrics, rcon-cli and mcrcon use.
 
 1. Open `rcon-password.txt` in `<save>-mod-data/enshwick.admin-tools/` beside
    the world's save. Admin Tools writes a random password there at the first
    start, and the server's log names the file.
-2. In the tool, enter the server's address, port `25575` and that password.
+2. In the tool on the server's computer, enter `127.0.0.1`, port `25575` and
+   that password.
 3. Send a command without the `/`, such as `adl online`. Send `help` to list
    the commands of every mod.
 
@@ -171,9 +172,12 @@ To choose the password yourself, set **Remote console password** in the
 world's settings. To turn the console off, set **Remote console** to off.
 
 RCON is not encrypted: the password and commands cross the network as
-plain text. Open the port only to computers you trust, with a firewall rule,
-or reach it through an SSH tunnel or a VPN. After three wrong passwords a
-connection closes, and its address waits a minute.
+plain text. To reach it from another computer, use an SSH tunnel or a VPN.
+Or set **Remote console address** to `0.0.0.0` and open the port only to
+computers you trust.
+
+After three wrong passwords from one address, the address waits a minute. A
+tool that does not log in within 10 seconds is disconnected.
 
 ## How do I back up the world?
 

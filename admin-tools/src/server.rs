@@ -8,7 +8,7 @@ use std::sync::Arc;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::chat::{ChatKind, ChatLine};
 use enshwick::config::{Config as _, Schema};
-use enshwick::game_settings::GameSettings;
+use enshwick::game_settings::{GameSettings, Settings as Game};
 use enshwick::weather::Forecast;
 use enshwick::{Off, Relock as _, WorldError};
 
@@ -279,25 +279,146 @@ fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
         texts::REPLY_WORLD,
         &[
             (texts::value::WORLD, &world),
-            (texts::value::PRESET, &format!("{preset:?}")),
+            (texts::value::PRESET, &kind(&preset)),
             (texts::value::TIME, &saved),
         ],
     );
+    let lines = GAME_SETTINGS
+        .iter()
+        .map(|(name, value)| format!("{name} = {}", value(&settings)));
     Outcome::done(
         core::iter::once(head)
-            .chain(fields(&format!("{settings:#?}")))
+            .chain(lines)
             .collect::<Vec<_>>()
             .join("\n"),
     )
 }
 
-/// The `name = value` lines of a struct's pretty `Debug` text.
-fn fields(debug: &str) -> impl Iterator<Item = String> {
-    debug
-        .lines()
-        .filter_map(|line| line.strip_prefix("    "))
-        .filter(|line| !line.starts_with(' '))
-        .map(|line| line.trim_end_matches(',').replacen(": ", " = ", 1))
+/// A game setting the world view shows: its name and its value as text.
+type Shown = (&'static str, fn(&Game) -> String);
+
+/// Every game setting the world view shows, in the API's order and words.
+const GAME_SETTINGS: [Shown; 38] = [
+    ("player health", |s| factor(s.player_health_factor)),
+    ("player mana", |s| factor(s.player_mana_factor)),
+    ("player stamina", |s| factor(s.player_stamina_factor)),
+    ("player body heat", |s| factor(s.player_body_heat_factor)),
+    ("player diving time", |s| {
+        factor(s.player_diving_time_factor)
+    }),
+    ("durability", |s| switch(s.enable_durability)),
+    ("starving", |s| switch(s.enable_starving_debuff)),
+    ("food buff duration", |s| {
+        factor(s.food_buff_duration_factor)
+    }),
+    ("from hunger to starving", |s| {
+        length(s.from_hunger_to_starving)
+    }),
+    ("shroud time", |s| factor(s.shroud_time_factor)),
+    ("tombstone mode", |s| kind(&s.tombstone_mode)),
+    ("glider turbulences", |s| {
+        switch(s.enable_glider_turbulences)
+    }),
+    ("weather frequency", |s| kind(&s.weather_frequency)),
+    ("fishing difficulty", |s| kind(&s.fishing_difficulty)),
+    ("mining damage", |s| factor(s.mining_damage_factor)),
+    ("plant growth speed", |s| {
+        factor(s.plant_growth_speed_factor)
+    }),
+    ("resource drop stack amount", |s| {
+        factor(s.resource_drop_stack_amount_factor)
+    }),
+    ("factory production speed", |s| {
+        factor(s.factory_production_speed_factor)
+    }),
+    ("perk upgrade recycling", |s| {
+        factor(s.perk_upgrade_recycling_factor)
+    }),
+    ("perk cost", |s| factor(s.perk_cost_factor)),
+    ("experience combat", |s| factor(s.experience_combat_factor)),
+    ("experience mining", |s| factor(s.experience_mining_factor)),
+    ("experience exploration and quests", |s| {
+        factor(s.experience_exploration_quests_factor)
+    }),
+    ("random spawner amount", |s| kind(&s.random_spawner_amount)),
+    ("aggro pool amount", |s| kind(&s.aggro_pool_amount)),
+    ("enemy damage", |s| factor(s.enemy_damage_factor)),
+    ("enemy health", |s| factor(s.enemy_health_factor)),
+    ("enemy stamina", |s| factor(s.enemy_stamina_factor)),
+    ("enemy perception range", |s| {
+        factor(s.enemy_perception_range_factor)
+    }),
+    ("boss damage", |s| factor(s.boss_damage_factor)),
+    ("boss health", |s| factor(s.boss_health_factor)),
+    ("threat bonus", |s| number(s.threat_bonus)),
+    ("pacify all enemies", |s| switch(s.pacify_all_enemies)),
+    ("taming startle repercussion", |s| {
+        kind(&s.taming_startle_repercussion)
+    }),
+    ("day length", |s| length(s.day_time_duration)),
+    ("night length", |s| length(s.night_time_duration)),
+    ("curse modifier", |s| kind(&s.curse_modifier)),
+    ("flame level fog removal", |s| {
+        s.flame_level_fog_removal.to_string()
+    }),
+];
+
+/// `value` with at most two decimals and no trailing zeros.
+fn number(value: f32) -> String {
+    let text = format!("{value:.2}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// A factor of the game's normal value, as `x1.5`.
+fn factor(value: f32) -> String {
+    format!("x{}", number(value))
+}
+
+/// A switch as `on` or `off`.
+fn switch(on: bool) -> String {
+    if on { "on" } else { "off" }.to_owned()
+}
+
+/// A length of time in hours, minutes and seconds, leaving out parts that
+/// are zero.
+fn length(time: Duration) -> String {
+    let seconds = time.as_secs();
+    let parts = [
+        (seconds / 3600, "h"),
+        (seconds / 60 % 60, "min"),
+        (seconds % 60, "s"),
+    ];
+    let text: Vec<String> = parts
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, unit)| format!("{count} {unit}"))
+        .collect();
+    if text.is_empty() {
+        "0 s".to_owned()
+    } else {
+        text.join(" ")
+    }
+}
+
+/// A kind the game names, such as a tombstone mode, in lower-case words:
+/// `AddBackpackMaterials` reads `add backpack materials`, an unnamed value
+/// `other 7`.
+fn kind(value: &impl core::fmt::Debug) -> String {
+    let mut words = String::new();
+    for c in format!("{value:?}").chars() {
+        match c {
+            '(' => words.push(' '),
+            ')' => {}
+            c if c.is_ascii_uppercase() => {
+                if !words.is_empty() {
+                    words.push(' ');
+                }
+                words.push(c.to_ascii_lowercase());
+            }
+            c => words.push(c),
+        }
+    }
+    words
 }
 
 impl Tools {
@@ -403,6 +524,8 @@ fn diff(
 
 #[cfg(test)]
 mod tests {
+    use enshwick::game_settings::{GameSettingsPreset, TombstoneMode};
+
     use super::*;
 
     #[test]
@@ -436,21 +559,32 @@ mod tests {
     }
 
     #[test]
-    fn the_world_view_takes_each_top_level_field_as_name_and_value() {
-        #[derive(Debug)]
-        #[expect(dead_code, reason = "the fields are read through Debug alone")]
-        struct Shown {
-            factor: f32,
-            on: bool,
-            length: Duration,
-        }
-        let shown = Shown {
-            factor: 2.0,
-            on: true,
-            length: Duration::from_secs(600),
-        };
-        let lines: Vec<String> = fields(&format!("{shown:#?}")).collect();
-        assert_eq!(lines, ["factor = 2.0", "on = true", "length = 600s"]);
+    fn the_world_view_writes_factors_lengths_switches_and_kinds_as_people_read_them() {
+        assert_eq!(factor(1.0), "x1");
+        assert_eq!(factor(2.5), "x2.5");
+        assert_eq!(factor(0.333_33), "x0.33");
+        assert_eq!(number(10.0), "10");
+        assert_eq!(switch(true), "on");
+        assert_eq!(switch(false), "off");
+        assert_eq!(length(Duration::from_mins(30)), "30 min");
+        assert_eq!(length(Duration::from_secs(90 * 60 + 30)), "1 h 30 min 30 s");
+        assert_eq!(length(Duration::from_hours(2)), "2 h");
+        assert_eq!(length(Duration::ZERO), "0 s");
+        assert_eq!(
+            kind(&TombstoneMode::AddBackpackMaterials),
+            "add backpack materials"
+        );
+        assert_eq!(kind(&TombstoneMode::Other(7)), "other 7");
+        assert_eq!(kind(&GameSettingsPreset::Custom), "custom");
+    }
+
+    #[test]
+    fn the_world_view_names_every_game_setting_once() {
+        let mut names: Vec<&str> = GAME_SETTINGS.iter().map(|(name, _)| *name).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), GAME_SETTINGS.len());
+        assert!(names.iter().all(|name| !name.contains('_')), "{names:?}");
     }
 
     #[test]

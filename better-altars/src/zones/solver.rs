@@ -25,6 +25,8 @@ struct State {
     on: bool,
     solved: Option<Input>,
     solving: bool,
+    /// The altars the last look left out for lacking a Flame level.
+    unleveled: usize,
     /// Counts the games run, and the times clusters turned off, so a solve
     /// of one never lands in the next.
     game: u64,
@@ -36,6 +38,7 @@ impl State {
             on: false,
             solved: None,
             solving: false,
+            unleveled: 0,
             game: 0,
         }
     }
@@ -61,6 +64,7 @@ impl State {
     /// Forgets what was solved, for the next game.
     fn forget(&mut self) {
         self.solved = None;
+        self.unleveled = 0;
         self.game = self.game.wrapping_add(1);
     }
 
@@ -158,10 +162,14 @@ pub(crate) fn forget() {
     answers().store(Arc::new(Vec::new()));
 }
 
-fn input(zones: ZoneSizes) -> Input {
-    zones
-        .altars()
-        .list()
+/// The altars the solver takes, and how many it leaves out because the
+/// engine has not reported their Flame level yet.
+fn input(altars: Vec<enshwick::altars::Altar>) -> (Input, usize) {
+    let unleveled = altars
+        .iter()
+        .filter(|altar| !altar.tilted && altar.levels.is_empty())
+        .count();
+    let input = altars
         .into_iter()
         .filter(|altar| {
             if altar.tilted {
@@ -180,7 +188,8 @@ fn input(zones: ZoneSizes) -> Input {
                 .collect();
             (altar.entity.0, levels)
         })
-        .collect()
+        .collect();
+    (input, unleveled)
 }
 
 /// The log line for the placed altars: how many stand at each Flame level,
@@ -208,7 +217,16 @@ fn maybe_solve(state: &mut State, zones: ZoneSizes) {
     if state.solving || !state.on {
         return;
     }
-    let input = input(zones);
+    let (input, unleveled) = input(zones.altars().list());
+    // Without this line an altar the engine never levels leaves no trace.
+    if unleveled != state.unleveled {
+        state.unleveled = unleveled;
+        if unleveled > 0 {
+            enshwick::info!(
+                "{unleveled} altars have no Flame level yet; they keep their vanilla zone"
+            );
+        }
+    }
     if !state.wants(&input) {
         return;
     }
@@ -289,6 +307,9 @@ pub(crate) fn sizes(input: &Input) -> Vec<Size> {
 
 #[cfg(test)]
 mod tests {
+    use enshwick::Entity;
+    use enshwick::altars::CellBox;
+
     use super::*;
 
     fn at_levels(levels: &[usize]) -> Input {
@@ -313,6 +334,28 @@ mod tests {
             placed(&at_levels(&[1, 1])),
             "2 altars placed, all at Flame level 1, as the game lists them right after a load"
         );
+    }
+
+    #[test]
+    fn altars_without_a_flame_level_are_left_out_and_counted() {
+        let cells = CellBox::new([0, 0, 0], [80, 80, 80]);
+        let listed = |entity, tilted, levels: Vec<CellBox>| enshwick::altars::Altar {
+            entity: Entity(entity),
+            level: u8::try_from(levels.len()).unwrap_or(u8::MAX),
+            tilted,
+            position: [0.0; 3],
+            zone: cells,
+            levels,
+            template: None,
+        };
+        let (input, unleveled) = input(vec![
+            listed(1, false, vec![cells]),
+            listed(2, false, Vec::new()),
+            listed(3, false, Vec::new()),
+            listed(4, true, Vec::new()),
+        ]);
+        assert_eq!(input.keys().copied().collect::<Vec<_>>(), [1]);
+        assert_eq!(unleveled, 2, "a tilted altar is not counted as unleveled");
     }
 
     #[test]

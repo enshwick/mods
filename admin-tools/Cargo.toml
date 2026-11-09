@@ -1,8 +1,8 @@
 [package]
 name = "enshwick-admin-tools"
 version = "0.0.0-dev"
-description = "Lets a server's administrators mute players in chat from the dedicated server's console"
-keywords = ["enshrouded", "mod", "admin", "chat"]
+description = "Gives a server's administrators a player list, bans, an allow-list, announcements, time and weather, teleports and an audit log"
+keywords = ["enshrouded", "mod", "admin", "server", "moderation"]
 categories = ["game-development"]
 readme = "README.md"
 authors = ["themaiby"]
@@ -22,10 +22,16 @@ name = "Admin Tools"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+arc-swap = { version = "1.9.3", default-features = false }
 enshwick = { workspace = true, features = ["unstable"] }
+rustc-hash.workspace = true
+serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
+toml = { version = "=1.2.1", default-features = false, features = ["std", "serde", "display"] }
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test"] }
+toml = { version = "=1.2.1", default-features = false, features = ["std", "serde", "display", "parse"] }
 
 [lints]
 workspace = true

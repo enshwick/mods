@@ -1,40 +1,126 @@
 ---
 id: enshwick.admin-tools
 name: Admin Tools
-summary: A server's administrators mute players in chat from the dedicated server's console. A muted player's lines reach no other player.
+summary: Server administrators kick, ban and mute players, keep an allow-list, announce, set time and weather, teleport players and read an audit log.
 needs: server
-settings: []
+settings:
+  - key: motd
+    default: ""
+    meaning: What each player reads when they join. Empty shows nothing.
+    applies: at-once
+  - key: allowlist
+    default: false
+    meaning: When on, only accounts on the allow-list and administrators may join.
+    applies: at-once
+  - key: announcements
+    default: "[]"
+    meaning: Texts every player reads in turn, one each interval, up to 16.
+    applies: at-once
+  - key: announce_minutes
+    default: 30
+    range: 1 to 1440
+    meaning: Minutes between two announcements.
+    applies: at-once
+  - key: restart_text
+    default: ""
+    meaning: A line players read after the time of each restart warning.
+    applies: at-once
+  - key: audit
+    default: auto
+    choices: auto, on, off
+    meaning: Whether admin actions go to audit.log. Auto is on for a dedicated server and off for a game a player hosts.
+    applies: at-once
+  - key: rights.<action>
+    default: CanKickBan, and everyone for online and motd
+    meaning: Who may use each action. everyone, nobody, or a permission of the player's user group.
+    applies: at-once
 ---
 
-- Administrators mute and unmute players in chat.
-- A muted player's chat lines reach no other player.
-- The muted player sees a notice that says so.
-- Administrators and the host are never muted.
+- Administrators see who is online, and kick, ban or mute players. A ban holds after a restart.
+- An allow-list lets only chosen accounts and administrators join.
+- Players read a message of the day, scheduled announcements and restart warnings.
+- Administrators set the time and the weather, heal players and teleport them.
+- Each world decides who may use each action, and an audit log keeps every change.
 
-## How do I mute a player?
+## How do I use an action?
 
-You type a line in the console window of a dedicated server. The server runs
-it as an administrator.
+You type the action as a command in chat, or in the console window of a
+dedicated server. Every command starts with `/adl` or `/admin-tools`.
 
-1. Open the console window of the dedicated server.
-2. Type `enshwick.admin-tools muted <player> on` to mute a player. Use the
-   player's name as the game shows it.
-3. Type `enshwick.admin-tools muted <player> off` to let the player write
-   again.
+1. Open the chat in the game.
+2. Type `/adl help` to see the actions you may use.
+3. Type a command, such as `/adl kick Bob`.
 
-The console answers on the next line and says what changed. The player must be
-online. Other players never see these lines.
+The answer shows only to you. In the console window of a dedicated server,
+type the same line without the `/`, such as `adl kick Bob`.
 
-## Can I mute a player from inside the game?
+The console may use every action.
 
-No. Admin Tools has no window in the game. A game that a player hosts has no
-console window, so its players cannot be muted.
+| Command | What it does |
+| --- | --- |
+| `/adl online` | Lists the players online, how long each has played, and who is muted. |
+| `/adl motd` | Shows the message of the day. |
+| `/adl kick <player>` | Removes a player from the game. They may join again. |
+| `/adl banned <player> on` | Bans a player who is online. |
+| `/adl banned <player> off` | Lifts a ban, also while the player is away. |
+| `/adl allowed <player> on` or `off` | Puts a player on the allow-list or takes them off. |
+| `/adl muted <player> on` or `off` | Mutes a player in chat or lifts the mute. |
+| `/adl heal <player>` | Gives a player their full health. |
+| `/adl goto <player>` | Takes you to a player. |
+| `/adl bring <player>` | Brings a player to you. |
+| `/adl send <player> <player>` | Moves the first player to the second. |
+| `/adl place <player> <x> <y> <z>` | Moves a player to a position in metres, on free ground near it. |
+| `/adl time <hour>` | Sets the time of day, such as `6.5` for 06:30. |
+| `/adl weather clear` | Starts the weather: `clear`, `rain`, `blizzard`, or `any` for the game's choice. |
+| `/adl restart <minutes>` | Warns every player of a restart. `0` stops the warning. |
+| `/adl audit <lines>` | Shows the last lines of the audit log, up to 50. |
 
-## How long does a mute last?
+Administrators and the host cannot be kicked, banned or muted. `goto` and
+`bring` need a character, so the console cannot use them.
 
-A mute lasts in its world until an administrator lifts it. It stays after the
-server restarts. Each world keeps its own mutes in
-`<save>-mod-data/enshwick/muted.txt` beside its save.
+## How do I keep strangers out?
+
+1. Put each player you trust on the allow-list with
+   `/adl allowed <player> on` while they are online.
+2. Open the Mods screen, select Admin Tools, and turn on **Allow-list** in the
+   server's settings.
+
+From then on, an account not on the list is kicked as it joins.
+Administrators always get in. To add a player, turn the allow-list off, add
+them while they are online, and turn it on again.
+
+## How do I decide who may use each action?
+
+Each action has a rule in the world's settings, under **Who may use each
+action**. A rule is one of these:
+
+- `everyone`
+- `nobody`. Only the server's console may then use the action.
+- A permission of the player's user group in `enshrouded_server.json`:
+  `CanKickBan` for administrators, `CanAccessInventories`, `CanEditBase`,
+  `CanEditWorld`, `CanExtendBase` or `CanReceiveExp`.
+
+By default, `online` and `motd` are for everyone and every other action is for
+administrators. A player sees only the actions their rule allows. A change
+applies within two seconds.
+
+## How do I warn players before a restart?
+
+Type `/adl restart 10`. Every player reads that the server restarts in
+10 minutes. The warning comes again at 5, 2 and 1 minutes left, and once more
+when the time is up.
+
+Admin Tools does not stop the server. Your host's panel or script stops it.
+Type `/adl restart 0` to call the restart off.
+
+## Where is the audit log?
+
+It is `audit.log` in `<save>-mod-data/enshwick.admin-tools/` beside the
+world's save. Each line holds the time in UTC, who acted, from where, the
+action, its values and the result.
+
+Past 1 MB the log moves to `audit.1.log` and starts again. Reads such as
+`online` are not written.
 
 ## Install
 
@@ -45,16 +131,20 @@ put both archives.
 
 ## Multiplayer
 
-Only the server needs Admin Tools.
+Only the server needs Admin Tools. Players without Enshwick can join and use
+the commands in chat.
 
 ## Problems
 
-**The console says no mod enshwick.admin-tools is loaded.** Check that the
-line starts with `enshwick.admin-tools` and that Admin Tools is in the server's
-`mods/` folder. If both are right, the server's log says why Admin Tools is off.
+**`/adl` posts the line to chat.** Check that Admin Tools is in the server's
+`mods/` folder. If it is, the server's log says why Admin Tools is off.
 
-**The console finds no player with that name.** Check that the player is
-online. Type the name as the game shows it.
+**The answer says no player has that name.** Check that the player is online.
+Type the name as the game shows it.
+
+**A player is kicked as they join.** The allow-list is on, and the player is
+not on it, or the player is banned. Lift a ban with
+`/adl banned <player> off`.
 
 **Something else goes wrong.** Open an issue in the
 [mods repository](https://github.com/enshwick/mods/issues). Attach

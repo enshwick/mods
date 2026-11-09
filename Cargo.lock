@@ -240,7 +240,12 @@ dependencies = [
 name = "enshwick-admin-tools"
 version = "0.0.0-dev"
 dependencies = [
+ "arc-swap",
  "enshwick",
+ "rustc-hash",
+ "serde",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]

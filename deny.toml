@@ -12,7 +12,9 @@ confidence-threshold = 0.9
 [bans]
 multiple-versions = "deny"
 # Duplicates allowed on purpose, each with its reason.
-skip = []
+skip = [
+    { crate = "syn@2", reason = "zeroize_derive, under zip in xtask, has not moved to syn 3" },
+]
 allow-wildcard-paths = true
 wildcards = "deny"
 # The game process makes no HTTP or TLS calls and checks no signatures:

@@ -126,6 +126,9 @@
 "config.rights.restart.doc" = "Who may warn of a restart."
 "config.rights.audit" = "Audit log"
 "config.rights.audit.doc" = "Who may read the audit log."
+"config.too-long" = "A text is longer than {max} bytes: {start}..."
+"config.too-many" = "At most {max} announcements."
+"config.bad-rule" = "rights.{field}: {rule} is none of {words}."
 
 [uk]
 "mod.name" = "Admin Tools"
@@ -255,3 +258,6 @@
 "config.rights.restart.doc" = "Хто може попереджати про перезапуск."
 "config.rights.audit" = "Журнал дій"
 "config.rights.audit.doc" = "Хто може читати журнал дій."
+"config.too-long" = "Текст довший за {max} байтів: {start}..."
+"config.too-many" = "Не більше {max} оголошень."
+"config.bad-rule" = "rights.{field}: {rule} — нічого з цього: {words}."

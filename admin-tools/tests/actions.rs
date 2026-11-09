@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     use enshwick::PlayerKey;
@@ -69,12 +69,12 @@ mod tests {
     /// A dedicated server with Ann (admin) and Bob online, `settings` for
     /// the world, its data in `dir`, and the mod started with the world
     /// loaded.
-    fn server(settings: &str, dir: &PathBuf) -> Installed {
+    fn server(settings: &str, dir: &Path) -> Installed {
         server_with(settings, dir, &[])
     }
 
     /// [`server`] with `more` players online beside Ann and Bob.
-    fn server_with(settings: &str, dir: &PathBuf, more: &[PlayerInfo]) -> Installed {
+    fn server_with(settings: &str, dir: &Path, more: &[PlayerInfo]) -> Installed {
         let host = enshwick::test::FakeHost::new().side(Side::SERVER).world();
         let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
         let mut host = host

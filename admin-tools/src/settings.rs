@@ -64,27 +64,24 @@ impl Default for Settings {
 impl Settings {
     /// Refuses texts past [`MAX_TEXT`], too many announcements and rules
     /// that name no permission.
-    fn check(&self) -> Result<(), String> {
+    fn check(&self) -> Result<(), CheckSettingsError> {
         let texts = [&self.motd, &self.restart_text]
             .into_iter()
             .chain(&self.announcements);
         if let Some(long) = texts.into_iter().find(|text| text.len() > MAX_TEXT) {
-            return Err(format!(
-                "a text is longer than {MAX_TEXT} bytes: {}...",
-                long.chars().take(24).collect::<String>()
-            ));
+            return Err(CheckSettingsError::TooLong(long.chars().take(24).collect()));
         }
         if self.announcements.len() > MAX_ANNOUNCEMENTS {
-            return Err(format!("at most {MAX_ANNOUNCEMENTS} announcements"));
+            return Err(CheckSettingsError::TooMany);
         }
         for id in ids::ALL {
             let rule = self.rights.rule(id);
             if Who::parse(rule).is_none() {
-                return Err(format!(
-                    "rights.{}: {rule} is none of {}",
-                    id.replace('-', "_"),
-                    Who::words().join(", ")
-                ));
+                return Err(CheckSettingsError::Rule {
+                    field: id.replace('-', "_"),
+                    rule: rule.to_owned(),
+                    words: Who::words().join(", "),
+                });
             }
         }
         Ok(())
@@ -98,6 +95,47 @@ impl Settings {
             word if word == on => true,
             word if word == off => false,
             _ => dedicated,
+        }
+    }
+}
+
+/// Why the world's settings were refused.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum CheckSettingsError {
+    /// A text past [`MAX_TEXT`]; its start.
+    #[error("a text is longer than {MAX_TEXT} bytes: {0}...")]
+    TooLong(String),
+    /// More than [`MAX_ANNOUNCEMENTS`].
+    #[error("at most {MAX_ANNOUNCEMENTS} announcements")]
+    TooMany,
+    /// A rule that names no permission.
+    #[error("rights.{field}: {rule} is none of {words}")]
+    Rule {
+        /// The rule's key in the group.
+        field: String,
+        /// What the world's file says.
+        rule: String,
+        /// The words a rule takes.
+        words: String,
+    },
+}
+
+impl From<CheckSettingsError> for enshwick::config::ConfigError {
+    /// The refusal in the reader's language, from the mod's texts.
+    fn from(error: CheckSettingsError) -> Self {
+        match &error {
+            CheckSettingsError::TooLong(start) => Self::text(
+                crate::texts::CONFIG_TOO_LONG,
+                &[("max", &MAX_TEXT.to_string()), ("start", start)],
+            ),
+            CheckSettingsError::TooMany => Self::text(
+                crate::texts::CONFIG_TOO_MANY,
+                &[("max", &MAX_ANNOUNCEMENTS.to_string())],
+            ),
+            CheckSettingsError::Rule { field, rule, words } => Self::text(
+                crate::texts::CONFIG_BAD_RULE,
+                &[("field", field), ("rule", rule), ("words", words)],
+            ),
         }
     }
 }
@@ -286,7 +324,7 @@ mod tests {
     fn the_check_refuses_an_unknown_rule_a_long_text_and_too_many_announcements() {
         let mut settings = Settings::default();
         settings.rights.place = "moderators".into();
-        let refused = settings.check().unwrap_err();
+        let refused = settings.check().unwrap_err().to_string();
         assert!(
             refused.contains("rights.place") && refused.contains("CanKickBan"),
             "{refused}"

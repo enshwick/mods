@@ -244,6 +244,7 @@ dependencies = [
  "enshwick",
  "rustc-hash",
  "serde",
+ "thiserror",
  "toml",
 ]
 

@@ -26,6 +26,7 @@ arc-swap = { version = "1.9.3", default-features = false }
 enshwick = { workspace = true, features = ["unstable"] }
 rustc-hash.workspace = true
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
 toml = { version = "=1.2.1", default-features = false, features = ["std", "serde", "display"] }
 
 [dev-dependencies]

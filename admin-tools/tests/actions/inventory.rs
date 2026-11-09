@@ -99,3 +99,33 @@ fn a_give_the_game_turns_down_is_told_to_the_administrator() {
         |line| line.starts_with("Bob did not get 1 × Tool_Glider_T1")
     )));
 }
+
+#[test]
+fn clear_and_copy_refuse_an_empty_inventory_and_copy_refuses_one_player_twice() {
+    let dir = scratch("clear");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "clear", "p0000000000000002"),
+        "0Bob carries nothing."
+    );
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "copy",
+            "p0000000000000002\tp0000000000000001"
+        ),
+        "0Bob carries nothing."
+    );
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "copy",
+            "p0000000000000002\tp0000000000000002"
+        ),
+        "0Name two different players."
+    );
+    assert!(run(&loader, &bob(), "clear", "p0000000000000002").starts_with('0'));
+    assert!(loader.inventory_requests().is_empty());
+}

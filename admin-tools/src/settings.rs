@@ -290,6 +290,10 @@ pub(crate) struct Rights {
     pub god: String,
     /// Giving a player items.
     pub give: String,
+    /// Clearing what a player carries.
+    pub clear: String,
+    /// Copying what one player carries to another.
+    pub copy: String,
     /// Going to a player.
     pub goto: String,
     /// Bringing a player here.
@@ -332,6 +336,8 @@ impl Default for Rights {
             stats: admins(),
             god: admins(),
             give: admins(),
+            clear: admins(),
+            copy: admins(),
             goto: admins(),
             bring: admins(),
             send: admins(),
@@ -364,6 +370,8 @@ impl Rights {
             ids::STATS => &self.stats,
             ids::GOD => &self.god,
             ids::GIVE => &self.give,
+            ids::CLEAR => &self.clear,
+            ids::COPY => &self.copy,
             ids::GOTO => &self.goto,
             ids::BRING => &self.bring,
             ids::SEND => &self.send,

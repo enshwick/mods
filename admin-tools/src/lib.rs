@@ -198,6 +198,9 @@ impl Tools {
         self.running.store(false, Ordering::Relaxed);
         *self.ticker.relock() = Ticker::default();
         self.joined.relock().clear();
+        // A copy still waiting to start ends with the game's tasks; the
+        // loader lets the saves go at shutdown.
+        self.backing_up.store(false, Ordering::Release);
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();
         }
@@ -297,7 +300,13 @@ fn language() -> Language {
 /// An account as the audit log and the server's log name it: the player's
 /// name and the key.
 fn account(name: &str, key: PlayerKey) -> String {
-    format!("{name} ({:016x})", key.0)
+    format!("{name} ({})", account_id(key))
+}
+
+/// An account's id as players, the logs and the ban file read it: 16 hex
+/// digits.
+pub(crate) fn account_id(key: PlayerKey) -> String {
+    format!("{:016x}", key.0)
 }
 
 /// A value as a console line writes it, for the audit log.

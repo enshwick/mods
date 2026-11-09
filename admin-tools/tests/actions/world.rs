@@ -7,6 +7,7 @@ use enshwick::PlayerKey;
 use enshwick::abi::ActionCall;
 use enshwick::actions::sheet::decode;
 use enshwick::console;
+use enshwick::events::{ShutdownStarted, WorldLoaded};
 
 use super::game::{Scratch, ann, bob, file_until, hosted, run, said, scratch, server, tick_until};
 
@@ -158,6 +159,17 @@ fn a_backup_holds_the_saves_copies_the_world_and_lets_the_saves_go() {
     assert!(tick_until(&loader, || said(&loader, 1)
         .iter()
         .any(|line| line.starts_with("The backup is in "))));
+}
+
+#[test]
+fn a_game_that_ends_before_its_backup_copies_leaves_the_next_world_free_to_back_up() {
+    let (_saves, data) = saves("backup-ended");
+    let loader = server("", &data);
+    assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
+    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    assert!(loader.raise::<WorldLoaded>(&()) >= 1);
+    let again = run(&loader, &ann(), "backup", "");
+    assert!(again.starts_with('1'), "{again}");
 }
 
 #[test]

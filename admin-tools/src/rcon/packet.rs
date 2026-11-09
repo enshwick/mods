@@ -17,8 +17,9 @@ pub(crate) const RESPONSE: i32 = 0;
 /// The longest body a client may send, in bytes.
 pub(crate) const MAX_BODY: usize = 4096;
 
-/// The longest body of one answer packet; a longer answer goes in several.
-pub(crate) const MAX_REPLY_BODY: usize = 4096;
+/// The longest body of one answer packet, so its size field stays within
+/// the protocol's 4096 bytes; a longer answer goes in several.
+pub(crate) const MAX_REPLY_BODY: usize = 4096 - MIN_SIZE;
 
 /// The bytes of a packet's size, id and type fields and closing zeros
 /// beside its body.
@@ -196,6 +197,10 @@ mod tests {
         let packets = Packet::answer(3, &text);
         assert!(packets.len() > 1);
         assert!(packets.iter().all(|p| p.body.len() <= MAX_REPLY_BODY));
+        assert!(
+            packets.iter().all(|p| p.encode().len() - 4 <= 4096),
+            "a size field past 4096 is refused by tools such as mcrcon"
+        );
         let joined: Vec<u8> = packets.iter().flat_map(|p| p.body.clone()).collect();
         assert_eq!(String::from_utf8(joined).unwrap(), text);
         assert_eq!(Packet::answer(4, "").len(), 1);

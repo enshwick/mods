@@ -116,6 +116,12 @@ pub(crate) fn hosted(settings: &str, dir: &Path) -> Installed {
 /// [`server_with`] on a dedicated server, or in a game a player hosts
 /// when `hosted`.
 pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Installed {
+    // Parallel tests would all take the remote console's default port.
+    let settings = if settings.contains("rcon") {
+        settings.to_owned()
+    } else {
+        format!("rcon = \"off\"\n{settings}")
+    };
     let host = if hosted {
         enshwick::test::FakeHost::new()
             .side(Side::CLIENT)
@@ -145,7 +151,7 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         .constant("attribute.experience_needed_slot", 2)
         .world_key("world0")
         .data_dir(dir.to_str().unwrap())
-        .settings(settings);
+        .settings(&settings);
     for (who, place) in [(ann(), [40, 12, -3]), (bob(), [0, 20, 7])] {
         host = host
             .player(who)

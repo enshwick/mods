@@ -186,9 +186,11 @@ its mod settings and its mod data to a folder named by the UTC time. Then it let
 
 Players keep playing. You read where the backup went when it is done.
 
-Backups go to `backups/` in `<save>-mod-data/enshwick.admin-tools/`, or to
-the folder you set in **Backup folder**. Admin Tools keeps the newest 10, or
-as many as **Backups kept** says, and removes older ones. To restore a
+Backups go to `backups/` in `<save>-mod-data/enshwick.admin-tools/`. If you
+set **Backup folder**, they go to a folder named after the save inside it.
+
+Admin Tools keeps the newest 10, or as many as **Backups kept** says, and
+removes older ones. To restore a
 backup, stop the server and copy the files from the backup folder back
 beside the world's save.
 

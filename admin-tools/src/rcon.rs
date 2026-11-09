@@ -277,6 +277,8 @@ impl Pace {
 fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
     stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(POLL))?;
+    // A client that stops reading cannot keep its thread and slot for good.
+    stream.set_write_timeout(Some(COMMAND_TIMEOUT))?;
     stream.set_nodelay(true)?;
     let label = format!("rcon {ip}");
     let mut buffer = Vec::new();
@@ -394,7 +396,13 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
             )
         }
         Ok(Err(why)) => why.to_string(),
-        Err(_) => tools.say(texts::REPLY_RCON_TIMEOUT, &[]),
+        Err(_) => tools.say(
+            texts::REPLY_RCON_TIMEOUT,
+            &[(
+                texts::value::SECONDS,
+                &COMMAND_TIMEOUT.as_secs().to_string(),
+            )],
+        ),
     }
 }
 
@@ -420,6 +428,12 @@ impl Tools {
         match Listener::open(config, Weak::clone(&self.me)) {
             Ok(listener) => {
                 enshwick::info!("the remote console listens on {address}");
+                if let (true, Some(dir)) =
+                    (settings.rcon_password.is_empty(), self.world.data_dir())
+                {
+                    let file = dir.join(PASSWORD_FILE);
+                    enshwick::info!("the remote console's password is in {}", file.display());
+                }
                 *slot = Some(listener);
             }
             Err(why) => enshwick::warn!("the remote console does not listen on {address}: {why}"),
@@ -434,10 +448,7 @@ impl Tools {
         let password = if settings.rcon_password.is_empty() {
             let file = self.world.data_dir()?.join(PASSWORD_FILE);
             match generated_password(&file) {
-                Ok(password) => {
-                    enshwick::info!("the remote console's password is in {}", file.display());
-                    password
-                }
+                Ok(password) => password,
                 Err(why) => {
                     enshwick::warn!("the remote console is off: {}: {why}", file.display());
                     return None;

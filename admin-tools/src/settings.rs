@@ -48,7 +48,7 @@ const RCON_IP: &str = "127.0.0.1";
 
 /// Admin Tools settings for this world.
 #[enshwick::config(validate = Settings::check)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct Settings {
     /// What each player reads when they join; empty for nothing.
     pub motd: String,
@@ -106,6 +106,27 @@ impl Default for Settings {
             rcon_password: String::new(),
             rights: Rights::default(),
         }
+    }
+}
+
+impl core::fmt::Debug for Settings {
+    /// Every setting but the secret password, which is never shown.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Settings")
+            .field("motd", &self.motd)
+            .field("allowlist", &self.allowlist)
+            .field("announcements", &self.announcements)
+            .field("announce_minutes", &self.announce_minutes)
+            .field("restart_text", &self.restart_text)
+            .field("audit", &self.audit)
+            .field("chat_log", &self.chat_log)
+            .field("backups_kept", &self.backups_kept)
+            .field("backup_dir", &self.backup_dir)
+            .field("rcon", &self.rcon)
+            .field("rcon_ip", &self.rcon_ip)
+            .field("rcon_port", &self.rcon_port)
+            .field("rights", &self.rights)
+            .finish_non_exhaustive()
     }
 }
 
@@ -541,6 +562,17 @@ mod tests {
         for id in ids::ALL {
             assert_eq!(rights.rule(id), format!("{id}-rule"));
         }
+    }
+
+    #[test]
+    fn the_settings_debug_text_never_shows_the_password() {
+        let settings = Settings {
+            rcon_password: "a secret of the world".into(),
+            ..Settings::default()
+        };
+        let text = format!("{settings:?} {settings:#?}");
+        assert!(!text.contains("a secret of the world"), "{text}");
+        assert!(text.contains("rcon_port"), "{text}");
     }
 
     #[test]

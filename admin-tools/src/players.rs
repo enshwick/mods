@@ -143,7 +143,7 @@ fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
                 key,
                 &[
                     (texts::value::NAME, &player.name),
-                    (texts::value::ACCOUNT, &format!("{:016x}", player.key.0)),
+                    (texts::value::ACCOUNT, &crate::account_id(player.key)),
                     (texts::value::MINUTES, &minutes),
                 ],
             )

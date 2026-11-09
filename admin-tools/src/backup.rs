@@ -49,6 +49,9 @@ pub(crate) struct Plan {
     pub stem: String,
     /// The folder each backup goes into, one folder per backup.
     pub root: PathBuf,
+    /// The default backups' folder in the world's data folder, never
+    /// copied, also when backups go elsewhere now.
+    pub default: PathBuf,
     /// How many backups to keep.
     pub kept: usize,
 }
@@ -86,17 +89,21 @@ impl Tools {
             return None;
         }
         let settings = self.settings.load();
+        let default = data.join(FOLDER);
         let root = if settings.backup_dir.is_empty() {
-            data.join(FOLDER)
+            default.clone()
         } else if !crate::settings::beside_the_save(&settings.backup_dir) {
             return None;
         } else {
-            mod_data.parent()?.join(&settings.backup_dir)
+            // A folder of the world's own, as every world in the saves'
+            // folder reads the same setting and pruning counts by name.
+            mod_data.parent()?.join(&settings.backup_dir).join(&stem)
         };
         Some(Plan {
             saves: mod_data.parent()?.to_path_buf(),
             stem,
             root,
+            default,
             kept: usize::try_from(settings.backups_kept).unwrap_or(usize::MAX),
         })
     }
@@ -108,7 +115,11 @@ impl Tools {
         let spawned = std::thread::Builder::new()
             .name("admin-tools backup".into())
             .spawn(move || {
-                let copied = tools.copy_held(&copying);
+                // A panic in the copy still lets the saves go.
+                let copied = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    tools.copy_held(&copying)
+                }))
+                .unwrap_or_else(|_| Err(io::Error::other("the copy stopped on an error")));
                 tools.finish_backup(&copying, copied, key);
             });
         if let Err(why) = spawned {
@@ -223,19 +234,23 @@ pub(crate) fn copy(plan: &Plan, name: &str) -> io::Result<PathBuf> {
 
 /// Copies the world's files of `plan` into the folder `into`.
 fn copy_into(plan: &Plan, into: &Path) -> io::Result<()> {
-    let root = fs::canonicalize(&plan.root)?;
+    let skip: Vec<PathBuf> = [&plan.root, &plan.default]
+        .into_iter()
+        .filter_map(|dir| fs::canonicalize(dir).ok())
+        .collect();
     for entry in fs::read_dir(&plan.saves)? {
         let entry = entry?;
         let name = entry.file_name();
         if name.to_str().is_some_and(|name| belongs(name, &plan.stem)) {
-            copy_tree(&entry.path(), &into.join(&name), &root)?;
+            copy_tree(&entry.path(), &into.join(&name), &skip)?;
         }
     }
     Ok(())
 }
 
-/// Copies `from` to `to`, a folder with all it holds, leaving out `skip`.
-fn copy_tree(from: &Path, to: &Path, skip: &Path) -> io::Result<()> {
+/// Copies `from` to `to`, a folder with all it holds, leaving out the
+/// folders `skip`.
+fn copy_tree(from: &Path, to: &Path, skip: &[PathBuf]) -> io::Result<()> {
     let kind = fs::symlink_metadata(from)?.file_type();
     if kind.is_symlink() {
         return Ok(());
@@ -243,7 +258,7 @@ fn copy_tree(from: &Path, to: &Path, skip: &Path) -> io::Result<()> {
     if !kind.is_dir() {
         return fs::copy(from, to).map(drop);
     }
-    if fs::canonicalize(from)? == skip {
+    if skip.contains(&fs::canonicalize(from)?) {
         return Ok(());
     }
     fs::create_dir_all(to)?;
@@ -323,6 +338,7 @@ mod tests {
             saves: saves.clone(),
             stem: "world0".into(),
             root: data.join(FOLDER),
+            default: data.join(FOLDER),
             kept: 2,
         };
         let first = copy(&plan, "2026-01-01_00-00-00").unwrap();
@@ -365,12 +381,35 @@ mod tests {
     }
 
     #[test]
+    fn backups_in_the_default_folder_stay_out_once_backups_go_elsewhere() {
+        let saves = scratch("moved");
+        let data = saves.join("w-mod-data").join("admin-tools");
+        let old = data.join(FOLDER).join("2026-01-01_00-00-00");
+        fs::create_dir_all(&old).unwrap();
+        fs::write(old.join("w.ksd"), "old").unwrap();
+        fs::write(saves.join("w.ksd"), "save").unwrap();
+        let plan = Plan {
+            saves: saves.clone(),
+            stem: "w".into(),
+            root: saves.join("w-backups").join("w"),
+            default: data.join(FOLDER),
+            kept: 1,
+        };
+        let into = copy(&plan, "2026-01-02_00-00-00").unwrap();
+        assert!(into.join("w.ksd").exists());
+        assert!(!into.join("w-mod-data/admin-tools").join(FOLDER).exists());
+        assert!(!into.join("w-backups/w").exists());
+        fs::remove_dir_all(&saves).unwrap();
+    }
+
+    #[test]
     fn a_copy_that_fails_part_way_leaves_no_folder_that_counts_as_a_backup() {
         let dir = scratch("half");
         let plan = Plan {
             saves: dir.join("missing"),
             stem: "w".into(),
             root: dir.join("out"),
+            default: PathBuf::new(),
             kept: 1,
         };
         assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
@@ -386,6 +425,7 @@ mod tests {
             saves: saves.clone(),
             stem: "w".into(),
             root: saves.join("out"),
+            default: PathBuf::new(),
             kept: 1,
         };
         let name = "2026-01-01_00-00-00";
@@ -411,6 +451,7 @@ mod tests {
             saves: saves.clone(),
             stem: "w".into(),
             root: saves.join("out"),
+            default: PathBuf::new(),
             kept: 1,
         };
         copy(&plan, "2026-01-01_00-00-00").unwrap();

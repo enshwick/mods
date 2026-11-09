@@ -269,7 +269,12 @@ fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
     };
     let saved = tools.world.save_info().map_or_else(
         || request.say(texts::REPLY_WORLD_UNSAVED, &[]),
-        |info| journal::utc(info.saved_at.as_secs()),
+        |info| {
+            request.say(
+                texts::REPLY_WORLD_SAVED,
+                &[(texts::value::TIME, &journal::utc(info.saved_at.as_secs()))],
+            )
+        },
     );
     let world = tools
         .world
@@ -434,7 +439,7 @@ impl Tools {
         };
         let (name, account) = line.player.map_or_else(Default::default, |key| {
             let name = self.world.player_by_key(key).map(|player| player.name);
-            (name.unwrap_or_default(), format!("{:016x}", key.0))
+            (name.unwrap_or_default(), crate::account_id(key))
         });
         let kind = match line.kind {
             ChatKind::Player => "say",
@@ -455,6 +460,12 @@ impl Tools {
             .relock()
             .step(elapsed, &settings.announcements, every);
         for say in &said {
+            // The save the restart would make, so the host's restart loses nothing.
+            if matches!(say, Say::RestartNow)
+                && let Err(why) = self.world.save()
+            {
+                enshwick::warn!("no save before the restart: {why}");
+            }
             self.announce(say);
         }
     }
@@ -476,13 +487,7 @@ impl Tools {
                 texts::NOTICE_RESTART,
                 &[(texts::value::MINUTES, &minutes.to_string())],
             )),
-            Say::RestartNow => {
-                // The save the restart would make, so the host's restart loses nothing.
-                if let Err(why) = self.world.save() {
-                    enshwick::warn!("no save before the restart: {why}");
-                }
-                with_text(self.say(texts::NOTICE_RESTART_NOW, &[]))
-            }
+            Say::RestartNow => with_text(self.say(texts::NOTICE_RESTART_NOW, &[])),
         };
         enshwick::info!("announced: {line}");
         self.world.notify_all(&line);

@@ -9,11 +9,14 @@ use super::game::{file_until, hosted, scratch, server, tick_until};
 
 /// A port no program listens on now.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    free_ports::<1>()[0]
+}
+
+/// `N` different ports no program listens on now.
+fn free_ports<const N: usize>() -> [u16; N] {
+    let held: [std::net::TcpListener; N] =
+        core::array::from_fn(|_| std::net::TcpListener::bind("127.0.0.1:0").unwrap());
+    held.map(|socket| socket.local_addr().unwrap().port())
 }
 
 /// One RCON packet on the wire.
@@ -183,7 +186,7 @@ fn a_hosted_game_opens_no_remote_console_unless_the_world_turns_it_on() {
 #[test]
 fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
     let dir = scratch("rcon-moves");
-    let (first, second) = (free_port(), free_port());
+    let [first, second] = free_ports();
     let loader = server(&rcon_settings(first), &dir);
     let _open = connect(first);
     loader.set_settings("settings", &rcon_settings(second));

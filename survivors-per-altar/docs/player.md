@@ -54,13 +54,13 @@ stays. Without the mod, the game removes the copies and the copy staffs.
 
 Survivors per Altar comes in its own archive, enshwick-survivors-per-altar.zip.
 It needs Enshwick, which comes in enshwick.zip. The
-[install guide](https://enshwick.github.io/docs/guides/install/) shows where to
+[install guide](https://enshwick.com/guides/install/) shows where to
 put both archives.
 
 ## Settings
 
 You change these values in the game, as the
-[settings guide](https://enshwick.github.io/docs/guides/change-mod-settings/)
+[settings guide](https://enshwick.com/guides/change-mod-settings/)
 shows.
 
 ## Multiplayer

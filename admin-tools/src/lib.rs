@@ -1,6 +1,5 @@
-//! Admin Tools: actions for a server's administrators in the game's
-//! interface. "Muted in chat" lists the players online with a switch each;
-//! a muted player's chat lines reach nobody.
+//! Admin Tools: actions for a server's administrators. "Muted in chat"
+//! switches a player's mute; a muted player's chat lines reach nobody.
 
 use enshwick::actions::{Action, Outcome, Request, Value};
 use enshwick::world::World;
@@ -32,7 +31,7 @@ impl Mod for AdminTools {
     }
 }
 
-/// The players online who are muted now, switched on in the list.
+/// The players online who are muted now, for the action's sheet.
 fn muted_online(world: World) -> Vec<(enshwick::PlayerKey, String)> {
     world
         .players()
@@ -42,7 +41,7 @@ fn muted_online(world: World) -> Vec<(enshwick::PlayerKey, String)> {
         .collect()
 }
 
-/// Mutes the player a switch names, or lifts the mute; the reply names them.
+/// Mutes the player a run names, or lifts the mute; the reply names them.
 fn mute(world: World, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
         return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));

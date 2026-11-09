@@ -49,8 +49,9 @@ Only the server needs Admin Tools.
 
 ## Problems
 
-**The console does not know the line.** Check that Admin Tools is in the
-server's `mods/` folder. Check that the line starts with `enshwick.admin-tools`.
+**The console says no mod enshwick.admin-tools is loaded.** Check that the
+line starts with `enshwick.admin-tools` and that Admin Tools is in the server's
+`mods/` folder. If both are right, the server's log says why Admin Tools is off.
 
 **The console finds no player with that name.** Check that the player is
 online. Type the name as the game shows it.

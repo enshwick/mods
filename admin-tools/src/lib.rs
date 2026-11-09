@@ -31,7 +31,7 @@ impl Mod for AdminTools {
     }
 }
 
-/// The players online who are muted now, switched on in the list.
+/// The players online who are muted now, for the action's sheet.
 fn muted_online(world: World) -> Vec<(enshwick::PlayerKey, String)> {
     world
         .players()
@@ -41,7 +41,7 @@ fn muted_online(world: World) -> Vec<(enshwick::PlayerKey, String)> {
         .collect()
 }
 
-/// Mutes the player a switch names, or lifts the mute; the reply names them.
+/// Mutes the player a run names, or lifts the mute; the reply names them.
 fn mute(world: World, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
         return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));

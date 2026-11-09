@@ -1,7 +1,7 @@
 ---
 id: enshwick.admin-tools
 name: Admin Tools
-summary: A server's administrators list, kick, ban and mute players, keep an allow-list, announce, warn of restarts, set the time and the weather, heal and teleport players, and read an audit log.
+summary: Server administrators kick, ban and mute players, keep an allow-list, announce, set time and weather, teleport players and read an audit log.
 needs: server
 settings:
   - key: motd
@@ -36,16 +36,11 @@ settings:
     applies: at-once
 ---
 
-- Administrators see who is online, and kick, ban or mute players.
-- A ban holds when the account comes back, also after a restart.
+- Administrators see who is online, and kick, ban or mute players. A ban holds after a restart.
 - An allow-list lets only chosen accounts and administrators join.
-- Players read a message of the day when they join.
-- Announcements repeat on a schedule.
-- A restart warning counts down for every player.
-- Administrators set the time of day and the weather.
-- Administrators heal players and move them to each other or to a position.
-- Each world decides who may use each action.
-- An audit log keeps every change an administrator made.
+- Players read a message of the day, scheduled announcements and restart warnings.
+- Administrators set the time and the weather, heal players and teleport them.
+- Each world decides who may use each action, and an audit log keeps every change.
 
 ## How do I use an action?
 
@@ -57,9 +52,10 @@ dedicated server. Every command starts with `/adl` or `/admin-tools`.
 3. Type a command, such as `/adl kick Bob`.
 
 The answer shows only to you. In the console window of a dedicated server,
-type the same line without the `/`, such as `adl kick Bob`. The console may
-use every action. Windows for these actions in the game come in a later
-release.
+type the same line without the `/`, such as `adl kick Bob`.
+
+The console may use every action. Windows for these actions in the game come
+in a later release.
 
 | Command | What it does |
 | --- | --- |
@@ -113,15 +109,19 @@ applies within two seconds.
 
 Type `/adl restart 10`. Every player reads that the server restarts in
 10 minutes. The warning comes again at 5, 2 and 1 minutes left, and once more
-when the time is up. Admin Tools does not stop the server. Your host's panel
-or script stops it. Type `/adl restart 0` to call the restart off.
+when the time is up.
+
+Admin Tools does not stop the server. Your host's panel or script stops it.
+Type `/adl restart 0` to call the restart off.
 
 ## Where is the audit log?
 
 It is `audit.log` in `<save>-mod-data/enshwick.admin-tools/` beside the
 world's save. Each line holds the time in UTC, who acted, from where, the
-action, its values and the result. Past 1 MB the log moves to `audit.1.log`
-and starts again. Reads such as `online` are not written.
+action, its values and the result.
+
+Past 1 MB the log moves to `audit.1.log` and starts again. Reads such as
+`online` are not written.
 
 ## Install
 

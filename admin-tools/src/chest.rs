@@ -8,7 +8,7 @@ use std::time::Duration;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::content::vanilla;
 use enshwick::world::{Player, TransactionId, TransactionStatus, WorldTransform};
-use enshwick::{ItemId, Off};
+use enshwick::{ItemId, Off, WorldError};
 
 use enshwick::inventory::{Batch, Op, Outcome as Given};
 
@@ -123,6 +123,9 @@ fn place(
     let Ok(chest) = vanilla::item(CHEST).map(ItemId::from_guid) else {
         return Outcome::refused(request.say(texts::REPLY_NO_CHEST, &[]));
     };
+    let Some(me) = tools.me.upgrade() else {
+        return Tools::failed(request, whereabouts, &WorldError::Missing);
+    };
     let placed = match tools
         .world
         .transaction()
@@ -142,16 +145,14 @@ fn place(
     let not_placed = request.say(texts::REPLY_CHEST_NOT_FILLED, &values);
     let reply = request.say(texts::REPLY_CHEST, &values);
     let done = report(tools, request, shown, count, whereabouts.to_owned());
-    if let Some(tools) = tools.me.upgrade() {
-        fill(
-            &tools,
-            placed,
-            (item, count),
-            request.player.clone(),
-            not_placed,
-            done,
-        );
-    }
+    fill(
+        &me,
+        placed,
+        (item, count),
+        request.player.clone(),
+        not_placed,
+        done,
+    );
     Outcome::done(reply)
 }
 

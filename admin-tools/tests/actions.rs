@@ -307,6 +307,10 @@ mod tests {
         );
         joins(&loader, &cid);
         assert_eq!(loader.removed(), [3], "Cid is not on the list");
+        assert_eq!(
+            run(&loader, &ann(), "allowed", "p0000000000000002\tb0"),
+            "1Bob is off the allow-list."
+        );
         let _gone = std::fs::remove_dir_all(&dir);
     }
 
@@ -360,20 +364,26 @@ mod tests {
     fn announcements_come_in_turn_at_the_world_s_interval() {
         let dir = scratch("announce");
         let loader = server(
-            "announcements = [\"Vote\", \"Rules\"]\nannounce_minutes = 1\n",
+            "announcements = [\"Vote\", \"Rules\"]\nannounce_minutes = 2\n",
             &dir,
         );
+        let said = |loader: &Installed| -> Vec<String> {
+            loader
+                .chat()
+                .into_iter()
+                .chain(loader.notices())
+                .filter(|(key, _)| *key == PlayerKey::new(1))
+                .map(|(_, text)| text)
+                .collect()
+        };
         for _ in 0..125 {
             let _ran = loader.tick(Duration::from_secs(1));
         }
-        let texts: Vec<String> = loader
-            .chat()
-            .into_iter()
-            .chain(loader.notices())
-            .filter(|(key, _)| *key == PlayerKey::new(1))
-            .map(|(_, text)| text)
-            .collect();
-        assert_eq!(texts, ["Vote", "Rules"]);
+        assert_eq!(said(&loader), ["Vote"], "one each two minutes");
+        for _ in 0..120 {
+            let _ran = loader.tick(Duration::from_secs(1));
+        }
+        assert_eq!(said(&loader), ["Vote", "Rules"]);
     }
 
     #[test]
@@ -456,20 +466,35 @@ mod tests {
         let dir = scratch("audit");
         let loader = server("", &dir);
         let _reply = run(&loader, &ann(), "online", "");
+        let _reply = run(&loader, &ann(), "time", "n6.5");
+        let _reply = run(&loader, &ann(), "weather", "c1");
+        assert_eq!(
+            console::run("enshwick.admin-tools muted Bob on").as_deref(),
+            Ok("Bob is muted in chat.")
+        );
+        let _reply = loader.type_in_chat(&ann(), 0, "/adl muted Bob off");
         let _reply = run(&loader, &ann(), "kick", "p0000000000000002");
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let mut read = String::new();
-        while std::time::Instant::now() < deadline && read.is_empty() {
+        while std::time::Instant::now() < deadline && !read.contains("\tkick\t") {
             read = run(&loader, &ann(), "audit", "n10");
-            if read.ends_with("empty.") {
-                read.clear();
-                std::thread::yield_now();
-            }
+            std::thread::yield_now();
         }
+        let lines: Vec<&str> = read.strip_prefix('1').unwrap_or(&read).lines().collect();
+        assert_eq!(lines.len(), 5, "{read}");
         assert!(
-            read.contains("Ann (0000000000000001)\tinterface\tkick\tBob\tBob was kicked."),
-            "{read}"
+            lines.iter().all(|line| line.starts_with("20")),
+            "UTC times: {read}"
         );
+        for part in [
+            "\tinterface\ttime\t6.5\t",
+            "\tinterface\tweather\t1\t",
+            "\tconsole\tmuted\tBob on\t",
+            "\tchat\tmuted\tBob off\t",
+            "Ann (0000000000000001)\tinterface\tkick\tBob\tBob was kicked.",
+        ] {
+            assert!(read.contains(part), "{part}: {read}");
+        }
         assert!(!read.contains("\tonline\t"), "reads stay out: {read}");
         let _gone = std::fs::remove_dir_all(&dir);
     }
@@ -489,8 +514,20 @@ mod tests {
     fn a_settings_change_while_the_world_runs_goes_to_the_audit_log_and_its_load_does_not() {
         let dir = scratch("audit-settings");
         let loader = server("audit = \"on\"\nmotd = \"Hi\"\n", &dir);
+        let carried = loader.rules_changed();
         loader.set_settings("settings", "audit = \"on\"\nmotd = \"Welcome\"\n");
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        assert_eq!(loader.rules_changed(), carried, "the rights stayed");
+        loader.set_settings(
+            "settings",
+            "audit = \"on\"\nmotd = \"Welcome\"\n[rights]\nheal = \"everyone\"\n",
+        );
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        assert_eq!(
+            loader.rules_changed(),
+            carried + 1,
+            "new rights are carried"
+        );
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let mut read = String::new();
         while std::time::Instant::now() < deadline && !read.contains("motd") {
@@ -521,6 +558,18 @@ mod tests {
                 .type_in_chat(&bob(), 0, "/admin-tools online")
                 .as_deref(),
             Some("12 online: Ann (0 min), Bob (0 min, muted)")
+        );
+        assert_eq!(
+            loader
+                .type_in_chat(&ann(), 0, "/adl muted Bob off")
+                .as_deref(),
+            Some("1Bob can write in chat again.")
+        );
+        assert_eq!(
+            loader
+                .type_in_chat(&ann(), 0, "/adl muted Ann on")
+                .as_deref(),
+            Some("0Ann is an administrator or the host and cannot be muted.")
         );
         let refused = loader.type_in_chat(&bob(), 0, "/adl kick Ann").unwrap();
         assert!(refused.starts_with('0'), "{refused}");

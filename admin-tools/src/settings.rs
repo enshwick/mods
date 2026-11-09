@@ -273,6 +273,8 @@ impl Who {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use enshwick::config::Config as _;
     use enshwick::{Entity, PlayerKey};
 
@@ -365,5 +367,27 @@ mod tests {
             let key = format!("rights.{}", id.replace('-', "_"));
             assert!(schema.field(&key).is_some(), "{key}");
         }
+    }
+
+    #[test]
+    fn each_action_reads_its_own_rule_from_the_world_s_settings() {
+        let mut table = String::new();
+        for id in ids::ALL {
+            writeln!(table, "{} = \"{id}-rule\"", id.replace('-', "_")).unwrap();
+        }
+        let rights: Rights = toml::from_str(&table).unwrap();
+        for id in ids::ALL {
+            assert_eq!(rights.rule(id), format!("{id}-rule"));
+        }
+    }
+
+    #[test]
+    fn texts_and_announcements_at_their_limits_pass_the_check() {
+        let full = Settings {
+            motd: "a".repeat(MAX_TEXT),
+            announcements: vec!["hi".into(); MAX_ANNOUNCEMENTS],
+            ..Settings::default()
+        };
+        assert_eq!(full.check(), Ok(()));
     }
 }

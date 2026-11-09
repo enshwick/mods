@@ -1,0 +1,7 @@
+[en]
+"mod.name" = "Test UI"
+"mod.description" = "Development only: screen extensions, sounds and input reads for checking the platform's interface in game"
+
+[uk]
+"mod.name" = "Test UI"
+"mod.description" = "Лише для розробки: розширення екранів, звуки й читання вводу для перевірки інтерфейсу платформи в грі"

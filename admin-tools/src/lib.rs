@@ -14,8 +14,7 @@ mod backup;
 mod ids;
 mod journal;
 mod players;
-#[doc(hidden)]
-pub mod rcon;
+mod rcon;
 mod schedule;
 mod server;
 mod settings;

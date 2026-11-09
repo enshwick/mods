@@ -5,20 +5,20 @@
 //! The format is Valve's "Source RCON Protocol", which RCON tools speak.
 
 /// The type of a login packet from a client.
-pub const AUTH: i32 = 3;
+pub(crate) const AUTH: i32 = 3;
 
 /// The type of a command from a client, and of the server's answer to a
 /// login.
-pub const EXEC: i32 = 2;
+pub(crate) const EXEC: i32 = 2;
 
 /// The type of the server's answer to a command.
-pub const RESPONSE: i32 = 0;
+pub(crate) const RESPONSE: i32 = 0;
 
 /// The longest body a client may send, in bytes.
-pub const MAX_BODY: usize = 4096;
+pub(crate) const MAX_BODY: usize = 4096;
 
 /// The longest body of one answer packet; a longer answer goes in several.
-pub const MAX_REPLY_BODY: usize = 4096;
+pub(crate) const MAX_REPLY_BODY: usize = 4096;
 
 /// The bytes of a packet's size, id and type fields and closing zeros
 /// beside its body.
@@ -29,18 +29,18 @@ const MIN_SIZE: usize = FRAME - 4;
 
 /// One packet, as a client sends it or the server answers.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Packet {
+pub(crate) struct Packet {
     /// The id the client chose, which the answer repeats.
-    pub id: i32,
+    pub(crate) id: i32,
     /// [`AUTH`], [`EXEC`] or [`RESPONSE`].
-    pub kind: i32,
+    pub(crate) kind: i32,
     /// The body without its closing zero.
-    pub body: Vec<u8>,
+    pub(crate) body: Vec<u8>,
 }
 
 /// Why bytes are no packet a client may send.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum ReadPacketError {
+pub(crate) enum ReadPacketError {
     /// A size field below the smallest packet or past [`MAX_BODY`].
     #[error("a packet size of {0} bytes")]
     Size(i32),
@@ -55,7 +55,7 @@ pub enum ReadPacketError {
 /// # Errors
 ///
 /// [`ReadPacketError::Size`] for a size out of bounds.
-pub fn length(size: [u8; 4]) -> Result<usize, ReadPacketError> {
+pub(crate) fn length(size: [u8; 4]) -> Result<usize, ReadPacketError> {
     let size = i32::from_le_bytes(size);
     usize::try_from(size)
         .ok()
@@ -69,7 +69,7 @@ pub fn length(size: [u8; 4]) -> Result<usize, ReadPacketError> {
 /// # Errors
 ///
 /// [`ReadPacketError::Unterminated`] when the last two bytes are not zero.
-pub fn decode(rest: &[u8]) -> Result<Packet, ReadPacketError> {
+pub(crate) fn decode(rest: &[u8]) -> Result<Packet, ReadPacketError> {
     let (head, body) = rest.split_at_checked(8).ok_or(ReadPacketError::Size(0))?;
     let body = body
         .strip_suffix(&[0, 0])
@@ -89,7 +89,7 @@ pub fn decode(rest: &[u8]) -> Result<Packet, ReadPacketError> {
 /// # Errors
 ///
 /// As [`length`] and [`decode`].
-pub fn parse(bytes: &[u8]) -> Result<Option<(Packet, usize)>, ReadPacketError> {
+pub(crate) fn parse(bytes: &[u8]) -> Result<Option<(Packet, usize)>, ReadPacketError> {
     let Some((size, rest)) = bytes.split_first_chunk::<4>() else {
         return Ok(None);
     };
@@ -103,7 +103,7 @@ pub fn parse(bytes: &[u8]) -> Result<Option<(Packet, usize)>, ReadPacketError> {
 impl Packet {
     /// The packet's bytes on the wire.
     #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    pub(crate) fn encode(&self) -> Vec<u8> {
         let size = i32::try_from(MIN_SIZE + self.body.len()).unwrap_or(i32::MAX);
         let mut bytes = Vec::with_capacity(FRAME + self.body.len());
         bytes.extend(size.to_le_bytes());
@@ -118,7 +118,7 @@ impl Packet {
     /// [`MAX_REPLY_BODY`] bytes, cut at character boundaries; one empty
     /// packet for an empty text.
     #[must_use]
-    pub fn answer(id: i32, text: &str) -> Vec<Self> {
+    pub(crate) fn answer(id: i32, text: &str) -> Vec<Self> {
         let mut packets = Vec::new();
         let mut rest = text;
         loop {

@@ -7,8 +7,7 @@
 //! second, the connections at once and the failed logins, after which the
 //! address waits a while.
 
-#[doc(hidden)]
-pub mod packet;
+mod packet;
 
 use core::time::Duration;
 use std::io::{self, Read as _, Write as _};

@@ -5,3 +5,6 @@
 .env
 .env.*
 /mutants.out*/
+/fuzz/artifacts/
+/fuzz/coverage/
+/fuzz/target/

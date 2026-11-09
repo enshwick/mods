@@ -186,7 +186,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           gh: true
-          tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
+          tools: cargo-cyclonedx@0.5.10,cargo-auditable@0.7.7
 
       - uses: ./.github/actions/release-files
         with:
@@ -316,7 +316,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           gh: true
-          tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
+          tools: cargo-cyclonedx@0.5.10,cargo-auditable@0.7.7
 
       - name: Notes
         id: notes

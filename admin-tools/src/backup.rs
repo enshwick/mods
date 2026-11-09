@@ -54,7 +54,7 @@ pub(crate) struct Plan {
 /// took effect; the reply says it started, and the caller reads how it
 /// ended.
 fn backup(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let Some(plan) = tools.backup_plan() else {
+    let (Some(plan), Some(me)) = (tools.backup_plan(), tools.me.upgrade()) else {
         return Outcome::refused(request.say(texts::REPLY_BACKUP_NONE, &[]));
     };
     if tools.backing_up.swap(true, Ordering::AcqRel) {
@@ -64,9 +64,7 @@ fn backup(tools: &Tools, request: &Request<'_>) -> Outcome {
         tools.backing_up.store(false, Ordering::Release);
         return Tools::failed(request, ids::BACKUP, &why);
     }
-    let (Some(me), key) = (tools.me.upgrade(), request.player.key) else {
-        return Outcome::refused(request.say(texts::REPLY_BACKUP_NONE, &[]));
-    };
+    let key = request.player.key;
     tools
         .scheduler
         .after(SETTLE, move || Arc::clone(&me).copy_aside(&plan, key));
@@ -193,10 +191,20 @@ fn belongs(name: &str, stem: &str) -> bool {
 
 /// Copies the world's files of `plan` into a new folder `name` under its
 /// root, leaving the root out where it lies inside them; the new folder.
+/// A copy that fails part-way removes its folder, so no half backup counts
+/// as one.
 pub(crate) fn copy(plan: &Plan, name: &str) -> io::Result<PathBuf> {
     fs::create_dir_all(&plan.root)?;
     let into = plan.root.join(name);
     fs::create_dir(&into)?;
+    copy_into(plan, &into).inspect_err(|_| {
+        let _removed = fs::remove_dir_all(&into);
+    })?;
+    Ok(into)
+}
+
+/// Copies the world's files of `plan` into the folder `into`.
+fn copy_into(plan: &Plan, into: &Path) -> io::Result<()> {
     let root = fs::canonicalize(&plan.root)?;
     for entry in fs::read_dir(&plan.saves)? {
         let entry = entry?;
@@ -205,7 +213,7 @@ pub(crate) fn copy(plan: &Plan, name: &str) -> io::Result<PathBuf> {
             copy_tree(&entry.path(), &into.join(&name), &root)?;
         }
     }
-    Ok(into)
+    Ok(())
 }
 
 /// Copies `from` to `to`, a folder with all it holds, leaving out `skip`.
@@ -336,6 +344,20 @@ mod tests {
             ["2026-01-02_00-00-00", "2026-01-03_00-00-00", "keep-me"]
         );
         fs::remove_dir_all(&saves).unwrap();
+    }
+
+    #[test]
+    fn a_copy_that_fails_part_way_leaves_no_folder_that_counts_as_a_backup() {
+        let dir = scratch("half");
+        let plan = Plan {
+            saves: dir.join("missing"),
+            stem: "w".into(),
+            root: dir.join("out"),
+            kept: 1,
+        };
+        assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
+        assert_eq!(fs::read_dir(&plan.root).unwrap().count(), 0);
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

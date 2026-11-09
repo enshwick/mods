@@ -15,6 +15,8 @@ pub(crate) const ALLOWED: &str = "allowed";
 pub(crate) const MUTED: &str = "muted";
 /// Heals a player.
 pub(crate) const HEAL: &str = "heal";
+/// Gives a player items.
+pub(crate) const GIVE: &str = "give";
 /// Takes the caller to a player.
 pub(crate) const GOTO: &str = "goto";
 /// Brings a player to the caller.
@@ -43,8 +45,8 @@ pub(crate) const BACKUP: &str = "backup";
 pub(crate) const CHAT: &str = "chat";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 20] = [
-    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, GOTO, BRING, SEND, PLACE, TIME,
+pub(crate) const ALL: [&str; 21] = [
+    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, GIVE, GOTO, BRING, SEND, PLACE, TIME,
     WEATHER, RESTART, SAVE, BACKUP, WORLD, AUDIT, CHAT,
 ];
 

@@ -12,6 +12,8 @@
 mod accounts;
 mod backup;
 mod ids;
+mod inventory;
+mod items;
 mod journal;
 mod players;
 mod rcon;
@@ -31,6 +33,7 @@ use enshwick::effects::Effects;
 use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
 use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
+use enshwick::inventory::Inventories;
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
@@ -60,6 +63,7 @@ pub(crate) struct Tools {
     effects: Effects,
     clock: Clock,
     weather: Weather,
+    inventories: Inventories,
     /// The game settings, `None` on a build without them.
     game_settings: Option<GameSettings>,
     scheduler: Scheduler,
@@ -103,6 +107,7 @@ impl Mod for AdminTools {
             .inspect_err(|why| enshwick::warn!("the world action is off: {why}"))
             .ok();
         let scheduler = load.scheduler()?;
+        let inventories = load.inventories()?;
         let actions = load.actions(texts.clone())?;
         let accounts = load.world_store(accounts::STORE)?;
         let tools = Arc::new_cyclic(|me| Tools {
@@ -111,6 +116,7 @@ impl Mod for AdminTools {
             effects,
             clock,
             weather,
+            inventories,
             game_settings,
             scheduler,
             actions,
@@ -134,6 +140,7 @@ impl Mod for AdminTools {
         let stopped = Arc::clone(&tools);
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
         players::add(&tools)?;
+        inventory::add(&tools)?;
         server::add(&tools)?;
         backup::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
@@ -316,6 +323,7 @@ fn word(value: &Value) -> String {
         Value::Choice(index) => index.to_string(),
         Value::Number(number) => number.to_string(),
         Value::Toggle(on) => if *on { "on" } else { "off" }.to_owned(),
+        Value::Text(text) => text.clone(),
         _ => String::new(),
     }
 }

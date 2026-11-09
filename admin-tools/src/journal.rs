@@ -1,6 +1,6 @@
-//! The audit log: one line per admin action, written to `audit.log` in the
-//! world's data folder by a thread of its own, so the game thread never
-//! waits on a write.
+//! The mod's logs in the world's data folder, the audit log and the chat
+//! log: one line per event, appended by a thread of its own, so the game
+//! thread never waits on a write, and moved aside past a size.
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
@@ -12,18 +12,33 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use enshwick::Relock as _;
 
-/// The log's file name in the world's data folder.
-pub(crate) const FILE: &str = "audit.log";
+/// The audit log: one line per admin action.
+pub(crate) const AUDIT: Files = Files {
+    now: "audit.log",
+    old: "audit.1.log",
+};
 
-/// The older half of the log once it outgrew [`MAX_BYTES`].
-pub(crate) const OLD_FILE: &str = "audit.1.log";
+/// The chat log: one line per chat line the server heard.
+pub(crate) const CHAT: Files = Files {
+    now: "chat.log",
+    old: "chat.1.log",
+};
 
-/// The size past which the log moves to [`OLD_FILE`] and starts again, so
+/// The size past which a log moves to its older file and starts again, so
 /// the two files together hold at most about twice this.
 pub(crate) const MAX_BYTES: u64 = 1 << 20;
 
 /// The most bytes a read of the log's last lines takes from its end.
 const TAIL_BYTES: u64 = 64 << 10;
+
+/// A log's two files in the world's data folder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Files {
+    /// The file new lines go to.
+    pub now: &'static str,
+    /// The older half, once the log outgrew [`MAX_BYTES`].
+    pub old: &'static str,
+}
 
 /// A line on its way to a world's log.
 struct Entry {
@@ -31,9 +46,10 @@ struct Entry {
     line: String,
 }
 
-/// The log's writer: lines go to a thread that appends them.
+/// A log's writer: lines go to a thread that appends them.
 #[derive(Debug)]
-pub(crate) struct Audit {
+pub(crate) struct Journal {
+    files: Files,
     writer: Mutex<Option<Writer>>,
 }
 
@@ -44,10 +60,11 @@ struct Writer {
     thread: Option<JoinHandle<()>>,
 }
 
-impl Audit {
-    /// A writer whose thread starts with the first line.
-    pub(crate) const fn new() -> Self {
+impl Journal {
+    /// A writer of the log `files` whose thread starts with the first line.
+    pub(crate) const fn new(files: Files) -> Self {
         Self {
+            files,
             writer: Mutex::new(None),
         }
     }
@@ -62,10 +79,10 @@ impl Audit {
         }
         line.push('\n');
         let mut writer = self.writer.relock();
-        let started = writer.get_or_insert_with(spawn);
+        let started = writer.get_or_insert_with(|| spawn(self.files));
         if let Err(lost) = started.lines.send(Entry { dir, line }) {
             // The thread ended: start another and hand it the line.
-            let _sent = writer.insert(spawn()).lines.send(lost.0);
+            let _sent = writer.insert(spawn(self.files)).lines.send(lost.0);
         }
     }
 
@@ -77,28 +94,26 @@ impl Audit {
         };
         drop(lines);
         if thread.is_some_and(|thread| thread.join().is_err()) {
-            enshwick::warn!("audit: the writer thread panicked");
+            enshwick::warn!("{}: the writer thread panicked", self.files.now);
         }
     }
 }
 
-/// Starts the writer thread; its lines arrive through the sender.
-fn spawn() -> Writer {
+/// Starts the writer thread of `files`; its lines arrive through the
+/// sender.
+fn spawn(files: Files) -> Writer {
     let (sender, lines) = mpsc::channel::<Entry>();
     let started = std::thread::Builder::new()
-        .name("admin-tools audit".into())
+        .name(format!("admin-tools {}", files.now))
         .spawn(move || {
             for entry in lines {
-                if let Err(why) = append(&entry.dir, &entry.line) {
-                    enshwick::warn!(
-                        "audit: {} not written: {why}",
-                        entry.dir.join(FILE).display()
-                    );
+                if let Err(why) = files.append(&entry.dir, &entry.line) {
+                    enshwick::warn!("{} not written: {why}", entry.dir.join(files.now).display());
                 }
             }
         });
     let thread = started
-        .inspect_err(|why| enshwick::warn!("audit: no writer thread: {why}"))
+        .inspect_err(|why| enshwick::warn!("{}: no writer thread: {why}", files.now))
         .ok();
     Writer {
         lines: sender,
@@ -106,36 +121,38 @@ fn spawn() -> Writer {
     }
 }
 
-/// Appends `line` to the log in `dir`, first moving a log past
-/// [`MAX_BYTES`] to [`OLD_FILE`].
-pub(crate) fn append(dir: &Path, line: &str) -> io::Result<()> {
-    fs::create_dir_all(dir)?;
-    let path = dir.join(FILE);
-    if fs::metadata(&path).is_ok_and(|meta| meta.len() >= MAX_BYTES) {
-        fs::rename(&path, dir.join(OLD_FILE))?;
+impl Files {
+    /// Appends `line` to the log in `dir`, first moving a log past
+    /// [`MAX_BYTES`] to the older file.
+    pub(crate) fn append(self, dir: &Path, line: &str) -> io::Result<()> {
+        fs::create_dir_all(dir)?;
+        let path = dir.join(self.now);
+        if fs::metadata(&path).is_ok_and(|meta| meta.len() >= MAX_BYTES) {
+            fs::rename(&path, dir.join(self.old))?;
+        }
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?
+            .write_all(line.as_bytes())
     }
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)?
-        .write_all(line.as_bytes())
-}
 
-/// The last `count` lines of the log in `dir`, oldest first, taking the
-/// rest from [`OLD_FILE`] when the log moved aside lately; empty when there
-/// is no log.
-///
-/// # Errors
-///
-/// The reason a log that is there does not read.
-pub(crate) fn tail(dir: &Path, count: usize) -> io::Result<Vec<String>> {
-    let mut lines = tail_of(&dir.join(FILE), count)?;
-    if lines.len() < count {
-        let mut older = tail_of(&dir.join(OLD_FILE), count - lines.len())?;
-        older.append(&mut lines);
-        lines = older;
+    /// The last `count` lines of the log in `dir`, oldest first, taking the
+    /// rest from the older file when the log moved aside lately; empty when
+    /// there is no log.
+    ///
+    /// # Errors
+    ///
+    /// The reason a log that is there does not read.
+    pub(crate) fn tail(self, dir: &Path, count: usize) -> io::Result<Vec<String>> {
+        let mut lines = tail_of(&dir.join(self.now), count)?;
+        if lines.len() < count {
+            let mut older = tail_of(&dir.join(self.old), count - lines.len())?;
+            older.append(&mut lines);
+            lines = older;
+        }
+        Ok(lines)
     }
-    Ok(lines)
 }
 
 /// The last `count` lines of the file at `path`; empty when it is not
@@ -207,9 +224,17 @@ pub(crate) fn utc(seconds: u64) -> String {
 mod tests {
     use super::*;
 
+    fn append(dir: &Path, line: &str) -> io::Result<()> {
+        AUDIT.append(dir, line)
+    }
+
+    fn tail(dir: &Path, count: usize) -> io::Result<Vec<String>> {
+        AUDIT.tail(dir, count)
+    }
+
     fn scratch(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("admin-tools-audit-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("admin-tools-journal-{name}-{}", std::process::id()));
         let _gone = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -228,13 +253,13 @@ mod tests {
     fn the_log_moves_aside_past_its_size_and_starts_again() {
         let dir = scratch("rotate");
         fs::write(
-            dir.join(FILE),
+            dir.join(AUDIT.now),
             vec![b'x'; usize::try_from(MAX_BYTES).unwrap()],
         )
         .unwrap();
         append(&dir, "next\n").unwrap();
-        assert_eq!(fs::read_to_string(dir.join(FILE)).unwrap(), "next\n");
-        assert_eq!(fs::metadata(dir.join(OLD_FILE)).unwrap().len(), MAX_BYTES);
+        assert_eq!(fs::read_to_string(dir.join(AUDIT.now)).unwrap(), "next\n");
+        assert_eq!(fs::metadata(dir.join(AUDIT.old)).unwrap().len(), MAX_BYTES);
         fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -265,7 +290,7 @@ mod tests {
     #[test]
     fn the_tail_right_after_a_move_aside_takes_the_rest_from_the_older_file() {
         let dir = scratch("tail-rotated");
-        fs::write(dir.join(OLD_FILE), "old 1\nold 2\nold 3\n").unwrap();
+        fs::write(dir.join(AUDIT.old), "old 1\nold 2\nold 3\n").unwrap();
         append(&dir, "new 1\n").unwrap();
         assert_eq!(tail(&dir, 3).unwrap(), ["old 2", "old 3", "new 1"]);
         assert_eq!(tail(&dir, 1).unwrap(), ["new 1"]);
@@ -275,7 +300,7 @@ mod tests {
     #[test]
     fn finish_writes_every_line_still_on_its_way_before_it_returns() {
         let dir = scratch("finish");
-        let audit = Audit::new();
+        let audit = Journal::new(AUDIT);
         for n in 0..200 {
             audit.record(dir.clone(), &[&format!("line {n}")]);
         }
@@ -290,7 +315,7 @@ mod tests {
     #[test]
     fn a_record_reaches_the_file_with_control_characters_as_spaces() {
         let dir = scratch("record");
-        let audit = Audit::new();
+        let audit = Journal::new(AUDIT);
         audit.record(dir.clone(), &["Ann", "kick\tBob\nnow"]);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while tail(&dir, 1).unwrap().is_empty() && std::time::Instant::now() < deadline {

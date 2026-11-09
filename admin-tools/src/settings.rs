@@ -1,6 +1,8 @@
 //! The world's settings: what players read, who may join, and who may use
 //! each action.
 
+use std::net::IpAddr;
+
 use enshwick::world::{Player, PlayerPermissions};
 
 use crate::ids;
@@ -21,18 +23,32 @@ const NOBODY: &str = "nobody";
 /// otherwise: the server's administrators.
 const ADMINS: &str = "CanKickBan";
 
-/// The audit log is on for a dedicated server and off for a hosted game.
-const AUDIT_AUTO: &str = "auto";
+/// A switch that is on for a dedicated server and off for a hosted game.
+const AUTO: &str = "auto";
 
-/// The audit log is always on.
-const AUDIT_ON: &str = "on";
+/// A switch that is always on.
+const ON: &str = "on";
 
-/// The audit log is always off.
-const AUDIT_OFF: &str = "off";
+/// A switch that is always off.
+const OFF: &str = "off";
+
+/// The default port of the remote console, the one most RCON tools try.
+const RCON_PORT: u32 = 25_575;
+
+/// The longest remote console password.
+pub(crate) const MAX_PASSWORD: usize = 128;
+
+/// The shortest remote console password a world may set, so a guess per
+/// failed login stays hopeless; the generated one is longer.
+pub(crate) const MIN_PASSWORD: usize = 16;
+
+/// The address the remote console listens on unless the world says
+/// otherwise: this computer only, as RCON sends its password in plain text.
+const RCON_IP: &str = "127.0.0.1";
 
 /// Admin Tools settings for this world.
 #[enshwick::config(validate = Settings::check)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct Settings {
     /// What each player reads when they join; empty for nothing.
     pub motd: String,
@@ -46,8 +62,27 @@ pub(crate) struct Settings {
     /// A line players read after each restart warning's time; empty for none.
     pub restart_text: String,
     /// Whether admin actions go to `audit.log` in this world's data folder: auto is on for a dedicated server and off for a game a player hosts.
-    #[config(choices = [AUDIT_AUTO, AUDIT_ON, AUDIT_OFF])]
+    #[config(choices = [AUTO, ON, OFF])]
     pub audit: String,
+    /// Whether chat lines go to `chat.log` in this world's data folder: auto is on for a dedicated server and off for a game a player hosts.
+    #[config(choices = [AUTO, ON, OFF])]
+    pub chat_log: String,
+    /// How many backups of the world the backup action keeps; the oldest go first.
+    #[config(range = 1..=100)]
+    pub backups_kept: u32,
+    /// The folder backups go to, beside the world's save; empty for `backups` in this world's data folder.
+    pub backup_dir: String,
+    /// Whether a remote console (Source RCON) listens: auto is on for a dedicated server and off for a game a player hosts.
+    #[config(choices = [AUTO, ON, OFF])]
+    pub rcon: String,
+    /// The address the remote console listens on: 127.0.0.1 for this computer only, 0.0.0.0 for every network.
+    pub rcon_ip: String,
+    /// The TCP port the remote console listens on.
+    #[config(range = 1..=65535)]
+    pub rcon_port: u32,
+    /// The remote console's password; empty to use the one generated in `rcon-password.txt` in this world's data folder.
+    #[config(secret)]
+    pub rcon_password: String,
     /// Who may use each action: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
     #[config(group)]
     pub rights: Rights,
@@ -61,9 +96,37 @@ impl Default for Settings {
             announcements: Vec::new(),
             announce_minutes: 30,
             restart_text: String::new(),
-            audit: AUDIT_AUTO.to_owned(),
+            audit: AUTO.to_owned(),
+            chat_log: AUTO.to_owned(),
+            backups_kept: 10,
+            backup_dir: String::new(),
+            rcon: AUTO.to_owned(),
+            rcon_ip: RCON_IP.to_owned(),
+            rcon_port: RCON_PORT,
+            rcon_password: String::new(),
             rights: Rights::default(),
         }
+    }
+}
+
+impl core::fmt::Debug for Settings {
+    /// Every setting but the secret password, which is never shown.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Settings")
+            .field("motd", &self.motd)
+            .field("allowlist", &self.allowlist)
+            .field("announcements", &self.announcements)
+            .field("announce_minutes", &self.announce_minutes)
+            .field("restart_text", &self.restart_text)
+            .field("audit", &self.audit)
+            .field("chat_log", &self.chat_log)
+            .field("backups_kept", &self.backups_kept)
+            .field("backup_dir", &self.backup_dir)
+            .field("rcon", &self.rcon)
+            .field("rcon_ip", &self.rcon_ip)
+            .field("rcon_port", &self.rcon_port)
+            .field("rights", &self.rights)
+            .finish_non_exhaustive()
     }
 }
 
@@ -71,7 +134,7 @@ impl Settings {
     /// Refuses texts past [`MAX_TEXT`], too many announcements and rules
     /// that name no permission.
     fn check(&self) -> Result<(), CheckSettingsError> {
-        let texts = [&self.motd, &self.restart_text]
+        let texts = [&self.motd, &self.restart_text, &self.backup_dir]
             .into_iter()
             .chain(&self.announcements);
         if let Some(long) = texts.into_iter().find(|text| text.len() > MAX_TEXT) {
@@ -79,6 +142,17 @@ impl Settings {
         }
         if self.announcements.len() > MAX_ANNOUNCEMENTS {
             return Err(CheckSettingsError::TooMany);
+        }
+        if self.rcon_ip.parse::<IpAddr>().is_err() {
+            return Err(CheckSettingsError::Address(self.rcon_ip.clone()));
+        }
+        if !self.rcon_password.is_empty()
+            && !(MIN_PASSWORD..=MAX_PASSWORD).contains(&self.rcon_password.len())
+        {
+            return Err(CheckSettingsError::Password);
+        }
+        if !beside_the_save(&self.backup_dir) {
+            return Err(CheckSettingsError::Folder(self.backup_dir.clone()));
         }
         for id in ids::ALL {
             let rule = self.rights.rule(id);
@@ -96,11 +170,35 @@ impl Settings {
     /// Whether the audit log is on, `dedicated` saying whether this is a
     /// dedicated server.
     pub(crate) fn audit_on(&self, dedicated: bool) -> bool {
-        match self.audit.as_str() {
-            AUDIT_ON => true,
-            AUDIT_OFF => false,
-            _ => dedicated,
-        }
+        switch(&self.audit, dedicated)
+    }
+
+    /// Whether the chat log is on, as [`Settings::audit_on`].
+    pub(crate) fn chat_log_on(&self, dedicated: bool) -> bool {
+        switch(&self.chat_log, dedicated)
+    }
+
+    /// Whether the remote console listens, as [`Settings::audit_on`].
+    pub(crate) fn rcon_on(&self, dedicated: bool) -> bool {
+        switch(&self.rcon, dedicated)
+    }
+}
+
+/// Whether the folder `dir` stays inside the saves' folder it is joined to:
+/// relative, with no `..`, drive or root, read the same way on every system.
+pub(crate) fn beside_the_save(dir: &str) -> bool {
+    !dir.starts_with(['/', '\\'])
+        && !dir.contains(':')
+        && dir.split(['/', '\\']).all(|part| part != "..")
+}
+
+/// Whether the switch `word` is on, `dedicated` saying whether this is a
+/// dedicated server, which auto follows.
+fn switch(word: &str, dedicated: bool) -> bool {
+    match word {
+        ON => true,
+        OFF => false,
+        _ => dedicated,
     }
 }
 
@@ -113,6 +211,16 @@ pub(crate) enum CheckSettingsError {
     /// More than [`MAX_ANNOUNCEMENTS`].
     #[error("at most {MAX_ANNOUNCEMENTS} announcements")]
     TooMany,
+    /// A remote console address that is no IP address.
+    #[error("rcon_ip: {0} is no IP address")]
+    Address(String),
+    /// A remote console password shorter than [`MIN_PASSWORD`] or past
+    /// [`MAX_PASSWORD`].
+    #[error("rcon_password must be {MIN_PASSWORD} to {MAX_PASSWORD} bytes long")]
+    Password,
+    /// A backup folder that leaves the saves' folder.
+    #[error("backup_dir: {0} is no folder beside the save")]
+    Folder(String),
     /// A rule that names no permission.
     #[error("rights.{field}: {rule} is none of {words}")]
     Rule {
@@ -137,6 +245,19 @@ impl From<CheckSettingsError> for enshwick::config::ConfigError {
                 crate::texts::CONFIG_TOO_MANY,
                 &[("max", &MAX_ANNOUNCEMENTS.to_string())],
             ),
+            CheckSettingsError::Address(address) => {
+                Self::text(crate::texts::CONFIG_BAD_ADDRESS, &[("address", address)])
+            }
+            CheckSettingsError::Password => Self::text(
+                crate::texts::CONFIG_BAD_PASSWORD,
+                &[
+                    ("min", &MIN_PASSWORD.to_string()),
+                    ("max", &MAX_PASSWORD.to_string()),
+                ],
+            ),
+            CheckSettingsError::Folder(folder) => {
+                Self::text(crate::texts::CONFIG_BAD_FOLDER, &[("folder", folder)])
+            }
             CheckSettingsError::Rule { field, rule, words } => Self::text(
                 crate::texts::CONFIG_BAD_RULE,
                 &[("field", field), ("rule", rule), ("words", words)],
@@ -179,6 +300,16 @@ pub(crate) struct Rights {
     pub restart: String,
     /// Reading the audit log.
     pub audit: String,
+    /// The versions, the uptime and the world.
+    pub status: String,
+    /// Saving the world now.
+    pub save: String,
+    /// Copying the world's save aside.
+    pub backup: String,
+    /// Reading the world's game settings.
+    pub world: String,
+    /// Reading the chat log.
+    pub chat: String,
 }
 
 impl Default for Rights {
@@ -200,6 +331,11 @@ impl Default for Rights {
             weather: admins(),
             restart: admins(),
             audit: admins(),
+            status: EVERYONE.to_owned(),
+            save: admins(),
+            backup: admins(),
+            world: admins(),
+            chat: admins(),
         }
     }
 }
@@ -224,6 +360,11 @@ impl Rights {
             ids::WEATHER => &self.weather,
             ids::RESTART => &self.restart,
             ids::AUDIT => &self.audit,
+            ids::STATUS => &self.status,
+            ids::SAVE => &self.save,
+            ids::BACKUP => &self.backup,
+            ids::WORLD => &self.world,
+            ids::CHAT => &self.chat,
             _ => ADMINS,
         }
     }
@@ -424,8 +565,77 @@ mod tests {
     }
 
     #[test]
+    fn the_settings_debug_text_never_shows_the_password() {
+        let settings = Settings {
+            rcon_password: "a secret of the world".into(),
+            ..Settings::default()
+        };
+        let text = format!("{settings:?} {settings:#?}");
+        assert!(!text.contains("a secret of the world"), "{text}");
+        assert!(text.contains("rcon_port"), "{text}");
+    }
+
+    #[test]
+    fn the_remote_console_listens_on_this_computer_only_unless_the_world_says() {
+        let ip: IpAddr = Settings::default().rcon_ip.parse().unwrap();
+        assert!(ip.is_loopback(), "{ip}");
+    }
+
+    #[test]
+    fn a_password_of_the_world_s_own_is_refused_when_short() {
+        let short = Settings {
+            rcon_password: "p".repeat(MIN_PASSWORD - 1),
+            ..Settings::default()
+        };
+        assert_eq!(short.check(), Err(CheckSettingsError::Password));
+        let generated = Settings::default();
+        assert_eq!(generated.check(), Ok(()), "empty uses the generated one");
+    }
+
+    #[test]
+    fn a_backup_folder_stays_beside_the_save() {
+        for refused in [
+            "..",
+            "../elsewhere",
+            "backups/../../up",
+            "/root",
+            "C:\\Windows",
+            "C:x",
+            "\\\\host\\share",
+        ] {
+            let settings = Settings {
+                backup_dir: refused.into(),
+                ..Settings::default()
+            };
+            assert_eq!(
+                settings.check(),
+                Err(CheckSettingsError::Folder(refused.into())),
+                "{refused}"
+            );
+        }
+        for kept in ["", "backups", "world backups/nightly", "./backups"] {
+            let settings = Settings {
+                backup_dir: kept.into(),
+                ..Settings::default()
+            };
+            assert_eq!(settings.check(), Ok(()), "{kept}");
+        }
+    }
+
+    #[test]
     fn texts_and_announcements_at_their_limits_pass_the_check() {
+        let long_password = Settings {
+            rcon_password: "p".repeat(MAX_PASSWORD + 1),
+            ..Settings::default()
+        };
+        assert!(long_password.check().is_err());
+        let bad_address = Settings {
+            rcon_ip: "localhost".into(),
+            ..Settings::default()
+        };
+        assert!(bad_address.check().is_err());
         let full = Settings {
+            rcon_password: "p".repeat(MAX_PASSWORD),
             motd: "a".repeat(MAX_TEXT),
             announcements: vec!["hi".into(); MAX_ANNOUNCEMENTS],
             ..Settings::default()

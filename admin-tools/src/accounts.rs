@@ -94,7 +94,7 @@ mod hex_key {
         reason = "serde's `with` hands a reference"
     )]
     pub(super) fn serialize<S: Serializer>(key: &PlayerKey, out: S) -> Result<S::Ok, S::Error> {
-        out.serialize_str(&format!("{:016x}", key.0))
+        out.serialize_str(&crate::account_id(*key))
     }
 
     pub(super) fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<PlayerKey, D::Error> {

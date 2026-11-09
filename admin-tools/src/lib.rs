@@ -1,22 +1,26 @@
 //! Admin Tools: what a server's administrators need in game. The player
 //! list, kicks, bans, the allow-list and chat mutes; the message of the
 //! day, scheduled announcements and restart warnings; the time of day and
-//! the weather; healing and teleports; who may use each, per world; and an
-//! audit log of what was done.
+//! the weather; healing and teleports; saves, backups and the world's
+//! settings; who may use each, per world; an audit log of what was done
+//! and a chat log.
 //!
 //! Every action also runs as a command, `/admin-tools <action>` or
-//! `/adl <action>`, in chat, the server's console and remote consoles.
+//! `/adl <action>`, in chat, the server's console and the mod's remote
+//! console (Source RCON).
 
 mod accounts;
-mod audit;
+mod backup;
 mod ids;
+mod journal;
 mod players;
+mod rcon;
 mod schedule;
 mod server;
 mod settings;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
@@ -25,7 +29,9 @@ use enshwick::actions::{Action, Actions, Outcome, Request, Value, Via};
 use enshwick::daytime::Clock;
 use enshwick::effects::Effects;
 use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
+use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
+use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
 use enshwick::world::World;
@@ -33,7 +39,7 @@ use enshwick::{Load, Mod, Off, PlayerKey, Relock as _};
 use rustc_hash::FxHashMap;
 
 use accounts::Accounts;
-use audit::Audit;
+use journal::Journal;
 use schedule::Ticker;
 use settings::{Rules, Settings};
 
@@ -48,21 +54,37 @@ pub struct AdminTools;
 
 /// What the actions, the join check and the schedule share.
 pub(crate) struct Tools {
+    /// The tools themselves, for work that outlives an action's run.
+    me: Weak<Tools>,
     world: World,
     effects: Effects,
     clock: Clock,
     weather: Weather,
+    /// The game settings, `None` on a build without them.
+    game_settings: Option<GameSettings>,
+    scheduler: Scheduler,
     texts: Texts,
     actions: Actions,
     settings: ArcSwap<Settings>,
     /// The rights of the world's settings, parsed once as they arrive.
     rules: ArcSwap<Rules>,
     accounts: WorldStore<Accounts>,
-    audit: Audit,
+    audit: Journal,
+    chat: Journal,
     ticker: Mutex<Ticker>,
     /// When each player online joined, for the time online.
     joined: Mutex<FxHashMap<PlayerKey, Instant>>,
-    /// Whether this is a dedicated server, for the audit log's default.
+    /// When the mod started, for the server's uptime.
+    started: Instant,
+    /// Whether a backup is under way.
+    backing_up: AtomicBool,
+    /// The remote console while it listens.
+    rcon: Mutex<Option<rcon::Listener>>,
+    /// Whether the remote console stopped after a panic, which keeps it
+    /// off until the mod loads again.
+    rcon_fused: AtomicBool,
+    /// Whether this is a dedicated server, for the defaults of the switches
+    /// and the restart.
     dedicated: bool,
     /// Whether a world runs, from its load to its shutdown.
     running: AtomicBool,
@@ -74,33 +96,52 @@ type Handler = fn(&Tools, &Request<'_>) -> Outcome;
 impl Mod for AdminTools {
     fn init(load: &mut Load<'_>) -> Result<Self, Off> {
         let texts = load.texts()?;
-        let tools = Arc::new(Tools {
-            world: load.world()?,
-            effects: load.effects(),
-            clock: load.clock(),
-            weather: load.weather(),
-            actions: load.actions(texts.clone())?,
+        let (world, effects, clock, weather) =
+            (load.world()?, load.effects(), load.clock(), load.weather());
+        let game_settings = load
+            .game_settings()
+            .inspect_err(|why| enshwick::warn!("the world action is off: {why}"))
+            .ok();
+        let scheduler = load.scheduler()?;
+        let actions = load.actions(texts.clone())?;
+        let accounts = load.world_store(accounts::STORE)?;
+        let tools = Arc::new_cyclic(|me| Tools {
+            me: Weak::clone(me),
+            world,
+            effects,
+            clock,
+            weather,
+            game_settings,
+            scheduler,
+            actions,
             texts,
             settings: ArcSwap::from_pointee(Settings::default()),
             rules: ArcSwap::from_pointee(Settings::default().rights.rules()),
-            accounts: load.world_store(accounts::STORE)?,
-            audit: Audit::new(),
+            accounts,
+            audit: Journal::new(journal::AUDIT),
+            chat: Journal::new(journal::CHAT),
             ticker: Mutex::new(Ticker::default()),
             joined: Mutex::new(FxHashMap::default()),
+            started: Instant::now(),
+            backing_up: AtomicBool::new(false),
+            rcon: Mutex::new(None),
+            rcon_fused: AtomicBool::new(false),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
             running: AtomicBool::new(false),
         });
         let loaded = Arc::clone(&tools);
-        load.on::<WorldLoaded>(move |()| loaded.running.store(true, Ordering::Relaxed))?;
+        load.on::<WorldLoaded>(move |()| loaded.start())?;
         let stopped = Arc::clone(&tools);
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
         players::add(&tools)?;
         server::add(&tools)?;
+        backup::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
 
         let changed = Arc::clone(&tools);
         load.on_settings_change(move |settings: &Settings| changed.apply(settings))?;
-        let scheduler = load.scheduler()?;
+        let heard = Arc::clone(&tools);
+        load.on_chat_said(move |line| heard.heard(line))?;
         let joins = Arc::clone(&tools);
         load.on::<PlayerJoined>(move |joined| {
             let (tools, key) = (Arc::clone(&joins), joined.key);
@@ -128,8 +169,10 @@ impl Tools {
         let rules = Arc::clone(self);
         let rule_id = id.clone();
         let tools = Arc::clone(self);
+        // A hosted game has no restart to warn of.
+        let offered = id != ids::RESTART || self.dedicated;
         self.actions.add(
-            action.allow(move |player| rules.rules.load().admits(&rule_id, player)),
+            action.allow(move |player| offered && rules.rules.load().admits(&rule_id, player)),
             move |request| {
                 let outcome = handler(&tools, request);
                 if outcome.is_done() && !ids::READS.contains(&id.as_str()) {
@@ -140,14 +183,29 @@ impl Tools {
         )
     }
 
+    /// Starts the world that loaded: the remote console listens when the
+    /// world's settings turn it on.
+    fn start(&self) {
+        self.running.store(true, Ordering::Relaxed);
+        self.listen(&self.settings.load());
+    }
+
     /// Ends the running game: a restart warning, the schedule and the times
-    /// online do not carry into the next hosted game, and the audit lines
-    /// still on their way are written before the process may exit.
+    /// online do not carry into the next hosted game, the remote console
+    /// closes, and the log lines still on their way are written before the
+    /// process may exit.
     fn stop(&self) {
         self.running.store(false, Ordering::Relaxed);
         *self.ticker.relock() = Ticker::default();
         self.joined.relock().clear();
+        // A copy still waiting to start ends with the game's tasks; the
+        // loader lets the saves go at shutdown.
+        self.backing_up.store(false, Ordering::Release);
+        if let Some(listener) = self.rcon.relock().take() {
+            listener.close();
+        }
         self.audit.finish();
+        self.chat.finish();
     }
 
     /// Writes the ban list and allow-list now, on a thread of their own, so
@@ -209,6 +267,7 @@ impl Tools {
         if !self.running.load(Ordering::Relaxed) {
             return;
         }
+        self.listen(settings);
         let changed = server::changed_keys(&old, settings);
         // The change that turns the log off is its last line.
         let on = old.audit_on(self.dedicated) || settings.audit_on(self.dedicated);
@@ -241,7 +300,13 @@ fn language() -> Language {
 /// An account as the audit log and the server's log name it: the player's
 /// name and the key.
 fn account(name: &str, key: PlayerKey) -> String {
-    format!("{name} ({:016x})", key.0)
+    format!("{name} ({})", account_id(key))
+}
+
+/// An account's id as players, the logs and the ban file read it: 16 hex
+/// digits.
+pub(crate) fn account_id(key: PlayerKey) -> String {
+    format!("{:016x}", key.0)
 }
 
 /// A value as a console line writes it, for the audit log.

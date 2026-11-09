@@ -1,18 +1,20 @@
 //! Actions on the whole server: the message of the day, restart warnings,
-//! the time of day, the weather and the audit log; and the tick that runs
-//! the schedule.
+//! the time of day, the weather, saves, the status, the world's settings
+//! and the logs; the tick that runs the schedule and the chat log.
 
 use core::time::Duration;
 use std::sync::Arc;
 
-use enshwick::Off;
-use enshwick::Relock as _;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
+use enshwick::chat::{ChatKind, ChatLine};
+use enshwick::config::{Config as _, Schema};
+use enshwick::game_settings::{GameSettings, Settings as Game};
 use enshwick::weather::Forecast;
+use enshwick::{Off, Relock as _, WorldError};
 
 use crate::schedule::Say;
 use crate::settings::Settings;
-use crate::{Tools, audit, ids, texts};
+use crate::{Tools, ids, journal, texts};
 
 /// The weather an admin picks: its word, its label's key, and the forecast.
 /// `Forecast` is the API's own list of what it starts.
@@ -26,8 +28,8 @@ const FORECASTS: [(&str, &str, Forecast); 4] = [
 /// The longest restart warning, in minutes.
 const MAX_RESTART_MINUTES: f64 = 180.0;
 
-/// The most audit lines one read shows.
-const MAX_AUDIT_LINES: f64 = 50.0;
+/// The most lines one read of a log shows.
+const MAX_LOG_LINES: f64 = 50.0;
 
 /// Declares the actions on the server.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -61,8 +63,26 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
     tools.add(
         Action::new(ids::AUDIT, texts::ACTION_AUDIT)
             .help(texts::ACTION_AUDIT_HELP)
-            .arg(Arg::number(texts::ARG_LINES, 1.0..=MAX_AUDIT_LINES, 1.0)),
+            .arg(Arg::number(texts::ARG_LINES, 1.0..=MAX_LOG_LINES, 1.0)),
         read_audit,
+    )?;
+    tools.add(
+        Action::new(ids::CHAT, texts::ACTION_CHAT)
+            .help(texts::ACTION_CHAT_HELP)
+            .arg(Arg::number(texts::ARG_LINES, 1.0..=MAX_LOG_LINES, 1.0)),
+        read_chat,
+    )?;
+    tools.add(
+        Action::new(ids::STATUS, texts::ACTION_STATUS).help(texts::ACTION_STATUS_HELP),
+        status,
+    )?;
+    tools.add(
+        Action::new(ids::SAVE, texts::ACTION_SAVE).help(texts::ACTION_SAVE_HELP),
+        save,
+    )?;
+    tools.add(
+        Action::new(ids::WORLD, texts::ACTION_WORLD).help(texts::ACTION_WORLD_HELP),
+        world,
     )
 }
 
@@ -151,14 +171,33 @@ fn restart(tools: &Tools, request: &Request<'_>) -> Outcome {
 
 /// The last lines of the audit log.
 fn read_audit(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let on = tools.settings.load().audit_on(tools.dedicated);
+    read_log(tools, request, journal::AUDIT, on, texts::REPLY_AUDIT_OFF)
+}
+
+/// The last lines of the chat log.
+fn read_chat(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let on = tools.settings.load().chat_log_on(tools.dedicated);
+    read_log(tools, request, journal::CHAT, on, texts::REPLY_CHAT_OFF)
+}
+
+/// The last lines of the log `files`, refused with the text `off` while
+/// the world's settings keep it off.
+fn read_log(
+    tools: &Tools,
+    request: &Request<'_>,
+    files: journal::Files,
+    on: bool,
+    off: &str,
+) -> Outcome {
     let [Value::Number(count)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_AUDIT_NONE, &[]));
+        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
     };
-    if !tools.settings.load().audit_on(tools.dedicated) {
-        return Outcome::refused(request.say(texts::REPLY_AUDIT_OFF, &[]));
+    if !on {
+        return Outcome::refused(request.say(off, &[]));
     }
     let Some(dir) = tools.world.data_dir() else {
-        return Outcome::refused(request.say(texts::REPLY_AUDIT_NONE, &[]));
+        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
     };
     #[expect(
         clippy::cast_possible_truncation,
@@ -166,10 +205,248 @@ fn read_audit(tools: &Tools, request: &Request<'_>) -> Outcome {
         reason = "the argument's range is 1 to 50 in whole steps"
     )]
     let count = count.round() as usize;
-    match audit::tail(&dir, count) {
-        Ok(lines) if lines.is_empty() => Outcome::done(request.say(texts::REPLY_AUDIT_NONE, &[])),
+    match files.tail(&dir, count) {
+        Ok(lines) if lines.is_empty() => Outcome::done(request.say(texts::REPLY_LOG_NONE, &[])),
         Ok(lines) => Outcome::done(lines.join("\n")),
-        Err(why) => Tools::failed(request, audit::FILE, &why),
+        Err(why) => Tools::failed(request, files.now, &why),
+    }
+}
+
+/// The loader's and every mod's version, the uptime and the world.
+fn status(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let (hours, minutes) = hours_minutes(tools.started.elapsed().as_secs());
+    let world = tools
+        .world
+        .key()
+        .unwrap_or_else(|| request.say(texts::REPLY_STATUS_NO_WORLD, &[]));
+    let mods: Vec<String> = enshwick::mods::all()
+        .iter()
+        .map(|entry| {
+            let key = if entry.running {
+                texts::REPLY_STATUS_MOD
+            } else {
+                texts::REPLY_STATUS_MOD_OFF
+            };
+            request.say(
+                key,
+                &[
+                    (texts::value::NAME, &entry.label()),
+                    (texts::value::VERSION, &entry.version),
+                ],
+            )
+        })
+        .collect();
+    Outcome::done(request.say(
+        texts::REPLY_STATUS,
+        &[
+            (texts::value::HOURS, &hours.to_string()),
+            (texts::value::MINUTES, &minutes.to_string()),
+            (texts::value::WORLD, &world),
+            (texts::value::MODS, &mods.join(", ")),
+        ],
+    ))
+}
+
+/// `seconds` as whole hours and the minutes past them.
+fn hours_minutes(seconds: u64) -> (u64, u64) {
+    let minutes = seconds / 60;
+    (minutes / 60, minutes % 60)
+}
+
+/// Saves the world now.
+fn save(tools: &Tools, request: &Request<'_>) -> Outcome {
+    match tools.world.save() {
+        Ok(()) => Outcome::done(request.say(texts::REPLY_SAVED, &[])),
+        Err(WorldError::Refused) => Outcome::refused(request.say(texts::REPLY_SAVE_REFUSED, &[])),
+        Err(why) => Tools::failed(request, ids::SAVE, &why),
+    }
+}
+
+/// The world, its last save and its game settings, one per line.
+fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let Some((settings, preset)) = tools.game_settings.as_ref().and_then(GameSettings::read) else {
+        return Outcome::refused(request.say(texts::REPLY_WORLD_NONE, &[]));
+    };
+    let saved = tools.world.save_info().map_or_else(
+        || request.say(texts::REPLY_WORLD_UNSAVED, &[]),
+        |info| {
+            request.say(
+                texts::REPLY_WORLD_SAVED,
+                &[(texts::value::TIME, &journal::utc(info.saved_at.as_secs()))],
+            )
+        },
+    );
+    let world = tools
+        .world
+        .key()
+        .unwrap_or_else(|| request.say(texts::REPLY_STATUS_NO_WORLD, &[]));
+    let head = request.say(
+        texts::REPLY_WORLD,
+        &[
+            (texts::value::WORLD, &world),
+            (texts::value::PRESET, &kind(&preset)),
+            (texts::value::TIME, &saved),
+        ],
+    );
+    let lines = GAME_SETTINGS
+        .iter()
+        .map(|(name, value)| format!("{name} = {}", value(&settings)));
+    Outcome::done(
+        core::iter::once(head)
+            .chain(lines)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+/// A game setting the world view shows: its name and its value as text.
+type Shown = (&'static str, fn(&Game) -> String);
+
+/// Every game setting the world view shows, in the API's order and words.
+const GAME_SETTINGS: [Shown; 38] = [
+    ("player health", |s| factor(s.player_health_factor)),
+    ("player mana", |s| factor(s.player_mana_factor)),
+    ("player stamina", |s| factor(s.player_stamina_factor)),
+    ("player body heat", |s| factor(s.player_body_heat_factor)),
+    ("player diving time", |s| {
+        factor(s.player_diving_time_factor)
+    }),
+    ("durability", |s| switch(s.enable_durability)),
+    ("starving", |s| switch(s.enable_starving_debuff)),
+    ("food buff duration", |s| {
+        factor(s.food_buff_duration_factor)
+    }),
+    ("from hunger to starving", |s| {
+        length(s.from_hunger_to_starving)
+    }),
+    ("shroud time", |s| factor(s.shroud_time_factor)),
+    ("tombstone mode", |s| kind(&s.tombstone_mode)),
+    ("glider turbulences", |s| {
+        switch(s.enable_glider_turbulences)
+    }),
+    ("weather frequency", |s| kind(&s.weather_frequency)),
+    ("fishing difficulty", |s| kind(&s.fishing_difficulty)),
+    ("mining damage", |s| factor(s.mining_damage_factor)),
+    ("plant growth speed", |s| {
+        factor(s.plant_growth_speed_factor)
+    }),
+    ("resource drop stack amount", |s| {
+        factor(s.resource_drop_stack_amount_factor)
+    }),
+    ("factory production speed", |s| {
+        factor(s.factory_production_speed_factor)
+    }),
+    ("perk upgrade recycling", |s| {
+        factor(s.perk_upgrade_recycling_factor)
+    }),
+    ("perk cost", |s| factor(s.perk_cost_factor)),
+    ("experience combat", |s| factor(s.experience_combat_factor)),
+    ("experience mining", |s| factor(s.experience_mining_factor)),
+    ("experience exploration and quests", |s| {
+        factor(s.experience_exploration_quests_factor)
+    }),
+    ("random spawner amount", |s| kind(&s.random_spawner_amount)),
+    ("aggro pool amount", |s| kind(&s.aggro_pool_amount)),
+    ("enemy damage", |s| factor(s.enemy_damage_factor)),
+    ("enemy health", |s| factor(s.enemy_health_factor)),
+    ("enemy stamina", |s| factor(s.enemy_stamina_factor)),
+    ("enemy perception range", |s| {
+        factor(s.enemy_perception_range_factor)
+    }),
+    ("boss damage", |s| factor(s.boss_damage_factor)),
+    ("boss health", |s| factor(s.boss_health_factor)),
+    ("threat bonus", |s| number(s.threat_bonus)),
+    ("pacify all enemies", |s| switch(s.pacify_all_enemies)),
+    ("taming startle repercussion", |s| {
+        kind(&s.taming_startle_repercussion)
+    }),
+    ("day length", |s| length(s.day_time_duration)),
+    ("night length", |s| length(s.night_time_duration)),
+    ("curse modifier", |s| kind(&s.curse_modifier)),
+    ("flame level fog removal", |s| {
+        s.flame_level_fog_removal.to_string()
+    }),
+];
+
+/// `value` with at most two decimals and no trailing zeros.
+fn number(value: f32) -> String {
+    let text = format!("{value:.2}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// A factor of the game's normal value, as `x1.5`.
+fn factor(value: f32) -> String {
+    format!("x{}", number(value))
+}
+
+/// A switch as `on` or `off`.
+fn switch(on: bool) -> String {
+    if on { "on" } else { "off" }.to_owned()
+}
+
+/// A length of time in hours, minutes and seconds, leaving out parts that
+/// are zero.
+fn length(time: Duration) -> String {
+    let seconds = time.as_secs();
+    let parts = [
+        (seconds / 3600, "h"),
+        (seconds / 60 % 60, "min"),
+        (seconds % 60, "s"),
+    ];
+    let text: Vec<String> = parts
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, unit)| format!("{count} {unit}"))
+        .collect();
+    if text.is_empty() {
+        "0 s".to_owned()
+    } else {
+        text.join(" ")
+    }
+}
+
+/// A kind the game names, such as a tombstone mode, in lower-case words:
+/// `AddBackpackMaterials` reads `add backpack materials`, an unnamed value
+/// `other 7`.
+fn kind(value: &impl core::fmt::Debug) -> String {
+    let mut words = String::new();
+    for c in format!("{value:?}").chars() {
+        match c {
+            '(' => words.push(' '),
+            ')' => {}
+            c if c.is_ascii_uppercase() => {
+                if !words.is_empty() {
+                    words.push(' ');
+                }
+                words.push(c.to_ascii_lowercase());
+            }
+            c => words.push(c),
+        }
+    }
+    words
+}
+
+impl Tools {
+    /// Writes a line the server's chat heard to the chat log while the
+    /// world's settings keep it on: the sender's name and account, what
+    /// the line is and its text.
+    pub(crate) fn heard(&self, line: &ChatLine) {
+        if !self.settings.load().chat_log_on(self.dedicated) {
+            return;
+        }
+        let Some(dir) = self.world.data_dir() else {
+            return;
+        };
+        let (name, account) = line.player.map_or_else(Default::default, |key| {
+            let name = self.world.player_by_key(key).map(|player| player.name);
+            (name.unwrap_or_default(), crate::account_id(key))
+        });
+        let kind = match line.kind {
+            ChatKind::Player => "say",
+            ChatKind::Emote => "emote",
+            _ => "notice",
+        };
+        self.chat.record(dir, &[&name, &account, kind, &line.text]);
     }
 }
 
@@ -183,6 +460,12 @@ impl Tools {
             .relock()
             .step(elapsed, &settings.announcements, every);
         for say in &said {
+            // The save the restart would make, so the host's restart loses nothing.
+            if matches!(say, Say::RestartNow)
+                && let Err(why) = self.world.save()
+            {
+                enshwick::warn!("no save before the restart: {why}");
+            }
             self.announce(say);
         }
     }
@@ -212,31 +495,42 @@ impl Tools {
 }
 
 /// The settings `new` changes from `old`, as `key = value`, dotted for a
-/// group's.
+/// group's; a secret setting by its key alone.
 pub(crate) fn changed_keys(old: &Settings, new: &Settings) -> Vec<String> {
     let (Ok(old), Ok(new)) = (toml::Table::try_from(old), toml::Table::try_from(new)) else {
         return Vec::new();
     };
+    let schema = Settings::schema();
     let mut changed = Vec::new();
-    diff("", &old, &new, &mut changed);
+    diff("", &old, &new, &schema, &mut changed);
     changed
 }
 
 /// Adds to `changed` each key of `new` whose value differs in `old`.
-fn diff(prefix: &str, old: &toml::Table, new: &toml::Table, changed: &mut Vec<String>) {
+fn diff(
+    prefix: &str,
+    old: &toml::Table,
+    new: &toml::Table,
+    schema: &Schema,
+    changed: &mut Vec<String>,
+) {
     for (key, value) in new {
+        let full = format!("{prefix}{key}");
         match (old.get(key), value) {
             (Some(toml::Value::Table(old)), toml::Value::Table(new)) => {
-                diff(&format!("{prefix}{key}."), old, new, changed);
+                diff(&format!("{full}."), old, new, schema, changed);
             }
             (Some(was), now) if was == now => {}
-            (_, now) => changed.push(format!("{prefix}{key} = {now}")),
+            _ if schema.field(&full).is_some_and(|field| field.secret) => changed.push(full),
+            (_, now) => changed.push(format!("{full} = {now}")),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use enshwick::game_settings::{GameSettingsPreset, TombstoneMode};
+
     use super::*;
 
     #[test]
@@ -259,5 +553,52 @@ mod tests {
             ["motd = \"Welcome\"", "rights.kick = \"nobody\""]
         );
         assert!(changed_keys(&old, &old).is_empty());
+    }
+
+    #[test]
+    fn the_uptime_reads_as_whole_hours_and_the_minutes_past_them() {
+        assert_eq!(hours_minutes(0), (0, 0));
+        assert_eq!(hours_minutes(59), (0, 0));
+        assert_eq!(hours_minutes(3_599), (0, 59));
+        assert_eq!(hours_minutes(3_600 * 26 + 125), (26, 2));
+    }
+
+    #[test]
+    fn the_world_view_writes_factors_lengths_switches_and_kinds_as_people_read_them() {
+        assert_eq!(factor(1.0), "x1");
+        assert_eq!(factor(2.5), "x2.5");
+        assert_eq!(factor(0.333_33), "x0.33");
+        assert_eq!(number(10.0), "10");
+        assert_eq!(switch(true), "on");
+        assert_eq!(switch(false), "off");
+        assert_eq!(length(Duration::from_mins(30)), "30 min");
+        assert_eq!(length(Duration::from_secs(90 * 60 + 30)), "1 h 30 min 30 s");
+        assert_eq!(length(Duration::from_hours(2)), "2 h");
+        assert_eq!(length(Duration::ZERO), "0 s");
+        assert_eq!(
+            kind(&TombstoneMode::AddBackpackMaterials),
+            "add backpack materials"
+        );
+        assert_eq!(kind(&TombstoneMode::Other(7)), "other 7");
+        assert_eq!(kind(&GameSettingsPreset::Custom), "custom");
+    }
+
+    #[test]
+    fn the_world_view_names_every_game_setting_once() {
+        let mut names: Vec<&str> = GAME_SETTINGS.iter().map(|(name, _)| *name).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), GAME_SETTINGS.len());
+        assert!(names.iter().all(|name| !name.contains('_')), "{names:?}");
+    }
+
+    #[test]
+    fn a_changed_secret_is_named_by_its_key_and_never_its_value() {
+        let old = Settings::default();
+        let new = Settings {
+            rcon_password: "hunter2".into(),
+            ..old.clone()
+        };
+        assert_eq!(changed_keys(&old, &new), ["rcon_password"]);
     }
 }

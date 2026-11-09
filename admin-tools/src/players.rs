@@ -11,7 +11,7 @@ use enshwick::world::{AccountAction, Player};
 use enshwick::{Entity, Off, PlayerKey, Relock as _, WorldError};
 
 use crate::accounts::Ban;
-use crate::{Tools, audit, ids, texts};
+use crate::{Tools, ids, journal, texts};
 
 /// How far a position may lie from the world's origin, in metres, on each
 /// axis; well past the edge of any map.
@@ -119,8 +119,8 @@ fn no_player(request: &Request<'_>) -> Outcome {
     Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]))
 }
 
-/// The players online, each with their time online and whether they are
-/// muted.
+/// The players online, each with their account, their time online and
+/// whether they are muted.
 fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
     let players = tools.world.players();
     if players.is_empty() {
@@ -143,6 +143,7 @@ fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
                 key,
                 &[
                     (texts::value::NAME, &player.name),
+                    (texts::value::ACCOUNT, &crate::account_id(player.key)),
                     (texts::value::MINUTES, &minutes),
                 ],
             )
@@ -186,7 +187,7 @@ fn banned(tools: &Tools, request: &Request<'_>) -> Outcome {
             key: *key,
             name: name.clone(),
             by: request.player.name.clone(),
-            at: audit::now(),
+            at: journal::now(),
         };
         tools.accounts.update(|accounts| accounts.ban(ban))
     } else {

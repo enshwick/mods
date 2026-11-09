@@ -344,6 +344,7 @@ mod tests {
             )
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        loader.host_screen(Some(CHEST));
         assert!(
             loader.draw_screen(HudScreenType::StorageChest).is_empty(),
             "no Safe open"
@@ -411,6 +412,7 @@ mod tests {
 
         // Closed past the grace of the last message, then opened again.
         std::thread::sleep(std::time::Duration::from_millis(1300));
+        reopen(&loader, CHEST);
         assert!(
             loader.draw_screen(HudScreenType::StorageChest).is_empty(),
             "a chest opened again waits for the server's word"
@@ -448,11 +450,12 @@ mod tests {
                 allowed: false,
             }],
         };
+        loader.host_screen(Some(CHEST));
         assert!(loader.net_deliver(CHANNEL, Peer::Server, &safe));
         assert!(!loader.draw_screen(HudScreenType::StorageChest).is_empty());
         // Closed and another chest opened within the grace, its Nothing still
         // on the way.
-        std::thread::sleep(std::time::Duration::from_millis(400));
+        reopen(&loader, Entity(CHEST.0 + 1));
         assert!(
             loader.draw_screen(HudScreenType::StorageChest).is_empty(),
             "the Safe's list was for the chest closed before"
@@ -463,6 +466,16 @@ mod tests {
             "a fresh message for the chest open now"
         );
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
+    }
+
+    /// The chest the tests open, an entity of the client's world.
+    const CHEST: Entity = Entity(512);
+
+    /// Closes the open chest for a frame, then opens `chest`.
+    fn reopen(loader: &enshwick::test::Installed, chest: Entity) {
+        loader.host_screen(None);
+        let _closed = loader.draw_frame();
+        loader.host_screen(Some(chest));
     }
 
     /// Each switch the panel draws, by label.
@@ -514,6 +527,7 @@ mod tests {
                 allowed: false,
             }],
         };
+        loader.host_screen(Some(CHEST));
         assert!(loader.net_deliver(CHANNEL, Peer::Server, &safe));
         let frame = || {
             let _hud = loader.draw_frame();
@@ -536,10 +550,10 @@ mod tests {
             "with no answer the switch shows the server's word again"
         );
 
-        let _closed = loader.draw_frame();
+        reopen(&loader, CHEST);
         assert!(
             frame().is_empty(),
-            "a frame without the panel closed the chest; the list was for it"
+            "the chest closed and opened again; the list was for before"
         );
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
     }

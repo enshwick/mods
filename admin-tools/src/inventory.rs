@@ -9,6 +9,7 @@ use enshwick::world::Player;
 use enshwick::{Entity, Off, WorldError};
 
 use crate::items::{self, Unknown};
+
 use crate::{Tools, ids, texts};
 
 /// The most items one give hands over; the item's stack size bounds it
@@ -146,33 +147,6 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
     Outcome::done(request.say(texts::REPLY_COPIED, &values))
 }
 
-/// The refusal for an item text that names no item the game knows.
-fn unknown(request: &Request<'_>, text: &str, why: &Unknown) -> Outcome {
-    let item = [(texts::value::ITEM, text)];
-    let reply = match why {
-        Unknown::Name { near } if near.is_empty() => request.say(texts::REPLY_NO_ITEM, &item),
-        Unknown::Name { near } => request.say(
-            texts::REPLY_NO_ITEM_NEAR,
-            &[
-                (texts::value::ITEM, text),
-                (texts::value::NEAR, &near.join(", ")),
-            ],
-        ),
-        Unknown::Several(guids) => {
-            let guids: Vec<String> = guids.iter().map(ToString::to_string).collect();
-            request.say(
-                texts::REPLY_SEVERAL_ITEMS,
-                &[
-                    (texts::value::ITEM, text),
-                    (texts::value::NEAR, &guids.join(", ")),
-                ],
-            )
-        }
-        Unknown::Unreadable => request.say(texts::REPLY_ITEMS_UNREAD, &item),
-    };
-    Outcome::refused(reply)
-}
-
 /// Gives a player `count` new items, at most one stack; a give the game
 /// turns down later, such as for a full inventory, is told to the caller.
 fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
@@ -187,12 +161,12 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
     let Some(inventories) = &tools.inventories else {
         return Tools::failed(request, name, &WorldError::Missing);
     };
-    let item = match items::resolve(text) {
+    let item = match items::item(text) {
         Ok(item) => item,
-        Err(why) => return unknown(request, text, &why),
+        Err(why) => return items::refused(request, text, &why),
     };
     let Some(info) = inventories.item_info(item) else {
-        return unknown(request, text, &Unknown::Name { near: Vec::new() });
+        return items::refused(request, text, &Unknown::Name { near: Vec::new() });
     };
     let Some(player) = tools.world.player_by_key(*key) else {
         return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));

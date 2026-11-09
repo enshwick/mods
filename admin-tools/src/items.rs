@@ -1,54 +1,105 @@
-//! Items as an administrator names them: the game's own name of an item,
-//! its GUID, a mod's content id or the item's number.
+//! Items and recipes as an administrator names them: the game's own name,
+//! the GUID, a mod's content id or the number.
 
 use enshwick::ItemId;
+use enshwick::actions::{Outcome, Request};
 use enshwick::content::Guid;
 use enshwick::content::vanilla::{self, VanillaError};
+use enshwick::knowledge::KnowledgeId;
 
-/// The longest item name an action takes, in bytes.
+use crate::texts;
+
+/// The longest item or recipe name an action takes, in bytes.
 pub(crate) const MAX_NAME: usize = 120;
 
-/// Why an item name names no item.
+/// Why a name names nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Unknown {
-    /// No item has the name; `near` lists names that look like it.
+    /// Nothing has the name; `near` lists names that look like it.
     Name { near: Vec<String> },
-    /// Several items have the name: each one's GUID.
+    /// Several have the name: each one's GUID.
     Several(Vec<Guid>),
-    /// The game's item list does not read.
+    /// The game's list does not read.
     Unreadable,
 }
 
 /// The item `text` names: a GUID, a content id (`<mod>:<name>`), the
 /// game's name of an item in any case, or the item's number.
-pub(crate) fn resolve(text: &str) -> Result<ItemId, Unknown> {
+pub(crate) fn item(text: &str) -> Result<ItemId, Unknown> {
+    resolve(text, vanilla::item, ItemId::from_guid, ItemId::new)
+}
+
+/// The knowledge `text` names: a recipe's GUID, content id or game's name
+/// in any case, or any knowledge's number.
+pub(crate) fn knowledge(text: &str) -> Result<KnowledgeId, Unknown> {
+    resolve(
+        text,
+        vanilla::recipe,
+        KnowledgeId::from_guid,
+        KnowledgeId::new,
+    )
+}
+
+/// What `text` names: a GUID or content id through `from_guid`, a name
+/// through `lookup`, else a number through `new`.
+fn resolve<T>(
+    text: &str,
+    lookup: impl Fn(&str) -> Result<Guid, VanillaError>,
+    from_guid: fn(Guid) -> T,
+    new: fn(u32) -> T,
+) -> Result<T, Unknown> {
     let text = text.trim();
     if let Some(guid) = Guid::try_parse(text).or_else(|| Guid::try_named(text)) {
-        return Ok(ItemId::from_guid(guid));
+        return Ok(from_guid(guid));
     }
-    match by_name(text, vanilla::item) {
-        Ok(guid) => Ok(ItemId::from_guid(guid)),
-        Err(unknown) => text.parse().map(ItemId::new).map_err(|_| unknown),
+    match by_name(text, lookup) {
+        Ok(guid) => Ok(from_guid(guid)),
+        Err(unknown) => text.parse().map(new).map_err(|_| unknown),
     }
 }
 
-/// The item named `name` by `lookup`; a name that differs only in case
-/// from one the lookup suggests names that one.
+/// What `lookup` finds named `name`; a name that differs only in case from
+/// one the lookup suggests names that one.
 fn by_name(
     name: &str,
     lookup: impl Fn(&str) -> Result<Guid, VanillaError>,
 ) -> Result<Guid, Unknown> {
     match lookup(name) {
         Ok(guid) => Ok(guid),
-        Err(VanillaError::Unknown { near, .. }) => {
+        Err(VanillaError::Unknown { near, .. } | VanillaError::UnknownRecipe { near, .. }) => {
             match near.iter().find(|near| near.eq_ignore_ascii_case(name)) {
                 Some(exact) => lookup(exact).map_err(|_| Unknown::Name { near }),
                 None => Err(Unknown::Name { near }),
             }
         }
-        Err(VanillaError::Ambiguous { items, .. }) => Err(Unknown::Several(items)),
+        Err(
+            VanillaError::Ambiguous { items: several, .. }
+            | VanillaError::AmbiguousRecipe {
+                recipes: several, ..
+            },
+        ) => Err(Unknown::Several(several)),
         Err(_) => Err(Unknown::Unreadable),
     }
+}
+
+/// The refusal of a run whose `text` names nothing, with the names near it
+/// or the GUIDs to choose from.
+pub(crate) fn refused(request: &Request<'_>, text: &str, why: &Unknown) -> Outcome {
+    let named = |key, near: &str| {
+        request.say(
+            key,
+            &[(texts::value::ITEM, text), (texts::value::NEAR, near)],
+        )
+    };
+    Outcome::refused(match why {
+        Unknown::Name { near } if near.is_empty() => named(texts::REPLY_NO_ITEM, ""),
+        Unknown::Name { near } => named(texts::REPLY_NO_ITEM_NEAR, &near.join(", ")),
+        Unknown::Several(guids) => {
+            let guids: Vec<String> = guids.iter().map(ToString::to_string).collect();
+            named(texts::REPLY_SEVERAL_ITEMS, &guids.join(", "))
+        }
+        Unknown::Unreadable => named(texts::REPLY_ITEMS_UNREAD, ""),
+    })
 }
 
 #[cfg(test)]
@@ -99,14 +150,39 @@ mod tests {
     #[test]
     fn a_guid_a_content_id_and_a_number_each_name_an_item_without_the_game() {
         assert_eq!(
-            resolve(" 3f0c8d44-6b2a-4c1e-9d77-0a5be1c2d3e4 "),
+            item(" 3f0c8d44-6b2a-4c1e-9d77-0a5be1c2d3e4 "),
             Ok(ItemId::from_guid(GLIDER))
         );
         assert_eq!(
-            resolve("you.lockers:locker"),
+            item("you.lockers:locker"),
             Ok(ItemId::named("you.lockers:locker"))
         );
-        assert_eq!(resolve("3073"), Ok(ItemId::new(3073)));
-        assert_eq!(resolve("Tool_Glider_T1"), Err(Unknown::Unreadable));
+        assert_eq!(item("3073"), Ok(ItemId::new(3073)));
+        assert_eq!(item("Tool_Glider_T1"), Err(Unknown::Unreadable));
+    }
+
+    #[test]
+    fn a_recipe_s_guid_names_the_knowledge_the_game_keeps_for_it() {
+        assert_eq!(
+            knowledge("3f0c8d44-6b2a-4c1e-9d77-0a5be1c2d3e4"),
+            Ok(enshwick::RecipeId::from_guid(GLIDER).into())
+        );
+        assert_eq!(knowledge("17"), Ok(KnowledgeId::new(17)));
+    }
+
+    #[test]
+    fn an_unknown_recipe_offers_the_recipe_names_near_it() {
+        let recipes = |name: &str| {
+            Err(VanillaError::UnknownRecipe {
+                name: name.to_owned(),
+                near: vec!["Tool_Torch01".into()],
+            })
+        };
+        assert_eq!(
+            by_name("Tool_Torch1", recipes),
+            Err(Unknown::Name {
+                near: vec!["Tool_Torch01".into()]
+            })
+        );
     }
 }

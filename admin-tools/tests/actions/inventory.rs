@@ -65,7 +65,7 @@ fn give_refuses_more_than_a_stack_and_an_unknown_name_with_the_names_near_it() {
         "p0000000000000002\tn1\ttTool_Glider",
     );
     assert!(
-        reply.starts_with("0No item is named Tool_Glider. Near: "),
+        reply.starts_with("0Nothing is named Tool_Glider. Near: "),
         "{reply}"
     );
     assert!(reply.contains("Tool_Glider_T1"), "{reply}");

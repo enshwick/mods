@@ -4,14 +4,24 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use enshwick::PlayerKey;
 use enshwick::abi::{ActionCall, DaytimeInfo, Header, PlayerData, PlayerInfo, Side, Status};
 use enshwick::content::EngineFacts as _;
+use enshwick::content::Guid;
 use enshwick::events::{PlayerJoined, SettingsReplaced, WorldLoaded};
 use enshwick::test::{Installed, facts};
+use enshwick::{ItemId, PlayerKey};
 use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
 
 pub(crate) const ADMIN: u8 = PlayerInfo::CAN_KICK_BAN;
+
+/// The game's skipped inventory entity, which the inventory reads compare to.
+static SKIPPED: [u32; 1] = [0];
+
+/// A glider in the fake's item registry, one to a stack.
+pub(crate) const GLIDER: Guid = Guid([0x61; 16]);
+
+/// Wood in the fake's item registry, a hundred to a stack.
+pub(crate) const WOOD: Guid = Guid([0x62; 16]);
 
 /// The fake's type hash of a health attribute set; past the world
 /// preset's own hashes.
@@ -131,7 +141,22 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
     }
     .world();
     let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
+    // Inventories resolve these; the actions under test never call them.
     let mut host = host
+        .symbol("ecs.type_index", 0x1_4064_5cc0)
+        .symbol("ecs.component_read_raw", 0x1_4064_6b00)
+        .symbol("ecs.slot_root", 0x1_4093_5420)
+        .symbol("inventory.skip_entity", SKIPPED.as_ptr().addr() as u64)
+        .constant("ecs.context_entity_world", 0x30)
+        .constant("ecs.registry_type_map", 0x30)
+        .constant("ecs.registry_type_map_fallback", 0x88)
+        .items()
+        .recipes()
+        .workshops()
+        .inventory()
+        .vanilla_items(&[(GLIDER, "Tool_Glider_T1"), (WOOD, "Resource_Wood")])
+        .item(ItemId::from_guid(GLIDER), 1, 0)
+        .item(ItemId::from_guid(WOOD), 100, 0)
         .type_hash("attribute_set.health", HEALTH)
         .type_hash("attribute_set.stamina", HEALTH + 1)
         .type_hash("attribute_set.mana", HEALTH + 2)

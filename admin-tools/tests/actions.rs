@@ -6,6 +6,9 @@
 #[path = "actions/game.rs"]
 mod game;
 #[cfg(test)]
+#[path = "actions/inventory.rs"]
+mod inventory;
+#[cfg(test)]
 #[path = "actions/players.rs"]
 mod players;
 #[cfg(test)]

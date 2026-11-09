@@ -63,7 +63,8 @@ pub(crate) struct Tools {
     effects: Effects,
     clock: Clock,
     weather: Weather,
-    inventories: Inventories,
+    /// The inventories, `None` on a build without them.
+    inventories: Option<Inventories>,
     /// The game settings, `None` on a build without them.
     game_settings: Option<GameSettings>,
     scheduler: Scheduler,
@@ -107,7 +108,10 @@ impl Mod for AdminTools {
             .inspect_err(|why| enshwick::warn!("the world action is off: {why}"))
             .ok();
         let scheduler = load.scheduler()?;
-        let inventories = load.inventories()?;
+        let inventories = load
+            .inventories()
+            .inspect_err(|why| enshwick::warn!("the inventory actions are off: {why}"))
+            .ok();
         let actions = load.actions(texts.clone())?;
         let accounts = load.world_store(accounts::STORE)?;
         let tools = Arc::new_cyclic(|me| Tools {

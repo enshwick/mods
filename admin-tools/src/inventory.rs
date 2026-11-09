@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use enshwick::Off;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::world::Player;
+use enshwick::{Off, WorldError};
 
 use crate::items::{self, Unknown};
 use crate::{Tools, ids, texts};
@@ -15,6 +15,9 @@ pub(crate) const MAX_COUNT: f64 = 9_999.0;
 
 /// Declares the actions on what players carry.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
+    if tools.inventories.is_none() {
+        return Ok(());
+    }
     tools.add(
         Action::new(ids::GIVE, texts::ACTION_GIVE)
             .help(texts::ACTION_GIVE_HELP)
@@ -63,11 +66,14 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
     else {
         return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
     };
+    let Some(inventories) = &tools.inventories else {
+        return Tools::failed(request, name, &WorldError::Missing);
+    };
     let item = match items::resolve(text) {
         Ok(item) => item,
         Err(why) => return unknown(request, text, &why),
     };
-    let Some(info) = tools.inventories.item_info(item) else {
+    let Some(info) = inventories.item_info(item) else {
         return unknown(request, text, &Unknown::Name { near: Vec::new() });
     };
     let Some(player) = tools.world.player_by_key(*key) else {
@@ -97,18 +103,16 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
     let failed = request.say(texts::REPLY_NOT_GIVEN, &values);
     let caller = request.player.clone();
     let world = tools.world;
-    let _ticket = tools
-        .inventories
-        .give(player.entity, item, count, move |outcome| {
-            if !outcome.is_committed() {
-                enshwick::warn!(
-                    "give of {item:?} to {} turned down: {:?}",
-                    player.name,
-                    outcome.done
-                );
-                tell(world, &caller, &failed);
-            }
-        });
+    let _ticket = inventories.give(player.entity, item, count, move |outcome| {
+        if !outcome.is_committed() {
+            enshwick::warn!(
+                "give of {item:?} to {} turned down: {:?}",
+                player.name,
+                outcome.done
+            );
+            tell(world, &caller, &failed);
+        }
+    });
     Outcome::done(request.say(texts::REPLY_GIVEN, &values))
 }
 

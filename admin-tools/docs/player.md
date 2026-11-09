@@ -99,6 +99,7 @@ The console and RCON tools may use every action.
 | `/adl allowed <player> on` or `off` | Puts a player on the allow-list or takes them off. |
 | `/adl muted <player> on` or `off` | Mutes a player in chat or lifts the mute. |
 | `/adl heal <player>` | Gives a player their full health. |
+| `/adl give <player> <count> <item>` | Gives a player new items, up to one stack. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
 | `/adl goto <player>` | Takes you to a player. |
 | `/adl bring <player>` | Brings a player to you. |
 | `/adl send <player> <player>` | Moves the first player to the second. |

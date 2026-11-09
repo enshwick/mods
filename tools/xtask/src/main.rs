@@ -97,7 +97,7 @@ fn run(args: &[String]) -> Result<bool, String> {
 }
 
 /// A workspace package.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Package {
     name: String,
     version: String,

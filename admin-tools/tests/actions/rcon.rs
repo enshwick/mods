@@ -86,7 +86,7 @@ fn an_rcon_tool_logs_in_and_runs_a_command_with_the_console_s_rights() {
         stream.write_all(&packet(6, 3, PASSWORD)).unwrap();
         assert_eq!(read_packet(&mut stream).unwrap(), (6, 0, String::new()));
         assert_eq!(read_packet(&mut stream).unwrap(), (6, 2, String::new()));
-        stream.write_all(&packet(7, 2, "adl online")).unwrap();
+        stream.write_all(&packet(7, 2, "adm online")).unwrap();
         stream.write_all(&packet(8, 0, "")).unwrap();
         let online = read_packet(&mut stream).unwrap();
         let end = read_packet(&mut stream).unwrap();
@@ -131,7 +131,7 @@ fn rcon_closes_on_a_hostile_size_a_command_before_login_and_repeated_failures() 
         let huge = read_packet(&mut huge);
 
         let mut early = connect(port);
-        early.write_all(&packet(1, 2, "adl kick Bob")).unwrap();
+        early.write_all(&packet(1, 2, "adm kick Bob")).unwrap();
         let early = read_packet(&mut early);
 
         let mut guessing = connect(port);

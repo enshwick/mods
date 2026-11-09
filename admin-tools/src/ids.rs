@@ -71,4 +71,4 @@ pub(crate) const READS: [&str; 6] = [ONLINE, STATUS, MOTD, WORLD, AUDIT, CHAT];
 /// The mod's command name, the part of its id after the author.
 pub(crate) const COMMAND: &str = "admin-tools";
 /// The command's short alias.
-pub(crate) const ALIAS: &str = "adl";
+pub(crate) const ALIAS: &str = "adm";

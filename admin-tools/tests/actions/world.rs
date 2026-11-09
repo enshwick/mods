@@ -20,7 +20,7 @@ fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
         reply.starts_with("1Up 0 h 0 min, world world0. Mods:"),
         "{reply}"
     );
-    let console = console::run("adl status").unwrap();
+    let console = console::run("adm status").unwrap();
     assert!(
         console.starts_with("Up 0 h 0 min, world world0."),
         "{console}"

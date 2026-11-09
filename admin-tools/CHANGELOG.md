@@ -10,8 +10,8 @@ Each entry says what players notice; a release's notes show its section.
 
 - First alpha. A server's administrators mute players in chat from the
   dedicated server's console.
-- Every action is a command in chat and the console: `/adl` or
-  `/admin-tools`, with `/adl help` listing what the caller may use.
+- Every action is a command in chat and the console: `/adm` or
+  `/admin-tools`, with `/adm help` listing what the caller may use.
 - Administrators list the players online, kick them, and heal them.
 - A ban holds when the account comes back, also after a restart, and lifts
   while the player is away.
@@ -26,7 +26,7 @@ Each entry says what players notice; a release's notes show its section.
   game's user groups.
 - An audit log beside the world's save keeps every change an administrator
   made.
-- The players list shows each player's account id, and `/adl status` shows
+- The players list shows each player's account id, and `/adm status` shows
   the uptime, the world and the Enshwick and mod versions.
 - RCON tools such as BattleMetrics or rcon-cli run every command on a
   dedicated server, on port 25575 of the server's own computer with a
@@ -35,9 +35,9 @@ Each entry says what players notice; a release's notes show its section.
   on.
 - A chat log beside the world's save keeps every chat line with the
   player's name and account id; it is on for a dedicated server.
-- `/adl backup` copies the world's save, mod settings and mod data while the
+- `/adm backup` copies the world's save, mod settings and mod data while the
   server runs, and keeps the newest 10 backups.
-- `/adl save` saves the world now, and `/adl world` shows its last save and
+- `/adm save` saves the world now, and `/adm world` shows its last save and
   its game settings.
 - A restart warning saves the world when its time is up; a game a player
   hosts offers no restart warning.
@@ -52,6 +52,6 @@ Each entry says what players notice; a release's notes show its section.
   a recipe or any knowledge by its number.
 - God mode keeps all damage off a player until they leave or the world
   stops.
-- `/adl online` lists the players in chat, one player a line.
+- `/adm online` lists the players in chat, one player a line.
 - The audit log also keeps every refused run of an action that changes
   something.

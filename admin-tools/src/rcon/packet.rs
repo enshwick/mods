@@ -180,7 +180,7 @@ mod tests {
         let mut bytes = Packet {
             id: 1,
             kind: EXEC,
-            body: b"adl online".to_vec(),
+            body: b"adm online".to_vec(),
         }
         .encode();
         assert_eq!(parse(&bytes[..bytes.len() - 1]), Ok(None));

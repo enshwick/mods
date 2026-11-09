@@ -8,7 +8,7 @@
 //! and a chat log.
 //!
 //! Every action also runs as a command, `/admin-tools <action>` or
-//! `/adl <action>`, in chat, the server's console and the mod's remote
+//! `/adm <action>`, in chat, the server's console and the mod's remote
 //! console (Source RCON).
 
 mod accounts;

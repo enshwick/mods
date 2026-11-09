@@ -37,7 +37,9 @@ On a client:
   held (`input::local_held`), the open screen, its host and template, the
   prompt, and what the two input hints drew.
 
-The mod writes the tone into its own folder as `tone.wav` at start.
+The mod writes the tone into its own folder as `tone.wav` at start. It has no
+button that raises a notifier at the player: the platform has no call for it
+yet.
 
 ## Settings
 

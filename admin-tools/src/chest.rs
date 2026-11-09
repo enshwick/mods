@@ -10,7 +10,9 @@ use enshwick::content::vanilla;
 use enshwick::world::{Player, TransactionId, TransactionStatus, WorldTransform};
 use enshwick::{ItemId, Off};
 
-use crate::inventory::{MAX_COUNT, tell};
+use enshwick::inventory::{Batch, Op, Outcome as Given};
+
+use crate::inventory::{MAX_COUNT, report, tell, whole};
 use crate::items::{self, Unknown};
 use crate::{Tools, ids, texts};
 
@@ -107,8 +109,8 @@ fn place(
     text: &str,
     whereabouts: &str,
 ) -> Outcome {
-    let item = match items::item(text) {
-        Ok(item) => item,
+    let (item, shown) = match items::item(text) {
+        Ok(found) => found,
         Err(why) => return items::refused(request, text, &why),
     };
     let known = tools
@@ -130,38 +132,42 @@ fn place(
         Ok(placed) => placed,
         Err(why) => return Tools::failed(request, whereabouts, &why),
     };
-    // The argument's range and step make it a whole number from 1 up.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a whole number in 1..=MAX_COUNT"
-    )]
-    let count = count as u32;
-    let shown = count.to_string();
+    let count = whole(count);
+    let shown_count = count.to_string();
     let values = [
         (texts::value::NAME, whereabouts),
-        (texts::value::COUNT, shown.as_str()),
-        (texts::value::ITEM, text),
+        (texts::value::COUNT, shown_count.as_str()),
+        (texts::value::ITEM, shown.as_str()),
     ];
-    let failed = request.say(texts::REPLY_CHEST_NOT_FILLED, &values);
+    let not_placed = request.say(texts::REPLY_CHEST_NOT_FILLED, &values);
+    let reply = request.say(texts::REPLY_CHEST, &values);
+    let done = report(tools, request, shown, count, whereabouts.to_owned());
     if let Some(tools) = tools.me.upgrade() {
-        fill(&tools, placed, item, count, request.player.clone(), failed);
+        fill(
+            &tools,
+            placed,
+            (item, count),
+            request.player.clone(),
+            not_placed,
+            done,
+        );
     }
-    Outcome::done(request.say(texts::REPLY_CHEST, &values))
+    Outcome::done(reply)
 }
 
 /// Looks for the chest transaction `placed` puts in the world and gives it
-/// `count` items `item`; a chest that does not appear, or a fill the game
-/// turns down, is told to `caller` as `failed`.
+/// `count` items `item` in as many stacks as fit, with `done` on the
+/// outcome; a chest that does not appear is told to `caller` as
+/// `not_placed`.
 fn fill(
     tools: &Arc<Tools>,
     placed: TransactionId,
-    item: ItemId,
-    count: u32,
+    (item, count): (ItemId, u32),
     caller: Player,
-    failed: String,
+    not_placed: String,
+    done: impl FnOnce(&Given) + Send + 'static,
 ) {
-    let (filling, mut looks) = (Arc::clone(tools), 0);
+    let (filling, mut looks, mut done) = (Arc::clone(tools), 0, Some(done));
     tools.scheduler.every(LOOK, move || {
         let world = filling.world;
         let chest = world.transaction_entities(placed).first().copied();
@@ -174,19 +180,21 @@ fn fill(
         let Some(chest) = chest else {
             if gone || looks >= LOOKS {
                 enshwick::warn!("chest of {item:?} not placed: {status:?}");
-                tell(world, &caller, &failed);
+                tell(world, &caller, &not_placed);
                 return ControlFlow::Break(());
             }
             return ControlFlow::Continue(());
         };
-        if let Some(inventories) = &filling.inventories {
-            let (caller, failed) = (caller.clone(), failed.clone());
-            let _ticket = inventories.give(chest, item, count, move |outcome| {
-                if !outcome.is_committed() {
-                    enshwick::warn!("chest fill of {item:?} turned down: {:?}", outcome.done);
-                    tell(world, &caller, &failed);
-                }
-            });
+        if let (Some(inventories), Some(done)) = (&filling.inventories, done.take()) {
+            let batch = Batch::new()
+                .with(Op::Give {
+                    to: chest,
+                    item,
+                    count,
+                    fill: None,
+                })
+                .allow_partial();
+            let _ticket = inventories.submit(&batch, done);
         }
         ControlFlow::Break(())
     });

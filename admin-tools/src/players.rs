@@ -154,7 +154,9 @@ fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
         texts::REPLY_ONLINE,
         &[
             (texts::value::COUNT, &count),
-            (texts::value::PLAYERS, &rows.join(", ")),
+            // One player a line: a reply of several lines goes to chat, where
+            // it stays, and one line only to a passing notice.
+            (texts::value::PLAYERS, &rows.join("\n")),
         ],
     ))
 }

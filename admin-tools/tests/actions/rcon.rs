@@ -101,7 +101,8 @@ fn an_rcon_tool_logs_in_and_runs_a_command_with_the_console_s_rights() {
         (
             7,
             0,
-            "2 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)".to_owned()
+            "Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"
+                .to_owned()
         )
     );
     assert_eq!(end, (8, 0, String::new()), "the end of a long reply");

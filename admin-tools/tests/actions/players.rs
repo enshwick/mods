@@ -55,12 +55,12 @@ fn the_world_s_rights_give_an_action_to_a_permission_and_take_one_away() {
     );
     assert_eq!(
         console::run("enshwick.admin-tools online").as_deref(),
-        Ok("2 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)"),
+        Ok("Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"),
         "the console always may"
     );
     assert_eq!(
         console::run("adl online").as_deref(),
-        Ok("2 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)"),
+        Ok("Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"),
         "the alias names the mod on the console"
     );
 }
@@ -412,7 +412,9 @@ fn commands_under_adl_run_the_actions_from_chat_with_the_player_s_rights() {
         loader
             .type_in_chat(&bob(), 0, "/admin-tools online")
             .as_deref(),
-        Some("12 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min, muted)")
+        Some(
+            "1Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min, muted)"
+        )
     );
     assert_eq!(
         loader

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
-use enshwick::inventory::{Batch, Inventories, Op, Slot};
+use enshwick::inventory::{Batch, Inventories, Op, Outcome as Given, Slot};
 use enshwick::world::Player;
 use enshwick::{Entity, Off, WorldError};
 
@@ -12,8 +12,7 @@ use crate::items::{self, Unknown};
 
 use crate::{Tools, ids, texts};
 
-/// The most items one give hands over; the item's stack size bounds it
-/// further.
+/// The most items one give hands over, in as many stacks as they need.
 pub(crate) const MAX_COUNT: f64 = 9_999.0;
 
 /// Declares the actions on what players carry.
@@ -147,8 +146,8 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
     Outcome::done(request.say(texts::REPLY_COPIED, &values))
 }
 
-/// Gives a player `count` new items, at most one stack; a give the game
-/// turns down later, such as for a full inventory, is told to the caller.
+/// Gives a player `count` new items in as many stacks as they need; what
+/// does not fit, or a give the game turns down, is told to the caller.
 fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [
         Value::Player { key, name },
@@ -161,51 +160,90 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
     let Some(inventories) = &tools.inventories else {
         return Tools::failed(request, name, &WorldError::Missing);
     };
-    let item = match items::item(text) {
-        Ok(item) => item,
+    let (item, shown) = match items::item(text) {
+        Ok(found) => found,
         Err(why) => return items::refused(request, text, &why),
     };
-    let Some(info) = inventories.item_info(item) else {
+    if inventories.item_info(item).is_none() {
         return items::refused(request, text, &Unknown::Name { near: Vec::new() });
-    };
+    }
     let Some(player) = tools.world.player_by_key(*key) else {
         return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
     };
-    // The argument's range and step make it a whole number from 1 up.
+    let count = whole(*count);
+    let batch = Batch::new()
+        .with(Op::Give {
+            to: player.entity,
+            item,
+            count,
+            fill: None,
+        })
+        .allow_partial();
+    let reply = request.say(
+        texts::REPLY_GIVEN,
+        &[
+            (texts::value::NAME, name),
+            (texts::value::COUNT, &count.to_string()),
+            (texts::value::ITEM, &shown),
+        ],
+    );
+    let _ticket = inventories.submit(&batch, report(tools, request, shown, count, name.clone()));
+    Outcome::done(reply)
+}
+
+/// `count`, an action's whole-number argument in `1..=MAX_COUNT`.
+pub(crate) fn whole(count: f64) -> u32 {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "a whole number in 1..=MAX_COUNT"
+        reason = "the argument's range and step make it a whole number in 1..=MAX_COUNT"
     )]
-    let count = *count as u32;
-    let stack = u32::from(info.max_stack_size.max(1));
-    let shown = count.to_string();
-    let values = [
-        (texts::value::NAME, name.as_str()),
-        (texts::value::COUNT, shown.as_str()),
-        (texts::value::ITEM, text.as_str()),
-    ];
-    if count > stack {
-        let stack = stack.to_string();
-        return Outcome::refused(request.say(
-            texts::REPLY_OVER_STACK,
-            &[(texts::value::ITEM, text), (texts::value::COUNT, &stack)],
-        ));
+    let count = count.clamp(1.0, MAX_COUNT) as u32;
+    count
+}
+
+/// How many of `count` items a give left out: all of them when the game
+/// turned it down, else what its one operation could not place.
+fn shortfall(outcome: &Given, count: u32) -> u32 {
+    if !outcome.is_committed() {
+        return count;
     }
-    let failed = request.say(texts::REPLY_NOT_GIVEN, &values);
+    outcome.ops.first().map_or(0, |op| op.remaining).min(count)
+}
+
+/// What runs once a give of `count` items, shown as `item`, to `to` ends:
+/// the caller reads, in their language, how many did not arrive.
+pub(crate) fn report(
+    tools: &Tools,
+    request: &Request<'_>,
+    item: String,
+    count: u32,
+    to: String,
+) -> impl FnOnce(&Given) + Send + 'static {
+    let (world, lines, language) = (tools.world, tools.texts.clone(), request.language);
     let caller = request.player.clone();
-    let world = tools.world;
-    let _ticket = inventories.give(player.entity, item, count, move |outcome| {
-        if !outcome.is_committed() {
-            enshwick::warn!(
-                "give of {item:?} to {} turned down: {:?}",
-                player.name,
-                outcome.done
-            );
-            tell(world, &caller, &failed);
+    move |outcome| {
+        let short = shortfall(outcome, count);
+        if short == 0 {
+            return;
         }
-    });
-    Outcome::done(request.say(texts::REPLY_GIVEN, &values))
+        enshwick::warn!(
+            "{short} of {count} {item} for {to} not given: {:?}",
+            outcome.done
+        );
+        let line = lines.fill(
+            texts::REPLY_SHORT,
+            language,
+            &[
+                (texts::value::NAME, &to),
+                (texts::value::ITEM, &item),
+                (texts::value::COUNT, &count.to_string()),
+                (texts::value::GIVEN, &(count - short).to_string()),
+                (texts::value::SHORT, &short.to_string()),
+            ],
+        );
+        tell(world, &caller, &line);
+    }
 }
 
 /// Tells `caller` `text` in chat, when the caller is a player in the game.

@@ -123,8 +123,8 @@ fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Text(text)] = request.args else {
         return Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]));
     };
-    let id = match items::knowledge(text) {
-        Ok(id) => id,
+    let (id, shown) = match items::knowledge(text) {
+        Ok(found) => found,
         Err(why) => return items::refused(request, text, &why),
     };
     let Some(player) = tools.world.player_by_key(*key) else {
@@ -132,7 +132,7 @@ fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
     };
     let values = [
         (texts::value::NAME, name.as_str()),
-        (texts::value::ITEM, text.as_str()),
+        (texts::value::ITEM, shown.as_str()),
     ];
     let Some(known) = tools.knowledge.get(player.entity, id) else {
         return items::refused(request, text, &items::Unknown::Name { near: Vec::new() });

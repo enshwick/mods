@@ -188,8 +188,8 @@ impl Mod for AdminTools {
 
 impl Tools {
     /// Declares `action` with `handler`: only players the world's rights
-    /// admit see and run it, and a run that changed something goes to the
-    /// audit log.
+    /// admit see and run it, and every run of an action that changes
+    /// something goes to the audit log, refused or done.
     fn add(self: &Arc<Self>, action: Action, handler: Handler) -> Result<(), Off> {
         let id = action.id().to_owned();
         let rules = Arc::clone(self);
@@ -201,7 +201,8 @@ impl Tools {
             action.allow(move |player| offered && rules.rules.load().admits(&rule_id, player)),
             move |request| {
                 let outcome = handler(&tools, request);
-                if outcome.is_done() && !ids::READS.contains(&id.as_str()) {
+                // A refusal goes in too, so an administrator sees what was tried.
+                if !ids::READS.contains(&id.as_str()) {
                     tools.record(request, &id, &outcome);
                 }
                 outcome

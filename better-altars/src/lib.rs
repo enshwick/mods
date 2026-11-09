@@ -121,8 +121,14 @@ mod tests {
         unleveled.entity = Entity(2);
         loader.set_altars(&[altar(Entity(1), 0), unleveled]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
+        let line = "1 altar has no Flame level yet; it keeps its vanilla zone";
+        // The solve the start began may still run, and the line then comes
+        // from its thread.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !loader.logs().iter().any(|(_, l)| l == line) && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
-        let line = "1 altars have no Flame level yet; they keep their vanilla zone";
         let logged = loader.logs().iter().filter(|(_, l)| l == line).count();
         assert_eq!(logged, 1, "{:?}", loader.logs());
     }

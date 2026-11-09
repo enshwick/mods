@@ -486,6 +486,26 @@ mod tests {
     }
 
     #[test]
+    fn a_settings_change_while_the_world_runs_goes_to_the_audit_log_and_its_load_does_not() {
+        let dir = scratch("audit-settings");
+        let loader = server("audit = \"on\"\nmotd = \"Hi\"\n", &dir);
+        loader.set_settings("settings", "audit = \"on\"\nmotd = \"Welcome\"\n");
+        assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut read = String::new();
+        while std::time::Instant::now() < deadline && !read.contains("motd") {
+            read = run(&loader, &ann(), "audit", "n10");
+            std::thread::yield_now();
+        }
+        assert!(read.contains("settings\tmotd = \"Welcome\""), "{read}");
+        assert!(
+            !read.contains("\"Hi\""),
+            "the world's load is no change: {read}"
+        );
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn commands_under_adl_run_the_actions_from_chat_with_the_player_s_rights() {
         let dir = scratch("chat");
         let loader = server("", &dir);

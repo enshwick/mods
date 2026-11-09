@@ -3,6 +3,9 @@
 //! logs, backups and the remote console.
 
 #[cfg(test)]
+#[path = "actions/character.rs"]
+mod character;
+#[cfg(test)]
 #[path = "actions/game.rs"]
 mod game;
 #[cfg(test)]

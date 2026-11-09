@@ -13,13 +13,12 @@ use crate::{Tools, ids, texts};
 /// its maximum anyway.
 const MAX_STAT: f64 = 100_000.0;
 
+/// How the world sets one pool of a character to a value.
+type SetPool = fn(World, Entity, i32) -> Result<Meter, WorldError>;
+
 /// The pools the stats action sets: each one's word, its label and how the
 /// world sets it.
-const POOLS: [(
-    &str,
-    &str,
-    fn(World, Entity, i32) -> Result<Meter, WorldError>,
-); 3] = [
+const POOLS: [(&str, &str, SetPool); 3] = [
     ("health", texts::POOL_HEALTH, World::set_health),
     ("stamina", texts::POOL_STAMINA, World::set_stamina),
     ("mana", texts::POOL_MANA, World::set_mana),

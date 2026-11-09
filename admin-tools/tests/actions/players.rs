@@ -30,7 +30,7 @@ fn a_player_sees_only_the_reads_and_an_administrator_sees_every_action() {
         .collect()
     };
     assert_eq!(ids(&bob()), ["online", "motd", "status"]);
-    assert_eq!(ids(&ann()).len(), 21);
+    assert_eq!(ids(&ann()).len(), 23);
     assert!(run(&loader, &bob(), "kick", "p0000000000000001").starts_with('0'));
 }
 

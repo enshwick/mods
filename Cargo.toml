@@ -12,6 +12,7 @@ members = [
     "devtools/enshwick-probe",
     "devtools/enshwick-research",
     "devtools/enshwick-test-content",
+    "devtools/enshwick-test-ui",
     "tools/xtask",
 ]
 resolver = "3"

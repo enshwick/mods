@@ -25,6 +25,8 @@ struct State {
     on: bool,
     solved: Option<Input>,
     solving: bool,
+    /// The altars the last look left out for lacking a Flame level.
+    unleveled: usize,
     /// Counts the games run, and the times clusters turned off, so a solve
     /// of one never lands in the next.
     game: u64,
@@ -36,6 +38,7 @@ impl State {
             on: false,
             solved: None,
             solving: false,
+            unleveled: 0,
             game: 0,
         }
     }
@@ -61,6 +64,7 @@ impl State {
     /// Forgets what was solved, for the next game.
     fn forget(&mut self) {
         self.solved = None;
+        self.unleveled = 0;
         self.game = self.game.wrapping_add(1);
     }
 
@@ -158,10 +162,11 @@ pub(crate) fn forget() {
     answers().store(Arc::new(Vec::new()));
 }
 
-fn input(zones: ZoneSizes) -> Input {
-    zones
-        .altars()
-        .list()
+/// The altars the solver takes, and how many it leaves out because the
+/// engine has not reported their Flame level yet.
+fn input(altars: Vec<enshwick::altars::Altar>) -> (Input, usize) {
+    let mut unleveled = 0;
+    let input = altars
         .into_iter()
         .filter(|altar| {
             if altar.tilted {
@@ -169,8 +174,13 @@ fn input(zones: ZoneSizes) -> Input {
                     "altar {} is tilted; it keeps its vanilla zone",
                     altar.entity
                 );
+                return false;
             }
-            !altar.tilted && !altar.levels.is_empty()
+            if altar.levels.is_empty() {
+                unleveled += 1;
+                return false;
+            }
+            true
         })
         .map(|altar| {
             let levels = altar
@@ -180,7 +190,20 @@ fn input(zones: ZoneSizes) -> Input {
                 .collect();
             (altar.entity.0, levels)
         })
-        .collect()
+        .collect();
+    (input, unleveled)
+}
+
+/// The log line when more altars wait for their Flame level than at the
+/// last look; without it an altar the engine never levels leaves no trace.
+fn unleveled_line(before: usize, now: usize) -> Option<String> {
+    (now > before).then(|| {
+        if now == 1 {
+            "1 altar has no Flame level yet; it keeps its vanilla zone".to_owned()
+        } else {
+            format!("{now} altars have no Flame level yet; they keep their vanilla zone")
+        }
+    })
 }
 
 /// The log line for the placed altars: how many stand at each Flame level,
@@ -208,7 +231,11 @@ fn maybe_solve(state: &mut State, zones: ZoneSizes) {
     if state.solving || !state.on {
         return;
     }
-    let input = input(zones);
+    let (input, unleveled) = input(zones.altars().list());
+    if let Some(line) = unleveled_line(state.unleveled, unleveled) {
+        enshwick::info!("{line}");
+    }
+    state.unleveled = unleveled;
     if !state.wants(&input) {
         return;
     }
@@ -289,6 +316,9 @@ pub(crate) fn sizes(input: &Input) -> Vec<Size> {
 
 #[cfg(test)]
 mod tests {
+    use enshwick::Entity;
+    use enshwick::altars::CellBox;
+
     use super::*;
 
     fn at_levels(levels: &[usize]) -> Input {
@@ -313,6 +343,42 @@ mod tests {
             placed(&at_levels(&[1, 1])),
             "2 altars placed, all at Flame level 1, as the game lists them right after a load"
         );
+    }
+
+    #[test]
+    fn altars_without_a_flame_level_are_left_out_and_counted() {
+        let cells = CellBox::new([0, 0, 0], [80, 80, 80]);
+        let listed = |entity, tilted, levels: Vec<CellBox>| enshwick::altars::Altar {
+            entity: Entity(entity),
+            level: u8::try_from(levels.len()).unwrap_or(u8::MAX),
+            tilted,
+            position: [0.0; 3],
+            zone: cells,
+            levels,
+            template: None,
+        };
+        let (input, unleveled) = input(vec![
+            listed(1, false, vec![cells]),
+            listed(2, false, Vec::new()),
+            listed(3, false, Vec::new()),
+            listed(4, true, Vec::new()),
+        ]);
+        assert_eq!(input.keys().copied().collect::<Vec<_>>(), [1]);
+        assert_eq!(unleveled, 2, "a tilted altar is not counted as unleveled");
+    }
+
+    #[test]
+    fn the_unleveled_line_comes_only_when_more_altars_wait() {
+        assert_eq!(
+            unleveled_line(0, 1).as_deref(),
+            Some("1 altar has no Flame level yet; it keeps its vanilla zone")
+        );
+        assert_eq!(
+            unleveled_line(1, 3).as_deref(),
+            Some("3 altars have no Flame level yet; they keep their vanilla zone")
+        );
+        assert_eq!(unleveled_line(3, 2), None, "fewer wait: no line");
+        assert_eq!(unleveled_line(2, 2), None);
     }
 
     #[test]

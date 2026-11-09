@@ -397,6 +397,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "enshwick-test-ui"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "enshwick",
+ "toml",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -25,6 +25,6 @@ checks every mod.
 | `personal-safes/` | Personal Safes |
 | `shared-experience/` | Shared Experience |
 | `survivors-per-altar/` | Survivors per Altar |
-| `devtools/` | the developer mods: the API probe and the client research mod |
+| `devtools/` | the developer mods: the API probe, the client research mod, the test content and the test UI |
 | `tools/xtask/` | `cargo xtask check`, the checks before a merge, and `cargo xtask dist`, each mod's archive |
 | `tools/wine/` | the image `cargo xtask check --windows` runs Windows-only tests in off Windows |

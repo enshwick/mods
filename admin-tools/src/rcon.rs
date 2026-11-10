@@ -15,7 +15,7 @@ use core::time::Duration;
 use std::io::{self, Read as _, Write as _};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering, fence};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
@@ -151,8 +151,18 @@ impl Listener {
         let listening = Arc::clone(&shared);
         std::thread::Builder::new()
             .name("admin-tools rcon".into())
-            .spawn(move || guarded(&listening, || listen_on(&listening)))?;
+            .spawn(move || {
+                guarded(&listening, || listen_on(&listening));
+                // A console that never bound counts as closed, so the next
+                // change of settings opens it again.
+                listening.stop.store(true, Ordering::SeqCst);
+            })?;
         Ok(Self { shared })
+    }
+
+    /// Whether its thread ended: closed, or it never took its port.
+    pub(crate) fn ended(&self) -> bool {
+        self.shared.stop.load(Ordering::SeqCst)
     }
 
     /// Where it listens and the password it takes.
@@ -164,8 +174,13 @@ impl Listener {
     /// their own, so the caller never waits for them.
     pub(crate) fn close(self) {
         self.shared.stop.store(true, Ordering::SeqCst);
+        // Pairs with the fence after `bound` is set: one side sees the other.
+        fence(Ordering::SeqCst);
         if let Some(&bound) = self.shared.bound.get() {
-            wake(bound);
+            // The connect may take up to WAKE; the caller is the game thread.
+            let _spawned = std::thread::Builder::new()
+                .name("admin-tools rcon wake".into())
+                .spawn(move || wake(bound));
         }
         for (_, client) in self.shared.clients.relock().iter() {
             let _shut = client.shutdown(Shutdown::Both);
@@ -221,6 +236,7 @@ fn listen_on(shared: &Arc<Shared>) {
     let _set = shared
         .bound
         .set(socket.local_addr().unwrap_or(config.address));
+    fence(Ordering::SeqCst);
     accept(&socket, shared);
 }
 
@@ -333,7 +349,8 @@ impl Shared {
         let mut open = self.open.relock();
         let total: usize = open.values().sum();
         let mine = open.get(&ip).copied().unwrap_or(0);
-        if total >= MAX_CONNECTIONS || mine >= MAX_PER_ADDRESS {
+        // Every local tool and tunnel arrives from loopback, which no crowd reaches.
+        if total >= MAX_CONNECTIONS || (mine >= MAX_PER_ADDRESS && !ip.is_loopback()) {
             return false;
         }
         open.insert(ip, mine + 1);
@@ -552,7 +569,8 @@ impl Tools {
             .then(|| self.rcon_config(settings))
             .flatten();
         let mut slot = self.rcon.relock();
-        if slot.as_ref().map(Listener::config) == wanted.as_ref() {
+        let alive = slot.as_ref().filter(|listener| !listener.ended());
+        if alive.map(Listener::config) == wanted.as_ref() {
             return;
         }
         if let Some(old) = slot.take() {
@@ -730,6 +748,35 @@ mod tests {
         assert!(!shared.take_slot(ip(5)));
     }
 
+    #[test]
+    fn local_tools_share_every_slot_from_loopback() {
+        let shared = shared("");
+        let local = IpAddr::from([127, 0, 0, 1]);
+        for _ in 0..MAX_CONNECTIONS {
+            assert!(shared.take_slot(local));
+        }
+        assert!(!shared.take_slot(local), "four in all");
+    }
+
+    #[test]
+    fn a_console_whose_password_file_cannot_be_made_counts_as_ended() {
+        let blocker =
+            std::env::temp_dir().join(format!("admin-tools-rcon-file-{}", std::process::id()));
+        std::fs::write(&blocker, "a file, not a folder").unwrap();
+        let config = Config {
+            address: SocketAddr::from(([127, 0, 0, 1], 0)),
+            password: String::new(),
+            file: Some(blocker.join(PASSWORD_FILE)),
+        };
+        let listener = Listener::open(config, Weak::new()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !listener.ended() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(listener.ended());
+        std::fs::remove_file(&blocker).unwrap();
+    }
+
     /// A connection to the console on `port`, once its thread listens.
     fn connect(port: u16) -> TcpStream {
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -775,6 +822,45 @@ mod tests {
         let second = Listener::open(config, Weak::new()).unwrap();
         let _again = connect(port);
         second.close();
+    }
+
+    #[test]
+    fn each_tracked_client_gets_its_own_number_and_one_tracked_after_closing_is_shut_down() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(server.local_addr().unwrap()).unwrap();
+        let (stream, _) = server.accept().unwrap();
+        let shared = shared("pw");
+        let first = shared.track(&stream);
+        let second = shared.track(&stream);
+        assert!(first.is_some() && first != second, "{first:?} {second:?}");
+        assert_eq!(shared.clients.relock().len(), 2);
+        shared.untrack(first);
+        assert_eq!(shared.clients.relock().len(), 1);
+        shared.untrack(second);
+        assert!(shared.clients.relock().is_empty());
+        shared.stop.store(true, Ordering::SeqCst);
+        let _late = shared.track(&stream);
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut byte = [0u8; 1];
+        assert_eq!(client.read(&mut byte).unwrap(), 0, "shut down at once");
+    }
+
+    #[test]
+    fn the_console_takes_its_port_once_another_socket_lets_it_go() {
+        let holder = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut shared = shared("pw");
+        shared.config.address = holder.local_addr().unwrap();
+        let shared = Arc::new(shared);
+        let binding = Arc::clone(&shared);
+        let bound = std::thread::spawn(move || bind(&binding));
+        std::thread::sleep(RETRY * 2);
+        drop(holder);
+        assert!(
+            bound.join().unwrap().is_some(),
+            "retried until the port was free"
+        );
     }
 
     #[test]

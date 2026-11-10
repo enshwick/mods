@@ -93,8 +93,8 @@ section shows only the actions you may use.
 
 ## Who may use each action
 
-Each world sets a rule for each action, under **Who may use each action** in
-its settings.
+Each world sets a rule for each action in its [settings](#settings), under
+**Who may use each action**, or under `[rights]` in `settings.toml`.
 
 | Rule | Who may use the action |
 | --- | --- |
@@ -116,8 +116,11 @@ save.
 
 ## Settings
 
-Each world has its own settings, behind the gear of Admin Tools on the Mods
-screen.
+Each world has its own settings. In the game they are behind the gear of
+Admin Tools on the Mods screen. On a dedicated server they are also in
+`settings.toml` in `<save>-mod-settings/enshwick.admin-tools/` beside the
+world's save, one line per setting, such as `build_log = true`, and the rules
+under `[rights]`. A change applies while the world runs.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -129,7 +132,7 @@ screen.
 | `audit`, `chat_log` | auto | Whether the audit log and the chat log are written. Auto is on for a dedicated server. |
 | `build_log` | off | Whether the build log is written. |
 | `backups_kept` | 10 | How many backups the backup action keeps. |
-| `backup_dir` | empty | The folder backups go to, beside the world's save. |
+| `backup_dir` | empty | The folder backups go to, beside the world's save. Empty uses `backups/` in the world's data folder. |
 | `rcon` | auto | Whether RCON tools may connect. Auto is on for a dedicated server. |
 | `rcon_ip`, `rcon_port` | `127.0.0.1`, 25575 | Where the remote console listens. |
 | `rcon_password` | empty | The RCON password, at least 16 characters. Empty uses `rcon-password.txt`. |
@@ -139,7 +142,8 @@ The [player page](docs/player.md) explains each task step by step.
 
 ## Install
 
-Admin Tools has no release yet. It needs the Enshwick loader.
+Admin Tools comes in its own archive, `enshwick-admin-tools.zip`. It needs
+the [Enshwick](https://github.com/enshwick/enshwick) loader.
 
 ## Who needs it
 

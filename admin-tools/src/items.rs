@@ -118,13 +118,11 @@ fn resolve<T>(
     if let Some(guid) = Guid::try_parse(text).or_else(|| Guid::try_named(text)) {
         return Ok((from_guid(guid), text.to_owned()));
     }
-    match by_name(text, lookup) {
-        Ok((guid, name)) => Ok((from_guid(guid), name)),
-        Err(unknown) => text
-            .parse()
-            .map(|number| (new(number), text.to_owned()))
-            .map_err(|_| unknown),
+    // No name is all digits, and the name searches cost the game thread.
+    if let Ok(number) = text.parse() {
+        return Ok((new(number), text.to_owned()));
     }
+    by_name(text, lookup).map(|(guid, name)| (from_guid(guid), name))
 }
 
 /// What `lookup` finds named `name`, with the game's spelling; a name that
@@ -246,6 +244,15 @@ mod tests {
         );
         assert_eq!(item("3073"), Ok((ItemId::new(3073), "3073".to_owned())));
         assert_eq!(item("Tool_Glider_T1"), Err(ResolveItemError::Unreadable));
+    }
+
+    #[test]
+    fn a_number_names_its_item_without_searching_the_names() {
+        let searched = |_: &str| -> Result<Guid, VanillaError> { panic!("a name search") };
+        assert_eq!(
+            resolve("3073", searched, ItemId::from_guid, ItemId::new),
+            Ok((ItemId::new(3073), "3073".to_owned()))
+        );
     }
 
     #[test]

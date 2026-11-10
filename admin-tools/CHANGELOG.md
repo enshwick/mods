@@ -96,4 +96,4 @@ Each entry says what players notice; a release's notes show its section.
 - `/adm world` names each game setting and value as the game's world
   settings do, in the reader's language, and long replies such as
   `/adm status` arrive as a list in chat.
-- Short replies read naturally, such as "Time: 06:30" and "World saved."
+- Short replies read naturally, such as "Time: 06:30" and "The world is saving."

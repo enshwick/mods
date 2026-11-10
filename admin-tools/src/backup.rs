@@ -8,7 +8,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 use enshwick::actions::{Action, Outcome, Request};
 use enshwick::i18n::Language;
@@ -158,10 +158,24 @@ impl Tools {
         }
     }
 
-    /// Waits until no save is being written, at most [`SAVE_WAIT`]: the
-    /// hold keeps a new save from starting, never one under way.
+    /// Waits until no save is being written while the world runs, at most
+    /// [`SAVE_WAIT`]: the hold keeps a new save from starting, never one
+    /// under way. A world that stopped meanwhile is not copied, as its final
+    /// save may be under way; past the wait the save's end is taken as
+    /// missed, so the next backup does not wait for it again.
     fn wait_for_save(&self) -> io::Result<()> {
-        wait_while(&self.saving, SAVE_WAIT)
+        let waited = wait_while(
+            || self.saving.load(Ordering::Acquire) && self.running.load(Ordering::Relaxed),
+            SAVE_WAIT,
+        );
+        if waited.is_err() {
+            self.saving.store(false, Ordering::Release);
+        }
+        waited?;
+        if !self.running.load(Ordering::Relaxed) {
+            return Err(io::Error::other("the world stopped before the copy"));
+        }
+        Ok(())
     }
 
     /// Copies the world while its saves stay held, after a save under way
@@ -219,9 +233,9 @@ impl Tools {
 
 /// Waits until `saving` is false, at most `limit`, looking every
 /// [`SAVE_LOOK`]; past it, the error that a save is still being written.
-fn wait_while(saving: &AtomicBool, limit: Duration) -> io::Result<()> {
+fn wait_while(saving: impl Fn() -> bool, limit: Duration) -> io::Result<()> {
     let deadline = std::time::Instant::now() + limit;
-    while saving.load(Ordering::Acquire) {
+    while saving() {
         if std::time::Instant::now() >= deadline {
             return Err(io::Error::other("the game is still writing the save"));
         }
@@ -292,8 +306,8 @@ fn copy_into(plan: &Plan, into: &Path) -> io::Result<()> {
         .into_iter()
         .filter_map(|dir| fs::canonicalize(dir).ok())
         .collect();
-    // The saves' folder must read, so a missing one fails the backup.
-    fs::read_dir(&plan.saves)?;
+    // A backup without the save restores nothing, so a missing one fails it.
+    fs::metadata(plan.saves.join(format!("{}.{SAVE_EXTENSION}", plan.stem)))?;
     for name in own_entries(&plan.stem) {
         let from = plan.saves.join(&name);
         if fs::symlink_metadata(&from).is_ok() {
@@ -342,6 +356,8 @@ pub(crate) fn prune(root: &Path, kept: usize) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
+
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
@@ -401,12 +417,18 @@ mod tests {
     fn a_copy_waits_for_a_save_to_end_and_fails_when_it_never_does() {
         let saving = AtomicBool::new(false);
         assert!(
-            wait_while(&saving, Duration::ZERO).is_ok(),
+            wait_while(|| saving.load(Ordering::Acquire), Duration::ZERO).is_ok(),
             "no save, no wait"
         );
         saving.store(true, Ordering::Release);
         let started = std::time::Instant::now();
-        assert!(wait_while(&saving, Duration::from_millis(250)).is_err());
+        assert!(
+            wait_while(
+                || saving.load(Ordering::Acquire),
+                Duration::from_millis(250)
+            )
+            .is_err()
+        );
         assert!(started.elapsed() >= Duration::from_millis(250));
         let written = Arc::new(AtomicBool::new(true));
         let writer = Arc::clone(&written);
@@ -414,7 +436,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(150));
             writer.store(false, Ordering::Release);
         });
-        assert!(wait_while(&written, Duration::from_secs(5)).is_ok());
+        assert!(wait_while(|| written.load(Ordering::Acquire), Duration::from_secs(5)).is_ok());
         save.join().unwrap();
     }
 
@@ -557,6 +579,22 @@ mod tests {
         };
         copy(&plan, "2026-01-01_00-00-00").unwrap();
         assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
+        fs::remove_dir_all(&saves).unwrap();
+    }
+
+    #[test]
+    fn a_world_without_its_save_gets_no_backup() {
+        let saves = scratch("no-save");
+        fs::create_dir_all(saves.join("w-mod-settings")).unwrap();
+        let plan = Plan {
+            saves: saves.clone(),
+            stem: "w".into(),
+            root: saves.join("out"),
+            default: PathBuf::new(),
+            kept: 1,
+        };
+        assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
+        assert_eq!(fs::read_dir(&plan.root).unwrap().count(), 0);
         fs::remove_dir_all(&saves).unwrap();
     }
 }

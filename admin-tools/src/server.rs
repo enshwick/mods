@@ -574,15 +574,26 @@ fn kind_key(setting: &str, value: &impl core::fmt::Debug) -> Option<String> {
     Some(key)
 }
 
-/// The kind `value` of the setting `setting` in the reader's words, or the
-/// game's number for a value the API does not name.
+/// The kind `value` of the setting `setting` in the reader's words, or as
+/// another kind for a value the API does not name or the texts lack.
 fn kind(request: &Request<'_>, setting: &str, value: &impl core::fmt::Debug) -> String {
     if let Some(key) = kind_key(setting, value) {
-        return request.say(&key, &[]);
+        let said = request.say(&key, &[]);
+        // The texts answer a key they lack with the key itself.
+        if said != key {
+            return said;
+        }
     }
-    let name = format!("{value:?}");
+    request.say(
+        texts::WORLD_OTHER,
+        &[(texts::value::VALUE, &other_kind(&format!("{value:?}")))],
+    )
+}
+
+/// What names a kind the texts lack: the game's number, else the API's name.
+fn other_kind(name: &str) -> String {
     let number = name.trim_matches(|c: char| !c.is_ascii_digit());
-    request.say(texts::WORLD_OTHER, &[(texts::value::VALUE, number)])
+    if number.is_empty() { name } else { number }.to_owned()
 }
 
 impl Tools {
@@ -769,6 +780,8 @@ mod tests {
             Some("world.tombstone-mode.add-backpack-materials")
         );
         assert_eq!(kind_key(PRESET, &GameSettingsPreset::Other(7)), None);
+        assert_eq!(other_kind("Other(7)"), "7");
+        assert_eq!(other_kind("NewMode"), "NewMode");
     }
 
     #[test]

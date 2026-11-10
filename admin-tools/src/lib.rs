@@ -275,6 +275,8 @@ impl Tools {
     /// Starts the world that loaded: the remote console listens when the
     /// world's settings turn it on.
     fn start(&self) {
+        // A save of the last world whose end was never heard is not this one's.
+        self.saving.store(false, Ordering::Release);
         self.running.store(true, Ordering::Relaxed);
         self.listen(&self.settings.load());
     }
@@ -291,7 +293,6 @@ impl Tools {
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);
-        self.saving.store(false, Ordering::Release);
         self.restart_save.store(0, Ordering::Relaxed);
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();

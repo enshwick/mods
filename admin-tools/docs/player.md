@@ -108,9 +108,24 @@ plain text. To reach the console from another computer, use an SSH tunnel or
 a VPN. Or set **Remote console address** to `0.0.0.0` and open the port only
 to computers you trust.
 
-To choose the password, set **Remote console password** in the world's
-settings. To turn the console off, set **Remote console** to off. After three
-wrong passwords from one address, the address waits a minute.
+To choose the password, set **Remote console password** in
+[the settings](#how-do-i-change-the-settings). To turn the console off, set
+**Remote console** to off. After three wrong passwords from one address, the
+address waits a minute.
+
+## How do I change the settings?
+
+Each world has its own Admin Tools settings. Change them in one of two ways:
+
+- **In the game:** open the Mods screen, select Admin Tools and press its
+  gear. On a server, only admins can change them there.
+- **On a dedicated server:** edit `settings.toml` in
+  `<save>-mod-settings/enshwick.admin-tools/` beside the world's save.
+  Admin Tools writes the file when the world first loads.
+
+In the file, each setting is a line such as `build_log = true`. The rules of
+the actions are under `[rights]`, such as `kick = "nobody"`. A change applies
+while the world runs.
 
 ## What commands are there?
 
@@ -205,8 +220,8 @@ under **Key bindings**.
 1. Put each player you trust on the allow-list with
    `/adm allowed <player> on`, or switch them on in the window's
    **Bans and the allow-list** section.
-2. Open the Mods screen, select Admin Tools, and turn on **Allow-list** in the
-   server's settings.
+2. Turn on **Allow-list** (`allowlist = true`) in
+   [the settings](#how-do-i-change-the-settings).
 
 From then on, an account not on the list is kicked as it joins.
 Admins always get in. A player kicked this way is remembered, so
@@ -217,8 +232,9 @@ and type `/adm account <id> allow`.
 
 ## How do I decide who may use each action?
 
-Each action has a rule in the world's settings, under **Who may use each
-action**. The table of commands shows each rule's default.
+Each action has a rule in [the settings](#how-do-i-change-the-settings),
+under **Who may use each action**, or under `[rights]` in the file. The table
+of commands shows each rule's default.
 
 | Rule | Who may use the action |
 | --- | --- |
@@ -251,7 +267,7 @@ its mod settings and its mod data to a folder named by the UTC time. Then it let
 Players keep playing. You read where the backup went when it is done.
 
 Backups go to `backups/` in `<save>-mod-data/enshwick.admin-tools/`. If you
-set **Backup folder**, they go to a folder named after the save inside it.
+set **Backup folder** in [the settings](#how-do-i-change-the-settings), they go to a folder named after the save inside it.
 
 Admin Tools keeps the newest 10, or as many as **Backups kept** says, and
 removes older ones. To restore a
@@ -260,7 +276,8 @@ beside the world's save.
 
 ## How do I see who built or broke something?
 
-Turn on **Build log** in the world's settings first. From then on, Admin Tools
+First turn on **Build log** (`build_log = true`) in
+[the settings](#how-do-i-change-the-settings). From then on, Admin Tools
 writes each building placed, picked up or torn down. It also writes each spot
 where building blocks were placed or removed and terrain was dug or filled.
 
@@ -287,7 +304,8 @@ save. Each line starts with the time in UTC.
 | `chat.log` | Each chat line: the player's name and account id, the kind of line and its text. | On a dedicated server |
 | `builds.log` | Each building placed or removed, and each spot of building blocks or terrain changed, with who did it. | No |
 
-A game a player hosts keeps no log until the world's settings turn it on.
+A game a player hosts keeps no log until **Audit log** or **Chat log** is on
+in [the settings](#how-do-i-change-the-settings).
 When the chat log is on, everything players write in chat is kept on the
 server. Past 1 MB a log moves to `audit.1.log`, `chat.1.log` or
 `builds.1.log` and starts again.

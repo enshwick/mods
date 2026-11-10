@@ -31,7 +31,7 @@ fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
 fn save_now_asks_the_game_for_a_save_and_only_administrators_may() {
     let dir = scratch("save");
     let loader = server("", &dir);
-    assert_eq!(run(&loader, &ann(), "save", ""), "1World saved.");
+    assert_eq!(run(&loader, &ann(), "save", ""), "1The world is saving.");
     assert_eq!(loader.saves(), 1);
     assert!(run(&loader, &bob(), "save", "").starts_with('0'));
     assert_eq!(loader.saves(), 1);
@@ -209,18 +209,36 @@ fn a_backup_waits_for_a_save_under_way_and_the_restart_save_waits_for_the_backup
 }
 
 #[test]
+fn a_backup_waiting_for_a_save_copies_nothing_once_the_world_stops() {
+    let (_saves, data) = saves("backup-shutdown");
+    let loader = server("", &data);
+    assert!(loader.raise::<WorldSaving>(&()) >= 1);
+    assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
+    // The copy starts a second after the hold, on the game's clock.
+    std::thread::sleep(Duration::from_millis(1100));
+    let _ran = loader.tick(Duration::from_secs(1));
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        !data.join("backups").exists(),
+        "not copied while the final save may be written"
+    );
+}
+
+#[test]
 fn the_console_hears_where_a_backup_s_end_is_written() {
     let (_saves, data) = saves("backup-console");
     let loader = server("", &data);
     assert_eq!(
         console::run("adm backup").unwrap(),
-        "The backup has started. The server's log and the audit log name where it went when it is done."
+        "The backup has started. The server's log names where it went when it is done, and so does the audit log when it is on."
     );
     assert!(tick_until(&loader, || !loader.saves_held()));
 }
 
 #[test]
-fn every_page_lists_the_commands_the_help_lists_in_its_order() {
+fn the_help_lists_every_action_under_its_group() {
     let dir = scratch("help-pages");
     let _loader = server("", &dir);
     let help = console::run("adm help").unwrap();
@@ -233,16 +251,11 @@ fn every_page_lists_the_commands_the_help_lists_in_its_order() {
     assert_eq!(helped.len(), 38, "{help}");
     let groups = help.lines().filter(|line| line.ends_with(':')).count();
     assert_eq!(groups, 9, "the actions sit under their groups: {help}");
-    for page in [
-        include_str!("../../README.md"),
-        include_str!("../../docs/player.md"),
-        include_str!("../../docs/player.uk.md"),
-    ] {
-        let listed: Vec<&str> = page
-            .lines()
-            .filter_map(|line| line.strip_prefix("| `/adm "))
-            .filter_map(|row| row.split([' ', '`']).next())
-            .collect();
-        assert_eq!(listed, helped);
-    }
+    // A unit test holds every page to the groups' order and the default rules.
+    let listed: Vec<&str> = include_str!("../../README.md")
+        .lines()
+        .filter_map(|line| line.strip_prefix("| `/adm "))
+        .filter_map(|row| row.split([' ', '`']).next())
+        .collect();
+    assert_eq!(listed, helped, "the README lists the help's order");
 }

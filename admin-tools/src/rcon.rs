@@ -388,7 +388,10 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
         Ok(Err(RunCommandError::Unknown | RunCommandError::Empty)) => {
             let names: Vec<String> = commands::list()
                 .into_iter()
-                .map(|set| format!("{} ({})", set.alias, set.name))
+                .map(|set| match set.alias {
+                    Some(alias) => format!("{alias} ({})", set.name),
+                    None => set.name,
+                })
                 .collect();
             tools.say(
                 texts::REPLY_RCON_COMMANDS,

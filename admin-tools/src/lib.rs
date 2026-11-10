@@ -185,7 +185,7 @@ impl Mod for AdminTools {
         backup::add(&tools)?;
         builds::add(&tools, load)?;
         windows::add(&tools)?;
-        tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
+        tools.actions.commands(ids::ALIAS)?;
 
         let changed = Arc::clone(&tools);
         load.on_settings_change(move |settings: &Settings| changed.apply(settings))?;

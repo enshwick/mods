@@ -125,9 +125,15 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
         Ok(saves) => extras.push(Box::new(move || saves.run())),
         Err(off) => enshwick::warn!("FAIL saves: {off}"),
     }
-    match platform::PlatformChecks::new(load, scheduler) {
-        Ok(platform) => extras.push(Box::new(move || platform.run())),
-        Err(off) => enshwick::warn!("FAIL platform: {off}"),
+    // Its hooks size altar zones and raise the base limits, so a run that
+    // leaves the world be goes without it.
+    if settings.scenario_only {
+        enshwick::info!("SKIP platform: the run plays only its scenario");
+    } else {
+        match platform::PlatformChecks::new(load, scheduler) {
+            Ok(platform) => extras.push(Box::new(move || platform.run())),
+            Err(off) => enshwick::warn!("FAIL platform: {off}"),
+        }
     }
     extras
 }

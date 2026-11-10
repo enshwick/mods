@@ -10,13 +10,18 @@ use enshwick::abi::HookFlags;
 use enshwick::{Next, hook};
 
 use enshwick::altars::{Altars, ZoneSizes, base_limit, grouping, set_base_cap};
+use enshwick::content::recipes::{WORKSHOP_RECIPES, workshop_limit};
+use enshwick::effects::{Effects, Spawn};
 use enshwick::map::Map;
 use enshwick::pacing::TaskWorkers;
 use enshwick::resources::Registry;
 use enshwick::schedule::Scheduler;
+use enshwick::state::ModLocal;
 use enshwick::voxels::{VoxelPos, Voxels};
 use enshwick::world::World;
 use enshwick::{Load, Off, WorldError};
+
+use crate::checks::{fail, pass};
 
 /// The field of the reflected type the probe looks up.
 const SHAPE_FIELD: &str = "rangeX";
@@ -24,37 +29,47 @@ const SHAPE_FIELD: &str = "rangeX";
 const SYSTEM: &str = "add_buildzones_server";
 /// A symbol the loader pins for every build.
 const SYMBOL: &str = "npc.lookup";
-/// Altar zones and bases the probe asks the game to group.
-const ZONES: u32 = 20;
-/// Bases the probe asks for, and the cap it sets.
-const BASES: u32 = 16;
+/// Altar zones and bases the probe asks for: more than `raise_base_limit`'s
+/// 32 zones in 16 bases, so the limit read shows the request took.
+const ZONES: u32 = 40;
+/// See [`ZONES`].
+const BASES: u32 = 20;
+/// The cap the probe sets for a moment, below its request.
+const CAP: u32 = 18;
 /// The console line the probe runs: its own action, as the console would.
 const CONSOLE_LINE: &str = "enshwick.probe census";
 /// How long the probe counts the loop's waits and the zone filter's calls.
 const COUNT_FOR: Duration = Duration::from_secs(5);
+/// How long a spawned entity may take to join the world, as the spawn
+/// check waits.
+const SPAWN_WAIT: Duration = Duration::from_secs(2);
+/// How many archive keys and content hashes the probe tries to read; a
+/// broken read then stays short instead of trying every key.
+const READ_TRIES: usize = 64;
 
-/// Calls of the hooked system since start.
-static SYSTEM_RUNS: AtomicUsize = AtomicUsize::new(0);
-/// Whether a hooked call read a caller frame with a stack pointer.
-static FRAME_SEEN: AtomicBool = AtomicBool::new(false);
+/// Calls of the hooked system in this mod's life.
+static SYSTEM_RUNS: ModLocal<AtomicUsize> = ModLocal::new();
+/// Whether a hooked call read a caller frame with a stack pointer since the
+/// last count began.
+static FRAME_SEEN: ModLocal<AtomicBool> = ModLocal::new();
+
+fn system_runs() -> &'static AtomicUsize {
+    SYSTEM_RUNS.get_or_init(AtomicUsize::default)
+}
+
+fn frame_seen() -> &'static AtomicBool {
+    FRAME_SEEN.get_or_init(AtomicBool::default)
+}
 
 /// Counts the system's runs and reads the caller's frame, then runs it.
 #[hook(flags = HookFlags::CALLER_FRAME)]
 fn system_update(next: Next<'_, unsafe extern "system" fn(*mut u64)>, ctx: *mut u64) {
-    SYSTEM_RUNS.fetch_add(1, Ordering::Relaxed);
+    system_runs().fetch_add(1, Ordering::Relaxed);
     if enshwick::host().is_some_and(|host| host.caller_frame().rsp != 0) {
-        FRAME_SEEN.store(true, Ordering::Relaxed);
+        frame_seen().store(true, Ordering::Relaxed);
     }
     // SAFETY: the rest of the chain takes the context the game passed.
     unsafe { next.call(ctx) }
-}
-
-fn pass(what: &str) {
-    enshwick::info!("PASS {what}");
-}
-
-fn fail(what: &str) {
-    enshwick::warn!("FAIL {what}");
 }
 
 /// Logs `PASS what: value` for `Ok`, `FAIL what: why` for `Err`.
@@ -65,10 +80,21 @@ fn report<T: core::fmt::Debug, E: core::fmt::Display>(what: &str, result: Result
     }
 }
 
+/// Logs `PASS` for `Ok(true)`; `Ok(false)`, the loader not finding or
+/// arming what the call needs on this build, is a `FAIL`.
+fn report_found<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
+    match result {
+        Ok(true) => pass(what),
+        Ok(false) => fail(&format!("{what}: not found on this build")),
+        Err(why) => fail(&format!("{what}: {why}")),
+    }
+}
+
 /// The checks, and the counts their hooks keep.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct PlatformChecks {
     world: World,
+    effects: Effects,
     voxels: Voxels,
     altars: Altars,
     zones: ZoneSizes,
@@ -100,14 +126,14 @@ impl PlatformChecks {
             load.field_offset(shape, SHAPE_FIELD),
         );
         report("reflection: type size", load.type_size(shape));
-        report("symbol", load.symbol(SYMBOL).map(|address| address != 0));
+        report("symbol", load.symbol(SYMBOL).map(|_| ()));
         report("code section bytes", load.code().map(<[u8]>::len));
-        report(
+        report_found(
             "task worker caps found",
             load.cap_task_workers(TaskWorkers::at_most(u8::MAX)),
         );
-        report("base limit raised", load.raise_base_limit());
-        report(
+        report_found("base limit raised", load.raise_base_limit());
+        report_found(
             "base limits requested",
             load.request_base_limits(ZONES, BASES),
         );
@@ -135,6 +161,7 @@ impl PlatformChecks {
         })?;
         Ok(Self {
             world: load.world()?,
+            effects: load.effects(),
             voxels: load.voxels(),
             altars: load.altars()?,
             zones,
@@ -159,10 +186,11 @@ impl PlatformChecks {
             loops.load(Ordering::Relaxed),
             servers.load(Ordering::Relaxed),
         );
-        let runs_before = SYSTEM_RUNS.load(Ordering::Relaxed);
+        let runs_before = system_runs().load(Ordering::Relaxed);
+        frame_seen().store(false, Ordering::Relaxed);
         self.scheduler.after(COUNT_FOR, move || {
-            let runs = SYSTEM_RUNS.load(Ordering::Relaxed) - runs_before;
-            match (runs, FRAME_SEEN.load(Ordering::Relaxed)) {
+            let runs = system_runs().load(Ordering::Relaxed) - runs_before;
+            match (runs, frame_seen().load(Ordering::Relaxed)) {
                 (0, _) => enshwick::info!("SKIP hook: {SYSTEM} did not run in {COUNT_FOR:?}"),
                 (runs, true) => pass(&format!(
                     "hook: {SYSTEM} ran {runs} times in {COUNT_FOR:?}, its caller's frame read"
@@ -199,13 +227,12 @@ impl PlatformChecks {
             Ok(version) if version.contains('|') => pass(&format!("game version {version}")),
             other => fail(&format!("game version: {other:?}")),
         }
-        let limit = enshwick::content::recipes::workshop_limit();
-        if limit >= 512 {
-            pass(&format!("workshop recipe limit {limit}"));
-        } else {
-            fail(&format!(
-                "workshop recipe limit {limit}, under the game's 512"
-            ));
+        match workshop_limit() {
+            usize::MAX => pass("workshop recipe limit lifted"),
+            WORKSHOP_RECIPES => enshwick::info!(
+                "SKIP workshop recipe limit: the game's own {WORKSHOP_RECIPES} holds, the lift is not armed"
+            ),
+            limit => fail(&format!("workshop recipe limit {limit}")),
         }
         // The smoke test checks that the reflected types name a type as the
         // engine does.
@@ -234,32 +261,41 @@ impl PlatformChecks {
         pass(&format!("resource keys: {}", keys.len()));
         let read = keys
             .iter()
+            .take(READ_TRIES)
             .find_map(|&key| host.game_resource(key).map(|bytes| (key, bytes)));
         match read {
             Some((key, bytes)) => {
                 pass(&format!("resource read: {} bytes", bytes.len()));
                 match host.served_resource(key) {
                     Ok(served) if served == bytes => {
-                        pass("served resource: an unserved key reads as the archive's");
+                        pass("served resource: reads as the archive's");
                     }
-                    Ok(served) => fail(&format!(
-                        "served resource: {} bytes, the archive's {}",
+                    // A mod or the loader may serve this key changed.
+                    Ok(served) => enshwick::info!(
+                        "SKIP served resource: {} bytes, the archive's {}; the key is served changed",
                         served.len(),
                         bytes.len()
-                    )),
+                    ),
                     Err(why) => fail(&format!("served resource: {why}")),
                 }
             }
-            None => fail("resource read: no key reads"),
+            None => fail(&format!("resource read: none of {READ_TRIES} keys reads")),
         }
         match host.content_hashes() {
-            Ok(hashes) => match hashes.iter().find_map(|&hash| host.game_content(hash)) {
+            Ok(hashes) => match hashes
+                .iter()
+                .take(READ_TRIES)
+                .find_map(|&hash| host.game_content(hash))
+            {
                 Some(bytes) => pass(&format!(
                     "contents: {} hashes, one read of {} bytes",
                     hashes.len(),
                     bytes.len()
                 )),
-                None => fail(&format!("contents: {} hashes, none reads", hashes.len())),
+                None => fail(&format!(
+                    "contents: {} hashes, none of the first {READ_TRIES} reads",
+                    hashes.len()
+                )),
             },
             Err(why) => fail(&format!("content hashes: {why}")),
         }
@@ -275,12 +311,8 @@ impl PlatformChecks {
             enshwick::info!("SKIP world reads: no placed entity");
             return;
         };
-        if self.world.set_label(entity, "probe") && self.world.set_label(entity, "") {
-            pass(&format!("label set on entity {} and removed", entity.0));
-        } else {
-            fail(&format!("label on entity {}: refused", entity.0));
-        }
         let [x, y, z] = at;
+        self.label_own_copy(entity, [x, y + 3.0, z]);
         report(
             "a save keeps the box at the first entity",
             self.world
@@ -295,6 +327,35 @@ impl PlatformChecks {
         }
     }
 
+    /// Labels a copy of `entity` the probe spawns at `at`, out of the save,
+    /// then destroys it: a label is saved with the world and would replace
+    /// a name the entity already had.
+    fn label_own_copy(&self, entity: enshwick::Entity, at: [f64; 3]) {
+        let Some(template) = self.world.template(entity) else {
+            enshwick::info!("SKIP label: entity {} has no template", entity.0);
+            return;
+        };
+        let copy = match self.effects.spawn(template, at, Spawn::new().do_not_save()) {
+            Ok(copy) => copy,
+            Err(why) => {
+                fail(&format!("label: spawn of its own entity: {why}"));
+                return;
+            }
+        };
+        let world = self.world;
+        // A spawned entity joins the world with the game's next steps.
+        self.scheduler.after(SPAWN_WAIT, move || {
+            if world.set_label(copy, "probe") && world.set_label(copy, "") {
+                pass(&format!("label set on entity {} and removed", copy.0));
+            } else {
+                fail(&format!("label on entity {}: refused", copy.0));
+            }
+            if let Err(why) = world.destroy(copy) {
+                fail(&format!("label: destroy of entity {}: {why}", copy.0));
+            }
+        });
+    }
+
     fn altars(&self) {
         let altars = self.altars.list();
         pass(&format!("altars: {}", altars.len()));
@@ -307,14 +368,18 @@ impl PlatformChecks {
             )),
         }
         enshwick::info!("grouping: {:?}", grouping());
-        match set_base_cap(BASES) {
-            Ok(()) if base_limit().is_some_and(|limit| limit.bases == BASES) => {
-                pass(&format!("base cap {BASES} reads back"));
+        // The lowest cap of every mod holds, so the probe lets go of its own
+        // at once: other mods keep the bases they asked for.
+        let capped = set_base_cap(CAP).map(|()| base_limit());
+        let released = set_base_cap(u32::MAX).map(|()| base_limit());
+        match (capped, released) {
+            (Ok(Some(low)), Ok(Some(back))) if low.bases == CAP && back.bases >= BASES => {
+                pass(&format!(
+                    "base cap {CAP} reads back, and {} once let go",
+                    back.bases
+                ));
             }
-            other => fail(&format!(
-                "base cap {BASES}: {other:?}, reads {:?}",
-                base_limit()
-            )),
+            other => fail(&format!("base cap {CAP}, then let go: {other:?}")),
         }
         if altars.is_empty() {
             enshwick::info!("SKIP altar zone filter: no altar in the world");
@@ -353,8 +418,8 @@ const MAP_TRIES: u32 = 12;
 /// while the loader still reads the scene, at most `tries` times.
 fn map_reads(map: Map, scheduler: Scheduler, tries: u32) {
     let (frame, markers) = (map.frame(), map.markers());
-    let loading =
-        [frame.as_ref().err(), markers.as_ref().err()].contains(&Some(&WorldError::NotLoaded));
+    let loading = matches!(frame, Err(WorldError::NotLoaded))
+        || matches!(markers, Err(WorldError::NotLoaded));
     if loading && tries > 1 {
         scheduler.after(COUNT_FOR, move || map_reads(map, scheduler, tries - 1));
         return;

@@ -12,11 +12,17 @@ mod game;
 #[path = "actions/inventory.rs"]
 mod inventory;
 #[cfg(test)]
+#[path = "actions/moderation.rs"]
+mod moderation;
+#[cfg(test)]
 #[path = "actions/players.rs"]
 mod players;
 #[cfg(test)]
 #[path = "actions/rcon.rs"]
 mod rcon;
+#[cfg(test)]
+#[path = "actions/windows.rs"]
+mod windows;
 #[cfg(test)]
 #[path = "actions/world.rs"]
 mod world;

@@ -39,6 +39,21 @@ Each entry says what players notice; a release's notes show its section.
   server runs, and keeps the newest 10 backups.
 - `/adm save` saves the world now, and `/adm world` shows its last save and
   its game settings.
+- Shift+F9 opens the Admin Tools window: the players online, each with a
+  window of every action on them, the bans and the allow-list, the server,
+  and the build log. Each administrator sees only the actions they may use.
+- A ban keeps its reason, `/adm bans` lists the newest 50 bans, and players who are
+  away can be banned, unbanned and allowed by the name they last joined
+  with, or any account by its id.
+- `/adm say` shows every player a line now, and `/adm setmotd` sets the
+  message of the day in game.
+- `/adm time` takes a time such as `18:30`.
+- `/adm mark` moves a player to the waypoint you set on your map.
+- A build log, off by default, keeps who placed or removed a building or
+  building blocks or changed terrain, and `/adm who` lists the changes near
+  you.
+- A moderator who is not an administrator cannot kick or ban themselves or
+  take themselves off the allow-list.
 - A restart warning saves the world when its time is up; a game a player
   hosts offers no restart warning.
 - Administrators give a player items by the game's name in any case, its

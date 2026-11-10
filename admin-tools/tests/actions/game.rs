@@ -32,6 +32,9 @@ pub(crate) const BACKPACK: u32 = 0x5001;
 /// Ann's look slots, which hold a glider.
 pub(crate) const LOOKS: u32 = 0x5002;
 
+/// Where Ann set her map waypoint, in metres; Bob set none.
+pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, -80.0];
+
 /// The game's number of the ordinary storage category.
 const GENERIC: u8 = 4;
 
@@ -172,9 +175,38 @@ pub(crate) fn hosted(settings: &str, dir: &Path) -> Installed {
     game(settings, dir, &[], true)
 }
 
+/// The fake's type hash of a player's waypoint, and one set at
+/// [`WAYPOINT`].
+fn waypoint(host: &FakeHost) -> (u32, Vec<u8>) {
+    let mut marked = vec![0u8; host.size(facts::PLAYER_WAYPOINT.id()).unwrap()];
+    marked[host.offset(facts::PLAYER_WAYPOINT_ENABLED.id()).unwrap()] = 1;
+    let place = host.offset(facts::PLAYER_WAYPOINT_POSITION.id()).unwrap();
+    for (axis, at) in enshwick::ecs::fixed(WAYPOINT).iter().enumerate() {
+        marked[place + 8 * axis..][..8].copy_from_slice(&at.to_le_bytes());
+    }
+    (host.hash(facts::PLAYER_WAYPOINT.id()).unwrap(), marked)
+}
+
+/// [`server`] on a game build whose inventories do not resolve, so the
+/// mod declares no action on what players carry.
+pub(crate) fn without_inventories(settings: &str, dir: &Path) -> Installed {
+    world(settings, dir, &[], false, false)
+}
+
 /// [`server_with`] on a dedicated server, or in a game a player hosts
 /// when `hosted`.
 pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Installed {
+    world(settings, dir, more, hosted, true)
+}
+
+/// [`game`], with the game's inventories only when `inventory`.
+fn world(
+    settings: &str,
+    dir: &Path,
+    more: &[PlayerInfo],
+    hosted: bool,
+    inventory: bool,
+) -> Installed {
     // Parallel tests would all take the remote console's default port.
     let settings = if settings.contains("rcon") {
         settings.to_owned()
@@ -189,7 +221,7 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
     .world();
     let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
     // Inventories resolve these; the actions under test never call them.
-    let mut host = host
+    let host = host
         .symbol("ecs.type_index", 0x1_4064_5cc0)
         .symbol("ecs.component_read_raw", 0x1_4064_6b00)
         .symbol("ecs.slot_root", 0x1_4093_5420)
@@ -200,8 +232,10 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         .items()
         .recipes()
         .workshops()
-        .props()
-        .inventory()
+        .props();
+    let host = if inventory { host.inventory() } else { host };
+    let mut host = host
+        .map_waypoints()
         .vanilla_items(&[
             (GLIDER, "Tool_Glider_T1"),
             (WOOD, "Resource_Wood"),
@@ -231,17 +265,21 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         .world_key("world0")
         .data_dir(dir.to_str().unwrap())
         .settings(&settings);
-    let (setup, inventory) = (
-        host.hash(facts::INVENTORY_SETUP.id()).unwrap(),
-        host.hash(facts::INVENTORY.id()).unwrap(),
-    );
-    let links = carried(&host, &[(BACKPACK, GENERIC), (LOOKS, CUSTOMIZATION)]);
-    let backpack = stacks(&host, &[(WOOD, 30), (GLIDER, 1)]);
-    let looks = stacks(&host, &[(GLIDER, 1)]);
-    host = host
-        .component(ann().entity, setup, &links)
-        .component(Entity(BACKPACK), inventory, &backpack)
-        .component(Entity(LOOKS), inventory, &looks);
+    if inventory {
+        let (setup, inventory) = (
+            host.hash(facts::INVENTORY_SETUP.id()).unwrap(),
+            host.hash(facts::INVENTORY.id()).unwrap(),
+        );
+        let links = carried(&host, &[(BACKPACK, GENERIC), (LOOKS, CUSTOMIZATION)]);
+        let backpack = stacks(&host, &[(WOOD, 30), (GLIDER, 1)]);
+        let looks = stacks(&host, &[(GLIDER, 1)]);
+        host = host
+            .component(ann().entity, setup, &links)
+            .component(Entity(BACKPACK), inventory, &backpack)
+            .component(Entity(LOOKS), inventory, &looks);
+    }
+    let (waypoint, marked) = waypoint(&host);
+    host = host.component(ann().entity, waypoint, &marked);
     for (who, place) in [(ann(), [40, 12, -3]), (bob(), [0, 20, 7])] {
         host = host
             .player(who)

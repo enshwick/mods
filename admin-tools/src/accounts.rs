@@ -2,6 +2,7 @@
 //! survive a restart and reach accounts while they are offline.
 
 use enshwick::PlayerKey;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 
 /// The world store's file name, `accounts.toml`.
@@ -14,7 +15,21 @@ pub(crate) struct Accounts {
     pub bans: Vec<Ban>,
     /// Accounts allowed to join while the allow-list is on.
     pub allowed: Vec<Known>,
+    /// The accounts that last came to the door, let in or not, oldest
+    /// first, so an administrator names a player who is away.
+    #[serde(default)]
+    pub seen: Vec<Known>,
+    /// The message of the day an administrator set in game, which players
+    /// read in place of the world's setting; empty for the setting's.
+    #[serde(default)]
+    pub motd: String,
 }
+
+/// The most accounts the door remembers.
+pub(crate) const MAX_SEEN: usize = 256;
+
+/// The longest reason of a ban, in bytes.
+pub(crate) const MAX_REASON: usize = 120;
 
 /// A banned account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,6 +43,9 @@ pub(crate) struct Ban {
     pub by: String,
     /// When, in seconds since 1970 (UTC).
     pub at: u64,
+    /// Why, as the administrator wrote it; empty for none.
+    #[serde(default)]
+    pub reason: String,
 }
 
 /// An account with the name its player last had.
@@ -69,6 +87,58 @@ impl Accounts {
     pub(crate) fn restore(&mut self, key: PlayerKey, older: Option<Ban>) {
         self.unban(key);
         self.bans.extend(older);
+    }
+
+    /// Whether `key` as `name` is the newest account the door remembers.
+    pub(crate) fn newest_at_door(&self, key: PlayerKey, name: &str) -> bool {
+        self.seen
+            .last()
+            .is_some_and(|known| known.key == key && known.name == name)
+    }
+
+    /// Remembers that `key` came to the door as `name`, as the newest of
+    /// at most [`MAX_SEEN`]; whether that changed what the door remembers.
+    pub(crate) fn see(&mut self, key: PlayerKey, name: &str) -> bool {
+        if self.newest_at_door(key, name) {
+            return false;
+        }
+        self.seen.retain(|known| known.key != key);
+        self.seen.push(Known {
+            key,
+            name: name.to_owned(),
+        });
+        let over = self.seen.len().saturating_sub(MAX_SEEN);
+        self.seen.drain(..over);
+        true
+    }
+
+    /// Every account the lists name with its name, newest first: those at
+    /// the door, then the banned, then the allowed. The platform keeps the
+    /// first of a long list, so the newest come first.
+    fn newest(&self) -> impl Iterator<Item = (PlayerKey, &String)> {
+        let at_door = self.seen.iter().rev().map(|known| (known.key, &known.name));
+        let banned = self.bans.iter().rev().map(|ban| (ban.key, &ban.name));
+        let allowed = self
+            .allowed
+            .iter()
+            .rev()
+            .map(|known| (known.key, &known.name));
+        at_door.chain(banned).chain(allowed)
+    }
+
+    /// Every account the lists name, once each, newest first.
+    pub(crate) fn known(&self) -> Vec<(PlayerKey, String)> {
+        let mut had = FxHashSet::default();
+        self.newest()
+            .filter(|(key, _)| had.insert(*key))
+            .map(|(key, name)| (key, name.clone()))
+            .collect()
+    }
+
+    /// The name `key` last had at the door or on a list.
+    pub(crate) fn name_of(&self, key: PlayerKey) -> Option<String> {
+        self.newest()
+            .find_map(|(known, name)| (known == key).then(|| name.clone()))
     }
 
     /// Puts `key` on the allow-list or takes it off.
@@ -119,6 +189,7 @@ mod tests {
             name: "Bob".into(),
             by: "Ann".into(),
             at: 1_700_000_000,
+            reason: String::new(),
         });
         accounts.allow(PlayerKey::new(2), "Cid", true);
         let text = toml::to_string(&accounts).unwrap();
@@ -134,6 +205,7 @@ mod tests {
             name: "Bob".into(),
             by: by.into(),
             at: 0,
+            reason: String::new(),
         };
         assert_eq!(accounts.ban(ban("Ann")), None);
         assert_eq!(accounts.ban(ban("Cid")), Some(ban("Ann")));
@@ -151,6 +223,7 @@ mod tests {
             name: "Bob".into(),
             by: by.into(),
             at: 0,
+            reason: String::new(),
         };
         let older = accounts.ban(ban("Ann"));
         accounts.restore(PlayerKey::new(7), older);
@@ -172,6 +245,56 @@ mod tests {
         assert_eq!(accounts.allowed.len(), 1);
         accounts.allow(PlayerKey::new(3), "Dee", false);
         assert!(!accounts.allowed(PlayerKey::new(3)));
+    }
+
+    #[test]
+    fn the_door_remembers_the_newest_accounts_and_names_each_known_one_once() {
+        let mut accounts = Accounts::default();
+        for key in 0..=MAX_SEEN as u64 {
+            assert!(accounts.see(PlayerKey::new(key), "old"));
+        }
+        assert!(accounts.see(PlayerKey::new(5), "Eve"));
+        assert!(
+            !accounts.see(PlayerKey::new(5), "Eve"),
+            "the newest already"
+        );
+        assert_eq!(accounts.seen.len(), MAX_SEEN);
+        assert!(!accounts.seen.iter().any(|known| known.key.0 == 0));
+        accounts.allow(PlayerKey::new(5), "Eve once", true);
+        accounts.allow(PlayerKey::new(900), "Fay", true);
+        let known = accounts.known();
+        assert_eq!(known[0], (PlayerKey::new(5), "Eve".to_owned()));
+        assert_eq!(known.len(), MAX_SEEN + 1);
+        assert_eq!(
+            accounts.name_of(PlayerKey::new(900)).as_deref(),
+            Some("Fay")
+        );
+        assert_eq!(accounts.name_of(PlayerKey::new(901)), None);
+    }
+
+    #[test]
+    fn the_newest_bans_come_before_older_ones_so_a_cut_list_keeps_them() {
+        let mut accounts = Accounts::default();
+        for (key, name) in [(7, "Old"), (8, "New")] {
+            let _older = accounts.ban(Ban {
+                key: PlayerKey::new(key),
+                name: name.into(),
+                by: "Ann".into(),
+                at: key,
+                reason: String::new(),
+            });
+        }
+        let names: Vec<String> = accounts.known().into_iter().map(|(_, name)| name).collect();
+        assert_eq!(names, ["New", "Old"]);
+        assert_eq!(accounts.name_of(PlayerKey::new(7)).as_deref(), Some("Old"));
+    }
+
+    #[test]
+    fn lists_written_before_reasons_and_the_door_still_read() {
+        let old = "allowed = []\n[[bans]]\nkey = \"07\"\nname = \"Bob\"\nby = \"Ann\"\nat = 3\n";
+        let accounts = toml::from_str::<Accounts>(old).unwrap();
+        assert_eq!(accounts.bans[0].reason, "");
+        assert!(accounts.seen.is_empty() && accounts.motd.is_empty());
     }
 
     #[test]

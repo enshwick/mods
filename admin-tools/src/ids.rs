@@ -58,15 +58,39 @@ pub(crate) const BACKUP: &str = "backup";
 /// Reads the chat log.
 pub(crate) const CHAT: &str = "chat";
 
+/// Bans a player with a reason.
+pub(crate) const BAN: &str = "ban";
+/// Reads the ban list.
+pub(crate) const BANS: &str = "bans";
+/// Bans, unbans, allows or disallows an account by its id.
+pub(crate) const ACCOUNT: &str = "account";
+/// Tells every player a line now.
+pub(crate) const SAY: &str = "say";
+/// Sets the message of the day.
+pub(crate) const SET_MOTD: &str = "setmotd";
+/// Moves a player to the caller's map waypoint.
+pub(crate) const MARK: &str = "mark";
+/// Who built, removed or dug near the caller.
+pub(crate) const WHO: &str = "who";
+/// Opens the mod's window.
+pub(crate) const PANEL: &str = "panel";
+/// Opens one section of the mod's window.
+pub(crate) const OPEN: &str = "open";
+/// Opens the window of one player.
+pub(crate) const PLAYER: &str = "player";
+
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 28] = [
-    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, STATS, LEARN, GOD, GIVE, CHEST,
-    CHEST_AT, CLEAR, COPY, GOTO, BRING, SEND, PLACE, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD,
-    AUDIT, CHAT,
+pub(crate) const ALL: [&str; 38] = [
+    PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, SET_MOTD, SAY, KICK, BAN, BANS, BANNED, ALLOWED,
+    ACCOUNT, MUTED, HEAL, STATS, LEARN, GOD, GIVE, CHEST, CHEST_AT, CLEAR, COPY, GOTO, BRING, SEND,
+    PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
 ];
 
-/// The actions that only read, which the audit log leaves out.
-pub(crate) const READS: [&str; 6] = [ONLINE, STATUS, MOTD, WORLD, AUDIT, CHAT];
+/// The actions that only read or open a window, which the audit log
+/// leaves out.
+pub(crate) const READS: [&str; 11] = [
+    PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, BANS, WORLD, WHO, AUDIT, CHAT,
+];
 
 /// The mod's command name, the part of its id after the author.
 pub(crate) const COMMAND: &str = "admin-tools";

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::inventory::{Batch, InventoryCategory, Op, Outcome as Given, Slot};
-use enshwick::{Entity, ItemId, Off, WorldError};
+use enshwick::{Entity, Off, WorldError};
 
 use crate::players::no_player;
 use crate::{Late, Tools, ids, items, texts};
@@ -197,10 +197,7 @@ fn try_give(tools: &Tools, request: &Request<'_>) -> Result<Outcome, Outcome> {
         return Err(Tools::failed(request, name, &WorldError::Missing));
     };
     let count = crate::whole(request, *count)?;
-    let (item, shown) = (
-        ItemId::from_guid(*picked),
-        items::name(*picked, request.language),
-    );
+    let (item, shown) = tools.picked(*picked, request.language);
     let (Some(player), Some(late)) = (
         tools.world.player_by_key(*key),
         Late::new(tools, request, ids::GIVE),
@@ -260,6 +257,7 @@ pub(crate) fn report(
 
 #[cfg(test)]
 mod tests {
+    use enshwick::ItemId;
     use enshwick::inventory::{Done, OpResult, SlotRef};
 
     use super::*;

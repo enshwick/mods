@@ -83,7 +83,8 @@ may be left out.
 | `/adm player <player>` | Opens the window of one player. | Admins |
 
 Admins are the players whose user group gives `CanKickBan`. The window lists
-the items by the names your game shows. A typed command names an item by its
+the game's own items by the names your game shows; a mod's item takes a typed
+command. A typed command names an item by its
 debug name, such as `Tool_Glider_T1`, its GUID or a mod's content id; in a
 game a player hosts, also by the name the game shows.
 
@@ -112,7 +113,7 @@ save.
 
 | File | What it holds | On by default |
 | --- | --- | --- |
-| `audit.log` | Each admin action that changes something, done or refused, and RCON logins. | On a dedicated server |
+| `audit.log` | Each admin action that changes something, done or refused by Admin Tools, and RCON logins. | On a dedicated server |
 | `chat.log` | Each chat line with the player's name and account id. | On a dedicated server |
 | `builds.log` | Each building placed or removed and each terrain change, with who did it. | No |
 

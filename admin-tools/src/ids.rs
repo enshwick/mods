@@ -27,7 +27,7 @@ pub(crate) const CHEST_AT: &str = "chestat";
 pub(crate) const CLEAR: &str = "clear";
 /// Copies what one player carries to another.
 pub(crate) const COPY: &str = "copy";
-/// Sets a player's health, stamina or mana.
+/// Sets a player's health, stamina, mana or level.
 pub(crate) const STATS: &str = "stats";
 /// Grants a player a recipe or other knowledge.
 pub(crate) const LEARN: &str = "learn";

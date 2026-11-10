@@ -190,7 +190,8 @@ ban list or the allow-list.
 
 In the window, **Give** and **Chest** list the game's items by the names
 your game shows, in your language, with a search field. This works on a
-dedicated server too.
+dedicated server too. The list holds the game's own items, so give a mod's
+item with a typed command.
 
 In a typed command:
 
@@ -201,7 +202,7 @@ In a typed command:
   have these names.
 - Any knowledge by its number for `learn`.
 
-An unknown recipe name lists the names near it. `give`, `chest` and `chestat` hand
+An unknown item or recipe name lists the names near it. `give`, `chest` and `chestat` hand
 over as many stacks as the items need, and you read how many did not fit.
 
 Items from `copy` start new, without wear or level, and the look and
@@ -307,7 +308,7 @@ save. Each line starts with the time in UTC.
 
 | File | What it holds | On by default |
 | --- | --- | --- |
-| `audit.log` | Each run of an action that changes something, done or refused: who, from where, the action, its values and the answer. Also RCON logins, and a change the game made in part after the answer, such as a give. Reads such as `online` are left out. | On a dedicated server |
+| `audit.log` | Each run of an action that changes something, done or refused: who, from where, the action, its values and the answer. Also RCON logins, and a change the game made in part after the answer, such as a give. Reads such as `online` are left out, and so is a run Enshwick refuses first, for an unknown player or item or a player without the right. | On a dedicated server |
 | `chat.log` | Each chat line: the player's name and account id, the kind of line and its text. | On a dedicated server |
 | `builds.log` | Each building placed or removed, and each spot of building blocks or terrain changed, with who did it. | No |
 

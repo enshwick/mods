@@ -1,6 +1,6 @@
 //! Actions on what players carry: giving an item a window picks or a typed
 //! line names, in as many stacks as they need, once; what did not fit; the
-//! refusals, which the audit log keeps too.
+//! refusals, which the audit log keeps when Admin Tools makes them.
 
 use enshwick::ItemId;
 use enshwick::abi::{
@@ -145,6 +145,25 @@ fn an_item_the_game_does_not_know_or_a_player_without_the_right_gives_nothing() 
     let picked = format!("p0000000000000002\ti{GLIDER}\tn1");
     assert!(run(&loader, &bob(), "give", &picked).starts_with('0'));
     assert!(gives(&loader).is_empty());
+}
+
+#[test]
+fn a_typed_give_takes_a_debug_name_offers_near_names_and_the_audit_log_keeps_the_debug_name() {
+    let dir = scratch("give-typed");
+    let loader = server("audit = \"on\"\n", &dir);
+    let given = loader
+        .type_in_chat(&ann(), 0, "/adm give Bob Tool_Glider_T1")
+        .unwrap();
+    assert_eq!(given, "1Gave Tool_Glider_T1 × 1 to Bob.");
+    let typo = loader
+        .type_in_chat(&ann(), 0, "/adm give Bob Tool_Glidr_T1")
+        .unwrap();
+    assert!(
+        typo.starts_with('0') && typo.contains("Tool_Glider_T1"),
+        "{typo}"
+    );
+    let audit = file_until(&dir, "audit.log", |text| text.contains("\tgive\t"));
+    assert!(audit.contains("\tgive\tBob Tool_Glider_T1 1\t"), "{audit}");
 }
 
 #[test]
@@ -338,7 +357,7 @@ fn a_chest_whose_placement_fails_is_told_kept_in_the_audit_log_and_gets_no_items
     let audit = file_until(&dir, "audit.log", |text| text.contains("No chest"));
     let outcome = audit.lines().last().unwrap();
     assert!(
-        outcome.contains(&format!("\tchestat\t10 20 30 {WOOD} 5\t")),
+        outcome.contains("\tchestat\t10 20 30 Resource_Wood 5\t"),
         "{audit}"
     );
     assert!(outcome.ends_with("\trefused"), "{audit}");

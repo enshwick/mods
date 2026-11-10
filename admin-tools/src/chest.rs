@@ -118,10 +118,7 @@ fn place(
     whereabouts: &str,
 ) -> Result<Outcome, Outcome> {
     let count = crate::whole(request, count)?;
-    let (item, shown) = (
-        ItemId::from_guid(picked),
-        items::name(picked, request.language),
-    );
+    let (item, shown) = tools.picked(picked, request.language);
     let Ok(chest) = vanilla::item(CHEST).map(ItemId::from_guid) else {
         return Err(Outcome::refused(request.say(texts::REPLY_NO_CHEST, &[])));
     };

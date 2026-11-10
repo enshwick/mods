@@ -50,11 +50,38 @@ fn stats_sets_a_player_s_level_in_the_game_s_next_step() {
     let loader = server("", &dir);
     assert_eq!(
         run(&loader, &ann(), "stats", "p0000000000000002\tc3\tn10"),
-        "1Bob goes to level 10 in the game's next step."
+        format!("1Bob goes to level 10 in the game's next step. {KEPT}")
     );
     assert_eq!(
         loader.progress_writes(),
         [(bob().entity, PROGRESS_SET_LEVEL, 10)]
+    );
+}
+
+/// What the level reply says of a level outside the game's range.
+const KEPT: &str = "The game keeps the level between 1 and its highest level.";
+
+#[test]
+fn a_level_outside_the_game_s_range_is_passed_on_and_the_reply_says_the_game_keeps_it_in_range() {
+    use enshwick::abi::PROGRESS_SET_LEVEL;
+
+    let dir = scratch("stats-level-range");
+    let loader = server("", &dir);
+    for level in [0, 100_000] {
+        let reply = run(
+            &loader,
+            &ann(),
+            "stats",
+            &format!("p0000000000000002\tc3\tn{level}"),
+        );
+        assert!(reply.starts_with('1') && reply.ends_with(KEPT), "{reply}");
+    }
+    assert_eq!(
+        loader.progress_writes(),
+        [
+            (bob().entity, PROGRESS_SET_LEVEL, 0),
+            (bob().entity, PROGRESS_SET_LEVEL, 100_000)
+        ]
     );
 }
 
@@ -64,7 +91,7 @@ fn revive_stands_a_dead_player_up_with_full_health_and_refuses_the_living() {
     let loader = server("", &dir);
     assert_eq!(
         run(&loader, &ann(), "revive", "p0000000000000002"),
-        "0Bob is not dead."
+        "0The game did not revive Bob: they are alive, or the game does not take the revive."
     );
     assert!(loader.set_component(bob().entity, HEALTH, &health(0, 200)));
     assert!(run(&loader, &bob(), "revive", "p0000000000000002").starts_with('0'));

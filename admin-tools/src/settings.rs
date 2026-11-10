@@ -288,7 +288,7 @@ pub(crate) struct Rights {
     pub muted: String,
     /// Healing a player.
     pub heal: String,
-    /// Setting a player's health, stamina or mana.
+    /// Setting a player's health, stamina, mana or level.
     pub stats: String,
     /// Reviving a dead player where they lie.
     pub revive: String,

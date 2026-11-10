@@ -15,6 +15,10 @@ rights and writes a run that changed something to the audit log.
 | `src/lib.rs` | the mod's start, the state its handlers share, and the rights and audit wrapper |
 | `src/ids.rs` | the actions' ids and the command names |
 | `src/players.rs` | actions on players, and the check of each player who joins |
+| `src/character.rs` | health, stamina and mana, recipes and other knowledge, and god mode through a damage filter |
+| `src/inventory.rs` | giving items, clearing an inventory and copying one to another |
+| `src/chest.rs` | a wooden chest placed by a world transaction, filled once it stands |
+| `src/items.rs` | items and recipes by the game's name, GUID, content id or number, with near names |
 | `src/server.rs` | actions on the whole server, the tick that runs the schedule, and the chat log's lines |
 | `src/settings.rs` | the world's settings and who may use each action |
 | `src/accounts.rs` | the ban list and the allow-list, kept in the world's data |

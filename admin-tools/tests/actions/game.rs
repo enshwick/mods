@@ -4,14 +4,73 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use enshwick::PlayerKey;
 use enshwick::abi::{ActionCall, DaytimeInfo, Header, PlayerData, PlayerInfo, Side, Status};
 use enshwick::content::EngineFacts as _;
+use enshwick::content::Guid;
 use enshwick::events::{PlayerJoined, SettingsReplaced, WorldLoaded};
-use enshwick::test::{Installed, facts};
+use enshwick::test::{FakeHost, Installed, facts};
+use enshwick::{Entity, ItemId, PlayerKey};
 use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
 
 pub(crate) const ADMIN: u8 = PlayerInfo::CAN_KICK_BAN;
+
+/// The game's skipped inventory entity, which the inventory reads compare to.
+static SKIPPED: [u32; 1] = [0];
+
+/// A glider in the fake's item registry, one to a stack.
+pub(crate) const GLIDER: Guid = Guid([0x61; 16]);
+
+/// Wood in the fake's item registry, a hundred to a stack.
+pub(crate) const WOOD: Guid = Guid([0x62; 16]);
+
+/// The wooden chest in the fake's item registry.
+pub(crate) const CHEST: Guid = Guid([0x63; 16]);
+
+/// Ann's backpack, which holds 30 wood and a glider; Bob carries nothing.
+pub(crate) const BACKPACK: u32 = 0x5001;
+
+/// Ann's look slots, which hold a glider.
+pub(crate) const LOOKS: u32 = 0x5002;
+
+/// The game's number of the ordinary storage category.
+const GENERIC: u8 = 4;
+
+/// The game's number of the looks category.
+const CUSTOMIZATION: u8 = 1;
+
+/// The stacks one sub-inventory holds.
+const SLOTS: usize = 8;
+
+/// An inventory setup that links `links`, each a sub-inventory and its
+/// category, in the layout of the fake's inventory preset.
+fn carried(host: &FakeHost, links: &[(u32, u8)]) -> Vec<u8> {
+    let [entities, categories, initialized] = [
+        facts::INVENTORY_SETUP_LINKS,
+        facts::INVENTORY_SETUP_CATEGORIES,
+        facts::INVENTORY_SETUP_INITIALIZED,
+    ]
+    .map(|fact| host.offset(fact.id()).unwrap());
+    let mut bytes = vec![0u8; initialized + 1];
+    for (i, (entity, category)) in links.iter().enumerate() {
+        bytes[entities + i * 4..][..4].copy_from_slice(&entity.to_le_bytes());
+        bytes[categories + i] = *category;
+    }
+    bytes[initialized] = 1;
+    bytes
+}
+
+/// A sub-inventory's stacks of `(item, count)`, the rest empty.
+fn stacks(host: &FakeHost, stacks: &[(Guid, u32)]) -> Vec<u8> {
+    let size = host.size(facts::ITEM_STACK.id()).unwrap();
+    let count_at = host.offset(facts::ITEM_STACK_COUNT.id()).unwrap();
+    let mut bytes = vec![0u8; size * SLOTS];
+    for (i, (item, count)) in stacks.iter().enumerate() {
+        let item = ItemId::from_guid(*item).get();
+        bytes[i * size..][..4].copy_from_slice(&item.to_le_bytes());
+        bytes[i * size + count_at..][..4].copy_from_slice(&count.to_le_bytes());
+    }
+    bytes
+}
 
 /// The fake's type hash of a health attribute set; past the world
 /// preset's own hashes.
@@ -36,7 +95,7 @@ pub(crate) fn player(entity: u32, key: u64, name: &str, permissions: u8) -> Play
     let mut info = PlayerInfo {
         header: Header::of::<PlayerInfo>(),
         slot: entity,
-        entity: enshwick::Entity(entity),
+        entity: Entity(entity),
         key: PlayerKey::new(key),
         permissions,
         name_len: u8::try_from(name.len()).unwrap(),
@@ -123,15 +182,35 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         format!("rcon = \"off\"\n{settings}")
     };
     let host = if hosted {
-        enshwick::test::FakeHost::new()
-            .side(Side::CLIENT)
-            .hosting(true)
+        FakeHost::new().side(Side::CLIENT).hosting(true)
     } else {
-        enshwick::test::FakeHost::new().side(Side::SERVER)
+        FakeHost::new().side(Side::SERVER)
     }
     .world();
     let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
+    // Inventories resolve these; the actions under test never call them.
     let mut host = host
+        .symbol("ecs.type_index", 0x1_4064_5cc0)
+        .symbol("ecs.component_read_raw", 0x1_4064_6b00)
+        .symbol("ecs.slot_root", 0x1_4093_5420)
+        .symbol("inventory.skip_entity", SKIPPED.as_ptr().addr() as u64)
+        .constant("ecs.context_entity_world", 0x30)
+        .constant("ecs.registry_type_map", 0x30)
+        .constant("ecs.registry_type_map_fallback", 0x88)
+        .items()
+        .recipes()
+        .workshops()
+        .props()
+        .inventory()
+        .vanilla_items(&[
+            (GLIDER, "Tool_Glider_T1"),
+            (WOOD, "Resource_Wood"),
+            (CHEST, "Prop_Storage_32_T2_Chest_Wood"),
+        ])
+        .item(ItemId::from_guid(GLIDER), 1, 0)
+        .item(ItemId::from_guid(WOOD), 100, 0)
+        .item(ItemId::from_guid(CHEST), 1, 0)
+        .item_places(ItemId::from_guid(CHEST), [5; 16])
         .type_hash("attribute_set.health", HEALTH)
         .type_hash("attribute_set.stamina", HEALTH + 1)
         .type_hash("attribute_set.mana", HEALTH + 2)
@@ -152,6 +231,17 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         .world_key("world0")
         .data_dir(dir.to_str().unwrap())
         .settings(&settings);
+    let (setup, inventory) = (
+        host.hash(facts::INVENTORY_SETUP.id()).unwrap(),
+        host.hash(facts::INVENTORY.id()).unwrap(),
+    );
+    let links = carried(&host, &[(BACKPACK, GENERIC), (LOOKS, CUSTOMIZATION)]);
+    let backpack = stacks(&host, &[(WOOD, 30), (GLIDER, 1)]);
+    let looks = stacks(&host, &[(GLIDER, 1)]);
+    host = host
+        .component(ann().entity, setup, &links)
+        .component(Entity(BACKPACK), inventory, &backpack)
+        .component(Entity(LOOKS), inventory, &looks);
     for (who, place) in [(ann(), [40, 12, -3]), (bob(), [0, 20, 7])] {
         host = host
             .player(who)
@@ -163,6 +253,8 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         host = host.player(*who);
     }
     let loader = host.install();
+    // Transactions need a world with terrain.
+    loader.set_terrain(&[]);
     // SAFETY: the exports of the mod under test.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
@@ -217,6 +309,8 @@ pub(crate) fn tick_until(loader: &Installed, done: impl Fn() -> bool) -> bool {
             return true;
         }
         let _ran = loader.tick(Duration::from_secs(1));
+        // The game writes committed transactions between its steps.
+        loader.run_transactions();
         std::thread::sleep(Duration::from_millis(10));
     }
     done()

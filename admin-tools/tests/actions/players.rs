@@ -30,7 +30,7 @@ fn a_player_sees_only_the_reads_and_an_administrator_sees_every_action() {
         .collect()
     };
     assert_eq!(ids(&bob()), ["online", "motd", "status"]);
-    assert_eq!(ids(&ann()).len(), 20);
+    assert_eq!(ids(&ann()).len(), 28);
     assert!(run(&loader, &bob(), "kick", "p0000000000000001").starts_with('0'));
 }
 
@@ -55,13 +55,45 @@ fn the_world_s_rights_give_an_action_to_a_permission_and_take_one_away() {
     );
     assert_eq!(
         console::run("enshwick.admin-tools online").as_deref(),
-        Ok("2 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)"),
+        Ok("Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"),
         "the console always may"
     );
     assert_eq!(
-        console::run("adl online").as_deref(),
-        Ok("2 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)"),
+        console::run("adm online").as_deref(),
+        Ok("Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"),
         "the alias names the mod on the console"
+    );
+}
+
+#[test]
+fn the_players_online_read_as_one_line_in_the_interface_and_a_line_each_in_chat() {
+    let dir = scratch("online-lines");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "online", ""),
+        "1Admin Tools: 2 online Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min)"
+    );
+    assert_eq!(
+        loader.type_in_chat(&ann(), 0, "/adm online").as_deref(),
+        Some(
+            "1Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min)"
+        )
+    );
+}
+
+#[test]
+fn the_audit_log_tells_a_refused_run_from_a_done_one() {
+    let dir = scratch("audit-refused");
+    let loader = server("audit = \"on\"\n", &dir);
+    assert!(run(&loader, &ann(), "kick", "p0000000000000001").starts_with('0'));
+    assert!(run(&loader, &ann(), "kick", "p0000000000000002").starts_with('1'));
+    let audit = file_until(&dir, "audit.log", |text| text.lines().count() == 2);
+    let lines: Vec<&str> = audit.lines().collect();
+    assert!(lines[0].contains("\tkick\tAnn\t"), "{audit}");
+    assert!(lines[0].ends_with("\trefused"), "{audit}");
+    assert!(
+        lines[1].ends_with("\tkick\tBob\tBob was kicked.\tdone"),
+        "{audit}"
     );
 }
 
@@ -329,7 +361,7 @@ fn every_change_goes_to_the_audit_log_and_reads_back_and_reads_stay_out() {
         console::run("enshwick.admin-tools muted Bob on").as_deref(),
         Ok("Bob is muted in chat.")
     );
-    let _reply = loader.type_in_chat(&ann(), 0, "/adl muted Bob off");
+    let _reply = loader.type_in_chat(&ann(), 0, "/adm muted Bob off");
     let _reply = run(&loader, &ann(), "kick", "p0000000000000002");
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     let mut read = String::new();
@@ -398,12 +430,12 @@ fn a_settings_change_while_the_world_runs_goes_to_the_audit_log_and_its_load_doe
 }
 
 #[test]
-fn commands_under_adl_run_the_actions_from_chat_with_the_player_s_rights() {
+fn commands_under_adm_run_the_actions_from_chat_with_the_player_s_rights() {
     let dir = scratch("chat");
     let loader = server("", &dir);
     assert_eq!(
         loader
-            .type_in_chat(&ann(), 0, "/adl muted Bob on")
+            .type_in_chat(&ann(), 0, "/adm muted Bob on")
             .as_deref(),
         Some("1Bob is muted in chat.")
     );
@@ -412,21 +444,23 @@ fn commands_under_adl_run_the_actions_from_chat_with_the_player_s_rights() {
         loader
             .type_in_chat(&bob(), 0, "/admin-tools online")
             .as_deref(),
-        Some("12 online: Ann (0000000000000001, 0 min), Bob (0000000000000002, 0 min, muted)")
+        Some(
+            "1Admin Tools: 2 online\nAnn (0000000000000001, 0 min)\nBob (0000000000000002, 0 min, muted)"
+        )
     );
     assert_eq!(
         loader
-            .type_in_chat(&ann(), 0, "/adl muted Bob off")
+            .type_in_chat(&ann(), 0, "/adm muted Bob off")
             .as_deref(),
         Some("1Bob can write in chat again.")
     );
     assert_eq!(
         loader
-            .type_in_chat(&ann(), 0, "/adl muted Ann on")
+            .type_in_chat(&ann(), 0, "/adm muted Ann on")
             .as_deref(),
         Some("0Ann is an administrator or the host and cannot be muted.")
     );
-    let refused = loader.type_in_chat(&bob(), 0, "/adl kick Ann").unwrap();
+    let refused = loader.type_in_chat(&bob(), 0, "/adm kick Ann").unwrap();
     assert!(refused.starts_with('0'), "{refused}");
     assert!(loader.removed().is_empty());
 }
@@ -436,20 +470,20 @@ fn a_remote_caller_runs_only_what_its_permissions_allow_and_nobody_leaves_the_co
     let dir = scratch("remote");
     let loader = server("[rights]\nweather = \"nobody\"\n", &dir);
     let bridge = Caller::new("bridge");
-    let kicked = commands::run("adl kick Bob", &bridge).unwrap();
+    let kicked = commands::run("adm kick Bob", &bridge).unwrap();
     assert!(!kicked.is_done(), "{}", kicked.text());
     assert!(loader.removed().is_empty(), "no permission, no kick");
-    let help = commands::run("adl help", &bridge).unwrap();
+    let help = commands::run("adm help", &bridge).unwrap();
     assert!(!help.text().contains("kick"), "{}", help.text());
 
     let moderator = Caller::new("moderator").with(PlayerPermissions::CanKickBan);
-    assert!(commands::run("adl kick Bob", &moderator).unwrap().is_done());
+    assert!(commands::run("adm kick Bob", &moderator).unwrap().is_done());
     assert_eq!(loader.removed(), [2]);
-    let weather = commands::run("adl weather rain", &moderator).unwrap();
+    let weather = commands::run("adm weather rain", &moderator).unwrap();
     assert!(!weather.is_done(), "nobody: {}", weather.text());
 
     assert_eq!(
-        console::run("adl weather rain").as_deref(),
+        console::run("adm weather rain").as_deref(),
         Ok("The weather changes to Rain."),
         "the server's console may use an action for nobody"
     );

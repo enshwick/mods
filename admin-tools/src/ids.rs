@@ -15,6 +15,22 @@ pub(crate) const ALLOWED: &str = "allowed";
 pub(crate) const MUTED: &str = "muted";
 /// Heals a player.
 pub(crate) const HEAL: &str = "heal";
+/// Gives a player items.
+pub(crate) const GIVE: &str = "give";
+/// Places a chest of items beside a player.
+pub(crate) const CHEST: &str = "chest";
+/// Places a chest of items at a position.
+pub(crate) const CHEST_AT: &str = "chestat";
+/// Clears what a player carries.
+pub(crate) const CLEAR: &str = "clear";
+/// Copies what one player carries to another.
+pub(crate) const COPY: &str = "copy";
+/// Sets a player's health, stamina or mana.
+pub(crate) const STATS: &str = "stats";
+/// Grants a player a recipe or other knowledge.
+pub(crate) const LEARN: &str = "learn";
+/// God mode: nothing damages a player.
+pub(crate) const GOD: &str = "god";
 /// Takes the caller to a player.
 pub(crate) const GOTO: &str = "goto";
 /// Brings a player to the caller.
@@ -43,9 +59,10 @@ pub(crate) const BACKUP: &str = "backup";
 pub(crate) const CHAT: &str = "chat";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 20] = [
-    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, GOTO, BRING, SEND, PLACE, TIME,
-    WEATHER, RESTART, SAVE, BACKUP, WORLD, AUDIT, CHAT,
+pub(crate) const ALL: [&str; 28] = [
+    ONLINE, STATUS, MOTD, KICK, BANNED, ALLOWED, MUTED, HEAL, STATS, LEARN, GOD, GIVE, CHEST,
+    CHEST_AT, CLEAR, COPY, GOTO, BRING, SEND, PLACE, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD,
+    AUDIT, CHAT,
 ];
 
 /// The actions that only read, which the audit log leaves out.
@@ -54,4 +71,4 @@ pub(crate) const READS: [&str; 6] = [ONLINE, STATUS, MOTD, WORLD, AUDIT, CHAT];
 /// The mod's command name, the part of its id after the author.
 pub(crate) const COMMAND: &str = "admin-tools";
 /// The command's short alias.
-pub(crate) const ALIAS: &str = "adl";
+pub(crate) const ALIAS: &str = "adm";

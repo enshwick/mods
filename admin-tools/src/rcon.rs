@@ -1,6 +1,6 @@
 //! The remote console: a Source RCON server on a thread of its own. A tool
 //! logs in with the world's password and sends command lines, such as
-//! `adl online`; each runs on the game thread as the server's console runs
+//! `adm online`; each runs on the game thread as the server's console runs
 //! it, and the reply goes back to the tool.
 //!
 //! Everything a client sends is bounded: the packet size, the packets a

@@ -1,17 +1,23 @@
 //! Admin Tools: what a server's administrators need in game. The player
 //! list, kicks, bans, the allow-list and chat mutes; the message of the
 //! day, scheduled announcements and restart warnings; the time of day and
-//! the weather; healing and teleports; saves, backups and the world's
+//! the weather; healing and teleports; items, chests of items and
+//! inventories; health, stamina and mana, recipes and god mode; saves,
+//! backups and the world's
 //! settings; who may use each, per world; an audit log of what was done
 //! and a chat log.
 //!
 //! Every action also runs as a command, `/admin-tools <action>` or
-//! `/adl <action>`, in chat, the server's console and the mod's remote
+//! `/adm <action>`, in chat, the server's console and the mod's remote
 //! console (Source RCON).
 
 mod accounts;
 mod backup;
+mod character;
+mod chest;
 mod ids;
+mod inventory;
+mod items;
 mod journal;
 mod players;
 mod rcon;
@@ -31,11 +37,13 @@ use enshwick::effects::Effects;
 use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
 use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
+use enshwick::inventory::Inventories;
+use enshwick::knowledge::Knowledge;
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
 use enshwick::world::World;
-use enshwick::{Load, Mod, Off, PlayerKey, Relock as _};
+use enshwick::{Entity, Load, Mod, Off, PlayerKey, Relock as _};
 use rustc_hash::FxHashMap;
 
 use accounts::Accounts;
@@ -60,6 +68,9 @@ pub(crate) struct Tools {
     effects: Effects,
     clock: Clock,
     weather: Weather,
+    knowledge: Knowledge,
+    /// The inventories, `None` on a build without them.
+    inventories: Option<Inventories>,
     /// The game settings, `None` on a build without them.
     game_settings: Option<GameSettings>,
     scheduler: Scheduler,
@@ -72,6 +83,9 @@ pub(crate) struct Tools {
     audit: Journal,
     chat: Journal,
     ticker: Mutex<Ticker>,
+    /// The players in god mode and their characters, read without a lock
+    /// by the damage filter.
+    gods: ArcSwap<Vec<(PlayerKey, Entity)>>,
     /// When each player online joined, for the time online.
     joined: Mutex<FxHashMap<PlayerKey, Instant>>,
     /// When the mod started, for the server's uptime.
@@ -103,6 +117,11 @@ impl Mod for AdminTools {
             .inspect_err(|why| enshwick::warn!("the world action is off: {why}"))
             .ok();
         let scheduler = load.scheduler()?;
+        let knowledge = load.knowledge();
+        let inventories = load
+            .inventories()
+            .inspect_err(|why| enshwick::warn!("the inventory actions are off: {why}"))
+            .ok();
         let actions = load.actions(texts.clone())?;
         let accounts = load.world_store(accounts::STORE)?;
         let tools = Arc::new_cyclic(|me| Tools {
@@ -111,6 +130,8 @@ impl Mod for AdminTools {
             effects,
             clock,
             weather,
+            knowledge,
+            inventories,
             game_settings,
             scheduler,
             actions,
@@ -121,6 +142,7 @@ impl Mod for AdminTools {
             audit: Journal::new(journal::AUDIT),
             chat: Journal::new(journal::CHAT),
             ticker: Mutex::new(Ticker::default()),
+            gods: ArcSwap::from_pointee(Vec::new()),
             joined: Mutex::new(FxHashMap::default()),
             started: Instant::now(),
             backing_up: AtomicBool::new(false),
@@ -134,6 +156,9 @@ impl Mod for AdminTools {
         let stopped = Arc::clone(&tools);
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
         players::add(&tools)?;
+        inventory::add(&tools)?;
+        chest::add(&tools)?;
+        character::add(&tools, load)?;
         server::add(&tools)?;
         backup::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
@@ -151,10 +176,12 @@ impl Mod for AdminTools {
         let leaves = Arc::clone(&tools);
         load.on::<PlayerLeft>(move |left| {
             leaves.joined.relock().remove(&left.key);
+            leaves.set_god(left.key, None);
         })?;
         let ticks = Arc::clone(&tools);
         load.on_tick(TICK, move |tick| {
             ticks.tick(core::time::Duration::from_nanos(tick.elapsed_nanos));
+            ticks.drop_stale_gods();
         })?;
         Ok(Self)
     }
@@ -162,8 +189,8 @@ impl Mod for AdminTools {
 
 impl Tools {
     /// Declares `action` with `handler`: only players the world's rights
-    /// admit see and run it, and a run that changed something goes to the
-    /// audit log.
+    /// admit see and run it, and every run of an action that changes
+    /// something goes to the audit log, refused or done.
     fn add(self: &Arc<Self>, action: Action, handler: Handler) -> Result<(), Off> {
         let id = action.id().to_owned();
         let rules = Arc::clone(self);
@@ -175,7 +202,8 @@ impl Tools {
             action.allow(move |player| offered && rules.rules.load().admits(&rule_id, player)),
             move |request| {
                 let outcome = handler(&tools, request);
-                if outcome.is_done() && !ids::READS.contains(&id.as_str()) {
+                // A refusal goes in too, so an administrator sees what was tried.
+                if !ids::READS.contains(&id.as_str()) {
                     tools.record(request, &id, &outcome);
                 }
                 outcome
@@ -198,6 +226,7 @@ impl Tools {
         self.running.store(false, Ordering::Relaxed);
         *self.ticker.relock() = Ticker::default();
         self.joined.relock().clear();
+        self.gods.store(Arc::new(Vec::new()));
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);
@@ -226,15 +255,9 @@ impl Tools {
 
     /// Writes a run of the action `id` to the audit log while it is on.
     fn record(&self, request: &Request<'_>, id: &str, outcome: &Outcome) {
-        let who = account(&request.player.name, request.player.key);
-        let via = match request.via {
-            Via::Interface => "interface",
-            Via::Console => "console",
-            Via::Chat => "chat",
-            _ => "remote",
-        };
-        let args: Vec<String> = request.args.iter().map(word).collect();
-        self.log(&[&who, via, id, &args.join(" "), outcome.text()]);
+        let (who, via, args) = run_of(request);
+        let ended = journal::outcome(outcome.is_done());
+        self.log(&[&who, via, id, &args, outcome.text(), ended]);
     }
 
     /// Writes `fields` to the audit log while the world's settings keep it
@@ -292,6 +315,88 @@ impl Tools {
     }
 }
 
+/// The end of a change the game runs after its action replied: the caller
+/// reads it in chat and the audit log keeps it, since the reply came before
+/// the game ran the change and a console or remote caller hears no chat.
+pub(crate) struct Late {
+    tools: Arc<Tools>,
+    caller: enshwick::world::Player,
+    language: Language,
+    id: &'static str,
+    /// Who ran the action, from where and with which values.
+    run: (String, &'static str, String),
+}
+
+impl Late {
+    /// The late end of the run `request` of the action `id`; `None` once
+    /// the mod is gone.
+    pub(crate) fn new(tools: &Tools, request: &Request<'_>, id: &'static str) -> Option<Arc<Self>> {
+        Some(Arc::new(Self {
+            tools: tools.me.upgrade()?,
+            caller: request.player.clone(),
+            language: request.language,
+            id,
+            run: run_of(request),
+        }))
+    }
+
+    /// Tells the caller the text `key` and writes it to the audit log: as a
+    /// change made in part when `done`, else as one the game turned down.
+    pub(crate) fn report(&self, done: bool, key: &str, values: &[(&str, &str)]) {
+        let line = self.tools.texts.fill(key, self.language, values);
+        self.tools.world.tell(&self.caller, &line);
+        let (who, via, args) = &self.run;
+        let ended = journal::outcome(done);
+        self.tools.log(&[who, via, self.id, args, &line, ended]);
+    }
+}
+
+/// Who ran an action, from where and with which values, as the audit log
+/// writes them.
+fn run_of(request: &Request<'_>) -> (String, &'static str, String) {
+    let via = match request.via {
+        Via::Interface => "interface",
+        Via::Console => "console",
+        Via::Chat => "chat",
+        _ => "remote",
+    };
+    let args: Vec<String> = request.args.iter().map(word).collect();
+    let who = account(&request.player.name, request.player.key);
+    (who, via, args.join(" "))
+}
+
+/// Between the lines of a reply.
+pub(crate) const LINE: &str = "\n";
+
+/// `parts` as one reply: a line each in chat, the console and a remote
+/// console, and one line in the interface, whose notice shows only one.
+pub(crate) fn lines(request: &Request<'_>, parts: &[String]) -> String {
+    let between = if matches!(request.via, Via::Interface) {
+        " "
+    } else {
+        LINE
+    };
+    parts.join(between)
+}
+
+/// `number` as the whole number an action's argument stands for, or the
+/// refusal of one with a fraction: the loader checks an argument's range,
+/// never its step.
+pub(crate) fn whole(request: &Request<'_>, number: f64) -> Result<u32, Outcome> {
+    if number.fract() != 0.0 || !(0.0..=f64::from(u32::MAX)).contains(&number) {
+        let shown = number.to_string();
+        return Err(Outcome::refused(
+            request.say(texts::REPLY_NOT_WHOLE, &[(texts::value::VALUE, &shown)]),
+        ));
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a whole number in 0..=u32::MAX, checked above"
+    )]
+    Ok(number as u32)
+}
+
 /// The language lines to every player are in: the server's own.
 fn language() -> Language {
     enshwick::i18n::language()
@@ -316,6 +421,7 @@ fn word(value: &Value) -> String {
         Value::Choice(index) => index.to_string(),
         Value::Number(number) => number.to_string(),
         Value::Toggle(on) => if *on { "on" } else { "off" }.to_owned(),
+        Value::Text(text) => text.clone(),
         _ => String::new(),
     }
 }
@@ -326,6 +432,11 @@ mod tests {
     use enshwick::i18n::{Language, Texts};
 
     use super::*;
+
+    #[test]
+    fn the_audit_log_writes_a_text_argument_as_typed() {
+        assert_eq!(word(&Value::Text("Stone Axe".to_owned())), "Stone Axe");
+    }
 
     #[test]
     fn every_text_exists_in_every_required_language() {

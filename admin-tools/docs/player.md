@@ -69,48 +69,56 @@ settings:
 ---
 
 - Administrators see who is online, and kick, ban or mute players. A ban holds after a restart.
-- An allow-list lets only chosen accounts and administrators join, and each world decides who may use each action.
-- Players read a message of the day, scheduled announcements and restart warnings.
+- An allow-list lets only chosen accounts and administrators join. Each world decides who may use each action. Players read a message of the day, scheduled announcements and restart warnings.
 - Administrators set the time and the weather, heal and teleport players, save the world and back it up while the server runs.
+- Administrators give items, place chests of items, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
 - RCON tools such as BattleMetrics run every command on a dedicated server, and audit and chat logs keep what happened.
 
 ## How do I use an action?
 
 You type the action as a command in chat, or in the console window of a
-dedicated server. Every command starts with `/adl` or `/admin-tools`.
+dedicated server. Every command starts with `/adm` or `/admin-tools`.
 
 1. Open the chat in the game.
-2. Type `/adl help` to see the actions you may use.
-3. Type a command, such as `/adl kick Bob`.
+2. Type `/adm help` to see the actions you may use.
+3. Type a command, such as `/adm kick Bob`.
 
 The answer shows only to you. In the console window of a dedicated server,
-type the same line without the `/`, such as `adl kick Bob`.
+type the same line without the `/`, such as `adm kick Bob`.
 
 The console and RCON tools may use every action.
 
 | Command | What it does |
 | --- | --- |
-| `/adl online` | Lists the players online, their account ids, how long each has played, and who is muted. |
-| `/adl status` | Shows how long the server runs, the world, and the Enshwick and mod versions. |
-| `/adl motd` | Shows the message of the day. |
-| `/adl kick <player>` | Removes a player from the game. They may join again. |
-| `/adl banned <player> on` | Bans a player who is online. |
-| `/adl banned <player> off` | Lifts a ban, also while the player is away. |
-| `/adl allowed <player> on` or `off` | Puts a player on the allow-list or takes them off. |
-| `/adl muted <player> on` or `off` | Mutes a player in chat or lifts the mute. |
-| `/adl heal <player>` | Gives a player their full health. |
-| `/adl goto <player>` | Takes you to a player. |
-| `/adl bring <player>` | Brings a player to you. |
-| `/adl send <player> <player>` | Moves the first player to the second. |
-| `/adl place <player> <x> <y> <z>` | Moves a player to a position in metres, on free ground near it. |
-| `/adl time <hour>` | Sets the time of day, such as `6.5` for 06:30. |
-| `/adl weather clear` | Starts the weather: `clear`, `rain`, `blizzard`, or `any` for the game's choice. |
-| `/adl restart <minutes>` | Warns every player of a restart, and saves the world when the time is up. `0` stops the warning. Only on a dedicated server. |
-| `/adl save` | Saves the world now. |
-| `/adl backup` | Copies the world to a backup folder while the server runs. |
-| `/adl world` | Shows the world, its last save and its game settings. |
-| `/adl audit <lines>` | Shows the last lines of the audit log, up to 50. |
-| `/adl chat <lines>` | Shows the last lines of the chat log, up to 50. |
+| `/adm online` | Lists the players online, their account ids, how long each has played, and who is muted. |
+| `/adm status` | Shows how long the server runs, the world, and the Enshwick and mod versions. |
+| `/adm motd` | Shows the message of the day. |
+| `/adm kick <player>` | Removes a player from the game. They may join again. |
+| `/adm banned <player> on` | Bans a player who is online. |
+| `/adm banned <player> off` | Lifts a ban, also while the player is away. |
+| `/adm allowed <player> on` or `off` | Puts a player on the allow-list or takes them off. |
+| `/adm muted <player> on` or `off` | Mutes a player in chat or lifts the mute. |
+| `/adm heal <player>` | Gives a player their full health. |
+| `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. The game keeps the value within the maximum. |
+| `/adm learn <player> <recipe>` | Unlocks a recipe for a player. Name it by the game's name, such as `Tool_Torch01`, in any case; by its GUID; or by a mod's content id. A number grants any knowledge the game keeps for the player. |
+| `/adm god <player> on` or `off` | Nothing damages a player in god mode. It ends when the player leaves or the world stops. |
+| `/adm give <player> <count> <item>` | Gives a player new items, in as many stacks as they need; you read how many did not fit. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
+| `/adm chest <player> <count> <item>` | Places a wooden chest beside a player and fills it with items, named as for `give`. A chest outside every base is not saved. |
+| `/adm chestat <x> <y> <z> <count> <item>` | Places a wooden chest at a position and fills it with items. A chest outside every base is not saved. |
+| `/adm clear <player>` | Destroys every stack in every slot a player has, equipment, action bar and look slots included. |
+| `/adm copy <player> <player>` | Gives the second player new items of every stack the first carries or wears. The items start new, without wear or level. What does not fit stays out, and you read how many; the look and currency slots are not copied. |
+| `/adm goto <player>` | Takes you to a player. |
+| `/adm bring <player>` | Brings a player to you. |
+| `/adm send <player> <player>` | Moves the first player to the second. |
+| `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres, on free ground near it. |
+| `/adm time <hour>` | Sets the time of day, such as `6.5` for 06:30. |
+| `/adm weather clear` | Starts the weather: `clear`, `rain`, `blizzard`, or `any` for the game's choice. |
+| `/adm restart <minutes>` | Warns every player of a restart, and saves the world when the time is up. `0` stops the warning. Only on a dedicated server. |
+| `/adm save` | Saves the world now. |
+| `/adm backup` | Copies the world to a backup folder while the server runs. |
+| `/adm world` | Shows the world, its last save and its game settings. |
+| `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. |
+| `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. |
 
 Administrators and the host cannot be kicked, banned or muted. `goto` and
 `bring` need a character, so the console cannot use them.
@@ -118,7 +126,7 @@ Administrators and the host cannot be kicked, banned or muted. `goto` and
 ## How do I keep strangers out?
 
 1. Put each player you trust on the allow-list with
-   `/adl allowed <player> on` while they are online.
+   `/adm allowed <player> on` while they are online.
 2. Open the Mods screen, select Admin Tools, and turn on **Allow-list** in the
    server's settings.
 
@@ -143,7 +151,7 @@ applies within two seconds.
 
 ## How do I warn players before a restart?
 
-Type `/adl restart 10`. Every player reads that the server restarts in
+Type `/adm restart 10`. Every player reads that the server restarts in
 10 minutes. The warning comes again at 5, 2 and 1 minutes left, and once more
 when the time is up.
 
@@ -151,7 +159,7 @@ When the time is up, Admin Tools saves the world. It does not stop the
 server: your host's panel or script stops it, so set the warning to end when
 the panel restarts the server.
 
-Type `/adl restart 0` to call the restart off. A game a player hosts has no
+Type `/adm restart 0` to call the restart off. A game a player hosts has no
 restart warning.
 
 ## How do I connect an RCON tool?
@@ -165,7 +173,7 @@ such as BattleMetrics, rcon-cli and mcrcon use.
    start, and the server's log names the file.
 2. In the tool on the server's computer, enter `127.0.0.1`, port `25575` and
    that password.
-3. Send a command without the `/`, such as `adl online`. Send `help` to list
+3. Send a command without the `/`, such as `adm online`. Send `help` to list
    the commands of every mod.
 
 To choose the password yourself, set **Remote console password** in the
@@ -181,7 +189,7 @@ tool that does not log in within 10 seconds is disconnected.
 
 ## How do I back up the world?
 
-Type `/adl backup`. Admin Tools holds the world's saves and copies the save,
+Type `/adm backup`. Admin Tools holds the world's saves and copies the save,
 its mod settings and its mod data to a folder named by the UTC time. Then it lets the saves go again, also when the copy fails.
 
 Players keep playing. You read where the backup went when it is done.
@@ -198,9 +206,12 @@ beside the world's save.
 
 Both are in `<save>-mod-data/enshwick.admin-tools/` beside the world's save.
 
-- `audit.log` holds one line per change an administrator made: the time in
-  UTC, who acted, from where, the action, its values and the result.
-  Reads such as `online` are not written. RCON logins are written too.
+- `audit.log` holds one line per run of an action that changes something,
+  done or refused. A line has the time in UTC, who acted, from where, the
+  action, its values, the answer, and `done` or `refused`. Reads such as
+  `online` are not written.
+- A change the game makes after the answer, such as a give, adds a line to
+  `audit.log` when part of it failed. RCON logins are written too.
 - `chat.log` holds one line per chat line: the time in UTC, the player's
   name and account id, the kind of line and its text.
 
@@ -223,7 +234,7 @@ the commands in chat.
 
 ## Problems
 
-**`/adl` posts the line to chat.** Check that Admin Tools is in the server's
+**`/adm` posts the line to chat.** Check that Admin Tools is in the server's
 `mods/` folder. If it is, the server's log says why Admin Tools is off.
 
 **The answer says no player has that name.** Check that the player is online.
@@ -231,7 +242,7 @@ Type the name as the game shows it.
 
 **A player is kicked as they join.** The allow-list is on, and the player is
 not on it, or the player is banned. Lift a ban with
-`/adl banned <player> off`.
+`/adm banned <player> off`.
 
 **An RCON tool cannot connect.** Check that the port is open in the
 firewall, and that the server's log says the remote console listens. When

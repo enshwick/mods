@@ -24,6 +24,18 @@ pub(crate) const CHAT: Files = Files {
     old: "chat.1.log",
 };
 
+/// The audit log's last field of a run that made its change.
+pub(crate) const DONE: &str = "done";
+
+/// The audit log's last field of a run that was refused, or of a change
+/// the game turned down.
+pub(crate) const REFUSED: &str = "refused";
+
+/// The audit log's last field of a run that ended `done` or refused.
+pub(crate) const fn outcome(done: bool) -> &'static str {
+    if done { DONE } else { REFUSED }
+}
+
 /// The size past which a log moves to its older file and starts again, so
 /// the two files together hold at most about twice this.
 pub(crate) const MAX_BYTES: u64 = 1 << 20;

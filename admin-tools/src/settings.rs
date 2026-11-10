@@ -284,6 +284,22 @@ pub(crate) struct Rights {
     pub muted: String,
     /// Healing a player.
     pub heal: String,
+    /// Setting a player's health, stamina or mana.
+    pub stats: String,
+    /// Teaching a player a recipe or other knowledge.
+    pub learn: String,
+    /// God mode for a player.
+    pub god: String,
+    /// Giving a player items.
+    pub give: String,
+    /// Placing a chest of items beside a player.
+    pub chest: String,
+    /// Placing a chest of items at a position.
+    pub chestat: String,
+    /// Clearing what a player carries.
+    pub clear: String,
+    /// Copying what one player carries to another.
+    pub copy: String,
     /// Going to a player.
     pub goto: String,
     /// Bringing a player here.
@@ -323,6 +339,14 @@ impl Default for Rights {
             allowed: admins(),
             muted: admins(),
             heal: admins(),
+            stats: admins(),
+            learn: admins(),
+            god: admins(),
+            give: admins(),
+            chest: admins(),
+            chestat: admins(),
+            clear: admins(),
+            copy: admins(),
             goto: admins(),
             bring: admins(),
             send: admins(),
@@ -352,6 +376,14 @@ impl Rights {
             ids::ALLOWED => &self.allowed,
             ids::MUTED => &self.muted,
             ids::HEAL => &self.heal,
+            ids::STATS => &self.stats,
+            ids::LEARN => &self.learn,
+            ids::GOD => &self.god,
+            ids::GIVE => &self.give,
+            ids::CHEST => &self.chest,
+            ids::CHEST_AT => &self.chestat,
+            ids::CLEAR => &self.clear,
+            ids::COPY => &self.copy,
             ids::GOTO => &self.goto,
             ids::BRING => &self.bring,
             ids::SEND => &self.send,

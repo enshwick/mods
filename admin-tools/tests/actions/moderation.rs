@@ -49,9 +49,9 @@ fn a_ban_keeps_its_reason_its_time_and_who_set_it_and_the_list_reads_them() {
 }
 
 #[test]
-fn a_moderator_cannot_ban_or_kick_themselves_where_the_game_would_let_them() {
+fn a_moderator_cannot_shut_themselves_out_where_the_game_would_let_them() {
     let dir = scratch("ban-self");
-    let rights = "[rights]\nban = \"everyone\"\nbanned = \"everyone\"\naccount = \"everyone\"\nkick = \"everyone\"\n";
+    let rights = "[rights]\nban = \"everyone\"\nbanned = \"everyone\"\naccount = \"everyone\"\nkick = \"everyone\"\nallowed = \"everyone\"\n";
     let loader = server(rights, &dir);
     let refused = "0You cannot do that to yourself.";
     assert_eq!(
@@ -64,12 +64,38 @@ fn a_moderator_cannot_ban_or_kick_themselves_where_the_game_would_let_them() {
     );
     assert_eq!(run(&loader, &bob(), "account", "t2\tc0"), refused);
     assert_eq!(run(&loader, &bob(), "kick", "p0000000000000002"), refused);
+    assert_eq!(
+        run(&loader, &bob(), "allowed", "p0000000000000002\tb0"),
+        refused
+    );
+    assert_eq!(run(&loader, &bob(), "account", "t2\tc3"), refused);
     assert!(loader.banned().is_empty() && loader.removed().is_empty());
     // Lifting a ban on oneself changes nothing the game would refuse.
     assert_eq!(
         run(&loader, &bob(), "banned", "p0000000000000002\tb0"),
         "1Bob is no longer banned."
     );
+}
+
+#[test]
+fn the_ban_list_reads_the_newest_fifty_under_the_count_of_all() {
+    let dir = scratch("bans-many");
+    std::fs::create_dir_all(&dir).unwrap();
+    let bans: String = (1..=60)
+        .map(|at| {
+            format!(
+                "[[bans]]\nkey = \"{:016x}\"\nname = \"P{at}\"\nby = \"Ann\"\nat = {at}\n",
+                at + 100
+            )
+        })
+        .collect();
+    std::fs::write(dir.join("accounts.toml"), format!("allowed = []\n{bans}")).unwrap();
+    let loader = server("", &dir);
+    let list = loader.type_in_chat(&ann(), 0, "/adm bans").unwrap();
+    let lines: Vec<&str> = list.lines().collect();
+    assert_eq!(lines[0], "1Admin Tools: 60 banned");
+    assert_eq!(lines.len(), 51);
+    assert!(lines[1].starts_with("P60 "), "newest first: {}", lines[1]);
 }
 
 #[test]
@@ -318,7 +344,7 @@ fn the_build_log_names_who_placed_removed_and_dug_and_the_lookup_reads_the_newes
 }
 
 #[test]
-fn the_build_log_tells_a_building_picked_up_and_terrain_filled_from_the_rest() {
+fn the_build_log_tells_pick_ups_fills_and_building_blocks_from_the_rest() {
     let dir = scratch("builds-kinds");
     let loader = server("build_log = true\n", &dir);
     let picked = building(BuildingData::PICKED_UP, [0.0; 3]);
@@ -327,10 +353,19 @@ fn the_build_log_tells_a_building_picked_up_and_terrain_filled_from_the_rest() {
     let at = VoxelPos::from_metres([0.0, 20.0, 7.0]).unwrap();
     let fill = [VoxelChange::new(at, Voxel::default(), rock)];
     assert!(loader.voxels_changed(EditSource::Game, &fill) >= 1);
-    let log = file_until(&dir, "builds.log", |text| text.lines().count() == 2);
+    let stone = Voxel::new(VoxelMaterial::Building(3), 255);
+    let wall = [VoxelChange::new(at, Voxel::default(), stone)];
+    assert!(loader.voxels_changed(EditSource::Game, &wall) >= 1);
+    let broken = [VoxelChange::new(at, stone, Voxel::default())];
+    assert!(loader.voxels_changed(EditSource::Game, &broken) >= 1);
+    let log = file_until(&dir, "builds.log", |text| text.lines().count() == 4);
     let kinds: Vec<&str> = log
         .lines()
         .map(|line| line.split('\t').nth(2).unwrap())
         .collect();
-    assert_eq!(kinds, ["picked-up", "filled"], "{log}");
+    assert_eq!(
+        kinds,
+        ["picked-up", "filled", "blocks-placed", "blocks-removed"],
+        "building blocks are not terrain: {log}"
+    );
 }

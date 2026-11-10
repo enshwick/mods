@@ -157,9 +157,10 @@ impl Files {
     ///
     /// The reason a log that is there does not read.
     pub(crate) fn tail(self, dir: &Path, count: usize) -> io::Result<Vec<String>> {
-        let mut lines = tail_of(&dir.join(self.now), count)?;
-        if lines.len() < count {
-            let mut older = tail_of(&dir.join(self.old), count - lines.len())?;
+        let (mut lines, whole) = tail_of(&dir.join(self.now), count)?;
+        // Past its last bytes the newer file holds lines the older one would skip.
+        if whole && lines.len() < count {
+            let (mut older, _) = tail_of(&dir.join(self.old), count - lines.len())?;
             older.append(&mut lines);
             lines = older;
         }
@@ -167,9 +168,9 @@ impl Files {
     }
 }
 
-/// The last `count` lines of the file at `path`; empty when it is not
-/// there.
-fn tail_of(path: &Path, count: usize) -> io::Result<Vec<String>> {
+/// The last `count` lines of the file at `path`, and whether they were
+/// read from the file's start; empty when it is not there.
+fn tail_of(path: &Path, count: usize) -> io::Result<(Vec<String>, bool)> {
     let Some(mut file) = fs::File::open(path).map(Some).or_else(|why| {
         if why.kind() == io::ErrorKind::NotFound {
             Ok(None)
@@ -178,7 +179,7 @@ fn tail_of(path: &Path, count: usize) -> io::Result<Vec<String>> {
         }
     })?
     else {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), true));
     };
     let start = file.seek(SeekFrom::End(0))?.saturating_sub(TAIL_BYTES);
     file.seek(SeekFrom::Start(start))?;
@@ -192,10 +193,11 @@ fn tail_of(path: &Path, count: usize) -> io::Result<Vec<String>> {
         &text
     };
     let lines: Vec<&str> = whole.lines().collect();
-    Ok(lines[lines.len().saturating_sub(count)..]
+    let tail = lines[lines.len().saturating_sub(count)..]
         .iter()
         .map(|line| (*line).to_owned())
-        .collect())
+        .collect();
+    Ok((tail, start == 0))
 }
 
 /// Seconds since 1970, UTC.
@@ -306,6 +308,19 @@ mod tests {
         append(&dir, "new 1\n").unwrap();
         assert_eq!(tail(&dir, 3).unwrap(), ["old 2", "old 3", "new 1"]);
         assert_eq!(tail(&dir, 1).unwrap(), ["new 1"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_tail_cut_short_by_its_bytes_takes_nothing_from_the_older_file() {
+        let dir = scratch("tail-cut");
+        fs::write(dir.join(AUDIT.old), "old 1\n").unwrap();
+        let line = "x".repeat(99);
+        let lines = usize::try_from(TAIL_BYTES).unwrap() / 100 + 10;
+        fs::write(dir.join(AUDIT.now), format!("{line}\n").repeat(lines)).unwrap();
+        let read = tail(&dir, lines * 2).unwrap();
+        assert!(!read.is_empty(), "the newest lines");
+        assert!(read.iter().all(|got| *got == line), "a gap before them");
         fs::remove_dir_all(&dir).unwrap();
     }
 

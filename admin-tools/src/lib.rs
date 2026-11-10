@@ -93,8 +93,8 @@ pub(crate) struct Tools {
     map: Option<Map>,
     /// The ids of the actions declared, which a window may name.
     declared: Mutex<Vec<String>>,
-    /// The window each player last opened.
-    shown: Mutex<FxHashMap<PlayerKey, windows::Shown>>,
+    /// The windows each player opened, one of each id.
+    shown: Mutex<FxHashMap<PlayerKey, Vec<windows::Shown>>>,
     ticker: Mutex<Ticker>,
     /// The players in god mode and their characters, read without a lock
     /// by the damage filter.
@@ -184,7 +184,6 @@ impl Mod for AdminTools {
         server::add(&tools)?;
         backup::add(&tools)?;
         builds::add(&tools, load)?;
-        // Last: a window names only actions declared before it.
         windows::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
 
@@ -222,7 +221,7 @@ impl Tools {
         let rules = Arc::clone(self);
         let rule_id = id.clone();
         let tools = Arc::clone(self);
-        self.declared.relock().push(id.clone());
+        let declared = id.clone();
         self.actions.add(
             action.allow(move |player| rules.admits(&rule_id, player)),
             move |request| {
@@ -236,16 +235,22 @@ impl Tools {
                 }
                 outcome
             },
-        )
+        )?;
+        self.declared.relock().push(declared);
+        Ok(())
     }
 
-    /// Whether `player` may run the action `id`: it is declared, the
-    /// world's rights admit them, and a restart warning is offered only on
-    /// a dedicated server, since a hosted game has no restart to warn of.
+    /// Whether `player` may run the action `id`: the world's rights admit
+    /// them, and a restart warning is offered only on a dedicated server,
+    /// since a hosted game has no restart to warn of.
     pub(crate) fn admits(&self, id: &str, player: &enshwick::world::Player) -> bool {
-        (id != ids::RESTART || self.dedicated)
-            && self.rules.load().admits(id, player)
-            && self.declared.relock().iter().any(|declared| declared == id)
+        (id != ids::RESTART || self.dedicated) && self.rules.load().admits(id, player)
+    }
+
+    /// Whether a window may name the action `id`: the mod declared it, which
+    /// it does not for a part of the game this build lacks.
+    pub(crate) fn declared(&self, id: &str) -> bool {
+        self.declared.relock().iter().any(|declared| declared == id)
     }
 
     /// Starts the world that loaded: the remote console listens when the

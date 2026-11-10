@@ -15,13 +15,16 @@ use crate::{Tools, ids, journal, texts};
 
 /// How far a position may lie from the world's origin, in metres, on each
 /// axis; well past the edge of any map.
-const REACH: f64 = 100_000.0;
+pub(crate) const REACH: f64 = 100_000.0;
 
 /// Between the players of a list read on one line.
 const LISTED: &str = ", ";
 
 /// What the ban list reads where a ban has no reason.
 const NO_REASON: &str = "-";
+
+/// The most bans the ban list reads out, as many as the audit log's lines.
+const MAX_BANS_READ: usize = 50;
 
 /// The most hex digits an account id has.
 const ACCOUNT_DIGITS: usize = 16;
@@ -202,8 +205,9 @@ pub(crate) fn bad_args(request: &Request<'_>) -> Outcome {
     Outcome::refused(request.say(texts::REPLY_BAD_ARGS, &[]))
 }
 
-/// The refusal of a kick or ban of the caller, which would shut out a
-/// moderator the game does not shield as it shields administrators.
+/// The refusal of a kick, ban or allow-list removal of the caller, which
+/// would shut out a moderator the game does not shield as it shields
+/// administrators.
 fn not_yourself(request: &Request<'_>) -> Outcome {
     Outcome::refused(request.say(texts::REPLY_NOT_YOURSELF, &[]))
 }
@@ -370,22 +374,25 @@ pub(crate) fn borrowed<'a, const N: usize>(
         .map(|(name, value)| (*name, value.as_str()))
 }
 
-/// The ban list, newest first: who, why, by whom and when.
+/// The ban list, newest first: who, why, by whom and when, at most
+/// [`MAX_BANS_READ`] under the count of all.
 fn bans(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let Some(rows) = tools.accounts.with(|accounts| {
-        accounts
+    let Some((count, rows)) = tools.accounts.with(|accounts| {
+        let rows = accounts
             .bans
             .iter()
             .rev()
+            .take(MAX_BANS_READ)
             .map(|ban| request.say(texts::REPLY_BANS_ROW, &borrowed(&ban_values(ban))))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        (accounts.bans.len(), rows)
     }) else {
         return store_shut(tools, request);
     };
     if rows.is_empty() {
         return Outcome::done(request.say(texts::REPLY_BANS_NONE, &[]));
     }
-    let count = rows.len().to_string();
+    let count = count.to_string();
     let head = request.say(texts::REPLY_BANS, &[(texts::value::COUNT, &count)]);
     Outcome::done(crate::lines(request, &[head, rows.join(crate::LINE)]))
 }
@@ -443,6 +450,9 @@ fn set_allowed(
     name: &str,
     on: bool,
 ) -> Outcome {
+    if !on && key == request.player.key {
+        return not_yourself(request);
+    }
     let values = [(texts::value::NAME, name)];
     if tools
         .accounts
@@ -635,11 +645,17 @@ impl Tools {
         };
         self.joined.relock().insert(key, Instant::now());
         let settings = self.settings.load();
-        let lists = self.accounts.update(|accounts| {
-            let new = accounts.see(key, &player.name);
+        let lists = self.accounts.with(|accounts| {
+            let new = !accounts.newest_at_door(key, &player.name);
             (accounts.banned(key), accounts.allowed(key), new)
         });
-        if lists.is_some_and(|(.., new)| new) {
+        // Only a change marks the lists for writing, not every join.
+        if lists.is_some_and(|(.., new)| new)
+            && self
+                .accounts
+                .update(|accounts| accounts.see(key, &player.name))
+                .is_some()
+        {
             // Written now, so an account refused here can be named after a crash too.
             self.keep_accounts();
         }

@@ -94,9 +94,8 @@ actions you may use, with a button for each.
 - **Build log** shows the changes near you, each with a button that takes you
   there.
 
-You can change the key on the controls page of the Mods screen. The Mods
-screen also opens the window: select Admin Tools, then
-**Admin Tools window**.
+To change the key, open the Mods screen, select Admin Tools and change it
+under **Key bindings**. Typing `/adm panel` in chat also opens the window.
 
 ## How do I use an action?
 
@@ -125,7 +124,7 @@ The console and RCON tools may use every action.
 | `/adm say <text>` | Shows every player a line now. |
 | `/adm kick <player>` | Removes a player from the game. They may join again. |
 | `/adm ban <player> <reason>` | Bans a player, online or away, and keeps the reason, the time and who banned them. |
-| `/adm bans` | Lists every ban, newest first, with its reason, who banned and when. |
+| `/adm bans` | Lists the newest 50 bans with their reasons, who banned and when, under the count of all bans. |
 | `/adm banned <player> on` or `off` | Bans a player, online or away, or lifts a ban. |
 | `/adm allowed <player> on` or `off` | Puts a player on the allow-list or takes them off, online or away. |
 | `/adm account <id> ban`, `unban`, `allow` or `disallow` | Changes an account by its id of up to 16 hex digits, also one that never joined this world. |
@@ -150,7 +149,7 @@ The console and RCON tools may use every action.
 | `/adm save` | Saves the world now. |
 | `/adm backup` | Copies the world to a backup folder while the server runs. |
 | `/adm world` | Shows the world, its last save and its game settings. |
-| `/adm who <metres>` | Shows the last 10 buildings placed or removed and terrain changed within up to 200 metres of you, newest first, while the build log is on. |
+| `/adm who <metres>` | Shows the last 10 changes to buildings, building blocks and terrain within up to 200 metres of you, newest first, while the build log is on. It looks through about the newest 1,000 changes. |
 | `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. |
 | `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. |
 
@@ -250,12 +249,12 @@ beside the world's save.
 ## How do I see who built or broke something?
 
 Turn on **Build log** in the world's settings first. From then on, Admin Tools
-writes each building placed, picked up or torn down, and each spot of terrain
-dug or filled. Each line has who did it, the time and the position.
+writes each building placed, picked up or torn down, each spot of building
+blocks placed or removed, and each spot of terrain dug or filled. Each line
+has who did it, the time and the position.
 
-Terrain changes
-name the nearest player within 16 metres, since the game does not say who
-changed it.
+Changes to terrain and building blocks name the nearest player within 16
+metres, since the game does not say who made them.
 
 1. Go to the spot.
 2. Open the Admin Tools window and its **Build log** section, or type

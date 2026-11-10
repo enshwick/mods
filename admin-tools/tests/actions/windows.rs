@@ -9,7 +9,9 @@ use enshwick::events::BuildingPlaced;
 use enshwick::test::Installed;
 use enshwick::{Entity, ItemId};
 
-use super::game::{ann, bob, file_until, hosted, run, scratch, server, without_inventories};
+use super::game::{
+    ann, bob, file_until, hosted, player, run, scratch, server, server_with, without_inventories,
+};
 
 /// The window `id` on `who`'s client; panics with the windows they hold
 /// when it is not among them.
@@ -235,6 +237,45 @@ fn a_viewer_s_own_window_offers_no_kick_or_ban_of_themselves() {
         .find(|(text, _)| text == "Moderate")
         .unwrap();
     assert_eq!(moderate.1, ["Mute", "Unmute"]);
+    let moves = rows(&own)
+        .into_iter()
+        .find(|(text, _)| text == "Move")
+        .unwrap();
+    assert_eq!(moves.1, ["To my waypoint"], "no go to or bring of oneself");
+}
+
+#[test]
+fn a_press_shows_again_every_window_it_changed_not_only_the_last_opened() {
+    let dir = scratch("refresh-many");
+    let loader = server_with("", &dir, &[player(13, 4, "Eve", 0)]);
+    assert_eq!(run(&loader, &ann(), "open", "c0"), "1");
+    assert_eq!(run(&loader, &ann(), "player", "p0000000000000002"), "1");
+    // The panel opens beside them and leaves them open.
+    assert_eq!(run(&loader, &ann(), "panel", ""), "1");
+    assert!(run(&loader, &ann(), "kick", "p0000000000000004").starts_with('1'));
+    let listed: Vec<String> = rows(&window(&loader, &ann(), "players"))
+        .into_iter()
+        .map(|(text, _)| text)
+        .collect();
+    assert_eq!(listed.len(), 2, "Eve left the list: {listed:?}");
+    assert!(run(&loader, &ann(), "kick", "p0000000000000002").starts_with('1'));
+    assert_eq!(rows(&window(&loader, &ann(), "players")).len(), 1);
+}
+
+#[test]
+fn the_accounts_window_says_the_lists_do_not_read_rather_than_none_banned() {
+    let dir = scratch("accounts-unread");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("accounts.toml"), "bans = 7\n").unwrap();
+    let loader = server("", &dir);
+    assert_eq!(run(&loader, &ann(), "open", "c1"), "1");
+    let accounts = window(&loader, &ann(), "accounts");
+    assert_eq!(accounts.items.len(), 1, "{:?}", accounts.items);
+    assert!(
+        matches!(&accounts.items[0], ItemView::Text(text) if text.starts_with("The ban list and allow-list do not read")),
+        "{:?}",
+        accounts.items
+    );
 }
 
 #[test]
@@ -292,10 +333,11 @@ fn the_accounts_window_lists_each_ban_with_its_reason_and_lifts_it_with_one_pres
     );
     assert_eq!(run(&loader, &ann(), "open", "c1"), "1");
     let accounts = window(&loader, &ann(), "accounts");
-    assert_eq!(
-        accounts.items[0],
-        ItemView::Text("Admin Tools: 1 banned".into())
-    );
+    // The forms come first: the platform cuts a window too big from its end.
+    assert_eq!(accounts.items[0], ItemView::Action("ban".into()));
+    let count = ItemView::Text("Admin Tools: 1 banned".into());
+    let at = accounts.items.iter().position(|item| *item == count);
+    assert_eq!(at, Some(4), "after the forms: {:?}", accounts.items);
     assert_eq!(whole(&accounts), ["ban", "allowed", "account"]);
     assert!(accounts.items.contains(&ItemView::Text(
         "The allow-list is off in the world's settings: everyone not banned may join.".into()
@@ -314,9 +356,10 @@ fn the_accounts_window_lists_each_ban_with_its_reason_and_lifts_it_with_one_pres
         "1Bob is no longer banned."
     );
     let after = window(&loader, &ann(), "accounts");
-    assert_eq!(
-        after.items[0],
-        ItemView::Text("Admin Tools: 0 banned".into())
+    assert!(
+        after
+            .items
+            .contains(&ItemView::Text("Admin Tools: 0 banned".into()))
     );
     assert!(rows(&after).is_empty(), "the lifted ban left the window");
 }
@@ -346,12 +389,20 @@ fn the_server_window_offers_times_weathers_announcements_and_the_restart_warning
         (rain.action.as_str(), &rain.args[..]),
         ("weather", &[Value::Choice(1)][..])
     );
-    let stop = button(&view, "Restart warning under way", "Stop");
+    assert_eq!(rows(&view).last().unwrap().1, ["Save now", "Back up"]);
+    assert!(
+        rows(&view)
+            .iter()
+            .all(|(text, _)| !text.starts_with("Restart")),
+        "no warning is under way"
+    );
+    assert!(run(&loader, &ann(), "restart", "n10").starts_with('1'));
+    let warned = window(&loader, &ann(), "server");
+    let stop = button(&warned, "Restart warning under way", "Stop");
     assert_eq!(
         (stop.action.as_str(), &stop.args[..]),
         ("restart", &[Value::Number(0.0)][..])
     );
-    assert_eq!(rows(&view).last().unwrap().1, ["Save now", "Back up"]);
     // The message set from the window shows in it at once.
     assert!(run(&loader, &ann(), "setmotd", "tWelcome").starts_with('1'));
     let after = window(&loader, &ann(), "server");

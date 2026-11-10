@@ -43,6 +43,11 @@ impl Ticker {
         });
     }
 
+    /// Whether a restart warning is under way.
+    pub(crate) fn restarting(&self) -> bool {
+        self.restart.is_some()
+    }
+
     /// Stops the warning under way; whether there was one.
     pub(crate) fn cancel(&mut self) -> bool {
         self.restart.take().is_some()

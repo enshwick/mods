@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use enshwick::abi::BuildingData;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value, Via};
 use enshwick::events::{BuildingPlaced, BuildingRemoved};
-use enshwick::voxels::{EditSource, PER_METRE, VoxelEdit};
+use enshwick::voxels::{EditSource, PER_METRE, VoxelEdit, VoxelMaterial};
 use enshwick::{Load, Off, PlayerKey, Relock as _};
 
 use crate::{Tools, ids, journal, texts};
@@ -22,12 +22,14 @@ pub(crate) const LOG: journal::Files = journal::Files {
 
 /// What a line of the log says happened: its word in the log and the key
 /// of the text players read.
-const KINDS: [(&str, &str); 5] = [
+const KINDS: [(&str, &str); 7] = [
     (PLACED, texts::BUILD_PLACED),
     (PICKED_UP, texts::BUILD_PICKED_UP),
     (TORN_DOWN, texts::BUILD_TORN_DOWN),
     (DUG, texts::BUILD_DUG),
     (FILLED, texts::BUILD_FILLED),
+    (BLOCKS_PLACED, texts::BUILD_BLOCKS_PLACED),
+    (BLOCKS_REMOVED, texts::BUILD_BLOCKS_REMOVED),
 ];
 
 const PLACED: &str = "placed";
@@ -35,6 +37,8 @@ const PICKED_UP: &str = "picked-up";
 const TORN_DOWN: &str = "torn-down";
 const DUG: &str = "dug";
 const FILLED: &str = "filled";
+const BLOCKS_PLACED: &str = "blocks-placed";
+const BLOCKS_REMOVED: &str = "blocks-removed";
 
 /// How far from changed terrain the nearest player may stand to be named
 /// as who changed it, in metres: the event names no player.
@@ -50,8 +54,9 @@ const SAME_SPOT: Duration = Duration::from_secs(30);
 /// The widest lookup, in metres.
 const MAX_RADIUS: f64 = 200.0;
 
-/// The most lines a lookup reads from the log's end.
-const MAX_READ: usize = 2_000;
+/// The most lines a lookup reads from the log's end; the journal's tail
+/// stops at 64 KiB first, about 1,000 lines.
+const MAX_READ: usize = 1_000;
 
 /// The most changes a lookup answers with.
 pub(crate) const MAX_FOUND: usize = 10;
@@ -79,7 +84,8 @@ impl Change {
                 .next()?
                 .parse::<f64>()
                 .ok()
-                .filter(|at| at.is_finite())
+                // A button takes its reader there, so no place past the world's reach.
+                .filter(|at| at.abs() <= crate::players::REACH)
         };
         let at = [axis()?, axis()?, axis()?];
         Some(Self {
@@ -273,10 +279,16 @@ impl Tools {
             return;
         }
         let dug = edit.changes.iter().filter(|c| c.after.is_air()).count();
-        let kind = if dug * 2 >= edit.changes.len() {
-            DUG
-        } else {
-            FILLED
+        let blocks = edit.changes.iter().any(|c| {
+            [c.before, c.after]
+                .iter()
+                .any(|voxel| matches!(voxel.material(), VoxelMaterial::Building(_)))
+        });
+        let kind = match (blocks, dug * 2 >= edit.changes.len()) {
+            (false, true) => DUG,
+            (false, false) => FILLED,
+            (true, true) => BLOCKS_REMOVED,
+            (true, false) => BLOCKS_PLACED,
         };
         let low = edit.min.to_metres();
         let at = [0, 1, 2].map(|i| low[i] + f64::from(edit.size[i]) / PER_METRE / 2.0);
@@ -343,6 +355,11 @@ mod tests {
     fn a_line_with_a_place_that_is_no_number_is_left_out() {
         assert_eq!(Change::parse("t\tAnn\tdug\tNaN\t0\t0"), None);
         assert_eq!(Change::parse("t\tAnn\tdug\t1\t2"), None);
+        assert_eq!(
+            Change::parse("t\tAnn\tdug\t250000\t0\t0"),
+            None,
+            "past what a move to it takes"
+        );
         let odd = Change::parse("t\tAnn\tmelted\t1\t2\t3").unwrap();
         assert_eq!(odd.kind_text(), "melted", "an unknown word reads as it is");
     }

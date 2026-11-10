@@ -30,13 +30,22 @@ const BUILDS: &str = "builds";
 const PLAYER: &str = "player";
 const CHANGES: &str = "changes";
 
-/// The panel's sections: each its word in a command, its label's key and
-/// its window's id, which is the same word.
-const SECTIONS: [(&str, &str); 4] = [
-    (PLAYERS, texts::WINDOW_PLAYERS),
-    (ACCOUNTS, texts::WINDOW_ACCOUNTS),
-    (SERVER, texts::WINDOW_SERVER),
-    (BUILDS, texts::WINDOW_BUILDS),
+/// A section of the panel, each a window of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Section {
+    Players,
+    Accounts,
+    Server,
+    Builds,
+}
+
+/// The panel's sections: each its word in a command, which is also its
+/// window's id, its label's key and the section.
+const SECTIONS: [(&str, &str, Section); 4] = [
+    (PLAYERS, texts::WINDOW_PLAYERS, Section::Players),
+    (ACCOUNTS, texts::WINDOW_ACCOUNTS, Section::Accounts),
+    (SERVER, texts::WINDOW_SERVER, Section::Server),
+    (BUILDS, texts::WINDOW_BUILDS, Section::Builds),
 ];
 
 /// The most rows of players or bans a window lists, so its text stays
@@ -46,26 +55,39 @@ const MAX_ROWS: usize = 16;
 /// The times of day the server window offers with one press.
 const TIMES: [&str; 4] = ["06:00", "12:00", "18:00", "00:00"];
 
-/// The window a player last opened, which a change they make shows again.
+/// A window a player opened, which a change they make shows again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Shown {
-    /// A section of [`SECTIONS`], by its index.
-    Section(usize),
+    /// A section of the panel.
+    Section(Section),
     /// The window of the player with this account.
     Player(PlayerKey),
 }
 
+/// The actions that take a player online off the server.
+const REMOVES: [&str; 4] = [ids::KICK, ids::BAN, ids::BANNED, ids::ACCOUNT];
+
 impl Shown {
-    /// Whether a run of the action `id` changes what the window lists.
+    /// The window's id: a player holds one window of each.
+    fn id(self) -> &'static str {
+        match self {
+            Self::Section(Section::Players) => PLAYERS,
+            Self::Section(Section::Accounts) => ACCOUNTS,
+            Self::Section(Section::Server) => SERVER,
+            Self::Section(Section::Builds) => BUILDS,
+            Self::Player(_) => PLAYER,
+        }
+    }
+
+    /// Whether a run of the action `id` changes what the window shows.
     fn stale_after(self, id: &str) -> bool {
         let lists: &[&str] = match self {
-            Self::Section(at) => match SECTIONS.get(at).map(|(word, _)| *word) {
-                Some(PLAYERS) => &[ids::KICK, ids::BAN, ids::MUTED],
-                Some(ACCOUNTS) => &[ids::BAN, ids::BANNED, ids::ALLOWED, ids::ACCOUNT],
-                Some(SERVER) => &[ids::SET_MOTD],
-                _ => &[],
-            },
-            Self::Player(_) => &[ids::KICK, ids::BAN, ids::MUTED, ids::GOD],
+            Self::Section(Section::Players) | Self::Player(_) => &REMOVES,
+            Self::Section(Section::Accounts) => {
+                &[ids::BAN, ids::BANNED, ids::ALLOWED, ids::ACCOUNT]
+            }
+            Self::Section(Section::Server) => &[ids::SET_MOTD, ids::RESTART],
+            Self::Section(Section::Builds) => &[],
         };
         lists.contains(&id)
     }
@@ -80,9 +102,15 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
     tools.add(
         Action::new(ids::OPEN, texts::ACTION_OPEN)
             .help(texts::ACTION_OPEN_HELP)
-            .arg(Arg::choice(texts::ARG_SECTION, &SECTIONS)),
+            .arg(Arg::choice(
+                texts::ARG_SECTION,
+                &SECTIONS.map(|(word, label, _)| (word, label)),
+            )),
         |tools, request| match request.args {
-            [Value::Choice(at)] => tools.open(request, Some(Shown::Section(*at))),
+            [Value::Choice(at)] => match SECTIONS.get(*at) {
+                Some((.., section)) => tools.open(request, Some(Shown::Section(*section))),
+                None => crate::players::bad_args(request),
+            },
             _ => crate::players::bad_args(request),
         },
     )?;
@@ -95,7 +123,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
             _ => crate::players::bad_args(request),
         },
     )?;
-    // Without its key the panel still opens from the Mods screen and by command.
+    // Without its key the panel still opens by command.
     if let Err(why) = Key::parse(PANEL_KEY)
         .map_err(Off::from)
         .and_then(|key| tools.actions.control(ids::PANEL, key))
@@ -123,7 +151,7 @@ impl<'a> Build<'a> {
     }
 
     fn may(&self, id: &str) -> bool {
-        self.tools.admits(id, self.viewer)
+        self.tools.declared(id) && self.tools.admits(id, self.viewer)
     }
 
     fn text(mut self, key: &str, values: &[(&str, &str)]) -> Self {
@@ -185,45 +213,63 @@ impl Tools {
     }
 
     /// Builds the panel, or the window `shown`, for `viewer` and shows it;
-    /// the window is remembered so their next change shows it again.
+    /// the window is remembered beside the others they hold, so their next
+    /// change shows it again.
     fn show(&self, viewer: &Player, shown: Option<Shown>) -> Result<(), Off> {
         let window = match shown {
             None => self.panel(viewer),
-            Some(Shown::Section(at)) => match SECTIONS.get(at).map(|(word, _)| *word) {
-                Some(PLAYERS) => self.players_window(viewer),
-                Some(ACCOUNTS) => self.accounts_window(viewer),
-                Some(SERVER) => self.server_window(viewer),
-                _ => self.builds_window(viewer),
-            },
+            Some(Shown::Section(Section::Players)) => self.players_window(viewer),
+            Some(Shown::Section(Section::Accounts)) => self.accounts_window(viewer),
+            Some(Shown::Section(Section::Server)) => self.server_window(viewer),
+            Some(Shown::Section(Section::Builds)) => self.builds_window(viewer),
             Some(Shown::Player(key)) => match self.world.player_by_key(key) {
                 Some(player) => self.player_window(viewer, &player),
-                // They left: the list they were on takes their window's place.
-                None => return self.show(viewer, Some(Shown::Section(0))),
+                None => {
+                    // They left: the list they were on takes their window's place.
+                    self.forget(viewer.key, Shown::Player(key));
+                    return self.show(viewer, Some(Shown::Section(Section::Players)));
+                }
             },
         };
         self.actions.show(window, &[viewer.key])?;
-        let mut held = self.shown.relock();
-        match shown {
-            Some(shown) => drop(held.insert(viewer.key, shown)),
-            None => drop(held.remove(&viewer.key)),
+        if let Some(shown) = shown {
+            let mut held = self.shown.relock();
+            let open = held.entry(viewer.key).or_default();
+            open.retain(|had| had.id() != shown.id());
+            open.push(shown);
         }
         Ok(())
     }
 
-    /// Shows the caller's window again after their run of the action `id`
-    /// changed what it lists.
-    pub(crate) fn refresh(&self, viewer: &Player, id: &str) {
-        let Some(shown) = self.shown.relock().get(&viewer.key).copied() else {
-            return;
-        };
-        if shown.stale_after(id)
-            && let Err(why) = self.show(viewer, Some(shown))
-        {
-            enshwick::warn!("a window not shown again: {why}");
+    /// Forgets the window `shown` that `viewer` held.
+    fn forget(&self, viewer: PlayerKey, shown: Shown) {
+        if let Some(open) = self.shown.relock().get_mut(&viewer) {
+            open.retain(|had| *had != shown);
         }
     }
 
-    /// Forgets the window `player` held, as when they leave.
+    /// Shows each window the caller holds again whose content their run of
+    /// the action `id` changed.
+    pub(crate) fn refresh(&self, viewer: &Player, id: &str) {
+        let stale: Vec<Shown> = self
+            .shown
+            .relock()
+            .get(&viewer.key)
+            .map(|open| {
+                open.iter()
+                    .copied()
+                    .filter(|shown| shown.stale_after(id))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for shown in stale {
+            if let Err(why) = self.show(viewer, Some(shown)) {
+                enshwick::warn!("a window not shown again: {why}");
+            }
+        }
+    }
+
+    /// Forgets every window `player` held, as when they leave.
     pub(crate) fn forget_window(&self, player: PlayerKey) {
         self.shown.relock().remove(&player);
     }
@@ -233,7 +279,7 @@ impl Tools {
         let count = self.world.players().len().to_string();
         let mut build = Build::new(self, viewer, PANEL, texts::WINDOW_PANEL)
             .text(texts::REPLY_ONLINE, &[(texts::value::COUNT, &count)]);
-        for (at, (_, label)) in SECTIONS.iter().enumerate() {
+        for (at, (_, label, _)) in SECTIONS.iter().enumerate() {
             let open: &[Value] = &[Value::Choice(at)];
             build = build.row(label, &[], &[(texts::BUTTON_OPEN, ids::OPEN, open)], false);
         }
@@ -290,10 +336,19 @@ impl Tools {
             (texts::BUTTON_KICK, ids::KICK, them),
             (texts::BUTTON_BAN, ids::BAN, them),
         ];
-        let moderate: Vec<(&str, &str, &[Value])> = if player.key == viewer.key {
-            mutes.to_vec()
+        let mark = (texts::BUTTON_MARK, ids::MARK, them);
+        let meet = [
+            (texts::BUTTON_GOTO, ids::GOTO, them),
+            (texts::BUTTON_BRING, ids::BRING, them),
+        ];
+        // Their own window offers nothing that moves them to or removes them.
+        let (moves, moderate): (Vec<(&str, &str, &[Value])>, Vec<_>) = if player.key == viewer.key {
+            (vec![mark], mutes.to_vec())
         } else {
-            removes.into_iter().chain(mutes).collect()
+            (
+                meet.into_iter().chain([mark]).collect(),
+                removes.into_iter().chain(mutes).collect(),
+            )
         };
         Build::new(self, viewer, PLAYER, texts::WINDOW_PLAYER)
             .text(
@@ -303,16 +358,7 @@ impl Tools {
                     (texts::value::ACCOUNT, &account),
                 ],
             )
-            .row(
-                texts::WINDOW_ROW_MOVE,
-                &[],
-                &[
-                    (texts::BUTTON_GOTO, ids::GOTO, them),
-                    (texts::BUTTON_BRING, ids::BRING, them),
-                    (texts::BUTTON_MARK, ids::MARK, them),
-                ],
-                false,
-            )
+            .row(texts::WINDOW_ROW_MOVE, &[], &moves, false)
             .row(
                 texts::WINDOW_ROW_MOVE_TO,
                 &[],
@@ -348,20 +394,29 @@ impl Tools {
             .window
     }
 
-    /// The ban list with a button to lift each ban, then banning, the
-    /// allow-list and changes by account id.
+    /// Banning, the allow-list and changes by account id, then the newest
+    /// bans with a button to lift each: the platform cuts a window too
+    /// big from its end, so the forms come first.
     fn accounts_window(&self, viewer: &Player) -> Window {
-        let bans = self
-            .accounts
-            .with(|accounts| accounts.bans.clone())
-            .unwrap_or_default();
+        let build = Build::new(self, viewer, ACCOUNTS, texts::WINDOW_ACCOUNTS);
+        let Some(bans) = self.accounts.with(|accounts| accounts.bans.clone()) else {
+            // Lists that do not read are no empty lists.
+            let why = self.accounts.shut_reason().unwrap_or_default();
+            return build
+                .text(texts::REPLY_STORE_SHUT, &[(texts::value::WHY, &why)])
+                .window;
+        };
         let count = bans.len().to_string();
         let allowlist = if self.settings.load().allowlist {
             texts::WINDOW_ALLOWLIST_ON
         } else {
             texts::WINDOW_ALLOWLIST_OFF
         };
-        let mut build = Build::new(self, viewer, ACCOUNTS, texts::WINDOW_ACCOUNTS)
+        let mut build = build
+            .action(ids::BAN)
+            .text(allowlist, &[])
+            .action(ids::ALLOWED)
+            .action(ids::ACCOUNT)
             .text(texts::REPLY_BANS, &[(texts::value::COUNT, &count)]);
         for ban in bans.iter().rev().take(MAX_ROWS) {
             let lift: &[Value] = &[
@@ -378,12 +433,7 @@ impl Tools {
                 true,
             );
         }
-        build
-            .action(ids::BAN)
-            .text(allowlist, &[])
-            .action(ids::ALLOWED)
-            .action(ids::ACCOUNT)
-            .window
+        build.window
     }
 
     /// The message of the day, announcements, the restart warning, the
@@ -407,16 +457,21 @@ impl Tools {
             .map(|((_, label, _), args)| (*label, ids::WEATHER, &args[..]))
             .collect();
         let stop: &[Value] = &[Value::Number(0.0)];
-        build
+        let build = build
             .action(ids::SET_MOTD)
             .action(ids::SAY)
-            .action(ids::RESTART)
-            .row(
+            .action(ids::RESTART);
+        let build = if self.ticker.relock().restarting() {
+            build.row(
                 texts::WINDOW_ROW_RESTART,
                 &[],
                 &[(texts::BUTTON_STOP, ids::RESTART, stop)],
                 false,
             )
+        } else {
+            build
+        };
+        build
             .row(texts::ACTION_TIME, &[], &times, false)
             .action(ids::TIME)
             .row(texts::ACTION_WEATHER, &[], &weathers, false)
@@ -471,24 +526,30 @@ mod tests {
 
     #[test]
     fn a_window_is_shown_again_only_after_a_change_to_what_it_lists() {
-        let accounts = SECTIONS.iter().position(|(word, _)| *word == ACCOUNTS);
-        let accounts = Shown::Section(accounts.unwrap());
+        let accounts = Shown::Section(Section::Accounts);
         assert!(accounts.stale_after(ids::BANNED));
         assert!(!accounts.stale_after(ids::KICK));
-        let players = SECTIONS.iter().position(|(word, _)| *word == PLAYERS);
-        let players = Shown::Section(players.unwrap());
+        let players = Shown::Section(Section::Players);
         assert!(players.stale_after(ids::KICK));
-        assert!(!players.stale_after(ids::SET_MOTD));
-        assert!(Shown::Player(PlayerKey::new(1)).stale_after(ids::KICK));
-        assert!(!Shown::Player(PlayerKey::new(1)).stale_after(ids::HEAL));
-        assert!(!Shown::Section(SECTIONS.len()).stale_after(ids::BAN));
+        assert!(!players.stale_after(ids::MUTED), "the list shows no mutes");
+        assert!(Shown::Section(Section::Server).stale_after(ids::RESTART));
+        assert!(Shown::Player(PlayerKey::new(1)).stale_after(ids::BAN));
+        assert!(!Shown::Player(PlayerKey::new(1)).stale_after(ids::GOD));
+        assert!(!Shown::Section(Section::Builds).stale_after(ids::BAN));
+    }
+
+    #[test]
+    fn each_section_s_window_id_is_its_word() {
+        for (word, _, section) in SECTIONS {
+            assert_eq!(Shown::Section(section).id(), word);
+        }
     }
 
     #[test]
     fn every_section_has_a_window_id_the_platform_takes() {
         for id in [PANEL, PLAYER, CHANGES]
             .into_iter()
-            .chain(SECTIONS.map(|(word, _)| word))
+            .chain(SECTIONS.map(|(word, ..)| word))
         {
             assert!(enshwick::actions::is_valid_id(id), "{id}");
         }

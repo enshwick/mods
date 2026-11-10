@@ -2,6 +2,7 @@
 //! survive a restart and reach accounts while they are offline.
 
 use enshwick::PlayerKey;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 
 /// The world store's file name, `accounts.toml`.
@@ -88,14 +89,17 @@ impl Accounts {
         self.bans.extend(older);
     }
 
+    /// Whether `key` as `name` is the newest account the door remembers.
+    pub(crate) fn newest_at_door(&self, key: PlayerKey, name: &str) -> bool {
+        self.seen
+            .last()
+            .is_some_and(|known| known.key == key && known.name == name)
+    }
+
     /// Remembers that `key` came to the door as `name`, as the newest of
     /// at most [`MAX_SEEN`]; whether that changed what the door remembers.
     pub(crate) fn see(&mut self, key: PlayerKey, name: &str) -> bool {
-        if self
-            .seen
-            .last()
-            .is_some_and(|known| known.key == key && known.name == name)
-        {
+        if self.newest_at_door(key, name) {
             return false;
         }
         self.seen.retain(|known| known.key != key);
@@ -108,34 +112,33 @@ impl Accounts {
         true
     }
 
-    /// Every account the lists name, once each: the newest at the door
-    /// first, then the banned and the allowed.
-    pub(crate) fn known(&self) -> Vec<(PlayerKey, String)> {
-        let listed = self
-            .bans
-            .iter()
-            .map(|ban| (ban.key, &ban.name))
-            .chain(self.allowed.iter().map(|known| (known.key, &known.name)));
-        let mut known: Vec<(PlayerKey, String)> = Vec::new();
-        for (key, name) in self
-            .seen
+    /// Every account the lists name with its name, newest first: those at
+    /// the door, then the banned, then the allowed. The platform keeps the
+    /// first of a long list, so the newest come first.
+    fn newest(&self) -> impl Iterator<Item = (PlayerKey, &String)> {
+        let at_door = self.seen.iter().rev().map(|known| (known.key, &known.name));
+        let banned = self.bans.iter().rev().map(|ban| (ban.key, &ban.name));
+        let allowed = self
+            .allowed
             .iter()
             .rev()
-            .map(|known| (known.key, &known.name))
-            .chain(listed)
-        {
-            if !known.iter().any(|(had, _)| *had == key) {
-                known.push((key, name.clone()));
-            }
-        }
-        known
+            .map(|known| (known.key, &known.name));
+        at_door.chain(banned).chain(allowed)
+    }
+
+    /// Every account the lists name, once each, newest first.
+    pub(crate) fn known(&self) -> Vec<(PlayerKey, String)> {
+        let mut had = FxHashSet::default();
+        self.newest()
+            .filter(|(key, _)| had.insert(*key))
+            .map(|(key, name)| (key, name.clone()))
+            .collect()
     }
 
     /// The name `key` last had at the door or on a list.
     pub(crate) fn name_of(&self, key: PlayerKey) -> Option<String> {
-        self.known()
-            .into_iter()
-            .find_map(|(known, name)| (known == key).then_some(name))
+        self.newest()
+            .find_map(|(known, name)| (known == key).then(|| name.clone()))
     }
 
     /// Puts `key` on the allow-list or takes it off.
@@ -267,6 +270,23 @@ mod tests {
             Some("Fay")
         );
         assert_eq!(accounts.name_of(PlayerKey::new(901)), None);
+    }
+
+    #[test]
+    fn the_newest_bans_come_before_older_ones_so_a_cut_list_keeps_them() {
+        let mut accounts = Accounts::default();
+        for (key, name) in [(7, "Old"), (8, "New")] {
+            let _older = accounts.ban(Ban {
+                key: PlayerKey::new(key),
+                name: name.into(),
+                by: "Ann".into(),
+                at: key,
+                reason: String::new(),
+            });
+        }
+        let names: Vec<String> = accounts.known().into_iter().map(|(_, name)| name).collect();
+        assert_eq!(names, ["New", "Old"]);
+        assert_eq!(accounts.name_of(PlayerKey::new(7)).as_deref(), Some("Old"));
     }
 
     #[test]

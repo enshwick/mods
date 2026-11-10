@@ -15,7 +15,7 @@ Change a line there first.
 
 | Mod | What it does |
 | --- | --- |
-| [Admin Tools](admin-tools/README.md) | Server admins manage players and the world from the game. It comes with 1.0. |
+| [Admin Tools](admin-tools/README.md) | Server admins manage players and the world from the game. |
 | [Area Loot](area-loot/README.md) | Loot one corpse, take the loot of the enemies nearby. |
 | [Better Altars](better-altars/README.md) | More Flame Altars, zones that grow together. |
 | [Build Camera](build-camera/README.md) | The flying build camera, without the skill. |

@@ -539,6 +539,53 @@ mod tests {
             }
         }
     }
+
+    /// The command table of a page: each row's action and its last
+    /// column, who may use it by default.
+    fn command_rows(page: &str) -> Vec<(&str, &str)> {
+        page.lines()
+            .filter_map(|line| line.strip_prefix("| `/adm "))
+            .map(|row| {
+                let id = row.split([' ', '`']).next().unwrap_or_default();
+                let who = row.trim_end_matches(['|', ' ']).rsplit('|').next();
+                (id, who.unwrap_or_default().trim())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_page_lists_every_action_in_the_help_s_order_with_its_default_rule() {
+        let rules = Settings::default().rights.rules();
+        let guest = enshwick::world::Player {
+            entity: Entity(2),
+            slot: 0,
+            key: PlayerKey::new(9),
+            permissions: 0,
+            name: "Guest".into(),
+        };
+        let pages = [
+            (include_str!("../README.md"), "Everyone", "Admins"),
+            (include_str!("../docs/player.md"), "Everyone", "Admins"),
+            (include_str!("../docs/player.uk.md"), "Усі", "Адміни"),
+        ];
+        let order: Vec<&str> = ids::GROUPS
+            .iter()
+            .flat_map(|(_, ids)| ids.iter().copied())
+            .collect();
+        for (page, everyone, admins) in pages {
+            let rows = command_rows(page);
+            let listed: Vec<&str> = rows.iter().map(|(id, _)| *id).collect();
+            assert_eq!(listed, order);
+            for (id, who) in rows {
+                let default = if rules.admits(id, &guest) {
+                    everyone
+                } else {
+                    admins
+                };
+                assert_eq!(who, default, "{id}");
+            }
+        }
+    }
 }
 
 enshwick::declare_mod!(AdminTools);

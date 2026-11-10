@@ -7,7 +7,7 @@ use enshwick::PlayerKey;
 use enshwick::abi::ActionCall;
 use enshwick::actions::sheet::decode;
 use enshwick::console;
-use enshwick::events::{ShutdownStarted, WorldLoaded};
+use enshwick::events::{ShutdownStarted, WorldLoaded, WorldSaved, WorldSaving};
 
 use super::game::{Scratch, ann, bob, file_until, hosted, run, said, scratch, server, tick_until};
 
@@ -191,4 +191,33 @@ fn a_backup_is_refused_when_the_data_folder_is_not_beside_a_save() {
     let loader = server("", &dir);
     assert!(run(&loader, &ann(), "backup", "").starts_with('0'));
     assert!(!loader.saves_held());
+}
+
+#[test]
+fn a_backup_waits_for_a_save_under_way_and_the_restart_save_waits_for_the_backup() {
+    let (_saves, data) = saves("backup-saving");
+    let loader = server("", &data);
+    assert!(loader.raise::<WorldSaving>(&()) >= 1);
+    assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
+    assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
+    assert!(tick_until(&loader, || said(&loader, 2)
+        .contains(&"The server restarts now.".to_owned())));
+    assert!(loader.saves_held(), "the copy waits for the save to end");
+    assert!(!data.join("backups").exists());
+    assert_eq!(loader.saves(), 0, "the restart save waits for the backup");
+    assert!(loader.raise::<WorldSaved>(&()) >= 1);
+    assert!(tick_until(&loader, || loader.saves() == 1));
+    assert!(!loader.saves_held());
+    assert_eq!(std::fs::read_dir(data.join("backups")).unwrap().count(), 1);
+}
+
+#[test]
+fn the_console_hears_where_a_backup_s_end_is_written() {
+    let (_saves, data) = saves("backup-console");
+    let loader = server("", &data);
+    assert_eq!(
+        console::run("adm backup").unwrap(),
+        "The backup has started. The server's log and the audit log name where it went when it is done."
+    );
+    assert!(tick_until(&loader, || !loader.saves_held()));
 }

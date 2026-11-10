@@ -4,6 +4,7 @@
 
 use core::time::Duration;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::chat::{ChatKind, ChatLine};
@@ -37,6 +38,10 @@ const MAX_RESTART_MINUTES: f64 = 180.0;
 
 /// The most lines one read of a log shows.
 const MAX_LOG_LINES: f64 = 50.0;
+
+/// How many ticks the save before a restart is asked for while the game
+/// refuses it, once no backup holds the saves.
+const RESTART_SAVE_TRIES: u32 = 30;
 
 /// Declares the actions on the server.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -536,12 +541,31 @@ impl Tools {
             .step(elapsed, &settings.announcements, every);
         for say in &said {
             // The save the restart would make, so the host's restart loses nothing.
-            if matches!(say, Say::RestartNow)
-                && let Err(why) = self.world.save()
-            {
-                enshwick::warn!("no save before the restart: {why}");
+            if matches!(say, Say::RestartNow) {
+                self.restart_save
+                    .store(RESTART_SAVE_TRIES, Ordering::Relaxed);
             }
             self.announce(say);
+        }
+        self.save_for_restart();
+    }
+
+    /// Asks for the save a restart makes, once no backup holds the saves;
+    /// a refused save is asked again each tick, at most
+    /// [`RESTART_SAVE_TRIES`] times.
+    fn save_for_restart(&self) {
+        let left = self.restart_save.load(Ordering::Relaxed);
+        if left == 0 || self.backing_up.load(Ordering::Acquire) {
+            return;
+        }
+        match self.world.save() {
+            Ok(()) => self.restart_save.store(0, Ordering::Relaxed),
+            Err(why) => {
+                self.restart_save.store(left - 1, Ordering::Relaxed);
+                if left == 1 {
+                    enshwick::warn!("no save before the restart: {why}");
+                }
+            }
         }
     }
 

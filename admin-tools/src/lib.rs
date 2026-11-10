@@ -27,7 +27,7 @@ mod server;
 mod settings;
 mod windows;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
@@ -36,7 +36,9 @@ use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Outcome, Request, Value, Via};
 use enshwick::daytime::Clock;
 use enshwick::effects::Effects;
-use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
+use enshwick::events::{
+    PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded, WorldSaved, WorldSaving,
+};
 use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
 use enshwick::inventory::Inventories;
@@ -105,6 +107,12 @@ pub(crate) struct Tools {
     started: Instant,
     /// Whether a backup is under way.
     backing_up: AtomicBool,
+    /// Whether the game is writing the world's save, from its start to its
+    /// end, which a backup waits for.
+    saving: AtomicBool,
+    /// The tries left of the save a restart makes before it goes, which
+    /// waits while a backup holds the saves.
+    restart_save: AtomicU32,
     /// The remote console while it listens.
     rcon: Mutex<Option<rcon::Listener>>,
     /// Whether the remote console stopped after a panic, which keeps it
@@ -168,6 +176,8 @@ impl Mod for AdminTools {
             joined: Mutex::new(FxHashMap::default()),
             started: Instant::now(),
             backing_up: AtomicBool::new(false),
+            saving: AtomicBool::new(false),
+            restart_save: AtomicU32::new(0),
             rcon: Mutex::new(None),
             rcon_fused: AtomicBool::new(false),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
@@ -177,6 +187,10 @@ impl Mod for AdminTools {
         load.on::<WorldLoaded>(move |()| loaded.start())?;
         let stopped = Arc::clone(&tools);
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
+        let saving = Arc::clone(&tools);
+        load.on::<WorldSaving>(move |()| saving.saving.store(true, Ordering::Release))?;
+        let saved = Arc::clone(&tools);
+        load.on::<WorldSaved>(move |()| saved.saving.store(false, Ordering::Release))?;
         players::add(&tools)?;
         inventory::add(&tools)?;
         chest::add(&tools)?;
@@ -277,6 +291,8 @@ impl Tools {
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);
+        self.saving.store(false, Ordering::Release);
+        self.restart_save.store(0, Ordering::Relaxed);
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();
         }

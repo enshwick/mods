@@ -1,0 +1,22 @@
+id: tests-listen-on-loopback
+valid:
+  - |
+    fn a_client_reaches_the_console() {
+        let socket = TcpListener::bind("127.0.0.1:0");
+        let six = TcpListener::bind("[::1]:0");
+        assert!(allowed("10.0.0.0/8"));
+        assert_eq!(name.split("::").count(), 2);
+    }
+invalid:
+  - |
+    fn settings() -> String {
+        format!("rcon_ip = \"0.0.0.0\"\n")
+    }
+  - |
+    fn a_client_reaches_the_console() {
+        let socket = UdpSocket::bind((Ipv6Addr::UNSPECIFIED, 0));
+    }
+  - |
+    fn a_client_reaches_the_console() {
+        let socket = UdpSocket::bind((Ipv4Addr::new(0, 0, 0, 0), 0));
+    }

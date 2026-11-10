@@ -231,6 +231,8 @@ fn every_page_lists_the_commands_the_help_lists_in_its_order() {
         .filter_map(|line| line.split([' ', ':']).next())
         .collect();
     assert_eq!(helped.len(), 38, "{help}");
+    let groups = help.lines().filter(|line| line.ends_with(':')).count();
+    assert_eq!(groups, 9, "the actions sit under their groups: {help}");
     for page in [
         include_str!("../../README.md"),
         include_str!("../../docs/player.md"),

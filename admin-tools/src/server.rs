@@ -529,21 +529,29 @@ fn switch(request: &Request<'_>, on: bool) -> String {
 /// A length of time in the reader's hours, minutes and seconds, leaving
 /// out parts that are zero.
 fn length(request: &Request<'_>, time: Duration) -> String {
+    let text: Vec<String> = length_parts(time)
+        .iter()
+        .map(|(count, unit)| request.say(unit, &[(texts::value::COUNT, &count.to_string())]))
+        .collect();
+    text.join(" ")
+}
+
+/// The hours, minutes and seconds of `time` with their unit's text key,
+/// leaving out parts that are zero; zero seconds for no time at all.
+fn length_parts(time: Duration) -> Vec<(u64, &'static str)> {
     let seconds = time.as_secs();
-    let parts = [
+    let parts: Vec<(u64, &str)> = [
         (seconds / 3600, texts::WORLD_HOURS),
         (seconds / 60 % 60, texts::WORLD_MINUTES),
         (seconds % 60, texts::WORLD_SECONDS),
-    ];
-    let text: Vec<String> = parts
-        .iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, unit)| request.say(unit, &[(texts::value::COUNT, &count.to_string())]))
-        .collect();
-    if text.is_empty() {
-        request.say(texts::WORLD_SECONDS, &[(texts::value::COUNT, "0")])
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    .collect();
+    if parts.is_empty() {
+        vec![(0, texts::WORLD_SECONDS)]
     } else {
-        text.join(" ")
+        parts
     }
 }
 
@@ -761,6 +769,23 @@ mod tests {
             Some("world.tombstone-mode.add-backpack-materials")
         );
         assert_eq!(kind_key(PRESET, &GameSettingsPreset::Other(7)), None);
+    }
+
+    #[test]
+    fn a_length_of_time_reads_as_its_hours_minutes_and_seconds_without_zero_parts() {
+        let (h, min, s) = (
+            texts::WORLD_HOURS,
+            texts::WORLD_MINUTES,
+            texts::WORLD_SECONDS,
+        );
+        assert_eq!(length_parts(Duration::from_mins(30)), [(30, min)]);
+        assert_eq!(
+            length_parts(Duration::from_secs(90 * 60 + 30)),
+            [(1, h), (30, min), (30, s)]
+        );
+        assert_eq!(length_parts(Duration::from_hours(2)), [(2, h)]);
+        assert_eq!(length_parts(Duration::from_secs(59)), [(59, s)]);
+        assert_eq!(length_parts(Duration::ZERO), [(0, s)]);
     }
 
     #[test]

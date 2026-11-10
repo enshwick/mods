@@ -4,6 +4,8 @@ Mods for Enshrouded by the Enshwick team, each in its own folder and released
 on its own. They run on [Enshwick](https://enshwick.com), the modding framework
 and API for Enshrouded.
 
+[![Coverage](https://codecov.io/gh/enshwick/mods/graph/badge.svg)](https://codecov.io/gh/enshwick/mods)
+
 Each released mod has a page on [enshwick.com](https://enshwick.com/#mods)
 that says what it changes and links its archive.
 

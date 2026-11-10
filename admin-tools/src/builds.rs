@@ -14,7 +14,7 @@ use enshwick::{Load, Off, PlayerKey, Relock as _};
 use crate::{Tools, ids, journal, texts};
 
 /// The build log: one line per building placed or removed and per spot of
-/// terrain changed.
+/// building blocks or terrain changed.
 pub(crate) const LOG: journal::Files = journal::Files {
     now: "builds.log",
     old: "builds.1.log",

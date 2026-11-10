@@ -314,6 +314,7 @@ impl Shared {
 
     /// Whether `ip` still waits after [`MAX_FAILURES`] failed logins.
     fn waits(&self, ip: IpAddr) -> bool {
+        let ip = network(ip);
         let mut strikes = self.strikes.relock();
         let now = Instant::now();
         strikes.retain(|_, strikes| now < strikes.last + PENALTY);
@@ -324,6 +325,7 @@ impl Shared {
 
     /// Counts a failed login from `ip`; whether the address now waits.
     fn strike(&self, ip: IpAddr) -> bool {
+        let ip = network(ip);
         let now = Instant::now();
         let mut strikes = self.strikes.relock();
         let strikes = strikes.entry(ip).or_insert(Strikes {
@@ -340,12 +342,14 @@ impl Shared {
 
     /// Forgets the failed logins of `ip` after it logged in.
     fn forgive(&self, ip: IpAddr) {
+        let ip = network(ip);
         self.strikes.relock().remove(&ip);
     }
 
     /// Counts one more connection from `ip` unless [`MAX_CONNECTIONS`] are
     /// open, or [`MAX_PER_ADDRESS`] from `ip`.
     fn take_slot(&self, ip: IpAddr) -> bool {
+        let ip = network(ip);
         let mut open = self.open.relock();
         let total: usize = open.values().sum();
         let mine = open.get(&ip).copied().unwrap_or(0);
@@ -359,6 +363,7 @@ impl Shared {
 
     /// Frees the slot of a connection from `ip` that closed.
     fn free_slot(&self, ip: IpAddr) {
+        let ip = network(ip);
         let mut open = self.open.relock();
         if let Some(mine) = open.get_mut(&ip) {
             *mine -= 1;
@@ -394,6 +399,17 @@ impl Shared {
         if let Some(tools) = self.tools.upgrade() {
             tools.log(&[label, "rcon", "login", "", outcome]);
         }
+    }
+}
+
+/// The address the limits count `ip` under: an IPv6 address by its /64
+/// network, which one client holds whole and can rotate within.
+fn network(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) if !v6.is_loopback() && v6.to_ipv4_mapped().is_none() => {
+            IpAddr::V6(Ipv6Addr::from(v6.to_bits() & !u128::from(u64::MAX)))
+        }
+        ip => ip.to_canonical(),
     }
 }
 
@@ -756,6 +772,29 @@ mod tests {
             assert!(shared.take_slot(local));
         }
         assert!(!shared.take_slot(local), "four in all");
+    }
+
+    #[test]
+    fn an_ipv6_client_counts_as_its_whole_network_for_logins_and_slots() {
+        let shared = shared("");
+        let one: IpAddr = "2001:db8:1:2::a".parse().unwrap();
+        let same: IpAddr = "2001:db8:1:2:ffff::b".parse().unwrap();
+        let other: IpAddr = "2001:db8:1:3::a".parse().unwrap();
+        for _ in 0..MAX_FAILURES {
+            let _waits = shared.strike(one);
+        }
+        assert!(shared.waits(same), "another address of the same /64");
+        assert!(!shared.waits(other));
+        assert!(shared.take_slot(one) && shared.take_slot(same));
+        assert!(!shared.take_slot(one), "two from one network");
+        assert_eq!(
+            network("::1".parse().unwrap()),
+            "::1".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(
+            network("::ffff:10.0.0.1".parse().unwrap()),
+            IpAddr::from([10, 0, 0, 1])
+        );
     }
 
     #[test]

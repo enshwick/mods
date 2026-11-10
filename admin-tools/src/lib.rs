@@ -192,11 +192,7 @@ impl Mod for AdminTools {
         let heard = Arc::clone(&tools);
         load.on_chat_said(move |line| heard.heard(line))?;
         let joins = Arc::clone(&tools);
-        load.on::<PlayerJoined>(move |joined| {
-            let (tools, key) = (Arc::clone(&joins), joined.key);
-            // Kicks and bans wait for the step to end.
-            scheduler.next_tick(move || tools.welcome(key));
-        })?;
+        load.on::<PlayerJoined>(move |joined| joins.welcome(joined.key))?;
         let leaves = Arc::clone(&tools);
         load.on::<PlayerLeft>(move |left| {
             leaves.joined.relock().remove(&left.key);

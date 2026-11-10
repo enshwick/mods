@@ -133,9 +133,9 @@ The console and RCON tools may use every action.
 | `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. The game keeps the value within the maximum. |
 | `/adm learn <player> <recipe>` | Unlocks a recipe for a player. Name it by the game's name, such as `Tool_Torch01`, in any case; by its GUID; or by a mod's content id. A number grants any knowledge the game keeps for the player. |
 | `/adm god <player> on` or `off` | Nothing damages a player in god mode. It ends when the player leaves or the world stops. |
-| `/adm give <player> <count> <item>` | Gives a player new items, in as many stacks as they need; you read how many did not fit. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
-| `/adm chest <player> <count> <item>` | Places a wooden chest beside a player and fills it with items, named as for `give`. A chest outside every base is not saved. |
-| `/adm chestat <x> <y> <z> <count> <item>` | Places a wooden chest at a position and fills it with items. A chest outside every base is not saved. |
+| `/adm give <player> <item> [count]` | Gives a player new items, one when the count is left out, in as many stacks as they need; you read how many did not fit. Name the item by its debug name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. In a game a player hosts, the name the game shows, such as `Glider`, works too, in any language the game offers; a dedicated server does not have these names. An unknown name lists the names near it. |
+| `/adm chest <player> <item> [count]` | Places a wooden chest beside a player and fills it with items, named as for `give`. A chest outside every base is not saved. |
+| `/adm chestat <x> <y> <z> <item> [count]` | Places a wooden chest at a position and fills it with items. A chest outside every base is not saved. |
 | `/adm clear <player>` | Destroys every stack in every slot a player has, equipment, action bar and look slots included. |
 | `/adm copy <player> <player>` | Gives the second player new items of every stack the first carries or wears. The items start new, without wear or level. What does not fit stays out, and you read how many; the look and currency slots are not copied. |
 | `/adm goto <player>` | Takes you to a player. |

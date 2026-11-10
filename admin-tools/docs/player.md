@@ -1,7 +1,7 @@
 ---
 id: enshwick.admin-tools
 name: Admin Tools
-summary: Server admins manage players, bans and the allow-list from a window, set time and weather, save and back up the world, and use RCON, a build log and audit and chat logs.
+summary: Server admins manage players, bans and the allow-list from a window, set time and weather, back up the world, and use RCON and logs.
 needs: server
 settings:
   - key: motd
@@ -75,8 +75,8 @@ settings:
 - An Admin Tools window opens with Shift+F9: the players online with their actions, the bans and the allow-list, the server, and the build log.
 - Administrators see who is online, and kick, ban or mute players. A ban keeps its reason and holds after a restart. Players who are away can be banned, unbanned and put on the allow-list.
 - An allow-list lets only chosen accounts and administrators join. Each world decides who may use each action. Players read a message of the day, announcements, scheduled announcements and restart warnings.
-- Administrators set the time and the weather, save the world and back it up while the server runs. They heal players, move them to a player, a position or a map waypoint, give items and chests of items, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
-- RCON tools such as BattleMetrics run every command on a dedicated server. Audit and chat logs keep what happened, and a build log, off by default, shows who placed or removed a building or changed terrain near a spot.
+- Administrators set the time and the weather, save the world and back it up while the server runs. They heal players and move them to a player, a position or a map waypoint. They give items and chests, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
+- RCON tools such as BattleMetrics run every command on a dedicated server. Audit and chat logs keep what happened. A build log, off by default, shows who built or broke what near a spot.
 
 ## How do I open the Admin Tools window?
 
@@ -100,7 +100,7 @@ screen also opens the window: select Admin Tools, then
 
 ## How do I use an action?
 
-You press its button in the Admin Tools window, or type the action as a
+You press its button in the Admin Tools window. Or you type the action as a
 command in chat or in the console window of a dedicated server. Every
 command starts with `/adm` or `/admin-tools`.
 
@@ -174,9 +174,10 @@ a mod's content id.
 
 From then on, an account not on the list is kicked as it joins.
 Administrators always get in. A player kicked this way is remembered, so
-you can allow them by name afterwards. To allow an account that never
-joined, ask the player for their account id and type
-`/adm account <id> allow`.
+you can allow them by name afterwards.
+
+To allow an account that never joined, ask the player for their account id
+and type `/adm account <id> allow`.
 
 ## How do I decide who may use each action?
 
@@ -250,7 +251,9 @@ beside the world's save.
 
 Turn on **Build log** in the world's settings first. From then on, Admin Tools
 writes each building placed, picked up or torn down, and each spot of terrain
-dug or filled, with who did it, the time and the position. Terrain changes
+dug or filled. Each line has who did it, the time and the position.
+
+Terrain changes
 name the nearest player within 16 metres, since the game does not say who
 changed it.
 

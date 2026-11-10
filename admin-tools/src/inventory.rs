@@ -89,7 +89,7 @@ fn shortfall(outcome: &Given, asked: u32) -> u32 {
 /// included; each transaction the stacks need is whole or not at all.
 fn clear(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return no_player(request);
+        return crate::players::bad_args(request);
     };
     let (Some(inventories), Some(player), Some(late)) = (
         &tools.inventories,
@@ -131,7 +131,7 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
         },
     ] = request.args
     else {
-        return no_player(request);
+        return crate::players::bad_args(request);
     };
     let (Some(inventories), Some(from), Some(target), Some(late)) = (
         &tools.inventories,

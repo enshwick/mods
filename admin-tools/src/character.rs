@@ -87,7 +87,7 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
         Value::Number(value),
     ] = request.args
     else {
-        return no_player(request);
+        return crate::players::bad_args(request);
     };
     let (Some(player), Some((_, label, set))) = (tools.world.player_by_key(*key), POOLS.get(*pool))
     else {
@@ -120,7 +120,7 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// refused, since unlocking does not count.
 fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Text(text)] = request.args else {
-        return no_player(request);
+        return crate::players::bad_args(request);
     };
     let (id, shown) = match items::knowledge(text) {
         Ok(found) => found,
@@ -164,7 +164,7 @@ fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// filter cancels every damage to their character.
 fn god_mode(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
-        return no_player(request);
+        return crate::players::bad_args(request);
     };
     let Some(player) = tools.world.player_by_key(*key) else {
         return no_player(request);

@@ -118,7 +118,7 @@ fn motd(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// the world's setting; [`NO_MOTD`] goes back to the setting's.
 fn set_motd(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Text(text)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_MOTD_NONE, &[]));
+        return crate::players::bad_args(request);
     };
     let motd = if text == NO_MOTD { "" } else { text.as_str() };
     if tools
@@ -138,7 +138,7 @@ fn set_motd(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Tells every player a line now.
 fn say(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Text(text)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
+        return crate::players::bad_args(request);
     };
     tools.announce(&Say::Announcement(text.clone()));
     let count = tools.world.players().len().to_string();
@@ -212,7 +212,7 @@ fn weather(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// the warning under way.
 fn restart(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Number(minutes)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_RESTART_NONE, &[]));
+        return crate::players::bad_args(request);
     };
     #[expect(
         clippy::cast_possible_truncation,
@@ -257,7 +257,7 @@ fn read_log(
     off: &str,
 ) -> Outcome {
     let [Value::Number(count)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
+        return crate::players::bad_args(request);
     };
     if !on {
         return Outcome::refused(request.say(off, &[]));

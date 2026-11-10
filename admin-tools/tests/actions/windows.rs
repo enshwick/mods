@@ -9,7 +9,7 @@ use enshwick::events::BuildingPlaced;
 use enshwick::test::Installed;
 use enshwick::{Entity, ItemId};
 
-use super::game::{ann, bob, file_until, hosted, run, scratch, server};
+use super::game::{ann, bob, file_until, hosted, run, scratch, server, without_inventories};
 
 /// The window `id` on `who`'s client; panics with the windows they hold
 /// when it is not among them.
@@ -151,6 +151,20 @@ fn the_players_window_lists_each_player_with_the_actions_used_most() {
 }
 
 #[test]
+fn only_a_press_in_the_interface_shows_the_window_again_not_a_command_in_chat() {
+    let dir = scratch("refresh-chat");
+    let loader = server("", &dir);
+    assert_eq!(run(&loader, &ann(), "open", "c0"), "1");
+    // The mod is not told when a window closes, so a typed command must
+    // not bring back one the player shut.
+    assert_eq!(
+        loader.type_in_chat(&ann(), 0, "/adm kick Bob").as_deref(),
+        Some("1Bob was kicked.")
+    );
+    assert_eq!(rows(&window(&loader, &ann(), "players")).len(), 2);
+}
+
+#[test]
 fn one_player_s_window_groups_every_action_on_them() {
     let dir = scratch("player-window");
     let loader = server("", &dir);
@@ -208,6 +222,31 @@ fn one_player_s_window_groups_every_action_on_them() {
             .iter()
             .any(|entry| entry.id == "ban" && entry.args.len() == 2)
     );
+}
+
+#[test]
+fn a_viewer_s_own_window_offers_no_kick_or_ban_of_themselves() {
+    let dir = scratch("own-window");
+    let loader = server("", &dir);
+    assert_eq!(run(&loader, &ann(), "player", "p0000000000000001"), "1");
+    let own = window(&loader, &ann(), "player");
+    let moderate = rows(&own)
+        .into_iter()
+        .find(|(text, _)| text == "Moderate")
+        .unwrap();
+    assert_eq!(moderate.1, ["Mute", "Unmute"]);
+}
+
+#[test]
+fn a_window_leaves_out_the_actions_a_game_build_without_inventories_does_not_declare() {
+    let dir = scratch("window-no-inventories");
+    let loader = without_inventories("", &dir);
+    assert_eq!(run(&loader, &ann(), "player", "p0000000000000002"), "1");
+    let items = rows(&window(&loader, &ann(), "player"))
+        .into_iter()
+        .find(|(text, _)| text == "Items and recipes")
+        .unwrap();
+    assert_eq!(items.1, ["Teach"], "give, chest and clear need inventories");
 }
 
 #[test]

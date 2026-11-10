@@ -49,6 +49,30 @@ fn a_ban_keeps_its_reason_its_time_and_who_set_it_and_the_list_reads_them() {
 }
 
 #[test]
+fn a_moderator_cannot_ban_or_kick_themselves_where_the_game_would_let_them() {
+    let dir = scratch("ban-self");
+    let rights = "[rights]\nban = \"everyone\"\nbanned = \"everyone\"\naccount = \"everyone\"\nkick = \"everyone\"\n";
+    let loader = server(rights, &dir);
+    let refused = "0You cannot do that to yourself.";
+    assert_eq!(
+        run(&loader, &bob(), "ban", "p0000000000000002\ttoops"),
+        refused
+    );
+    assert_eq!(
+        run(&loader, &bob(), "banned", "p0000000000000002\tb1"),
+        refused
+    );
+    assert_eq!(run(&loader, &bob(), "account", "t2\tc0"), refused);
+    assert_eq!(run(&loader, &bob(), "kick", "p0000000000000002"), refused);
+    assert!(loader.banned().is_empty() && loader.removed().is_empty());
+    // Lifting a ban on oneself changes nothing the game would refuse.
+    assert_eq!(
+        run(&loader, &bob(), "banned", "p0000000000000002\tb0"),
+        "1Bob is no longer banned."
+    );
+}
+
+#[test]
 fn a_player_who_is_away_is_banned_by_the_name_they_last_joined_with() {
     let dir = scratch("ban-away");
     std::fs::create_dir_all(&dir).unwrap();
@@ -291,4 +315,22 @@ fn the_build_log_names_who_placed_removed_and_dug_and_the_lookup_reads_the_newes
         console::run("enshwick.admin-tools who 60").as_deref(),
         Ok("Run this as a player in the world: the console has no character.")
     );
+}
+
+#[test]
+fn the_build_log_tells_a_building_picked_up_and_terrain_filled_from_the_rest() {
+    let dir = scratch("builds-kinds");
+    let loader = server("build_log = true\n", &dir);
+    let picked = building(BuildingData::PICKED_UP, [0.0; 3]);
+    assert!(loader.raise::<BuildingRemoved>(&picked) >= 1);
+    let rock = Voxel::new(VoxelMaterial::Terrain(9), 255);
+    let at = VoxelPos::from_metres([0.0, 20.0, 7.0]).unwrap();
+    let fill = [VoxelChange::new(at, Voxel::default(), rock)];
+    assert!(loader.voxels_changed(EditSource::Game, &fill) >= 1);
+    let log = file_until(&dir, "builds.log", |text| text.lines().count() == 2);
+    let kinds: Vec<&str> = log
+        .lines()
+        .map(|line| line.split('\t').nth(2).unwrap())
+        .collect();
+    assert_eq!(kinds, ["picked-up", "filled"], "{log}");
 }

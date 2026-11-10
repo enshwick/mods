@@ -13,7 +13,9 @@ use enshwick::events::{SettingsReplaced, ShutdownStarted, WorldLoaded};
 use enshwick::test::Installed;
 use enshwick::world::PlayerPermissions;
 
-use super::game::{HEALTH, ann, bob, file_until, joins, player, run, scratch, server, server_with};
+use super::game::{
+    ADMIN, HEALTH, ann, bob, file_until, joins, player, run, scratch, server, server_with,
+};
 
 #[test]
 fn a_player_sees_only_the_reads_and_an_administrator_sees_every_action() {
@@ -100,23 +102,23 @@ fn the_audit_log_tells_a_refused_run_from_a_done_one() {
 #[test]
 fn an_administrator_kicks_a_player_but_not_another_administrator() {
     let dir = scratch("kick");
-    let loader = server("", &dir);
+    let loader = server_with("", &dir, &[player(13, 4, "Eve", ADMIN)]);
     assert_eq!(
         run(&loader, &ann(), "kick", "p0000000000000002"),
         "1Bob was kicked."
     );
     assert_eq!(loader.removed(), [2]);
-    let reply = run(&loader, &ann(), "kick", "p0000000000000001");
+    let reply = run(&loader, &ann(), "kick", "p0000000000000004");
     assert_eq!(
         reply,
-        "0Ann is an administrator or the host and cannot be removed."
+        "0Eve is an administrator or the host and cannot be removed."
     );
 }
 
 #[test]
 fn an_administrator_bans_a_player_online_and_lifts_the_ban_while_they_are_away() {
     let dir = scratch("ban");
-    let loader = server("", &dir);
+    let loader = server_with("", &dir, &[player(13, 4, "Eve", ADMIN)]);
     assert_eq!(
         run(&loader, &ann(), "banned", "p0000000000000002\tb1"),
         "1Bob is banned."
@@ -140,8 +142,8 @@ fn an_administrator_bans_a_player_online_and_lifts_the_ban_while_they_are_away()
         "1Bob is no longer banned."
     );
     assert_eq!(
-        run(&loader, &ann(), "banned", "p0000000000000001\tb1"),
-        "0Ann is an administrator or the host and cannot be removed."
+        run(&loader, &ann(), "banned", "p0000000000000004\tb1"),
+        "0Eve is an administrator or the host and cannot be removed."
     );
 }
 

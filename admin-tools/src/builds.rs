@@ -172,7 +172,7 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
 /// What changed within the radius of the caller, newest first.
 fn who(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Number(radius)] = request.args else {
-        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
+        return crate::players::bad_args(request);
     };
     if !tools.settings.load().build_log {
         return Outcome::refused(request.say(texts::REPLY_BUILDS_OFF, &[]));

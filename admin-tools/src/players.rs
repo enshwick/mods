@@ -31,13 +31,22 @@ pub(crate) fn axis(label: &'static str) -> Arg {
     Arg::number(label, -REACH..=REACH, 0.0)
 }
 
-/// What the account action does to the account it names: each a word for
-/// console lines and its label's key.
-const CHANGES: [(&str, &str); 4] = [
-    ("ban", texts::CHANGE_BAN),
-    ("unban", texts::CHANGE_UNBAN),
-    ("allow", texts::CHANGE_ALLOW),
-    ("disallow", texts::CHANGE_DISALLOW),
+/// What the account action does to the account it names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Change {
+    Ban,
+    Unban,
+    Allow,
+    Disallow,
+}
+
+/// The account action's changes: each a word for console lines, its
+/// label's key and the change.
+const CHANGES: [(&str, &str, Change); 4] = [
+    ("ban", texts::CHANGE_BAN, Change::Ban),
+    ("unban", texts::CHANGE_UNBAN, Change::Unban),
+    ("allow", texts::CHANGE_ALLOW, Change::Allow),
+    ("disallow", texts::CHANGE_DISALLOW, Change::Disallow),
 ];
 
 /// The accounts the world's lists know beyond the players online, for an
@@ -102,7 +111,10 @@ fn add_accounts(tools: &Arc<Tools>) -> Result<(), Off> {
         Action::new(ids::ACCOUNT, texts::ACTION_ACCOUNT)
             .help(texts::ACTION_ACCOUNT_HELP)
             .arg(Arg::text(texts::ARG_ACCOUNT, ACCOUNT_DIGITS))
-            .arg(Arg::choice(texts::ARG_CHANGE, &CHANGES)),
+            .arg(Arg::choice(
+                texts::ARG_CHANGE,
+                &CHANGES.map(|(word, label, _)| (word, label)),
+            )),
         account,
     )?;
     Ok(())
@@ -183,6 +195,19 @@ pub(crate) fn no_player(request: &Request<'_>) -> Outcome {
     Outcome::refused(request.say(texts::REPLY_NO_PLAYER, &[]))
 }
 
+/// The refusal of values other than those the action declares. The
+/// platform checks them before a handler runs, so no run reaches it; a
+/// handler's pattern still needs an answer for every other shape.
+pub(crate) fn bad_args(request: &Request<'_>) -> Outcome {
+    Outcome::refused(request.say(texts::REPLY_BAD_ARGS, &[]))
+}
+
+/// The refusal of a kick or ban of the caller, which would shut out a
+/// moderator the game does not shield as it shields administrators.
+fn not_yourself(request: &Request<'_>) -> Outcome {
+    Outcome::refused(request.say(texts::REPLY_NOT_YOURSELF, &[]))
+}
+
 /// The players online, each with their account, their time online and
 /// whether they are muted.
 fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
@@ -227,8 +252,11 @@ fn online(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Removes a player from the game; administrators and the host stay.
 fn kick(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
+    if *key == request.player.key {
+        return not_yourself(request);
+    }
     let values = [(texts::value::NAME, name.as_str())];
     match tools.world.account_action(AccountAction::Kick, *key) {
         Ok(()) => Outcome::done(request.say(texts::REPLY_KICKED, &values)),
@@ -242,7 +270,7 @@ fn kick(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Bans a player, online or away, or lifts a ban, from the list's switch.
 fn banned(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     set_ban(tools, request, *key, name, on.then(String::new))
 }
@@ -250,7 +278,7 @@ fn banned(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Bans a player, online or away, with a reason.
 fn ban(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Text(reason)] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     set_ban(tools, request, *key, name, Some(reason.clone()))
 }
@@ -268,6 +296,10 @@ fn set_ban(
 ) -> Outcome {
     let values = [(texts::value::NAME, name)];
     let on = reason.is_some();
+    // The game shields only administrators and the host from a ban.
+    if on && key == request.player.key {
+        return not_yourself(request);
+    }
     let older = match reason {
         Some(reason) => {
             let ban = Ban {
@@ -372,7 +404,7 @@ pub(crate) fn account_key(text: &str) -> Option<PlayerKey> {
 /// reaches an account that never came to this world.
 fn account(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Text(id), Value::Choice(change)] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     let Some(key) = account_key(id) else {
         return Outcome::refused(
@@ -385,11 +417,12 @@ fn account(tools: &Tools, request: &Request<'_>) -> Outcome {
         .map(|player| player.name)
         .or_else(|| tools.accounts.with(|accounts| accounts.name_of(key))?)
         .unwrap_or_else(|| crate::account_id(key));
-    match CHANGES.get(*change).map(|(word, _)| *word) {
-        Some("ban") => set_ban(tools, request, key, &name, Some(String::new())),
-        Some("unban") => set_ban(tools, request, key, &name, None),
-        Some(word) => set_allowed(tools, request, key, &name, word == "allow"),
-        None => no_player(request),
+    match CHANGES.get(*change).map(|(.., change)| *change) {
+        Some(Change::Ban) => set_ban(tools, request, key, &name, Some(String::new())),
+        Some(Change::Unban) => set_ban(tools, request, key, &name, None),
+        Some(Change::Allow) => set_allowed(tools, request, key, &name, true),
+        Some(Change::Disallow) => set_allowed(tools, request, key, &name, false),
+        None => bad_args(request),
     }
 }
 
@@ -397,7 +430,7 @@ fn account(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// switch.
 fn allowed(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     set_allowed(tools, request, *key, name, *on)
 }
@@ -436,7 +469,7 @@ pub(crate) fn store_shut(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Mutes a player in chat or lifts the mute.
 fn muted(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }, Value::Toggle(on)] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     let values = [(texts::value::NAME, name.as_str())];
     match tools.world.set_muted(*key, *on) {
@@ -452,7 +485,7 @@ fn muted(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Gives a player their full health; it restores, it never adds.
 fn heal(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     let Some(player) = tools.world.player_by_key(*key) else {
         return no_player(request);
@@ -498,7 +531,7 @@ fn move_to(
 /// Takes the caller to a player.
 fn goto(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     match character(request) {
         Ok(me) => move_to(tools, request, (me.key, &me.name), (*key, name)),
@@ -509,7 +542,7 @@ fn goto(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Brings a player to the caller.
 fn bring(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     match character(request) {
         Ok(me) => move_to(tools, request, (*key, name), (me.key, &me.name)),
@@ -527,7 +560,7 @@ fn send(tools: &Tools, request: &Request<'_>) -> Outcome {
         },
     ] = request.args
     else {
-        return no_player(request);
+        return bad_args(request);
     };
     move_to(tools, request, (*key, name), (*to, to_name))
 }
@@ -541,7 +574,7 @@ fn place(tools: &Tools, request: &Request<'_>) -> Outcome {
         Value::Number(z),
     ] = request.args
     else {
-        return no_player(request);
+        return bad_args(request);
     };
     place_at(tools, request, *key, name, [*x, *y, *z])
 }
@@ -549,7 +582,7 @@ fn place(tools: &Tools, request: &Request<'_>) -> Outcome {
 /// Moves a player to the map waypoint the caller set.
 fn mark(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [Value::Player { key, name }] = request.args else {
-        return no_player(request);
+        return bad_args(request);
     };
     let me = match character(request) {
         Ok(me) => me,

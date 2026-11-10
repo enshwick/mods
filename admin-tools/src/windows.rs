@@ -83,7 +83,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
             .arg(Arg::choice(texts::ARG_SECTION, &SECTIONS)),
         |tools, request| match request.args {
             [Value::Choice(at)] => tools.open(request, Some(Shown::Section(*at))),
-            _ => crate::players::no_player(request),
+            _ => crate::players::bad_args(request),
         },
     )?;
     tools.add(
@@ -92,7 +92,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
             .arg(Arg::player(texts::ARG_PLAYER)),
         |tools, request| match request.args {
             [Value::Player { key, .. }] => tools.open(request, Some(Shown::Player(*key))),
-            _ => crate::players::no_player(request),
+            _ => crate::players::bad_args(request),
         },
     )?;
     // Without its key the panel still opens from the Mods screen and by command.
@@ -282,6 +282,19 @@ impl Tools {
             &[value(player), Value::Toggle(true)],
             &[value(player), Value::Toggle(false)],
         );
+        let mutes = [
+            (texts::BUTTON_MUTE, ids::MUTED, on),
+            (texts::BUTTON_UNMUTE, ids::MUTED, off),
+        ];
+        let removes = [
+            (texts::BUTTON_KICK, ids::KICK, them),
+            (texts::BUTTON_BAN, ids::BAN, them),
+        ];
+        let moderate: Vec<(&str, &str, &[Value])> = if player.key == viewer.key {
+            mutes.to_vec()
+        } else {
+            removes.into_iter().chain(mutes).collect()
+        };
         Build::new(self, viewer, PLAYER, texts::WINDOW_PLAYER)
             .text(
                 texts::WINDOW_PLAYER_WHO,
@@ -309,17 +322,7 @@ impl Tools {
                 ],
                 false,
             )
-            .row(
-                texts::WINDOW_ROW_MODERATE,
-                &[],
-                &[
-                    (texts::BUTTON_KICK, ids::KICK, them),
-                    (texts::BUTTON_BAN, ids::BAN, them),
-                    (texts::BUTTON_MUTE, ids::MUTED, on),
-                    (texts::BUTTON_UNMUTE, ids::MUTED, off),
-                ],
-                false,
-            )
+            .row(texts::WINDOW_ROW_MODERATE, &[], &moderate, false)
             .row(
                 texts::WINDOW_ROW_CARE,
                 &[],
@@ -472,6 +475,10 @@ mod tests {
         let accounts = Shown::Section(accounts.unwrap());
         assert!(accounts.stale_after(ids::BANNED));
         assert!(!accounts.stale_after(ids::KICK));
+        let players = SECTIONS.iter().position(|(word, _)| *word == PLAYERS);
+        let players = Shown::Section(players.unwrap());
+        assert!(players.stale_after(ids::KICK));
+        assert!(!players.stale_after(ids::SET_MOTD));
         assert!(Shown::Player(PlayerKey::new(1)).stale_after(ids::KICK));
         assert!(!Shown::Player(PlayerKey::new(1)).stale_after(ids::HEAL));
         assert!(!Shown::Section(SECTIONS.len()).stale_after(ids::BAN));

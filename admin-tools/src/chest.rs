@@ -62,7 +62,7 @@ fn chest(tools: &Tools, request: &Request<'_>) -> Outcome {
         Value::Text(text),
     ] = request.args
     else {
-        return no_player(request);
+        return crate::players::bad_args(request);
     };
     let Some([x, y, z]) = tools
         .world

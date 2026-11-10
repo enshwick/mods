@@ -62,11 +62,11 @@ pub(crate) struct Checks {
     marks: EntityData<u32>,
 }
 
-fn pass(what: &str) {
+pub(crate) fn pass(what: &str) {
     enshwick::info!("PASS {what}");
 }
 
-fn fail(what: &str) {
+pub(crate) fn fail(what: &str) {
     enshwick::warn!("FAIL {what}");
 }
 

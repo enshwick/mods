@@ -5,39 +5,69 @@ message: a test listens on 127.0.0.1 or [::1], never on every network
 note: >-
   A test program that listens on 0.0.0.0 or [::] raises the Windows firewall
   prompt on a developer's desktop and opens a port to the network while the
-  test runs. The rule reads the addresses written in test files as strings,
-  `UNSPECIFIED` or an all-zero `Ipv4Addr::new` or `Ipv6Addr::new`; an
-  address built from an array or reaching a test from a default elsewhere is
-  not seen.
+  test runs. The rule reads test files for the strings 0.0.0.0 and [::],
+  `UNSPECIFIED` and an all-zero `Ipv4Addr::new` or `Ipv6Addr::new` outside a
+  macro; a test that only checks such a value carries an ignore comment.
+  Not seen: "::", arrays, `from_bits`, calls inside a macro, an address from
+  a fixture file or a default in non-test code.
 files:
   - "**/tests/**"
   - "**/tests.rs"
+  - "**/*_tests.rs"
+utils:
+  every-network:
+    any:
+      - kind: string_content
+        regex: '\b0\.0\.0\.0\b|\[::\]'
+      - kind: identifier
+        regex: '^UNSPECIFIED$'
+      - kind: call_expression
+        regex: 'Ipv[46]Addr::new\(\s*0(\s*,\s*0){3,7}\s*,?\s*\)$'
 rule:
-  any:
-    - kind: string_content
-      regex: '\b0\.0\.0\.0\b|\[::\]|^::$'
-    - kind: identifier
-      regex: '^UNSPECIFIED$'
-    - kind: call_expression
-      regex: 'Ipv[46]Addr::new\(\s*0(\s*,\s*0){3,7}\s*,?\s*\)$'
+  matches: every-network
 ---
 id: test-modules-listen-on-loopback
 language: rust
 severity: error
 message: a test listens on 127.0.0.1 or [::1], never on every network
 note: >-
-  As `tests-listen-on-loopback`, for the `mod tests` of a source file.
+  As `tests-listen-on-loopback`, for test code in other files: a
+  `#[cfg(test)]` module or function, or a `#[test]` function.
+ignores:
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_tests.rs"
+utils:
+  every-network:
+    any:
+      - kind: string_content
+        regex: '\b0\.0\.0\.0\b|\[::\]'
+      - kind: identifier
+        regex: '^UNSPECIFIED$'
+      - kind: call_expression
+        regex: 'Ipv[46]Addr::new\(\s*0(\s*,\s*0){3,7}\s*,?\s*\)$'
+  in-test:
+    any:
+      - kind: mod_item
+        follows:
+          kind: attribute_item
+          stopBy:
+            not:
+              any:
+                - kind: attribute_item
+                - kind: line_comment
+          regex: '^#\[cfg\(.*\btest\b'
+      - kind: function_item
+        follows:
+          kind: attribute_item
+          stopBy:
+            not:
+              any:
+                - kind: attribute_item
+                - kind: line_comment
+          regex: '^#\[(test|cfg\(.*\btest\b)'
 rule:
-  any:
-    - kind: string_content
-      regex: '\b0\.0\.0\.0\b|\[::\]|^::$'
-    - kind: identifier
-      regex: '^UNSPECIFIED$'
-    - kind: call_expression
-      regex: 'Ipv[46]Addr::new\(\s*0(\s*,\s*0){3,7}\s*,?\s*\)$'
+  matches: every-network
   inside:
-    kind: mod_item
     stopBy: end
-    has:
-      field: name
-      regex: '^tests$'
+    matches: in-test

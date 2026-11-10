@@ -97,3 +97,10 @@ Each entry says what players notice; a release's notes show its section.
   settings do, in the reader's language, and long replies such as
   `/adm status` arrive as a list in chat.
 - Short replies read naturally, such as "Time: 06:30" and "The world is saving."
+- Give and Chest in the window list the game's items by the names the
+  administrator's own game shows, with a search field, also on a dedicated
+  server. A typed command names an item by its debug name, GUID or a mod's
+  content id; an item number no longer names one.
+- Administrators set a player's level with `/adm stats <player> level`, and
+  revive a dead player where they lie, with full health, with `/adm revive`.
+- God mode has its own row in a player's window.

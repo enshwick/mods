@@ -25,6 +25,13 @@ const FORECASTS: [(&str, &str, Forecast); 4] = [
     ("any", texts::WEATHER_ANY, Forecast::Any),
 ];
 
+/// The text that, set as the message of the day, takes the in-game one
+/// away: a text argument is never empty.
+pub(crate) const NO_MOTD: &str = "-";
+
+/// The most bytes a time of day takes, `hh:mm` or hours with a fraction.
+const MAX_TIME_TEXT: usize = 8;
+
 /// The longest restart warning, in minutes.
 const MAX_RESTART_MINUTES: f64 = 180.0;
 
@@ -38,9 +45,21 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
         motd,
     )?;
     tools.add(
+        Action::new(ids::SET_MOTD, texts::ACTION_SETMOTD)
+            .help(texts::ACTION_SETMOTD_HELP)
+            .arg(Arg::text(texts::ARG_MESSAGE, crate::settings::MAX_TEXT)),
+        set_motd,
+    )?;
+    tools.add(
+        Action::new(ids::SAY, texts::ACTION_SAY)
+            .help(texts::ACTION_SAY_HELP)
+            .arg(Arg::text(texts::ARG_MESSAGE, crate::settings::MAX_TEXT)),
+        say,
+    )?;
+    tools.add(
         Action::new(ids::TIME, texts::ACTION_TIME)
             .help(texts::ACTION_TIME_HELP)
-            .arg(Arg::number(texts::ARG_HOUR, 0.0..=24.0, 0.0)),
+            .arg(Arg::text(texts::ARG_TIME, MAX_TIME_TEXT)),
         time,
     )?;
     let kinds = FORECASTS.map(|(word, label, _)| (word, label));
@@ -88,27 +107,77 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
 
 /// The world's message of the day.
 fn motd(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let settings = tools.settings.load();
-    if settings.motd.is_empty() {
+    let motd = tools.motd();
+    if motd.is_empty() {
         return Outcome::done(request.say(texts::REPLY_MOTD_NONE, &[]));
     }
-    Outcome::done(settings.motd.clone())
+    Outcome::done(motd)
 }
 
-/// Sets the time of day, in hours.
+/// Sets the message of the day in the world's data, where it holds over
+/// the world's setting; [`NO_MOTD`] goes back to the setting's.
+fn set_motd(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [Value::Text(text)] = request.args else {
+        return Outcome::refused(request.say(texts::REPLY_MOTD_NONE, &[]));
+    };
+    let motd = if text == NO_MOTD { "" } else { text.as_str() };
+    if tools
+        .accounts
+        .update(|accounts| motd.clone_into(&mut accounts.motd))
+        .is_none()
+    {
+        let why = tools.accounts.shut_reason().unwrap_or_default();
+        return Outcome::refused(
+            request.say(texts::REPLY_STORE_SHUT, &[(texts::value::WHY, &why)]),
+        );
+    }
+    tools.keep_accounts();
+    if motd.is_empty() {
+        return Outcome::done(request.say(texts::REPLY_MOTD_CLEARED, &[]));
+    }
+    Outcome::done(request.say(texts::REPLY_MOTD_SET, &[(texts::value::TEXT, motd)]))
+}
+
+/// Tells every player a line now.
+fn say(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [Value::Text(text)] = request.args else {
+        return Outcome::refused(request.say(texts::REPLY_LOG_NONE, &[]));
+    };
+    tools.announce(&Say::Announcement(text.clone()));
+    let count = tools.world.players().len().to_string();
+    Outcome::done(request.say(texts::REPLY_SAID, &[(texts::value::COUNT, &count)]))
+}
+
+/// The hours a time of day reads as: `18:30`, or hours from 0 to 24 such
+/// as `6.5`.
+pub(crate) fn hours_of(text: &str) -> Option<f64> {
+    let hours = match text.split_once(':') {
+        Some((hours, minutes)) => {
+            let minutes = minutes.parse::<u8>().ok().filter(|minutes| *minutes < 60)?;
+            f64::from(hours.parse::<u8>().ok()?) + f64::from(minutes) / 60.0
+        }
+        None => text.parse::<f64>().ok()?,
+    };
+    (0.0..=24.0).contains(&hours).then_some(hours)
+}
+
+/// Sets the time of day.
 fn time(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let [Value::Number(hours)] = request.args else {
+    let Some(hours) = request.args.first().and_then(|value| match value {
+        Value::Text(text) => hours_of(text),
+        _ => None,
+    }) else {
         return Outcome::refused(request.say(texts::REPLY_BAD_HOUR, &[]));
     };
     #[expect(
         clippy::cast_possible_truncation,
         reason = "an hour of the day fits an f32"
     )]
-    let set = tools.clock.set_hours(*hours as f32);
+    let set = tools.clock.set_hours(hours as f32);
     match set {
         Ok(()) => Outcome::done(request.say(
             texts::REPLY_TIME,
-            &[(texts::value::TIME, &clock_text(*hours))],
+            &[(texts::value::TIME, &clock_text(hours))],
         )),
         Err(why) => Tools::failed(request, ids::TIME, &why),
     }
@@ -451,6 +520,15 @@ impl Tools {
 }
 
 impl Tools {
+    /// What players read when they join: the message an administrator set
+    /// in game, else the world's setting; empty for none.
+    pub(crate) fn motd(&self) -> String {
+        self.accounts
+            .with(|accounts| accounts.motd.clone())
+            .filter(|motd| !motd.is_empty())
+            .unwrap_or_else(|| self.settings.load().motd.clone())
+    }
+
     /// Moves the schedule and a restart warning on by `elapsed`.
     pub(crate) fn tick(&self, elapsed: Duration) {
         let settings = self.settings.load();

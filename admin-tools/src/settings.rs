@@ -67,6 +67,8 @@ pub(crate) struct Settings {
     /// Whether chat lines go to `chat.log` in this world's data folder: auto is on for a dedicated server and off for a game a player hosts.
     #[config(choices = [AUTO, ON, OFF])]
     pub chat_log: String,
+    /// Whether what players build, remove and dig goes to `builds.log` in this world's data folder, for the who action; the log grows fast in a busy world.
+    pub build_log: bool,
     /// How many backups of the world the backup action keeps; the oldest go first.
     #[config(range = 1..=100)]
     pub backups_kept: u32,
@@ -98,6 +100,7 @@ impl Default for Settings {
             restart_text: String::new(),
             audit: AUTO.to_owned(),
             chat_log: AUTO.to_owned(),
+            build_log: false,
             backups_kept: 10,
             backup_dir: String::new(),
             rcon: AUTO.to_owned(),
@@ -120,6 +123,7 @@ impl core::fmt::Debug for Settings {
             .field("restart_text", &self.restart_text)
             .field("audit", &self.audit)
             .field("chat_log", &self.chat_log)
+            .field("build_log", &self.build_log)
             .field("backups_kept", &self.backups_kept)
             .field("backup_dir", &self.backup_dir)
             .field("rcon", &self.rcon)
@@ -326,6 +330,26 @@ pub(crate) struct Rights {
     pub world: String,
     /// Reading the chat log.
     pub chat: String,
+    /// Banning a player with a reason.
+    pub ban: String,
+    /// Reading the ban list.
+    pub bans: String,
+    /// Banning, unbanning, allowing or disallowing an account by its id.
+    pub account: String,
+    /// Telling every player a line now.
+    pub say: String,
+    /// Setting the message of the day.
+    pub setmotd: String,
+    /// Moving a player to the caller's map waypoint.
+    pub mark: String,
+    /// Reading who built, removed or dug near the caller.
+    pub who: String,
+    /// Opening the mod's window.
+    pub panel: String,
+    /// Opening a section of the mod's window.
+    pub open: String,
+    /// Opening the window of one player.
+    pub player: String,
 }
 
 impl Default for Rights {
@@ -360,6 +384,16 @@ impl Default for Rights {
             backup: admins(),
             world: admins(),
             chat: admins(),
+            ban: admins(),
+            bans: admins(),
+            account: admins(),
+            say: admins(),
+            setmotd: admins(),
+            mark: admins(),
+            who: admins(),
+            panel: admins(),
+            open: admins(),
+            player: admins(),
         }
     }
 }
@@ -397,6 +431,16 @@ impl Rights {
             ids::BACKUP => &self.backup,
             ids::WORLD => &self.world,
             ids::CHAT => &self.chat,
+            ids::BAN => &self.ban,
+            ids::BANS => &self.bans,
+            ids::ACCOUNT => &self.account,
+            ids::SAY => &self.say,
+            ids::SET_MOTD => &self.setmotd,
+            ids::MARK => &self.mark,
+            ids::WHO => &self.who,
+            ids::PANEL => &self.panel,
+            ids::OPEN => &self.open,
+            ids::PLAYER => &self.player,
             _ => ADMINS,
         }
     }

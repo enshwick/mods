@@ -91,7 +91,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: enshwick/docs
-          ref: f6bc23ed02cea9c3579a07f2ed949b890283ba41 # main
+          ref: cf21b80043897a130d078ce71527702ff502c7bc # main
           path: .site
           persist-credentials: false
 

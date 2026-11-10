@@ -13,6 +13,7 @@
 
 mod accounts;
 mod backup;
+mod builds;
 mod character;
 mod chest;
 mod ids;
@@ -24,6 +25,7 @@ mod rcon;
 mod schedule;
 mod server;
 mod settings;
+mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -39,6 +41,7 @@ use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
 use enshwick::inventory::Inventories;
 use enshwick::knowledge::Knowledge;
+use enshwick::map::Map;
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
 use enshwick::weather::Weather;
@@ -82,6 +85,16 @@ pub(crate) struct Tools {
     accounts: WorldStore<Accounts>,
     audit: Journal,
     chat: Journal,
+    /// The build log's writer.
+    builds: Journal,
+    /// The last terrain change the build log wrote for each player.
+    spots: Mutex<builds::Spots>,
+    /// The map, for a player's waypoint; `None` on a build without it.
+    map: Option<Map>,
+    /// The ids of the actions declared, which a window may name.
+    declared: Mutex<Vec<String>>,
+    /// The window each player last opened.
+    shown: Mutex<FxHashMap<PlayerKey, windows::Shown>>,
     ticker: Mutex<Ticker>,
     /// The players in god mode and their characters, read without a lock
     /// by the damage filter.
@@ -122,6 +135,10 @@ impl Mod for AdminTools {
             .inventories()
             .inspect_err(|why| enshwick::warn!("the inventory actions are off: {why}"))
             .ok();
+        let map = load
+            .map()
+            .inspect_err(|why| enshwick::warn!("the waypoint action is off: {why}"))
+            .ok();
         let actions = load.actions(texts.clone())?;
         let accounts = load.world_store(accounts::STORE)?;
         let tools = Arc::new_cyclic(|me| Tools {
@@ -141,6 +158,11 @@ impl Mod for AdminTools {
             accounts,
             audit: Journal::new(journal::AUDIT),
             chat: Journal::new(journal::CHAT),
+            builds: Journal::new(builds::LOG),
+            spots: Mutex::default(),
+            map,
+            declared: Mutex::default(),
+            shown: Mutex::default(),
             ticker: Mutex::new(Ticker::default()),
             gods: ArcSwap::from_pointee(Vec::new()),
             joined: Mutex::new(FxHashMap::default()),
@@ -161,6 +183,9 @@ impl Mod for AdminTools {
         character::add(&tools, load)?;
         server::add(&tools)?;
         backup::add(&tools)?;
+        builds::add(&tools, load)?;
+        // Last: a window names only actions declared before it.
+        windows::add(&tools)?;
         tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
 
         let changed = Arc::clone(&tools);
@@ -176,6 +201,7 @@ impl Mod for AdminTools {
         let leaves = Arc::clone(&tools);
         load.on::<PlayerLeft>(move |left| {
             leaves.joined.relock().remove(&left.key);
+            leaves.forget_window(left.key);
             leaves.set_god(left.key, None);
         })?;
         let ticks = Arc::clone(&tools);
@@ -196,19 +222,30 @@ impl Tools {
         let rules = Arc::clone(self);
         let rule_id = id.clone();
         let tools = Arc::clone(self);
-        // A hosted game has no restart to warn of.
-        let offered = id != ids::RESTART || self.dedicated;
+        self.declared.relock().push(id.clone());
         self.actions.add(
-            action.allow(move |player| offered && rules.rules.load().admits(&rule_id, player)),
+            action.allow(move |player| rules.admits(&rule_id, player)),
             move |request| {
                 let outcome = handler(&tools, request);
                 // A refusal goes in too, so an administrator sees what was tried.
                 if !ids::READS.contains(&id.as_str()) {
                     tools.record(request, &id, &outcome);
                 }
+                if outcome.is_done() && matches!(request.via, Via::Interface) {
+                    tools.refresh(request.player, &id);
+                }
                 outcome
             },
         )
+    }
+
+    /// Whether `player` may run the action `id`: it is declared, the
+    /// world's rights admit them, and a restart warning is offered only on
+    /// a dedicated server, since a hosted game has no restart to warn of.
+    pub(crate) fn admits(&self, id: &str, player: &enshwick::world::Player) -> bool {
+        (id != ids::RESTART || self.dedicated)
+            && self.rules.load().admits(id, player)
+            && self.declared.relock().iter().any(|declared| declared == id)
     }
 
     /// Starts the world that loaded: the remote console listens when the
@@ -233,8 +270,11 @@ impl Tools {
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();
         }
+        self.shown.relock().clear();
+        self.spots.relock().clear();
         self.audit.finish();
         self.chat.finish();
+        self.builds.finish();
     }
 
     /// Writes the ban list and allow-list now, on a thread of their own, so

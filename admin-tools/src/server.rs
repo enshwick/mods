@@ -18,7 +18,7 @@ use crate::{Tools, ids, journal, texts};
 
 /// The weather an admin picks: its word, its label's key, and the forecast.
 /// `Forecast` is the API's own list of what it starts.
-const FORECASTS: [(&str, &str, Forecast); 4] = [
+pub(crate) const FORECASTS: [(&str, &str, Forecast); 4] = [
     ("clear", texts::WEATHER_CLEAR, Forecast::Clear),
     ("rain", texts::WEATHER_RAIN, Forecast::Rain),
     ("blizzard", texts::WEATHER_BLIZZARD, Forecast::Blizzard),

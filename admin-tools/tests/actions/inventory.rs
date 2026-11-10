@@ -144,7 +144,7 @@ fn a_give_the_game_turns_down_is_told_to_the_administrator_and_kept_in_the_audit
     assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
     assert!(ann_hears(
         &loader,
-        "Bob got 0 of Tool_Glider_T1 × 1: 1 did not fit"
+        "Bob got 0 of Tool_Glider_T1 × 1: 1 did not fit, or the game turned them down, and were left out."
     ));
     let audit = file_until(&dir, "audit.log", |text| text.contains("0 of"));
     let outcome = audit.lines().find(|line| line.contains("0 of")).unwrap();
@@ -201,7 +201,10 @@ fn copy_gives_what_fits_leaves_the_look_slots_out_and_tells_how_many_stayed_out(
     );
     assert!(partial(&loader), "what does not fit stays out");
     assert!(loader.finish_inventory(InventoryResult::COMMITTED, &[left(3), left(0)]));
-    assert!(ann_hears(&loader, "3 items did not reach Bob"));
+    assert!(ann_hears(
+        &loader,
+        "3 items did not reach Bob: they did not fit, or the game turned them down, and were left out."
+    ));
     let audit = file_until(&dir, "audit.log", |text| text.contains("did not reach"));
     assert!(
         audit.contains("\tcopy\tAnn Bob\t3 items did not reach Bob"),

@@ -43,7 +43,7 @@ Each entry says what players notice; a release's notes show its section.
   hosts offers no restart warning.
 - Administrators give a player items by the game's name in any case, its
   GUID, a mod's content id or its number, in as many stacks as needed, and
-  read how many did not fit. An unknown name answers with the names near it.
+  read how many did not fit and were left out. An unknown name answers with the names near it.
 - Administrators place a wooden chest of items beside a player or at a
   position.
 - Administrators clear a player's inventory or copy one player's inventory

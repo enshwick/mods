@@ -1,5 +1,3 @@
-# Coverage informs and never gates: statuses always pass, and pull requests
-# get no comment or annotation.
 coverage:
   status:
     project:
@@ -14,6 +12,8 @@ comment: false
 github_checks:
   annotations: false
 
+# Test files; inline test modules still count, since stable Rust cannot mark
+# them out.
 ignore:
   - "**/tests/**"
   - "**/tests.rs"

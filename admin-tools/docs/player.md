@@ -77,8 +77,6 @@ settings:
 - An allow-list lets only chosen accounts and administrators join. Each world decides who may use each action. Players read a message of the day, announcements, scheduled announcements and restart warnings.
 - Administrators set the time and the weather, save the world and back it up while the server runs. They heal players, move them to a player, a position or a map waypoint, give items and chests of items, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
 - RCON tools such as BattleMetrics run every command on a dedicated server. Audit and chat logs keep what happened, and a build log, off by default, shows who placed or removed a building or changed terrain near a spot.
-- Administrators give items, place chests of items, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
-- RCON tools such as BattleMetrics run every command on a dedicated server, and audit and chat logs keep what happened.
 
 ## How do I open the Admin Tools window?
 

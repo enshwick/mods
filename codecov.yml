@@ -1,0 +1,21 @@
+# Coverage informs and never gates: statuses always pass, and pull requests
+# get no comment or annotation.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment: false
+
+github_checks:
+  annotations: false
+
+ignore:
+  - "**/tests/**"
+  - "**/tests.rs"
+  - fuzz/**
+  - tools/**

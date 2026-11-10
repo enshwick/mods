@@ -62,7 +62,7 @@ jobs:
             pages=false
           elif [ "$FULL" != true ]; then
             git diff --name-only "$BASE...HEAD" | grep -qE '^([^/]+/docs/player[^/]*\.md|\.github/workflows/(ci|check)\.yml)$' || pages=false
-            never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/release-plz\.yml|actions/release-files/.*)$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
+            never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/(release-plz|coverage)\.yml|actions/release-files/.*)$|codecov\.yml$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
             if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
               reason="no file that builds changed"
             fi

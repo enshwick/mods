@@ -642,3 +642,21 @@ impl Tools {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_account_id_takes_one_to_sixteen_hex_digits_and_never_zero() {
+        assert_eq!(account_key("ab"), Some(PlayerKey::new(0xab)));
+        assert_eq!(
+            account_key("ffffffffffffffff"),
+            Some(PlayerKey::new(u64::MAX))
+        );
+        assert_eq!(account_key("00000000000000001"), None, "17 digits");
+        for refused in ["", "0", "+7", "xyz", "1 2"] {
+            assert_eq!(account_key(refused), None, "{refused:?}");
+        }
+    }
+}

@@ -17,12 +17,12 @@ fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
     let loader = server("", &dir);
     let reply = run(&loader, &bob(), "status", "");
     assert!(
-        reply.starts_with("1Up 0 h 0 min, world world0. Mods:"),
+        reply.starts_with("1Up: 0 h 0 min\nWorld: world0\nMods:\n"),
         "{reply}"
     );
     let console = console::run("adm status").unwrap();
     assert!(
-        console.starts_with("Up 0 h 0 min, world world0."),
+        console.starts_with("Up: 0 h 0 min\nWorld: world0\nMods:\n"),
         "{console}"
     );
 }
@@ -31,10 +31,7 @@ fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
 fn save_now_asks_the_game_for_a_save_and_only_administrators_may() {
     let dir = scratch("save");
     let loader = server("", &dir);
-    assert_eq!(
-        run(&loader, &ann(), "save", ""),
-        "1The world is saving now."
-    );
+    assert_eq!(run(&loader, &ann(), "save", ""), "1World saved.");
     assert_eq!(loader.saves(), 1);
     assert!(run(&loader, &bob(), "save", "").starts_with('0'));
     assert_eq!(loader.saves(), 1);

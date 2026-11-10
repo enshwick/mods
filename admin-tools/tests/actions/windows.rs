@@ -380,10 +380,7 @@ fn the_server_window_offers_times_weathers_announcements_and_the_restart_warning
         (noon.action.as_str(), &noon.args[..]),
         ("time", &[Value::Text("12:00".into())][..])
     );
-    assert_eq!(
-        run(&loader, &ann(), "time", "t12:00"),
-        "1The time is now 12:00."
-    );
+    assert_eq!(run(&loader, &ann(), "time", "t12:00"), "1Time: 12:00");
     let rain = button(&view, "Weather", "Rain");
     assert_eq!(
         (rain.action.as_str(), &rain.args[..]),

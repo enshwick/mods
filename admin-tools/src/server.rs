@@ -313,7 +313,7 @@ fn status(tools: &Tools, request: &Request<'_>) -> Outcome {
             (texts::value::HOURS, &hours.to_string()),
             (texts::value::MINUTES, &minutes.to_string()),
             (texts::value::WORLD, &world),
-            (texts::value::MODS, &mods.join(", ")),
+            (texts::value::MODS, &mods.join(crate::LINE)),
         ],
     ))
 }
@@ -355,86 +355,149 @@ fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
         texts::REPLY_WORLD,
         &[
             (texts::value::WORLD, &world),
-            (texts::value::PRESET, &kind(&preset)),
+            (texts::value::PRESET, &kind(request, PRESET, &preset)),
             (texts::value::TIME, &saved),
         ],
     );
-    let lines = GAME_SETTINGS
-        .iter()
-        .map(|(name, value)| format!("{name} = {}", value(&settings)));
+    let lines = GAME_SETTINGS.iter().map(|(name, value)| {
+        request.say(
+            texts::REPLY_WORLD_ROW,
+            &[
+                (texts::value::NAME, &request.say(name, &[])),
+                (texts::value::VALUE, &value(&settings, request)),
+            ],
+        )
+    });
     Outcome::done(
         core::iter::once(head)
             .chain(lines)
             .collect::<Vec<_>>()
-            .join("\n"),
+            .join(crate::LINE),
     )
 }
 
-/// A game setting the world view shows: its name and its value as text.
-type Shown = (&'static str, fn(&Game) -> String);
+/// A game setting the world view shows: its name's text key and its value
+/// as the reader reads it.
+type Shown = (&'static str, fn(&Game, &Request<'_>) -> String);
 
-/// Every game setting the world view shows, in the API's order and words.
+/// The text key the preset's kinds start with.
+const PRESET: &str = "world.preset";
+
+/// Every game setting the world view shows, in the API's order, named as
+/// the game's world settings name them.
 const GAME_SETTINGS: [Shown; 38] = [
-    ("player health", |s| factor(s.player_health_factor)),
-    ("player mana", |s| factor(s.player_mana_factor)),
-    ("player stamina", |s| factor(s.player_stamina_factor)),
-    ("player body heat", |s| factor(s.player_body_heat_factor)),
-    ("player diving time", |s| {
-        factor(s.player_diving_time_factor)
+    (texts::WORLD_PLAYER_HEALTH, |s, _| {
+        percent(s.player_health_factor)
     }),
-    ("durability", |s| switch(s.enable_durability)),
-    ("starving", |s| switch(s.enable_starving_debuff)),
-    ("food buff duration", |s| {
-        factor(s.food_buff_duration_factor)
+    (texts::WORLD_PLAYER_MANA, |s, _| {
+        percent(s.player_mana_factor)
     }),
-    ("from hunger to starving", |s| {
-        length(s.from_hunger_to_starving)
+    (texts::WORLD_PLAYER_STAMINA, |s, _| {
+        percent(s.player_stamina_factor)
     }),
-    ("shroud time", |s| factor(s.shroud_time_factor)),
-    ("tombstone mode", |s| kind(&s.tombstone_mode)),
-    ("glider turbulences", |s| {
-        switch(s.enable_glider_turbulences)
+    (texts::WORLD_BODY_HEAT, |s, _| {
+        percent(s.player_body_heat_factor)
     }),
-    ("weather frequency", |s| kind(&s.weather_frequency)),
-    ("fishing difficulty", |s| kind(&s.fishing_difficulty)),
-    ("mining damage", |s| factor(s.mining_damage_factor)),
-    ("plant growth speed", |s| {
-        factor(s.plant_growth_speed_factor)
+    (texts::WORLD_DIVING_TIME, |s, _| {
+        percent(s.player_diving_time_factor)
     }),
-    ("resource drop stack amount", |s| {
-        factor(s.resource_drop_stack_amount_factor)
+    (texts::WORLD_DURABILITY, |s, r| {
+        switch(r, s.enable_durability)
     }),
-    ("factory production speed", |s| {
-        factor(s.factory_production_speed_factor)
+    (texts::WORLD_STARVATION, |s, r| {
+        switch(r, s.enable_starving_debuff)
     }),
-    ("perk upgrade recycling", |s| {
-        factor(s.perk_upgrade_recycling_factor)
+    (texts::WORLD_FOOD_BUFF_DURATION, |s, _| {
+        percent(s.food_buff_duration_factor)
     }),
-    ("perk cost", |s| factor(s.perk_cost_factor)),
-    ("experience combat", |s| factor(s.experience_combat_factor)),
-    ("experience mining", |s| factor(s.experience_mining_factor)),
-    ("experience exploration and quests", |s| {
-        factor(s.experience_exploration_quests_factor)
+    (texts::WORLD_TIME_UNTIL_STARVATION, |s, r| {
+        length(r, s.from_hunger_to_starving)
     }),
-    ("random spawner amount", |s| kind(&s.random_spawner_amount)),
-    ("aggro pool amount", |s| kind(&s.aggro_pool_amount)),
-    ("enemy damage", |s| factor(s.enemy_damage_factor)),
-    ("enemy health", |s| factor(s.enemy_health_factor)),
-    ("enemy stamina", |s| factor(s.enemy_stamina_factor)),
-    ("enemy perception range", |s| {
-        factor(s.enemy_perception_range_factor)
+    (texts::WORLD_SHROUD_TIME, |s, _| {
+        percent(s.shroud_time_factor)
     }),
-    ("boss damage", |s| factor(s.boss_damage_factor)),
-    ("boss health", |s| factor(s.boss_health_factor)),
-    ("threat bonus", |s| number(s.threat_bonus)),
-    ("pacify all enemies", |s| switch(s.pacify_all_enemies)),
-    ("taming startle repercussion", |s| {
-        kind(&s.taming_startle_repercussion)
+    (texts::WORLD_TOMBSTONE_MODE, |s, r| {
+        kind(r, texts::WORLD_TOMBSTONE_MODE, &s.tombstone_mode)
     }),
-    ("day length", |s| length(s.day_time_duration)),
-    ("night length", |s| length(s.night_time_duration)),
-    ("curse modifier", |s| kind(&s.curse_modifier)),
-    ("flame level fog removal", |s| {
+    (texts::WORLD_GLIDER_TURBULENCES, |s, r| {
+        switch(r, s.enable_glider_turbulences)
+    }),
+    (texts::WORLD_WEATHER_FREQUENCY, |s, r| {
+        kind(r, texts::WORLD_WEATHER_FREQUENCY, &s.weather_frequency)
+    }),
+    (texts::WORLD_FISHING_DIFFICULTY, |s, r| {
+        kind(r, texts::WORLD_FISHING_DIFFICULTY, &s.fishing_difficulty)
+    }),
+    (texts::WORLD_MINING_DAMAGE, |s, _| {
+        percent(s.mining_damage_factor)
+    }),
+    (texts::WORLD_PLANT_GROWTH_SPEED, |s, _| {
+        percent(s.plant_growth_speed_factor)
+    }),
+    (texts::WORLD_LOOT_AMOUNT, |s, _| {
+        percent(s.resource_drop_stack_amount_factor)
+    }),
+    (texts::WORLD_WORKSHOP_SPEED, |s, _| {
+        percent(s.factory_production_speed_factor)
+    }),
+    (texts::WORLD_UPGRADE_RECYCLING, |s, _| {
+        percent(s.perk_upgrade_recycling_factor)
+    }),
+    (texts::WORLD_UPGRADE_COST, |s, _| {
+        percent(s.perk_cost_factor)
+    }),
+    (texts::WORLD_COMBAT_XP, |s, _| {
+        percent(s.experience_combat_factor)
+    }),
+    (texts::WORLD_MINING_XP, |s, _| {
+        percent(s.experience_mining_factor)
+    }),
+    (texts::WORLD_QUEST_XP, |s, _| {
+        percent(s.experience_exploration_quests_factor)
+    }),
+    (texts::WORLD_ENEMY_AMOUNT, |s, r| {
+        kind(r, texts::WORLD_ENEMY_AMOUNT, &s.random_spawner_amount)
+    }),
+    (texts::WORLD_ENEMY_ATTACKS, |s, r| {
+        kind(r, texts::WORLD_ENEMY_ATTACKS, &s.aggro_pool_amount)
+    }),
+    (texts::WORLD_ENEMY_DAMAGE, |s, _| {
+        percent(s.enemy_damage_factor)
+    }),
+    (texts::WORLD_ENEMY_HEALTH, |s, _| {
+        percent(s.enemy_health_factor)
+    }),
+    (texts::WORLD_ENEMY_STAMINA, |s, _| {
+        percent(s.enemy_stamina_factor)
+    }),
+    (texts::WORLD_ENEMY_PERCEPTION, |s, _| {
+        percent(s.enemy_perception_range_factor)
+    }),
+    (texts::WORLD_BOSS_DAMAGE, |s, _| {
+        percent(s.boss_damage_factor)
+    }),
+    (texts::WORLD_BOSS_HEALTH, |s, _| {
+        percent(s.boss_health_factor)
+    }),
+    (texts::WORLD_THREAT_BONUS, |s, _| number(s.threat_bonus)),
+    (texts::WORLD_PACIFY, |s, r| switch(r, s.pacify_all_enemies)),
+    (texts::WORLD_TAMING_STARTLE, |s, r| {
+        kind(
+            r,
+            texts::WORLD_TAMING_STARTLE,
+            &s.taming_startle_repercussion,
+        )
+    }),
+    (texts::WORLD_DAY_LENGTH, |s, r| {
+        length(r, s.day_time_duration)
+    }),
+    (texts::WORLD_NIGHT_LENGTH, |s, r| {
+        length(r, s.night_time_duration)
+    }),
+    (texts::WORLD_CURSE_CHANCE, |s, r| {
+        kind(r, texts::WORLD_CURSE_CHANCE, &s.curse_modifier)
+    }),
+    (texts::WORLD_FOG_REMOVAL, |s, _| {
         s.flame_level_fog_removal.to_string()
     }),
 ];
@@ -445,56 +508,73 @@ fn number(value: f32) -> String {
     text.trim_end_matches('0').trim_end_matches('.').to_owned()
 }
 
-/// A factor of the game's normal value, as `x1.5`.
-fn factor(value: f32) -> String {
-    format!("x{}", number(value))
+/// A factor of the game's normal value as the game's settings show it, in
+/// percent: 1.5 reads `150%`.
+fn percent(value: f32) -> String {
+    format!("{}%", number(value * 100.0))
 }
 
-/// A switch as `on` or `off`.
-fn switch(on: bool) -> String {
-    if on { "on" } else { "off" }.to_owned()
+/// A switch as the reader's on or off.
+fn switch(request: &Request<'_>, on: bool) -> String {
+    request.say(
+        if on {
+            texts::WORLD_ON
+        } else {
+            texts::WORLD_OFF
+        },
+        &[],
+    )
 }
 
-/// A length of time in hours, minutes and seconds, leaving out parts that
-/// are zero.
-fn length(time: Duration) -> String {
+/// A length of time in the reader's hours, minutes and seconds, leaving
+/// out parts that are zero.
+fn length(request: &Request<'_>, time: Duration) -> String {
     let seconds = time.as_secs();
     let parts = [
-        (seconds / 3600, "h"),
-        (seconds / 60 % 60, "min"),
-        (seconds % 60, "s"),
+        (seconds / 3600, texts::WORLD_HOURS),
+        (seconds / 60 % 60, texts::WORLD_MINUTES),
+        (seconds % 60, texts::WORLD_SECONDS),
     ];
     let text: Vec<String> = parts
         .iter()
         .filter(|(count, _)| *count > 0)
-        .map(|(count, unit)| format!("{count} {unit}"))
+        .map(|(count, unit)| request.say(unit, &[(texts::value::COUNT, &count.to_string())]))
         .collect();
     if text.is_empty() {
-        "0 s".to_owned()
+        request.say(texts::WORLD_SECONDS, &[(texts::value::COUNT, "0")])
     } else {
         text.join(" ")
     }
 }
 
-/// A kind the game names, such as a tombstone mode, in lower-case words:
-/// `AddBackpackMaterials` reads `add backpack materials`, an unnamed value
-/// `other 7`.
-fn kind(value: &impl core::fmt::Debug) -> String {
-    let mut words = String::new();
-    for c in format!("{value:?}").chars() {
-        match c {
-            '(' => words.push(' '),
-            ')' => {}
-            c if c.is_ascii_uppercase() => {
-                if !words.is_empty() {
-                    words.push(' ');
-                }
-                words.push(c.to_ascii_lowercase());
-            }
-            c => words.push(c),
-        }
+/// The text key of the kind `value` of the setting `setting`: the setting's
+/// key and the kind's name in kebab case, `AddBackpackMaterials` under
+/// `world.tombstone-mode` reads `world.tombstone-mode.add-backpack-materials`;
+/// `None` for a value the API does not name.
+fn kind_key(setting: &str, value: &impl core::fmt::Debug) -> Option<String> {
+    let name = format!("{value:?}");
+    if name.contains('(') {
+        return None;
     }
-    words
+    let mut key = format!("{setting}.");
+    for (at, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() && at > 0 {
+            key.push('-');
+        }
+        key.push(c.to_ascii_lowercase());
+    }
+    Some(key)
+}
+
+/// The kind `value` of the setting `setting` in the reader's words, or the
+/// game's number for a value the API does not name.
+fn kind(request: &Request<'_>, setting: &str, value: &impl core::fmt::Debug) -> String {
+    if let Some(key) = kind_key(setting, value) {
+        return request.say(&key, &[]);
+    }
+    let name = format!("{value:?}");
+    let number = name.trim_matches(|c: char| !c.is_ascii_digit());
+    request.say(texts::WORLD_OTHER, &[(texts::value::VALUE, number)])
 }
 
 impl Tools {
@@ -628,7 +708,11 @@ fn diff(
 
 #[cfg(test)]
 mod tests {
-    use enshwick::game_settings::{GameSettingsPreset, TombstoneMode};
+    use enshwick::game_settings::{
+        AggroPoolAmount, CurseModifier, GameSettingsPreset, GenericDifficulty, RandomSpawnerAmount,
+        TamingStartleRepercussion, TombstoneMode, WeatherFrequency,
+    };
+    use enshwick::i18n::{Language, Texts};
 
     use super::*;
 
@@ -663,32 +747,118 @@ mod tests {
     }
 
     #[test]
-    fn the_world_view_writes_factors_lengths_switches_and_kinds_as_people_read_them() {
-        assert_eq!(factor(1.0), "x1");
-        assert_eq!(factor(2.5), "x2.5");
-        assert_eq!(factor(0.333_33), "x0.33");
+    fn the_world_view_writes_factors_in_percent_and_kinds_as_text_keys() {
+        assert_eq!(percent(1.0), "100%");
+        assert_eq!(percent(2.5), "250%");
+        assert_eq!(percent(0.333_33), "33.33%");
         assert_eq!(number(10.0), "10");
-        assert_eq!(switch(true), "on");
-        assert_eq!(switch(false), "off");
-        assert_eq!(length(Duration::from_mins(30)), "30 min");
-        assert_eq!(length(Duration::from_secs(90 * 60 + 30)), "1 h 30 min 30 s");
-        assert_eq!(length(Duration::from_hours(2)), "2 h");
-        assert_eq!(length(Duration::ZERO), "0 s");
         assert_eq!(
-            kind(&TombstoneMode::AddBackpackMaterials),
-            "add backpack materials"
+            kind_key(
+                texts::WORLD_TOMBSTONE_MODE,
+                &TombstoneMode::AddBackpackMaterials
+            )
+            .as_deref(),
+            Some("world.tombstone-mode.add-backpack-materials")
         );
-        assert_eq!(kind(&TombstoneMode::Other(7)), "other 7");
-        assert_eq!(kind(&GameSettingsPreset::Custom), "custom");
+        assert_eq!(kind_key(PRESET, &GameSettingsPreset::Other(7)), None);
     }
 
     #[test]
-    fn the_world_view_names_every_game_setting_once() {
+    fn every_game_setting_and_every_kind_it_takes_has_its_text() {
+        let texts = Texts::parse(texts::TOML).unwrap();
+        let has = |key: &str| {
+            Language::REQUIRED
+                .iter()
+                .all(|language| texts.get(key, *language).is_some())
+        };
         let mut names: Vec<&str> = GAME_SETTINGS.iter().map(|(name, _)| *name).collect();
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), GAME_SETTINGS.len());
-        assert!(names.iter().all(|name| !name.contains('_')), "{names:?}");
+        assert!(names.iter().all(|name| has(name)), "{names:?}");
+        let kinds: Vec<Option<String>> = [
+            GameSettingsPreset::Default,
+            GameSettingsPreset::Relaxed,
+            GameSettingsPreset::Hard,
+            GameSettingsPreset::Survival,
+            GameSettingsPreset::Custom,
+        ]
+        .iter()
+        .map(|kind| kind_key(PRESET, kind))
+        .chain(
+            [
+                TombstoneMode::AddBackpackMaterials,
+                TombstoneMode::Everything,
+                TombstoneMode::NoTombstone,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_TOMBSTONE_MODE, kind)),
+        )
+        .chain(
+            [
+                WeatherFrequency::Disabled,
+                WeatherFrequency::Rare,
+                WeatherFrequency::Normal,
+                WeatherFrequency::Often,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_WEATHER_FREQUENCY, kind)),
+        )
+        .chain(
+            [
+                GenericDifficulty::VeryEasy,
+                GenericDifficulty::Easy,
+                GenericDifficulty::Normal,
+                GenericDifficulty::Hard,
+                GenericDifficulty::VeryHard,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_FISHING_DIFFICULTY, kind)),
+        )
+        .chain(
+            [
+                RandomSpawnerAmount::Few,
+                RandomSpawnerAmount::Normal,
+                RandomSpawnerAmount::Many,
+                RandomSpawnerAmount::Extreme,
+                RandomSpawnerAmount::Automatic,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_ENEMY_AMOUNT, kind)),
+        )
+        .chain(
+            [
+                AggroPoolAmount::Few,
+                AggroPoolAmount::Normal,
+                AggroPoolAmount::Many,
+                AggroPoolAmount::Extreme,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_ENEMY_ATTACKS, kind)),
+        )
+        .chain(
+            [
+                TamingStartleRepercussion::KeepProgress,
+                TamingStartleRepercussion::LoseSomeProgress,
+                TamingStartleRepercussion::LoseAllProgress,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_TAMING_STARTLE, kind)),
+        )
+        .chain(
+            [
+                CurseModifier::Easy,
+                CurseModifier::Normal,
+                CurseModifier::Hard,
+            ]
+            .iter()
+            .map(|kind| kind_key(texts::WORLD_CURSE_CHANCE, kind)),
+        )
+        .collect();
+        for key in kinds {
+            let key = key.unwrap();
+            assert!(has(&key), "{key}");
+        }
     }
 
     #[test]

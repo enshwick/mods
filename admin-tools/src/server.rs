@@ -126,10 +126,7 @@ fn set_motd(tools: &Tools, request: &Request<'_>) -> Outcome {
         .update(|accounts| motd.clone_into(&mut accounts.motd))
         .is_none()
     {
-        let why = tools.accounts.shut_reason().unwrap_or_default();
-        return Outcome::refused(
-            request.say(texts::REPLY_STORE_SHUT, &[(texts::value::WHY, &why)]),
-        );
+        return crate::players::store_shut(tools, request);
     }
     tools.keep_accounts();
     if motd.is_empty() {

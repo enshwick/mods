@@ -115,8 +115,11 @@ fn an_account_that_never_joined_is_banned_and_allowed_by_its_id() {
         run(&loader, &ann(), "account", "tabcdef\tc2"),
         "10000000000abcdef may join while the allow-list is on."
     );
-    let kept = file_until(&dir, "accounts.toml", |text| text.contains("abcdef"));
-    assert!(kept.contains("[[allowed]]"), "{kept}");
+    // The ban's earlier write names the account too, so wait for the allow-list's.
+    let kept = file_until(&dir, "accounts.toml", |text| {
+        text.contains("[[allowed]]") && text.contains("abcdef")
+    });
+    assert!(!kept.contains("[[bans]]"), "{kept}");
     assert_eq!(
         run(&loader, &ann(), "account", "t7\tc2"),
         "1Eve may join while the allow-list is on."

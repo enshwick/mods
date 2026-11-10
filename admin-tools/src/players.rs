@@ -428,7 +428,7 @@ fn set_allowed(
 }
 
 /// The refusal while the world's lists do not read.
-fn store_shut(tools: &Tools, request: &Request<'_>) -> Outcome {
+pub(crate) fn store_shut(tools: &Tools, request: &Request<'_>) -> Outcome {
     let why = tools.accounts.shut_reason().unwrap_or_default();
     Outcome::refused(request.say(texts::REPLY_STORE_SHUT, &[(texts::value::WHY, &why)]))
 }

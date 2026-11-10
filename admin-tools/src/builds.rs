@@ -241,7 +241,8 @@ pub(crate) fn row(change: &Change, kind: String) -> [(&'static str, String); 6] 
 impl Tools {
     /// Writes a building placed, picked up or torn down to the build log
     /// while the world's settings keep it on. A removal says no place, so
-    /// it is written where its player stands.
+    /// it is written where its player stands, and not at all without one,
+    /// since a lookup finds a change only by its place.
     fn built(&self, data: &BuildingData) {
         if !self.settings.load().build_log {
             return;
@@ -257,8 +258,11 @@ impl Tools {
         } else {
             self.world.position(data.player)
         };
+        let Some(at) = at else {
+            return;
+        };
         let who = player.map(|player| crate::account(&player.name, player.key));
-        self.write_change(who.as_deref(), kind, at.unwrap_or_default());
+        self.write_change(who.as_deref(), kind, at);
     }
 
     /// Writes terrain the game changed to the build log while the world's

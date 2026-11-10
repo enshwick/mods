@@ -68,7 +68,17 @@ Ten seconds after the world has loaded, and again on the `check` action:
   refused;
 - a save on demand, followed by `WorldSaved`; the save on disk read, the
   first `WorldSaving`, and half a minute later the saves held, a save asked
-  meanwhile refused, and the saves let go.
+  meanwhile refused, and the saves let go;
+- the platform's other reads: a system, a field offset, a type's size and a
+  symbol by name; the code section; the task worker caps, the event loop's
+  and the server loop's waits counted over five seconds; that this process
+  hosts, the archive's version, the workshop recipe limit and the reflected
+  types; resource keys, a resource read from the archive and as served, and
+  a content read; whether a save keeps the box at the first placed entity
+  and its voxel; the altars, the base limits raised to 20 zones in 16 bases
+  and capped at 16, and the altar zone filter's calls once the zones are
+  sized again; the map's frame and markers; and its own `census` run as a
+  console line.
 
 Its spawns stay out of the world's save. From start, its chat filter drops a
 line of exactly `drop me`, logging its sender, and keeps every other line, and it logs each line

@@ -19,6 +19,7 @@ mod checks;
 mod clock;
 mod damage;
 mod knowledge;
+mod platform;
 mod raw_stats;
 mod saves;
 mod scenarios;
@@ -123,6 +124,10 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
     match saves::SaveChecks::new(load, scheduler) {
         Ok(saves) => extras.push(Box::new(move || saves.run())),
         Err(off) => enshwick::warn!("FAIL saves: {off}"),
+    }
+    match platform::PlatformChecks::new(load, scheduler) {
+        Ok(platform) => extras.push(Box::new(move || platform.run())),
+        Err(off) => enshwick::warn!("FAIL platform: {off}"),
     }
     extras
 }

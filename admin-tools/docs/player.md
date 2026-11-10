@@ -69,8 +69,7 @@ settings:
 ---
 
 - Administrators see who is online, and kick, ban or mute players. A ban holds after a restart.
-- An allow-list lets only chosen accounts and administrators join, and each world decides who may use each action.
-- Players read a message of the day, scheduled announcements and restart warnings.
+- An allow-list lets only chosen accounts and administrators join. Each world decides who may use each action. Players read a message of the day, scheduled announcements and restart warnings.
 - Administrators set the time and the weather, heal and teleport players, save the world and back it up while the server runs.
 - Administrators give items, place chests of items, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
 - RCON tools such as BattleMetrics run every command on a dedicated server, and audit and chat logs keep what happened.

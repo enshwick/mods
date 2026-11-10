@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use enshwick::abi::BuildingData;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value, Via};
 use enshwick::events::{BuildingPlaced, BuildingRemoved};
-use enshwick::voxels::{EditSource, VoxelEdit, VoxelPos};
+use enshwick::voxels::{EditSource, PER_METRE, VoxelEdit};
 use enshwick::{Load, Off, PlayerKey, Relock as _};
 
 use crate::{Tools, ids, journal, texts};
@@ -275,13 +275,7 @@ impl Tools {
             FILLED
         };
         let low = edit.min.to_metres();
-        let high = VoxelPos::new(
-            edit.min.x.saturating_add(edit.size[0]),
-            edit.min.y.saturating_add(edit.size[1]),
-            edit.min.z.saturating_add(edit.size[2]),
-        )
-        .to_metres();
-        let at = [0, 1, 2].map(|i| f64::midpoint(low[i], high[i]));
+        let at = [0, 1, 2].map(|i| low[i] + f64::from(edit.size[i]) / PER_METRE / 2.0);
         let nearest = self
             .world
             .players()
@@ -336,7 +330,7 @@ mod tests {
         let who: Vec<&str> = found.iter().map(|change| change.who.as_str()).collect();
         assert_eq!(who, ["Bob (02)", "Ann (01)"], "5 m away is within 5 m");
         assert_eq!(found[0].kind_text(), texts::BUILD_DUG);
-        assert!(near(&lines, [0.0, 0.0, 0.0], 4.9).len() == 1);
+        assert_eq!(near(&lines, [0.0, 0.0, 0.0], 4.9).len(), 1);
         let many: Vec<String> = (0..MAX_FOUND + 5).map(|_| lines[0].clone()).collect();
         assert_eq!(near(&many, [0.0, 0.0, 0.0], 1.0).len(), MAX_FOUND);
     }
@@ -369,13 +363,14 @@ mod tests {
         #[test]
         fn a_written_change_reads_back(x in -99_999i32..99_999, y in -999i32..9_999, z in -99_999i32..99_999, kind in 0usize..KINDS.len()) {
             let change = Change::parse(&line("Ann (0000000000000001)", KINDS[kind].0, [x, y, z])).unwrap();
-            prop_assert_eq!(change.at, [f64::from(x), f64::from(y), f64::from(z)]);
+            prop_assert_eq!(change.at.map(f64::to_bits), [x, y, z].map(|axis| f64::from(axis).to_bits()));
             prop_assert_eq!(change.kind_text(), KINDS[kind].1);
         }
 
         #[test]
         fn no_line_makes_the_reader_panic(line in ".*") {
-            let _ = Change::parse(&line);
+            let read = Change::parse(&line);
+            prop_assert!(read.is_none_or(|change| change.at.iter().all(|axis| axis.is_finite())));
         }
     }
 }

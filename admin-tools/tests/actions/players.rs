@@ -30,7 +30,7 @@ fn a_player_sees_only_the_reads_and_an_administrator_sees_every_action() {
         .collect()
     };
     assert_eq!(ids(&bob()), ["online", "motd", "status"]);
-    assert_eq!(ids(&ann()).len(), 28);
+    assert_eq!(ids(&ann()).len(), 38);
     assert!(run(&loader, &bob(), "kick", "p0000000000000001").starts_with('0'));
 }
 
@@ -339,9 +339,20 @@ fn the_time_of_day_and_the_weather_change_from_their_actions() {
     let dir = scratch("world");
     let loader = server("", &dir);
     assert_eq!(
-        run(&loader, &ann(), "time", "n6.5"),
+        run(&loader, &ann(), "time", "t6.5"),
         "1The time is now 06:30."
     );
+    assert_eq!(
+        loader.type_in_chat(&ann(), 0, "/adm time 18:30").as_deref(),
+        Some("1The time is now 18:30.")
+    );
+    for refused in ["t25:00", "t6:60", "t24:30", "tnoon", "t-1"] {
+        assert_eq!(
+            run(&loader, &ann(), "time", refused),
+            "0Write a time from 00:00 to 24:00, such as 18:30, or hours from 0 to 24.",
+            "{refused}"
+        );
+    }
     assert!(loader.daytime().is_some());
     assert_eq!(
         run(&loader, &ann(), "weather", "c1"),
@@ -355,7 +366,7 @@ fn every_change_goes_to_the_audit_log_and_reads_back_and_reads_stay_out() {
     let dir = scratch("audit");
     let loader = server("", &dir);
     let _reply = run(&loader, &ann(), "online", "");
-    let _reply = run(&loader, &ann(), "time", "n6.5");
+    let _reply = run(&loader, &ann(), "time", "t6.5");
     let _reply = run(&loader, &ann(), "weather", "c1");
     assert_eq!(
         console::run("enshwick.admin-tools muted Bob on").as_deref(),

@@ -32,6 +32,9 @@ pub(crate) const BACKPACK: u32 = 0x5001;
 /// Ann's look slots, which hold a glider.
 pub(crate) const LOOKS: u32 = 0x5002;
 
+/// Where Ann set her map waypoint, in metres; Bob set none.
+pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, -80.0];
+
 /// The game's number of the ordinary storage category.
 const GENERIC: u8 = 4;
 
@@ -172,6 +175,18 @@ pub(crate) fn hosted(settings: &str, dir: &Path) -> Installed {
     game(settings, dir, &[], true)
 }
 
+/// The fake's type hash of a player's waypoint, and one set at
+/// [`WAYPOINT`].
+fn waypoint(host: &FakeHost) -> (u32, Vec<u8>) {
+    let mut marked = vec![0u8; host.size(facts::PLAYER_WAYPOINT.id()).unwrap()];
+    marked[host.offset(facts::PLAYER_WAYPOINT_ENABLED.id()).unwrap()] = 1;
+    let place = host.offset(facts::PLAYER_WAYPOINT_POSITION.id()).unwrap();
+    for (axis, at) in enshwick::ecs::fixed(WAYPOINT).iter().enumerate() {
+        marked[place + 8 * axis..][..8].copy_from_slice(&at.to_le_bytes());
+    }
+    (host.hash(facts::PLAYER_WAYPOINT.id()).unwrap(), marked)
+}
+
 /// [`server_with`] on a dedicated server, or in a game a player hosts
 /// when `hosted`.
 pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Installed {
@@ -202,6 +217,7 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
         .workshops()
         .props()
         .inventory()
+        .map_waypoints()
         .vanilla_items(&[
             (GLIDER, "Tool_Glider_T1"),
             (WOOD, "Resource_Wood"),
@@ -238,7 +254,9 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
     let links = carried(&host, &[(BACKPACK, GENERIC), (LOOKS, CUSTOMIZATION)]);
     let backpack = stacks(&host, &[(WOOD, 30), (GLIDER, 1)]);
     let looks = stacks(&host, &[(GLIDER, 1)]);
+    let (waypoint, marked) = waypoint(&host);
     host = host
+        .component(ann().entity, waypoint, &marked)
         .component(ann().entity, setup, &links)
         .component(Entity(BACKPACK), inventory, &backpack)
         .component(Entity(LOOKS), inventory, &looks);

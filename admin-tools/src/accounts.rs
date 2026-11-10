@@ -89,8 +89,15 @@ impl Accounts {
     }
 
     /// Remembers that `key` came to the door as `name`, as the newest of
-    /// at most [`MAX_SEEN`].
-    pub(crate) fn see(&mut self, key: PlayerKey, name: &str) {
+    /// at most [`MAX_SEEN`]; whether that changed what the door remembers.
+    pub(crate) fn see(&mut self, key: PlayerKey, name: &str) -> bool {
+        if self
+            .seen
+            .last()
+            .is_some_and(|known| known.key == key && known.name == name)
+        {
+            return false;
+        }
         self.seen.retain(|known| known.key != key);
         self.seen.push(Known {
             key,
@@ -98,6 +105,7 @@ impl Accounts {
         });
         let over = self.seen.len().saturating_sub(MAX_SEEN);
         self.seen.drain(..over);
+        true
     }
 
     /// Every account the lists name, once each: the newest at the door
@@ -240,9 +248,13 @@ mod tests {
     fn the_door_remembers_the_newest_accounts_and_names_each_known_one_once() {
         let mut accounts = Accounts::default();
         for key in 0..=MAX_SEEN as u64 {
-            accounts.see(PlayerKey::new(key), "old");
+            assert!(accounts.see(PlayerKey::new(key), "old"));
         }
-        accounts.see(PlayerKey::new(5), "Eve");
+        assert!(accounts.see(PlayerKey::new(5), "Eve"));
+        assert!(
+            !accounts.see(PlayerKey::new(5), "Eve"),
+            "the newest already"
+        );
         assert_eq!(accounts.seen.len(), MAX_SEEN);
         assert!(!accounts.seen.iter().any(|known| known.key.0 == 0));
         accounts.allow(PlayerKey::new(5), "Eve once", true);

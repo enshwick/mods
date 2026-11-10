@@ -47,19 +47,10 @@ fn known(tools: &Arc<Tools>) -> impl Fn(&Ask<'_>) -> Vec<(PlayerKey, String)> + 
     move |_| tools.accounts.with(Accounts::known).unwrap_or_default()
 }
 
-/// Declares the actions on players.
-pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
+/// Declares the ban list, the allow-list and the changes of either by
+/// account id.
+fn add_accounts(tools: &Arc<Tools>) -> Result<(), Off> {
     let player = || Arg::player(texts::ARG_PLAYER);
-    tools.add(
-        Action::new(ids::ONLINE, texts::ACTION_ONLINE).help(texts::ACTION_ONLINE_HELP),
-        online,
-    )?;
-    tools.add(
-        Action::new(ids::KICK, texts::ACTION_KICK)
-            .help(texts::ACTION_KICK_HELP)
-            .arg(player()),
-        kick,
-    )?;
     tools.add(
         Action::new(ids::BAN, texts::ACTION_BAN)
             .help(texts::ACTION_BAN_HELP)
@@ -114,6 +105,23 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
             .arg(Arg::choice(texts::ARG_CHANGE, &CHANGES)),
         account,
     )?;
+    Ok(())
+}
+
+/// Declares the actions on players.
+pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
+    let player = || Arg::player(texts::ARG_PLAYER);
+    tools.add(
+        Action::new(ids::ONLINE, texts::ACTION_ONLINE).help(texts::ACTION_ONLINE_HELP),
+        online,
+    )?;
+    tools.add(
+        Action::new(ids::KICK, texts::ACTION_KICK)
+            .help(texts::ACTION_KICK_HELP)
+            .arg(player()),
+        kick,
+    )?;
+    add_accounts(tools)?;
     tools.add(
         Action::new(ids::MARK, texts::ACTION_MARK)
             .help(texts::ACTION_MARK_HELP)
@@ -595,9 +603,14 @@ impl Tools {
         self.joined.relock().insert(key, Instant::now());
         let settings = self.settings.load();
         let lists = self.accounts.update(|accounts| {
-            accounts.see(key, &player.name);
-            (accounts.banned(key), accounts.allowed(key))
+            let new = accounts.see(key, &player.name);
+            (accounts.banned(key), accounts.allowed(key), new)
         });
+        if lists.is_some_and(|(.., new)| new) {
+            // Written now, so an account refused here can be named after a crash too.
+            self.keep_accounts();
+        }
+        let lists = lists.map(|(banned, allowed, _)| (banned, allowed));
         // Lists that do not read keep the door shut: a ban in them may hold.
         let unread = lists.is_none() && self.accounts.shut_reason().is_some();
         let refusal = match lists {

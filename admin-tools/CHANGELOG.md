@@ -77,3 +77,23 @@ Each entry says what players notice; a release's notes show its section.
 - A give, a chest, a clear or a copy the game later turns down, in whole or
   in part, adds a line to the audit log, so the console and RCON tools see
   it too.
+- The item comes before the count in `give`, `chest` and `chestat`, and the
+  count may be left out for one item.
+- In a game a player hosts, items are also named by the name the game shows,
+  in any language it offers, and an unknown name lists those names near it.
+- `/adm help` lists the actions under groups, one line each, and lists offer
+  the administrator too, for actions they may use on themselves.
+- A banned or unlisted account is turned away the moment it joins.
+- A backup copies only the world's save, mod settings and mod data, never
+  the game's rolling copies or folders set aside, and waits for a save that
+  is being written.
+- The save before a restart waits for a running backup instead of being
+  lost, and the console and RCON tools read where a backup's result is
+  logged; a player reads it in their own language.
+- The remote console waits without polling, closes its connections at once
+  when its settings change, takes its port again reliably, and lets at most
+  two connections come from one address.
+- `/adm world` names each game setting and value as the game's world
+  settings do, in the reader's language, and long replies such as
+  `/adm status` arrive as a list in chat.
+- Short replies read naturally, such as "Time: 06:30" and "World saved."

@@ -408,14 +408,14 @@ mod tests {
         let started = std::time::Instant::now();
         assert!(wait_while(&saving, Duration::from_millis(250)).is_err());
         assert!(started.elapsed() >= Duration::from_millis(250));
-        let ended = std::sync::Arc::new(AtomicBool::new(true));
-        let ends = std::sync::Arc::clone(&ended);
-        let ender = std::thread::spawn(move || {
+        let written = Arc::new(AtomicBool::new(true));
+        let writer = Arc::clone(&written);
+        let save = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(150));
-            ends.store(false, Ordering::Release);
+            writer.store(false, Ordering::Release);
         });
-        assert!(wait_while(&ended, Duration::from_secs(5)).is_ok());
-        ender.join().unwrap();
+        assert!(wait_while(&written, Duration::from_secs(5)).is_ok());
+        save.join().unwrap();
     }
 
     #[test]

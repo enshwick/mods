@@ -17,15 +17,25 @@ use crate::{Tools, ids, items, texts};
 /// its maximum anyway.
 const MAX_STAT: f64 = 100_000.0;
 
-/// How the world sets one pool of a character to a value.
-type SetPool = fn(World, Entity, i32) -> Result<Meter, WorldError>;
+/// How the world sets one pool of a character to a value: the pool as it
+/// now is, or `None` for one the game sets in its next step.
+type SetPool = fn(World, Entity, i32) -> Result<Option<Meter>, WorldError>;
 
 /// The pools the stats action sets: each one's word, its label and how the
 /// world sets it.
-const POOLS: [(&str, &str, SetPool); 3] = [
-    ("health", texts::POOL_HEALTH, World::set_health),
-    ("stamina", texts::POOL_STAMINA, World::set_stamina),
-    ("mana", texts::POOL_MANA, World::set_mana),
+const POOLS: [(&str, &str, SetPool); 4] = [
+    ("health", texts::POOL_HEALTH, |w, e, v| {
+        w.set_health(e, v).map(Some)
+    }),
+    ("stamina", texts::POOL_STAMINA, |w, e, v| {
+        w.set_stamina(e, v).map(Some)
+    }),
+    ("mana", texts::POOL_MANA, |w, e, v| {
+        w.set_mana(e, v).map(Some)
+    }),
+    ("level", texts::POOL_LEVEL, |w, e, v| {
+        w.set_level(e, v.unsigned_abs()).map(|()| None)
+    }),
 ];
 
 /// Declares the actions on characters and the filter that keeps god mode.
@@ -38,6 +48,12 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
             .arg(Arg::choice(texts::ARG_POOL, &pools))
             .arg(Arg::number(texts::ARG_VALUE, 0.0..=MAX_STAT, 1.0)),
         stats,
+    )?;
+    tools.add(
+        Action::new(ids::REVIVE, texts::ACTION_REVIVE)
+            .help(texts::ACTION_REVIVE_HELP)
+            .arg(Arg::player(texts::ARG_PLAYER)),
+        revive,
     )?;
     tools.add(
         Action::new(ids::LEARN, texts::ACTION_LEARN)
@@ -98,7 +114,14 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
         Err(refused) => return refused,
     };
     match set(tools.world, player.entity, value) {
-        Ok(now) => {
+        Ok(None) => Outcome::done(request.say(
+            texts::REPLY_LEVEL_SET,
+            &[
+                (texts::value::NAME, name),
+                (texts::value::CURRENT, &value.to_string()),
+            ],
+        )),
+        Ok(Some(now)) => {
             let (current, max) = (now.current.to_string(), now.max.to_string());
             let pool = request.say(label, &[]);
             Outcome::done(request.say(
@@ -110,6 +133,34 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
                     (texts::value::MAX, &max),
                 ],
             ))
+        }
+        Err(why) => Tools::failed(request, name, &why),
+    }
+}
+
+/// Revives a dead player where they lie, with their full health.
+fn revive(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [Value::Player { key, name }] = request.args else {
+        return crate::players::bad_args(request);
+    };
+    let Some(player) = tools.world.player_by_key(*key) else {
+        return no_player(request);
+    };
+    let full = tools
+        .world
+        .vitals(player.entity)
+        .map_or(1, |v| v.health.max);
+    match tools.world.revive(player.entity, full) {
+        Ok(now) => Outcome::done(request.say(
+            texts::REPLY_REVIVED,
+            &[
+                (texts::value::NAME, name),
+                (texts::value::CURRENT, &now.current.to_string()),
+                (texts::value::MAX, &now.max.to_string()),
+            ],
+        )),
+        Err(WorldError::Refused) => {
+            Outcome::refused(request.say(texts::REPLY_NOT_DEAD, &[(texts::value::NAME, name)]))
         }
         Err(why) => Tools::failed(request, name, &why),
     }

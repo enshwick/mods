@@ -2,7 +2,7 @@
 //! the GUID, a mod's content id or the number.
 
 use enshwick::ItemId;
-use enshwick::actions::{Arg, Outcome, Request};
+use enshwick::actions::{Arg, Outcome, Request, Value};
 use enshwick::content::Guid;
 use enshwick::content::vanilla::{self, VanillaError};
 use enshwick::knowledge::KnowledgeId;
@@ -15,9 +15,10 @@ pub(crate) const MAX_NAME: usize = 120;
 /// The most items one give hands over, in as many stacks as they need.
 pub(crate) const MAX_COUNT: f64 = 9_999.0;
 
-/// The argument that counts the items of a give.
+/// The argument that counts the items of a give, the last one, one when
+/// left out.
 pub(crate) fn count_arg() -> Arg {
-    Arg::number(texts::ARG_COUNT, 1.0..=MAX_COUNT, 1.0)
+    Arg::number(texts::ARG_COUNT, 1.0..=MAX_COUNT, 1.0).optional(Value::Number(1.0))
 }
 
 /// The argument that names the item of a give.
@@ -60,10 +61,37 @@ pub(crate) fn known_item(
 }
 
 /// The item `text` names, a GUID, a content id (`<mod>:<name>`), the game's
-/// name of an item in any case, or the item's number, with the name to
-/// show for it.
+/// debug name or the name it shows in any language, in any case, or the
+/// item's number, with the name to show for it.
 pub(crate) fn item(text: &str) -> Result<(ItemId, String), ResolveItemError> {
-    resolve(text, vanilla::item, ItemId::from_guid, ItemId::new)
+    let named = |name: &str| either(name, vanilla::item, vanilla::item_by_display_name);
+    resolve(text, named, ItemId::from_guid, ItemId::new)
+}
+
+/// What `debug` finds by the debug name `name`, else what `shown` finds by
+/// the name the game shows, with the near names of both. The shown names
+/// read only where the game's texts do, not on a dedicated server, which
+/// then keeps to debug names.
+fn either(
+    name: &str,
+    debug: impl Fn(&str) -> Result<Guid, VanillaError>,
+    shown: impl Fn(&str) -> Result<Guid, VanillaError>,
+) -> Result<Guid, VanillaError> {
+    let near = match debug(name) {
+        Err(VanillaError::Unknown { near, .. }) => near,
+        found => return found,
+    };
+    match shown(name) {
+        Err(VanillaError::Unknown { near: more, .. }) => Err(VanillaError::Unknown {
+            name: name.to_owned(),
+            near: near.into_iter().chain(more).collect(),
+        }),
+        Err(VanillaError::Unreadable(_)) => Err(VanillaError::Unknown {
+            name: name.to_owned(),
+            near,
+        }),
+        found => found,
+    }
 }
 
 /// The knowledge `text` names, a recipe's GUID, content id or game's name
@@ -243,5 +271,41 @@ mod tests {
                 near: vec!["Tool_Torch01".into()]
             })
         );
+    }
+
+    fn shown(name: &str) -> Result<Guid, VanillaError> {
+        if name.eq_ignore_ascii_case("glider") {
+            return Ok(GLIDER);
+        }
+        Err(VanillaError::Unknown {
+            name: name.to_owned(),
+            near: vec!["Glider".into()],
+        })
+    }
+
+    fn no_texts(_: &str) -> Result<Guid, VanillaError> {
+        Err(VanillaError::Unreadable("texts"))
+    }
+
+    #[test]
+    fn a_name_the_game_shows_names_its_item_where_the_texts_read() {
+        assert_eq!(either("glider", glider, shown), Ok(GLIDER));
+        assert_eq!(either("Tool_Glider_T1", glider, no_texts), Ok(GLIDER));
+    }
+
+    #[test]
+    fn an_unknown_name_offers_the_debug_and_shown_names_near_it() {
+        let Err(VanillaError::Unknown { near, .. }) = either("Glidr", glider, shown) else {
+            panic!("not unknown");
+        };
+        assert_eq!(near, ["Tool_Glider_T1", "Tool_Glider_T2", "Glider"]);
+    }
+
+    #[test]
+    fn without_the_game_s_texts_an_unknown_name_offers_only_debug_names() {
+        let Err(VanillaError::Unknown { near, .. }) = either("Glider", glider, no_texts) else {
+            panic!("not unknown");
+        };
+        assert_eq!(near, ["Tool_Glider_T1", "Tool_Glider_T2"]);
     }
 }

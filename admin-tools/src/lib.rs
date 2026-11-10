@@ -222,6 +222,15 @@ impl Tools {
         let rule_id = id.clone();
         let tools = Arc::clone(self);
         let declared = id.clone();
+        let action = match ids::group(&id) {
+            Some(group) => action.group(group),
+            None => action,
+        };
+        let action = if ids::WITH_SELF.contains(&id.as_str()) {
+            action.with_self()
+        } else {
+            action
+        };
         self.actions.add(
             action.allow(move |player| rules.admits(&rule_id, player)),
             move |request| {

@@ -1,6 +1,8 @@
 //! The actions' ids: their words in commands and console lines, and their
 //! keys in the rights settings.
 
+use crate::texts;
+
 /// The players online.
 pub(crate) const ONLINE: &str = "online";
 /// The message of the day.
@@ -86,6 +88,37 @@ pub(crate) const ALL: [&str; 38] = [
     PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
 ];
 
+/// The groups the command help lists the actions under: each group's text
+/// key and its actions.
+pub(crate) const GROUPS: [(&str, &[&str]); 9] = [
+    (texts::GROUP_WINDOWS, &[PANEL, OPEN, PLAYER]),
+    (texts::GROUP_PLAYERS, &[ONLINE, KICK, MUTED]),
+    (
+        texts::GROUP_ACCOUNTS,
+        &[BAN, BANS, BANNED, ALLOWED, ACCOUNT],
+    ),
+    (texts::GROUP_CHARACTER, &[HEAL, STATS, LEARN, GOD]),
+    (texts::GROUP_ITEMS, &[GIVE, CHEST, CHEST_AT, CLEAR, COPY]),
+    (texts::GROUP_MOVES, &[GOTO, BRING, SEND, PLACE, MARK]),
+    (texts::GROUP_WORLD, &[TIME, WEATHER, SAVE, BACKUP, WORLD]),
+    (texts::GROUP_SERVER, &[STATUS, MOTD, SET_MOTD, SAY, RESTART]),
+    (texts::GROUP_LOGS, &[WHO, AUDIT, CHAT]),
+];
+
+/// The group of the action `id`, a text key.
+pub(crate) fn group(id: &str) -> Option<&'static str> {
+    GROUPS
+        .iter()
+        .find(|(_, ids)| ids.contains(&id))
+        .map(|(group, _)| *group)
+}
+
+/// The actions whose player lists offer the caller too: those an
+/// administrator uses on themselves as on anyone.
+pub(crate) const WITH_SELF: [&str; 11] = [
+    PLAYER, HEAL, STATS, LEARN, GOD, GIVE, CHEST, CLEAR, COPY, PLACE, MARK,
+];
+
 /// The actions that only read or open a window, which the audit log
 /// leaves out.
 pub(crate) const READS: [&str; 11] = [
@@ -94,3 +127,18 @@ pub(crate) const READS: [&str; 11] = [
 
 /// The command's short alias.
 pub(crate) const ALIAS: &str = "adm";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_action_is_in_exactly_one_group() {
+        for id in ALL {
+            let groups = GROUPS.iter().filter(|(_, ids)| ids.contains(&id)).count();
+            assert_eq!(groups, 1, "{id}");
+        }
+        let grouped: usize = GROUPS.iter().map(|(_, ids)| ids.len()).sum();
+        assert_eq!(grouped, ALL.len());
+    }
+}

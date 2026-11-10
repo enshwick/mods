@@ -38,8 +38,8 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
         Action::new(ids::CHEST, texts::ACTION_CHEST)
             .help(texts::ACTION_CHEST_HELP)
             .arg(Arg::player(texts::ARG_PLAYER))
-            .arg(items::count_arg())
-            .arg(items::item_arg()),
+            .arg(items::item_arg())
+            .arg(items::count_arg()),
         chest,
     )?;
     tools.add(
@@ -48,8 +48,8 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
             .arg(axis(texts::ARG_X))
             .arg(axis(texts::ARG_Y))
             .arg(axis(texts::ARG_Z))
-            .arg(items::count_arg())
-            .arg(items::item_arg()),
+            .arg(items::item_arg())
+            .arg(items::count_arg()),
         chest_at,
     )
 }
@@ -58,8 +58,8 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
 fn chest(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [
         Value::Player { key, name },
-        Value::Number(count),
         Value::Text(text),
+        Value::Number(count),
     ] = request.args
     else {
         return crate::players::bad_args(request);
@@ -88,8 +88,8 @@ fn chest_at(tools: &Tools, request: &Request<'_>) -> Outcome {
         Value::Number(x),
         Value::Number(y),
         Value::Number(z),
-        Value::Number(count),
         Value::Text(text),
+        Value::Number(count),
     ] = request.args
     else {
         return Tools::failed(request, ids::CHEST_AT, &WorldError::Refused);

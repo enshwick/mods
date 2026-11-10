@@ -13,7 +13,7 @@ commands.
   the server runs, the world's game settings, and audit, chat and build
   logs.
 - **Characters and items:** heal, set health, stamina, mana and level,
-  revive in place, teach recipes, god mode, give items or chests, clear or copy an inventory.
+  revive, teach recipes, god mode, give items or chests, clear or copy an inventory.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 

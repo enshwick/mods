@@ -249,9 +249,10 @@ beside the world's save.
 ## How do I see who built or broke something?
 
 Turn on **Build log** in the world's settings first. From then on, Admin Tools
-writes each building placed, picked up or torn down, each spot of building
-blocks placed or removed, and each spot of terrain dug or filled. Each line
-has who did it, the time and the position.
+writes each building placed, picked up or torn down. It also writes each spot
+where building blocks were placed or removed and terrain was dug or filled.
+
+Each line has who did it, the time and the position.
 
 Changes to terrain and building blocks name the nearest player within 16
 metres, since the game does not say who made them.

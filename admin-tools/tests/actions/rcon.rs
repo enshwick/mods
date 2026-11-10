@@ -163,13 +163,15 @@ fn a_dedicated_server_generates_the_rcon_password_and_logs_only_its_file() {
         &format!("rcon_ip = \"127.0.0.1\"\nrcon_port = {port}\n"),
         &dir,
     );
+    // The console's own thread makes the password, then listens.
+    let _stream = connect(port);
+    assert!(tick_until(&loader, || format!("{:?}", loader.logs())
+        .contains("rcon-password.txt")));
     let password = std::fs::read_to_string(dir.join("rcon-password.txt")).unwrap();
     let password = password.trim();
     assert_eq!(password.len(), 24);
     let logs = format!("{:?}", loader.logs());
-    assert!(logs.contains("rcon-password.txt"), "{logs}");
     assert!(!logs.contains(password), "the password is never logged");
-    let _stream = connect(port);
 }
 
 #[test]

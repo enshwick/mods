@@ -7,7 +7,7 @@ use enshwick::PlayerKey;
 use enshwick::abi::ActionCall;
 use enshwick::actions::sheet::decode;
 use enshwick::console;
-use enshwick::events::{ShutdownStarted, WorldLoaded};
+use enshwick::events::{ShutdownStarted, WorldLoaded, WorldSaved, WorldSaving};
 
 use super::game::{Scratch, ann, bob, file_until, hosted, run, said, scratch, server, tick_until};
 
@@ -17,12 +17,12 @@ fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
     let loader = server("", &dir);
     let reply = run(&loader, &bob(), "status", "");
     assert!(
-        reply.starts_with("1Up 0 h 0 min, world world0. Mods:"),
+        reply.starts_with("1Up: 0 h 0 min\nWorld: world0\nMods:\n"),
         "{reply}"
     );
     let console = console::run("adm status").unwrap();
     assert!(
-        console.starts_with("Up 0 h 0 min, world world0."),
+        console.starts_with("Up: 0 h 0 min\nWorld: world0\nMods:\n"),
         "{console}"
     );
 }
@@ -31,10 +31,7 @@ fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
 fn save_now_asks_the_game_for_a_save_and_only_administrators_may() {
     let dir = scratch("save");
     let loader = server("", &dir);
-    assert_eq!(
-        run(&loader, &ann(), "save", ""),
-        "1The world is saving now."
-    );
+    assert_eq!(run(&loader, &ann(), "save", ""), "1The world is saving.");
     assert_eq!(loader.saves(), 1);
     assert!(run(&loader, &bob(), "save", "").starts_with('0'));
     assert_eq!(loader.saves(), 1);
@@ -191,4 +188,74 @@ fn a_backup_is_refused_when_the_data_folder_is_not_beside_a_save() {
     let loader = server("", &dir);
     assert!(run(&loader, &ann(), "backup", "").starts_with('0'));
     assert!(!loader.saves_held());
+}
+
+#[test]
+fn a_backup_waits_for_a_save_under_way_and_the_restart_save_waits_for_the_backup() {
+    let (_saves, data) = saves("backup-saving");
+    let loader = server("", &data);
+    assert!(loader.raise::<WorldSaving>(&()) >= 1);
+    assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
+    assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
+    assert!(tick_until(&loader, || said(&loader, 2)
+        .contains(&"The server restarts now.".to_owned())));
+    assert!(loader.saves_held(), "the copy waits for the save to end");
+    assert!(!data.join("backups").exists());
+    assert_eq!(loader.saves(), 0, "the restart save waits for the backup");
+    assert!(loader.raise::<WorldSaved>(&()) >= 1);
+    assert!(tick_until(&loader, || loader.saves() == 1));
+    assert!(!loader.saves_held());
+    assert_eq!(std::fs::read_dir(data.join("backups")).unwrap().count(), 1);
+}
+
+#[test]
+fn a_backup_waiting_for_a_save_copies_nothing_once_the_world_stops() {
+    let (_saves, data) = saves("backup-shutdown");
+    let loader = server("", &data);
+    assert!(loader.raise::<WorldSaving>(&()) >= 1);
+    assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
+    // The copy starts a second after the hold, on the game's clock.
+    std::thread::sleep(Duration::from_millis(1100));
+    let _ran = loader.tick(Duration::from_secs(1));
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        !data.join("backups").exists(),
+        "not copied while the final save may be written"
+    );
+}
+
+#[test]
+fn the_console_hears_where_a_backup_s_end_is_written() {
+    let (_saves, data) = saves("backup-console");
+    let loader = server("", &data);
+    assert_eq!(
+        console::run("adm backup").unwrap(),
+        "The backup has started. The server's log names where it went when it is done, and so does the audit log when it is on."
+    );
+    assert!(tick_until(&loader, || !loader.saves_held()));
+}
+
+#[test]
+fn the_help_lists_every_action_under_its_group() {
+    let dir = scratch("help-pages");
+    let _loader = server("", &dir);
+    let help = console::run("adm help").unwrap();
+    let helped: Vec<&str> = help
+        .lines()
+        .skip(1)
+        .filter(|line| !line.ends_with(':'))
+        .filter_map(|line| line.split([' ', ':']).next())
+        .collect();
+    assert_eq!(helped.len(), 38, "{help}");
+    let groups = help.lines().filter(|line| line.ends_with(':')).count();
+    assert_eq!(groups, 9, "the actions sit under their groups: {help}");
+    // A unit test holds every page to the groups' order and the default rules.
+    let listed: Vec<&str> = include_str!("../../README.md")
+        .lines()
+        .filter_map(|line| line.strip_prefix("| `/adm "))
+        .filter_map(|row| row.split([' ', '`']).next())
+        .collect();
+    assert_eq!(listed, helped, "the README lists the help's order");
 }

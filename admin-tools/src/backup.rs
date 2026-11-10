@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use enshwick::actions::{Action, Outcome, Request};
+use enshwick::i18n::Language;
 use enshwick::{Off, PlayerKey};
 
 use crate::{Tools, ids, journal, texts};
@@ -31,6 +32,19 @@ const SETTLE: Duration = Duration::from_secs(1);
 
 /// How often a copy starts again when the save changed under it.
 const TRIES: u32 = 3;
+
+/// The extension of the world's save file.
+const SAVE_EXTENSION: &str = "ksd";
+
+/// The suffix of the world's mod settings folder beside its save.
+const SETTINGS_SUFFIX: &str = "-mod-settings";
+
+/// How long a copy waits for a save already being written to end; past
+/// it, the backup fails rather than copy a save half written.
+const SAVE_WAIT: Duration = Duration::from_secs(120);
+
+/// How often a copy looks whether the save being written has ended.
+const SAVE_LOOK: Duration = Duration::from_millis(100);
 
 /// Declares the backup action.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -70,11 +84,28 @@ fn backup(tools: &Tools, request: &Request<'_>) -> Outcome {
         tools.backing_up.store(false, Ordering::Release);
         return Tools::failed(request, ids::BACKUP, &why);
     }
-    let key = request.player.key;
+    let caller = Caller {
+        key: request.player.key,
+        language: request.language,
+    };
     tools
         .scheduler
-        .after(SETTLE, move || Arc::clone(&me).copy_aside(&plan, key));
-    Outcome::done(request.say(texts::REPLY_BACKUP_STARTED, &[]))
+        .after(SETTLE, move || Arc::clone(&me).copy_aside(&plan, caller));
+    // The console and a remote console get no notice: the logs keep the end.
+    let started = if caller.key.0 == 0 {
+        texts::REPLY_BACKUP_STARTED_LOG
+    } else {
+        texts::REPLY_BACKUP_STARTED
+    };
+    Outcome::done(request.say(started, &[]))
+}
+
+/// Who asked for a backup and the language they read its end in; account 0
+/// for the console and a remote console.
+#[derive(Debug, Clone, Copy)]
+struct Caller {
+    key: PlayerKey,
+    language: Language,
 }
 
 impl Tools {
@@ -108,9 +139,9 @@ impl Tools {
         })
     }
 
-    /// Copies the world aside on a thread of its own, lets the saves go and
-    /// tells the account `key` how it went.
-    fn copy_aside(self: Arc<Self>, plan: &Plan, key: PlayerKey) {
+    /// Copies the world aside on a thread of its own, once a save being
+    /// written has ended, lets the saves go and tells the caller how it went.
+    fn copy_aside(self: Arc<Self>, plan: &Plan, caller: Caller) {
         let (tools, copying) = (Arc::clone(&self), plan.clone());
         let spawned = std::thread::Builder::new()
             .name("admin-tools backup".into())
@@ -120,16 +151,38 @@ impl Tools {
                     tools.copy_held(&copying)
                 }))
                 .unwrap_or_else(|_| Err(io::Error::other("the copy stopped on an error")));
-                tools.finish_backup(&copying, copied, key);
+                tools.finish_backup(&copying, copied, caller);
             });
         if let Err(why) = spawned {
-            self.finish_backup(plan, Err(why), key);
+            self.finish_backup(plan, Err(why), caller);
         }
     }
 
-    /// Copies the world while its saves stay held, again when the save on
-    /// disk changed during the copy; the backup's folder.
+    /// Waits until no save is being written while the world runs, at most
+    /// [`SAVE_WAIT`]: the hold keeps a new save from starting, never one
+    /// under way. A world that stopped meanwhile is not copied, as its final
+    /// save may be under way; past the wait the save's end is taken as
+    /// missed, so the next backup does not wait for it again.
+    fn wait_for_save(&self) -> io::Result<()> {
+        let waited = wait_while(
+            || self.saving.load(Ordering::Acquire) && self.running.load(Ordering::Relaxed),
+            SAVE_WAIT,
+        );
+        if waited.is_err() {
+            self.saving.store(false, Ordering::Release);
+        }
+        waited?;
+        if !self.running.load(Ordering::Relaxed) {
+            return Err(io::Error::other("the world stopped before the copy"));
+        }
+        Ok(())
+    }
+
+    /// Copies the world while its saves stay held, after a save under way
+    /// ended and again when the save on disk changed during the copy; the
+    /// backup's folder.
     fn copy_held(&self, plan: &Plan) -> io::Result<PathBuf> {
+        self.wait_for_save()?;
         for _ in 0..TRIES {
             let before = self.world.save_info();
             let into = copy(plan, &folder_name(journal::now()))?;
@@ -141,44 +194,54 @@ impl Tools {
         Err(io::Error::other("the save kept changing during the copy"))
     }
 
-    /// Lets the saves go, prunes old backups and reports the result.
-    fn finish_backup(&self, plan: &Plan, copied: io::Result<PathBuf>, key: PlayerKey) {
+    /// Lets the saves go, prunes old backups and reports the result: to the
+    /// server's log and the audit log, and to a player caller in their
+    /// language.
+    fn finish_backup(&self, plan: &Plan, copied: io::Result<PathBuf>, caller: Caller) {
         if let Err(why) = self.world.hold_saves(false) {
             enshwick::warn!("backup: saves not let go: {why}");
         }
-        let (line, outcome) = match copied {
+        let (key, value, said) = match copied {
             Ok(into) => {
                 if let Err(why) = prune(&plan.root, plan.kept) {
                     enshwick::warn!("backup: old backups not removed: {why}");
                 }
                 let path = into.display().to_string();
                 enshwick::info!("backup written to {path}");
-                (
-                    self.say(texts::NOTICE_BACKUP_DONE, &[(texts::value::PATH, &path)]),
-                    path,
-                )
+                (texts::NOTICE_BACKUP_DONE, texts::value::PATH, path)
             }
             Err(why) => {
                 let why = why.to_string();
                 enshwick::warn!("backup failed: {why}");
-                (
-                    self.say(texts::NOTICE_BACKUP_FAILED, &[(texts::value::WHY, &why)]),
-                    why,
-                )
+                (texts::NOTICE_BACKUP_FAILED, texts::value::WHY, why)
             }
         };
-        self.log(&["server", "", ids::BACKUP, "", &outcome]);
+        self.log(&["server", "", ids::BACKUP, "", &said]);
         self.backing_up.store(false, Ordering::Release);
-        if key.0 == 0 {
+        if caller.key.0 == 0 {
             return;
         }
+        let line = self.texts.fill(key, caller.language, &[(value, &said)]);
         let world = self.world;
         self.scheduler.next_tick(move || {
-            if let Some(player) = world.player_by_key(key) {
+            if let Some(player) = world.player_by_key(caller.key) {
                 let _shown = world.notify(&player, &line);
             }
         });
     }
+}
+
+/// Waits until `saving` is false, at most `limit`, looking every
+/// [`SAVE_LOOK`]; past it, the error that a save is still being written.
+fn wait_while(saving: impl Fn() -> bool, limit: Duration) -> io::Result<()> {
+    let deadline = std::time::Instant::now() + limit;
+    while saving() {
+        if std::time::Instant::now() >= deadline {
+            return Err(io::Error::other("the game is still writing the save"));
+        }
+        std::thread::sleep(SAVE_LOOK);
+    }
+    Ok(())
 }
 
 /// A backup folder's name for `seconds` since 1970: the UTC time, sortable,
@@ -198,11 +261,16 @@ fn is_backup(name: &str) -> bool {
         })
 }
 
-/// Whether the entry `name` in the saves' folder belongs to the world
-/// `stem`: its save and the folders beside it that start with its key.
-fn belongs(name: &str, stem: &str) -> bool {
-    name.strip_prefix(stem)
-        .is_some_and(|rest| rest.is_empty() || rest.starts_with(['.', '-', '_']))
+/// The entries beside the save of the world `stem` that restore it: the
+/// save and its mods' settings and data. The game's rolling copies in
+/// `backup/` and the folders the loader renamed aside, `.old-<stamp>`, stay
+/// out.
+fn own_entries(stem: &str) -> [String; 3] {
+    [
+        format!("{stem}.{SAVE_EXTENSION}"),
+        format!("{stem}{SETTINGS_SUFFIX}"),
+        format!("{stem}{DATA_SUFFIX}"),
+    ]
 }
 
 /// Copies the world's files of `plan` into a new folder `name` under its
@@ -238,11 +306,12 @@ fn copy_into(plan: &Plan, into: &Path) -> io::Result<()> {
         .into_iter()
         .filter_map(|dir| fs::canonicalize(dir).ok())
         .collect();
-    for entry in fs::read_dir(&plan.saves)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        if name.to_str().is_some_and(|name| belongs(name, &plan.stem)) {
-            copy_tree(&entry.path(), &into.join(&name), &skip)?;
+    // A backup without the save restores nothing, so a missing one fails it.
+    fs::metadata(plan.saves.join(format!("{}.{SAVE_EXTENSION}", plan.stem)))?;
+    for name in own_entries(&plan.stem) {
+        let from = plan.saves.join(&name);
+        if fs::symlink_metadata(&from).is_ok() {
+            copy_tree(&from, &into.join(&name), &skip)?;
         }
     }
     Ok(())
@@ -287,6 +356,8 @@ pub(crate) fn prune(root: &Path, kept: usize) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
+
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
@@ -298,13 +369,38 @@ mod tests {
     }
 
     #[test]
-    fn a_world_s_files_start_with_its_key_and_another_world_s_do_not() {
-        assert!(belongs("world0", "world0"));
-        assert!(belongs("world0.ksd", "world0"));
-        assert!(belongs("world0-mod-data", "world0"));
-        assert!(belongs("world0_info", "world0"));
-        assert!(!belongs("world01.ksd", "world0"));
-        assert!(!belongs("backup", "world0"));
+    fn a_backup_takes_the_save_and_its_mod_folders_and_no_rolling_copy_or_old_folder() {
+        let saves = scratch("own");
+        for folder in [
+            "world0-mod-settings",
+            "world0-mod-data",
+            "world0-mod-data.old-2026-11-02-10-00-00",
+            "world0-mod-settings.old-2026-11-02-10-00-00",
+            "backup",
+        ] {
+            fs::create_dir_all(saves.join(folder)).unwrap();
+        }
+        fs::write(saves.join("world0.ksd"), "save").unwrap();
+        fs::write(saves.join("world01.ksd"), "another").unwrap();
+        fs::write(saves.join("backup/world0.ksd.backup-0"), "rolling").unwrap();
+        let plan = Plan {
+            saves: saves.clone(),
+            stem: "world0".into(),
+            root: saves.join("out"),
+            default: PathBuf::new(),
+            kept: 1,
+        };
+        let into = copy(&plan, "2026-01-01_00-00-00").unwrap();
+        let mut taken: Vec<String> = fs::read_dir(&into)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        taken.sort();
+        assert_eq!(
+            taken,
+            ["world0-mod-data", "world0-mod-settings", "world0.ksd"]
+        );
+        fs::remove_dir_all(&saves).unwrap();
     }
 
     #[test]
@@ -315,6 +411,33 @@ mod tests {
         assert!(!is_backup("photos"));
         assert!(!is_backup("2026-11-04 12-00-00"));
         assert!(!is_backup("2026-11-04_12-00-0x"));
+    }
+
+    #[test]
+    fn a_copy_waits_for_a_save_to_end_and_fails_when_it_never_does() {
+        let saving = AtomicBool::new(false);
+        assert!(
+            wait_while(|| saving.load(Ordering::Acquire), Duration::ZERO).is_ok(),
+            "no save, no wait"
+        );
+        saving.store(true, Ordering::Release);
+        let started = std::time::Instant::now();
+        assert!(
+            wait_while(
+                || saving.load(Ordering::Acquire),
+                Duration::from_millis(250)
+            )
+            .is_err()
+        );
+        assert!(started.elapsed() >= Duration::from_millis(250));
+        let written = Arc::new(AtomicBool::new(true));
+        let writer = Arc::clone(&written);
+        let save = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            writer.store(false, Ordering::Release);
+        });
+        assert!(wait_while(|| written.load(Ordering::Acquire), Duration::from_secs(5)).is_ok());
+        save.join().unwrap();
     }
 
     #[test]
@@ -456,6 +579,22 @@ mod tests {
         };
         copy(&plan, "2026-01-01_00-00-00").unwrap();
         assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
+        fs::remove_dir_all(&saves).unwrap();
+    }
+
+    #[test]
+    fn a_world_without_its_save_gets_no_backup() {
+        let saves = scratch("no-save");
+        fs::create_dir_all(saves.join("w-mod-settings")).unwrap();
+        let plan = Plan {
+            saves: saves.clone(),
+            stem: "w".into(),
+            root: saves.join("out"),
+            default: PathBuf::new(),
+            kept: 1,
+        };
+        assert!(copy(&plan, "2026-01-01_00-00-00").is_err());
+        assert_eq!(fs::read_dir(&plan.root).unwrap().count(), 0);
         fs::remove_dir_all(&saves).unwrap();
     }
 }

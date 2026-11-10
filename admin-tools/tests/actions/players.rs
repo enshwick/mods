@@ -340,13 +340,10 @@ fn heal_restores_a_player_to_their_full_health_and_no_more() {
 fn the_time_of_day_and_the_weather_change_from_their_actions() {
     let dir = scratch("world");
     let loader = server("", &dir);
-    assert_eq!(
-        run(&loader, &ann(), "time", "t6.5"),
-        "1The time is now 06:30."
-    );
+    assert_eq!(run(&loader, &ann(), "time", "t6.5"), "1Time: 06:30");
     assert_eq!(
         loader.type_in_chat(&ann(), 0, "/adm time 18:30").as_deref(),
-        Some("1The time is now 18:30.")
+        Some("1Time: 18:30")
     );
     for refused in ["t25:00", "t6:60", "t24:30", "tnoon", "t-1"] {
         assert_eq!(
@@ -358,7 +355,7 @@ fn the_time_of_day_and_the_weather_change_from_their_actions() {
     assert!(loader.daytime().is_some());
     assert_eq!(
         run(&loader, &ann(), "weather", "c1"),
-        "1The weather changes to Rain."
+        "1Weather: Rain (starts within a minute)"
     );
     assert_eq!(loader.forecasts().len(), 1);
 }
@@ -497,7 +494,7 @@ fn a_remote_caller_runs_only_what_its_permissions_allow_and_nobody_leaves_the_co
 
     assert_eq!(
         console::run("adm weather rain").as_deref(),
-        Ok("The weather changes to Rain."),
+        Ok("Weather: Rain (starts within a minute)"),
         "the server's console may use an action for nobody"
     );
 }

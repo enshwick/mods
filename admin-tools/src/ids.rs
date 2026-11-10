@@ -1,6 +1,8 @@
 //! The actions' ids: their words in commands and console lines, and their
 //! keys in the rights settings.
 
+use crate::texts;
+
 /// The players online.
 pub(crate) const ONLINE: &str = "online";
 /// The message of the day.
@@ -86,13 +88,58 @@ pub(crate) const ALL: [&str; 38] = [
     PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
 ];
 
+/// The groups the command help lists the actions under, each group's text
+/// key and its actions, in the order the help shows them: the order the
+/// mod declares them in.
+pub(crate) const GROUPS: [(&str, &[&str]); 9] = [
+    (texts::GROUP_PLAYERS, &[ONLINE, KICK, MUTED]),
+    (
+        texts::GROUP_ACCOUNTS,
+        &[BAN, BANS, BANNED, ALLOWED, ACCOUNT],
+    ),
+    (texts::GROUP_MOVES, &[MARK, GOTO, BRING, SEND, PLACE]),
+    (texts::GROUP_CHARACTER, &[HEAL, STATS, LEARN, GOD]),
+    (texts::GROUP_ITEMS, &[GIVE, CLEAR, COPY, CHEST, CHEST_AT]),
+    (texts::GROUP_SERVER, &[MOTD, SET_MOTD, SAY, RESTART, STATUS]),
+    (texts::GROUP_WORLD, &[TIME, WEATHER, SAVE, WORLD, BACKUP]),
+    (texts::GROUP_LOGS, &[AUDIT, CHAT, WHO]),
+    (texts::GROUP_WINDOWS, &[PANEL, OPEN, PLAYER]),
+];
+
+/// The group of the action `id`, a text key.
+pub(crate) fn group(id: &str) -> Option<&'static str> {
+    GROUPS
+        .iter()
+        .find(|(_, ids)| ids.contains(&id))
+        .map(|(group, _)| *group)
+}
+
+/// The actions whose player lists offer the caller too: those an
+/// administrator uses on themselves as on anyone.
+pub(crate) const WITH_SELF: [&str; 11] = [
+    PLAYER, HEAL, STATS, LEARN, GOD, GIVE, CHEST, CLEAR, COPY, PLACE, MARK,
+];
+
 /// The actions that only read or open a window, which the audit log
 /// leaves out.
 pub(crate) const READS: [&str; 11] = [
     PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, BANS, WORLD, WHO, AUDIT, CHAT,
 ];
 
-/// The mod's command name, the part of its id after the author.
-pub(crate) const COMMAND: &str = "admin-tools";
 /// The command's short alias.
 pub(crate) const ALIAS: &str = "adm";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_action_is_in_exactly_one_group() {
+        for id in ALL {
+            let groups = GROUPS.iter().filter(|(_, ids)| ids.contains(&id)).count();
+            assert_eq!(groups, 1, "{id}");
+        }
+        let grouped: usize = GROUPS.iter().map(|(_, ids)| ids.len()).sum();
+        assert_eq!(grouped, ALL.len());
+    }
+}

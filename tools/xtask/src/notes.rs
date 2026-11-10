@@ -38,11 +38,6 @@ const WARNING: &str = "\
 > This is an alpha. Before 1.0 anything may change, including the API, the
 > ABI, file layouts, settings and mod ids. Mods built for one alpha may need a
 > rebuild for the next. Back up your saves.
->
-> Це альфа-версія. До 1.0 може змінитися будь-що: API, ABI, розташування
-> файлів, налаштування та ідентифікатори модів. Моди, зібрані для однієї
-> альфа-версії, можуть потребувати перезбирання для наступної. Зробіть
-> резервні копії збережень.
 ";
 
 /// Writes `<package>.md` into `--out` (`target/notes` by default) for each
@@ -766,10 +761,10 @@ mod tests {
     }
 
     #[test]
-    fn notes_open_with_both_warnings_and_name_the_loader_release() {
+    fn notes_open_with_the_warning_in_english_only_and_name_the_loader_release() {
         let text = notes("enshwick-game-rates", "v1.0.0-alpha.12", "- More loot.").unwrap();
         assert!(text.starts_with("> [!WARNING]\n> This is an alpha."));
-        assert!(text.contains("> Це альфа-версія."));
+        assert!(text.is_ascii(), "release notes are English only");
         assert!(text.contains(
             "Built for Enshwick 1.0.0-alpha.12. Extract [enshwick.zip](https://github.com/enshwick/enshwick/releases/tag/v1.0.0-alpha.12)"
         ));

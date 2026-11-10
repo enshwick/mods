@@ -27,7 +27,7 @@ mod server;
 mod settings;
 mod windows;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
@@ -36,7 +36,9 @@ use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Outcome, Request, Value, Via};
 use enshwick::daytime::Clock;
 use enshwick::effects::Effects;
-use enshwick::events::{PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded};
+use enshwick::events::{
+    PlayerJoined, PlayerLeft, ShutdownStarted, WorldLoaded, WorldSaved, WorldSaving,
+};
 use enshwick::game_settings::GameSettings;
 use enshwick::i18n::{Language, Texts};
 use enshwick::inventory::Inventories;
@@ -105,6 +107,12 @@ pub(crate) struct Tools {
     started: Instant,
     /// Whether a backup is under way.
     backing_up: AtomicBool,
+    /// Whether the game is writing the world's save, from its start to its
+    /// end, which a backup waits for.
+    saving: AtomicBool,
+    /// The tries left of the save a restart makes before it goes, which
+    /// waits while a backup holds the saves.
+    restart_save: AtomicU32,
     /// The remote console while it listens.
     rcon: Mutex<Option<rcon::Listener>>,
     /// Whether the remote console stopped after a panic, which keeps it
@@ -168,6 +176,8 @@ impl Mod for AdminTools {
             joined: Mutex::new(FxHashMap::default()),
             started: Instant::now(),
             backing_up: AtomicBool::new(false),
+            saving: AtomicBool::new(false),
+            restart_save: AtomicU32::new(0),
             rcon: Mutex::new(None),
             rcon_fused: AtomicBool::new(false),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
@@ -177,6 +187,10 @@ impl Mod for AdminTools {
         load.on::<WorldLoaded>(move |()| loaded.start())?;
         let stopped = Arc::clone(&tools);
         load.on::<ShutdownStarted>(move |()| stopped.stop())?;
+        let saving = Arc::clone(&tools);
+        load.on::<WorldSaving>(move |()| saving.saving.store(true, Ordering::Release))?;
+        let saved = Arc::clone(&tools);
+        load.on::<WorldSaved>(move |()| saved.saving.store(false, Ordering::Release))?;
         players::add(&tools)?;
         inventory::add(&tools)?;
         chest::add(&tools)?;
@@ -185,18 +199,14 @@ impl Mod for AdminTools {
         backup::add(&tools)?;
         builds::add(&tools, load)?;
         windows::add(&tools)?;
-        tools.actions.commands(ids::COMMAND, ids::ALIAS)?;
+        tools.actions.commands(ids::ALIAS)?;
 
         let changed = Arc::clone(&tools);
         load.on_settings_change(move |settings: &Settings| changed.apply(settings))?;
         let heard = Arc::clone(&tools);
         load.on_chat_said(move |line| heard.heard(line))?;
         let joins = Arc::clone(&tools);
-        load.on::<PlayerJoined>(move |joined| {
-            let (tools, key) = (Arc::clone(&joins), joined.key);
-            // Kicks and bans wait for the step to end.
-            scheduler.next_tick(move || tools.welcome(key));
-        })?;
+        load.on::<PlayerJoined>(move |joined| joins.welcome(joined.key))?;
         let leaves = Arc::clone(&tools);
         load.on::<PlayerLeft>(move |left| {
             leaves.joined.relock().remove(&left.key);
@@ -222,6 +232,15 @@ impl Tools {
         let rule_id = id.clone();
         let tools = Arc::clone(self);
         let declared = id.clone();
+        let action = match ids::group(&id) {
+            Some(group) => action.group(group),
+            None => action,
+        };
+        let action = if ids::WITH_SELF.contains(&id.as_str()) {
+            action.with_self()
+        } else {
+            action
+        };
         self.actions.add(
             action.allow(move |player| rules.admits(&rule_id, player)),
             move |request| {
@@ -256,6 +275,8 @@ impl Tools {
     /// Starts the world that loaded: the remote console listens when the
     /// world's settings turn it on.
     fn start(&self) {
+        // A save of the last world whose end was never heard is not this one's.
+        self.saving.store(false, Ordering::Release);
         self.running.store(true, Ordering::Relaxed);
         self.listen(&self.settings.load());
     }
@@ -272,6 +293,7 @@ impl Tools {
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);
+        self.restart_save.store(0, Ordering::Relaxed);
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();
         }
@@ -515,6 +537,53 @@ mod tests {
         for id in ids::ALL {
             for key in [format!("action.{id}"), format!("action.{id}.help")] {
                 assert!(texts.get(&key, Language::FALLBACK).is_some(), "{key}");
+            }
+        }
+    }
+
+    /// The command table of a page: each row's action and its last
+    /// column, who may use it by default.
+    fn command_rows(page: &str) -> Vec<(&str, &str)> {
+        page.lines()
+            .filter_map(|line| line.strip_prefix("| `/adm "))
+            .map(|row| {
+                let id = row.split([' ', '`']).next().unwrap_or_default();
+                let who = row.trim_end_matches(['|', ' ']).rsplit('|').next();
+                (id, who.unwrap_or_default().trim())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_page_lists_every_action_in_the_help_s_order_with_its_default_rule() {
+        let rules = Settings::default().rights.rules();
+        let guest = enshwick::world::Player {
+            entity: Entity(2),
+            slot: 0,
+            key: PlayerKey::new(9),
+            permissions: 0,
+            name: "Guest".into(),
+        };
+        let pages = [
+            (include_str!("../README.md"), "Everyone", "Admins"),
+            (include_str!("../docs/player.md"), "Everyone", "Admins"),
+            (include_str!("../docs/player.uk.md"), "Усі", "Адміни"),
+        ];
+        let order: Vec<&str> = ids::GROUPS
+            .iter()
+            .flat_map(|(_, ids)| ids.iter().copied())
+            .collect();
+        for (page, everyone, admins) in pages {
+            let rows = command_rows(page);
+            let listed: Vec<&str> = rows.iter().map(|(id, _)| *id).collect();
+            assert_eq!(listed, order);
+            for (id, who) in rows {
+                let default = if rules.admits(id, &guest) {
+                    everyone
+                } else {
+                    admins
+                };
+                assert_eq!(who, default, "{id}");
             }
         }
     }

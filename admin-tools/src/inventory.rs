@@ -24,8 +24,8 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
         Action::new(ids::GIVE, texts::ACTION_GIVE)
             .help(texts::ACTION_GIVE_HELP)
             .arg(Arg::player(texts::ARG_PLAYER))
-            .arg(items::count_arg())
-            .arg(items::item_arg()),
+            .arg(items::item_arg())
+            .arg(items::count_arg()),
         give,
     )?;
     tools.add(
@@ -187,8 +187,8 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
 fn try_give(tools: &Tools, request: &Request<'_>) -> Result<Outcome, Outcome> {
     let [
         Value::Player { key, name },
-        Value::Number(count),
         Value::Text(text),
+        Value::Number(count),
     ] = request.args
     else {
         return Err(no_player(request));

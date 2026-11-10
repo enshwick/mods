@@ -10,7 +10,7 @@ settings:
     applies: at-once
   - key: allowlist
     default: false
-    meaning: When on, only accounts on the allow-list and administrators may join.
+    meaning: When on, only accounts on the allow-list and admins may join.
     applies: at-once
   - key: announcements
     default: "[]"
@@ -72,107 +72,159 @@ settings:
     applies: at-once
 ---
 
-- An Admin Tools window opens with Shift+F9: the players online with their actions, the bans and the allow-list, the server, and the build log.
-- Administrators see who is online, and kick, ban or mute players. A ban keeps its reason and holds after a restart. Players who are away can be banned, unbanned and put on the allow-list.
-- An allow-list lets only chosen accounts and administrators join. Each world decides who may use each action. Players read a message of the day, announcements, scheduled announcements and restart warnings.
-- Administrators set the time and the weather, save the world and back it up while the server runs. They heal players and move them to a player, a position or a map waypoint. They give items and chests, clear or copy an inventory, set health, stamina and mana, teach recipes and turn on god mode.
-- RCON tools such as BattleMetrics run every command on a dedicated server. Audit and chat logs keep what happened. A build log, off by default, shows who built or broke what near a spot.
+- **Remote console:** every command from an RCON tool, without joining the
+  game.
+- **Players and access:** who is online, kicks, bans with reasons, chat
+  mutes, an allow-list. Players who are away can be banned too.
+- **Chat and announcements:** a message of the day, announcements on a
+  timer, a line to everyone now, restart warnings.
+- **World and server:** the time of day, the weather, saves, backups while
+  the server runs, the world's game settings, and audit, chat and build
+  logs.
+- **Characters and items:** heal, set health, stamina and mana, teach
+  recipes, god mode, give items or chests, clear or copy an inventory.
 
-## How do I open the Admin Tools window?
+## How do I connect an RCON tool?
 
-Press Shift+F9 in the game. The window lists its sections: players, bans
-and the allow-list, server, and build log. Each section shows only the
-actions you may use, with a button for each.
+On a dedicated server the remote console is on from the first start. It
+speaks Source RCON, the protocol of tools such as rcon-cli, mcrcon and
+BattleMetrics.
 
-- **Players** lists the players online. **Actions** opens the window of one
-  player, with every action on them: move, moderate, health, items and
-  recipes.
-- **Bans and the allow-list** lists the bans with their reasons, each with a
-  button to lift it, and switches players on the allow-list or off.
-- **Server** shows the message of the day and the restart warning, and sets
-  the time of day, the weather, saves and backups.
-- **Build log** shows the changes near you, each with a button that takes you
-  there.
-
-To change the key, open the Mods screen, select Admin Tools and change it
-under **Key bindings**. Typing `/adm panel` in chat also opens the window.
-
-## How do I use an action?
-
-You press its button in the Admin Tools window. Or you type the action as a
-command in chat or in the console window of a dedicated server. Every
-command starts with `/adm` or `/admin-tools`.
-
-1. Open the chat in the game.
-2. Type `/adm help` to see the actions you may use.
-3. Type a command, such as `/adm kick Bob`.
-
-The answer shows only to you. In the console window of a dedicated server,
-type the same line without the `/`, such as `adm kick Bob`.
-
-The console and RCON tools may use every action.
-
-| Command | What it does |
+| | |
 | --- | --- |
-| `/adm panel` | Opens the Admin Tools window. |
-| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. |
-| `/adm player <player>` | Opens the window of one player, with every action on them. |
-| `/adm online` | Lists the players online, their account ids, how long each has played, and who is muted. |
-| `/adm status` | Shows how long the server runs, the world, and the Enshwick and mod versions. |
-| `/adm motd` | Shows the message of the day. |
-| `/adm setmotd <text>` | Sets the message of the day in place of the world's setting. `/adm setmotd -` goes back to the setting. |
-| `/adm say <text>` | Shows every player a line now. |
-| `/adm kick <player>` | Removes a player from the game. They may join again. |
-| `/adm ban <player> <reason>` | Bans a player, online or away, and keeps the reason, the time and who banned them. |
-| `/adm bans` | Lists the newest 50 bans with their reasons, who banned and when, under the count of all bans. |
-| `/adm banned <player> on` or `off` | Bans a player, online or away, or lifts a ban. |
-| `/adm allowed <player> on` or `off` | Puts a player on the allow-list or takes them off, online or away. |
-| `/adm account <id> ban`, `unban`, `allow` or `disallow` | Changes an account by its id of up to 16 hex digits, also one that never joined this world. |
-| `/adm muted <player> on` or `off` | Mutes a player in chat or lifts the mute. |
-| `/adm heal <player>` | Gives a player their full health. |
-| `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. The game keeps the value within the maximum. |
-| `/adm learn <player> <recipe>` | Unlocks a recipe for a player. Name it by the game's name, such as `Tool_Torch01`, in any case; by its GUID; or by a mod's content id. A number grants any knowledge the game keeps for the player. |
-| `/adm god <player> on` or `off` | Nothing damages a player in god mode. It ends when the player leaves or the world stops. |
-| `/adm give <player> <count> <item>` | Gives a player new items, in as many stacks as they need; you read how many did not fit. Name the item by the game's name, such as `Tool_Glider_T1`, in any case; by its GUID; by a mod's content id; or by its number. An unknown name lists the names near it. |
-| `/adm chest <player> <count> <item>` | Places a wooden chest beside a player and fills it with items, named as for `give`. A chest outside every base is not saved. |
-| `/adm chestat <x> <y> <z> <count> <item>` | Places a wooden chest at a position and fills it with items. A chest outside every base is not saved. |
-| `/adm clear <player>` | Destroys every stack in every slot a player has, equipment, action bar and look slots included. |
-| `/adm copy <player> <player>` | Gives the second player new items of every stack the first carries or wears. The items start new, without wear or level. What does not fit stays out, and you read how many; the look and currency slots are not copied. |
-| `/adm goto <player>` | Takes you to a player. |
-| `/adm bring <player>` | Brings a player to you. |
-| `/adm send <player> <player>` | Moves the first player to the second. |
-| `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres, on free ground near it. |
-| `/adm mark <player>` | Moves a player to the waypoint you set on your map, on free ground near it. |
-| `/adm time <time>` | Sets the time of day, such as `18:30`, or in hours, such as `6.5` for 06:30. |
-| `/adm weather clear` | Starts the weather: `clear`, `rain`, `blizzard`, or `any` for the game's choice. |
-| `/adm restart <minutes>` | Warns every player of a restart, and saves the world when the time is up. `0` stops the warning. Only on a dedicated server. |
-| `/adm save` | Saves the world now. |
-| `/adm backup` | Copies the world to a backup folder while the server runs. |
-| `/adm world` | Shows the world, its last save and its game settings. |
-| `/adm who <metres>` | Shows the last 10 changes to buildings, building blocks and terrain within up to 200 metres of you, newest first, while the build log is on. It looks through about the newest 1,000 changes. |
-| `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. |
-| `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. |
+| Address | `127.0.0.1`, the server's own computer |
+| Port | `25575` |
+| Password | in `rcon-password.txt` in `<save>-mod-data/enshwick.admin-tools/` beside the world's save |
+| On by default | on a dedicated server; off in a game a player hosts |
 
-Administrators and the host cannot be kicked, banned or muted. `goto`,
-`bring`, `mark` and `who` need a character, so the console cannot use them.
+1. Open `rcon-password.txt`. Admin Tools writes a random password there at
+   the first start, and the server's log names the file.
+2. In the tool, enter the address, the port and that password.
+3. Send a command without the `/`, such as `adm online`. Send `help` to list
+   the commands of every mod.
+
+RCON is not encrypted: the password and the commands cross the network as
+plain text. To reach the console from another computer, use an SSH tunnel or
+a VPN. Or set **Remote console address** to `0.0.0.0` and open the port only
+to computers you trust.
+
+To choose the password, set **Remote console password** in
+[the settings](#how-do-i-change-the-settings). To turn the console off, set
+**Remote console** to off. After three wrong passwords from one address, the
+address waits a minute.
+
+## How do I change the settings?
+
+Each world has its own Admin Tools settings. Change them in one of two ways:
+
+- **In the game:** open the Mods screen, select Admin Tools and press its
+  gear. On a server, only admins can change them there.
+- **On a dedicated server:** edit `settings.toml` in
+  `<save>-mod-settings/enshwick.admin-tools/` beside the world's save.
+  Admin Tools writes the file when the world first loads.
+
+In the file, each setting is a line such as `build_log = true`. The rules of
+the actions are under `[rights]`, such as `kick = "nobody"`. A change applies
+while the world runs.
+
+## What commands are there?
+
+Every action is a command in chat, in the console window of a dedicated
+server and in an RCON tool. It starts with `/adm` or `/admin-tools`. In the
+console and an RCON tool, leave out the `/`.
+
+`/adm help` lists the actions you may use, and `/adm help <action>` explains
+one. An argument in square brackets may be left out.
+
+| Command | What it does | By default |
+| --- | --- | --- |
+| `/adm online` | Lists the players online, their account ids and time online. | Everyone |
+| `/adm kick <player>` | Removes a player from the game. They may join again. | Admins |
+| `/adm muted <player> on` or `off` | Mutes a player in chat or lifts the mute. | Admins |
+| `/adm ban <player> <reason>` | Bans a player, online or away, with a reason. | Admins |
+| `/adm bans` | Lists the newest 50 bans with their reasons. | Admins |
+| `/adm banned <player> on` or `off` | Bans a player or lifts a ban. | Admins |
+| `/adm allowed <player> on` or `off` | Puts a player on the allow-list or takes them off. | Admins |
+| `/adm account <id> ban`, `unban`, `allow` or `disallow` | Changes an account by its id, also one that never joined. | Admins |
+| `/adm mark <player>` | Moves a player to the waypoint on your map. | Admins |
+| `/adm goto <player>` | Takes you to a player. | Admins |
+| `/adm bring <player>` | Brings a player to you. | Admins |
+| `/adm send <player> <player>` | Moves the first player to the second. | Admins |
+| `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres. | Admins |
+| `/adm heal <player>` | Gives a player their full health. | Admins |
+| `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. | Admins |
+| `/adm learn <player> <recipe>` | Unlocks a recipe for a player. | Admins |
+| `/adm god <player> on` or `off` | Nothing damages the player until they leave. | Admins |
+| `/adm give <player> <item> [count]` | Gives a player items, one when the count is left out. | Admins |
+| `/adm clear <player>` | Destroys everything a player carries and wears. | Admins |
+| `/adm copy <player> <player>` | Gives the second player new items of everything the first carries. | Admins |
+| `/adm chest <player> <item> [count]` | Places a chest of items beside a player. | Admins |
+| `/adm chestat <x> <y> <z> <item> [count]` | Places a chest of items at a position. | Admins |
+| `/adm motd` | Shows the message of the day. | Everyone |
+| `/adm setmotd <text>` | Sets the message of the day. `-` goes back to the world's setting. | Admins |
+| `/adm say <text>` | Shows every player a line now. | Admins |
+| `/adm restart <minutes>` | Warns every player of a restart and saves when the time is up. `0` stops it. Only on a dedicated server. | Admins |
+| `/adm status` | Shows the uptime, the world and the mod versions. | Everyone |
+| `/adm time <time>` | Sets the time of day, such as `18:30`, or `6.5` for 06:30. | Admins |
+| `/adm weather <weather>` | Starts `clear`, `rain`, `blizzard`, or `any` for the game's choice. | Admins |
+| `/adm save` | Saves the world now. | Admins |
+| `/adm world` | Shows the world, its last save and its game settings. | Admins |
+| `/adm backup` | Copies the world to a backup folder while the server runs. | Admins |
+| `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. | Admins |
+| `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. | Admins |
+| `/adm who <metres>` | Shows the last 10 changes to buildings and terrain near you, up to 200 metres. | Admins |
+| `/adm panel` | Opens the Admin Tools window. | Admins |
+| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. | Admins |
+| `/adm player <player>` | Opens the window of one player. | Admins |
+
+Admins are the players whose user group gives `CanKickBan`. Admins and the
+host cannot be kicked, banned or muted. `goto`, `bring`, `mark` and
+`who` need a character, so the console cannot use them.
 
 A player who is away is named as they last joined this world. Admin Tools
 remembers the last 256 accounts that tried to join, and every account on the
 ban list or the allow-list.
 
-On a dedicated server, name an item or recipe by the game's name, its GUID or
-a mod's content id.
+## How do I name an item or a recipe?
+
+- By its debug name, such as `Tool_Glider_T1`, in any case.
+- By its GUID, or by a mod's content id, such as `you.lockers:locker`.
+- In a game a player hosts, also by the name the game shows, such as
+  `Glider`, in any language the game offers. A dedicated server does not
+  have these names.
+- An item by its number, and any knowledge by its number for `learn`.
+
+An unknown name lists the names near it. `give`, `chest` and `chestat` hand
+over as many stacks as the items need, and you read how many did not fit.
+
+Items from `copy` start new, without wear or level, and the look and
+currency slots are not copied. A chest outside every base is not saved.
+
+## How do I open the Admin Tools window?
+
+Press Shift+F9 in the game, or type `/adm panel`. The window has four
+sections, and each shows only the actions you may use:
+
+| Section | What it holds |
+| --- | --- |
+| Players | The players online. **Actions** opens one player's window: move, moderate, health, items and recipes. |
+| Bans and the allow-list | The bans with their reasons, each with a button to lift it, and the allow-list. |
+| Server | The message of the day, the restart warning, the time of day, the weather, saves and backups. |
+| Build log | The changes near you, each with a button that takes you there. |
+
+To change the key, open the Mods screen, select Admin Tools and change it
+under **Key bindings**.
 
 ## How do I keep strangers out?
 
 1. Put each player you trust on the allow-list with
    `/adm allowed <player> on`, or switch them on in the window's
    **Bans and the allow-list** section.
-2. Open the Mods screen, select Admin Tools, and turn on **Allow-list** in the
-   server's settings.
+2. Turn on **Allow-list** (`allowlist = true`) in
+   [the settings](#how-do-i-change-the-settings).
 
 From then on, an account not on the list is kicked as it joins.
-Administrators always get in. A player kicked this way is remembered, so
+Admins always get in. A player kicked this way is remembered, so
 you can allow them by name afterwards.
 
 To allow an account that never joined, ask the player for their account id
@@ -180,18 +232,19 @@ and type `/adm account <id> allow`.
 
 ## How do I decide who may use each action?
 
-Each action has a rule in the world's settings, under **Who may use each
-action**. A rule is one of these:
+Each action has a rule in [the settings](#how-do-i-change-the-settings),
+under **Who may use each action**, or under `[rights]` in the file. The table
+of commands shows each rule's default.
 
-- `everyone`
-- `nobody`. Only the server's console may then use the action.
-- A permission of the player's user group in `enshrouded_server.json`:
-  `CanKickBan` for administrators, `CanAccessInventories`, `CanEditBase`,
-  `CanEditWorld`, `CanExtendBase` or `CanReceiveExp`.
+| Rule | Who may use the action |
+| --- | --- |
+| `everyone` | Every player. |
+| `nobody` | No player. The server's console and RCON tools still may. |
+| `CanKickBan` | Admins. |
+| `CanAccessInventories`, `CanEditBase`, `CanEditWorld`, `CanExtendBase` or `CanReceiveExp` | Players whose user group in `enshrouded_server.json` gives that permission. |
 
-By default, `online`, `status` and `motd` are for everyone and every other
-action is for administrators. A player sees only the actions their rule allows. A change
-applies within two seconds.
+A player sees only the actions their rule allows. A change applies within
+two seconds.
 
 ## How do I warn players before a restart?
 
@@ -206,31 +259,6 @@ the panel restarts the server.
 Type `/adm restart 0` to call the restart off. A game a player hosts has no
 restart warning.
 
-## How do I connect an RCON tool?
-
-On a dedicated server the remote console is on from the first start. It
-listens on the server's own computer only. It speaks Source RCON, which tools
-such as BattleMetrics, rcon-cli and mcrcon use.
-
-1. Open `rcon-password.txt` in `<save>-mod-data/enshwick.admin-tools/` beside
-   the world's save. Admin Tools writes a random password there at the first
-   start, and the server's log names the file.
-2. In the tool on the server's computer, enter `127.0.0.1`, port `25575` and
-   that password.
-3. Send a command without the `/`, such as `adm online`. Send `help` to list
-   the commands of every mod.
-
-To choose the password yourself, set **Remote console password** in the
-world's settings. To turn the console off, set **Remote console** to off.
-
-RCON is not encrypted: the password and commands cross the network as
-plain text. To reach it from another computer, use an SSH tunnel or a VPN.
-Or set **Remote console address** to `0.0.0.0` and open the port only to
-computers you trust.
-
-After three wrong passwords from one address, the address waits a minute. A
-tool that does not log in within 10 seconds is disconnected.
-
 ## How do I back up the world?
 
 Type `/adm backup`. Admin Tools holds the world's saves and copies the save,
@@ -239,7 +267,7 @@ its mod settings and its mod data to a folder named by the UTC time. Then it let
 Players keep playing. You read where the backup went when it is done.
 
 Backups go to `backups/` in `<save>-mod-data/enshwick.admin-tools/`. If you
-set **Backup folder**, they go to a folder named after the save inside it.
+set **Backup folder** in [the settings](#how-do-i-change-the-settings), they go to a folder named after the save inside it.
 
 Admin Tools keeps the newest 10, or as many as **Backups kept** says, and
 removes older ones. To restore a
@@ -248,7 +276,8 @@ beside the world's save.
 
 ## How do I see who built or broke something?
 
-Turn on **Build log** in the world's settings first. From then on, Admin Tools
+First turn on **Build log** (`build_log = true`) in
+[the settings](#how-do-i-change-the-settings). From then on, Admin Tools
 writes each building placed, picked up or torn down. It also writes each spot
 where building blocks were placed or removed and terrain was dug or filled.
 
@@ -264,25 +293,22 @@ metres, since the game does not say who made them.
 
 The log keeps nothing from before you turned it on.
 
-## Where are the audit log and the chat log?
+## Where are the logs?
 
-Both are in `<save>-mod-data/enshwick.admin-tools/` beside the world's save.
+The logs are in `<save>-mod-data/enshwick.admin-tools/` beside the world's
+save. Each line starts with the time in UTC.
 
-- `audit.log` holds one line per run of an action that changes something,
-  done or refused. A line has the time in UTC, who acted, from where, the
-  action, its values, the answer, and `done` or `refused`. Reads such as
-  `online` are not written.
-- A change the game makes after the answer, such as a give, adds a line to
-  `audit.log` when part of it failed. RCON logins are written too.
-- `chat.log` holds one line per chat line: the time in UTC, the player's
-  name and account id, the kind of line and its text.
+| File | What it holds | On by default |
+| --- | --- | --- |
+| `audit.log` | Each run of an action that changes something, done or refused: who, from where, the action, its values and the answer. Also RCON logins, and a change the game made in part after the answer, such as a give. Reads such as `online` are left out. | On a dedicated server |
+| `chat.log` | Each chat line: the player's name and account id, the kind of line and its text. | On a dedicated server |
+| `builds.log` | Each building placed or removed, and each spot of building blocks or terrain changed, with who did it. | No |
 
+A game a player hosts keeps no log until **Audit log** or **Chat log** is on
+in [the settings](#how-do-i-change-the-settings).
 When the chat log is on, everything players write in chat is kept on the
-server. It is on for a dedicated server and off for a game a player hosts,
-unless the world's **Chat log** setting says otherwise.
-
-`builds.log` sits beside them while the build log is on. Past 1 MB a log
-moves to `audit.1.log`, `chat.1.log` or `builds.1.log` and starts again.
+server. Past 1 MB a log moves to `audit.1.log`, `chat.1.log` or
+`builds.1.log` and starts again.
 
 ## Install
 

@@ -334,8 +334,6 @@ pub(crate) fn joins(loader: &Installed, who: &PlayerInfo) {
         key: who.key,
     };
     assert!(loader.raise::<PlayerJoined>(&data) >= 1);
-    // The check runs after the step, at the scheduler's next turn.
-    let _ran = loader.tick(Duration::from_secs(1));
 }
 
 /// Ticks the fake server a second at a time until `done` holds or ten

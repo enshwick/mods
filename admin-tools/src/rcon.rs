@@ -4,19 +4,20 @@
 //! it, and the reply goes back to the tool.
 //!
 //! Everything a client sends is bounded: the packet size, the packets a
-//! second, the connections at once and the failed logins, after which the
-//! address waits a while.
+//! second, the connections at once and from one address, and the failed
+//! logins, after which the address waits a while. The threads block on
+//! their sockets and closing shuts the sockets down, so an idle console
+//! costs nothing and the game thread never waits for it.
 
 mod packet;
 
 use core::time::Duration;
 use std::io::{self, Read as _, Write as _};
-use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering, fence};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, Weak};
-use std::thread::JoinHandle;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
 
 use enshwick::Relock as _;
@@ -38,6 +39,10 @@ const ALPHABET: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx
 
 /// Clients connected at once; a client past it is closed at once.
 const MAX_CONNECTIONS: usize = 4;
+
+/// Clients connected at once from one address, so a few addresses cannot
+/// hold every slot.
+const MAX_PER_ADDRESS: usize = 2;
 
 /// Failed logins from one address, over any number of connections, before
 /// its connection closes and the address waits.
@@ -64,16 +69,27 @@ const IDLE: Duration = Duration::from_secs(300);
 /// How long a command may wait for the game thread before the reply says so.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// How often the threads look whether the console closed.
-const POLL: Duration = Duration::from_millis(100);
+/// How many times the listener tries to take its port, which a console
+/// closed a moment ago may still hold.
+const BIND_TRIES: u32 = 10;
+
+/// How long the listener waits between tries to take its port, and after a
+/// connection that failed to arrive.
+const RETRY: Duration = Duration::from_millis(500);
+
+/// How long closing tries to reach the listener to wake it.
+const WAKE: Duration = Duration::from_secs(1);
 
 /// Where the remote console listens and the password it takes.
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Config {
     /// The address and port.
     pub address: SocketAddr,
-    /// The password, never shown or logged.
+    /// The world's password, never shown or logged; empty for the one
+    /// generated in `file`.
     pub password: String,
+    /// The file of the generated password in the world's data folder.
+    pub file: Option<PathBuf>,
 }
 
 impl core::fmt::Debug for Config {
@@ -87,16 +103,24 @@ impl core::fmt::Debug for Config {
 /// The remote console while it listens.
 #[derive(Debug)]
 pub(crate) struct Listener {
-    config: Config,
     shared: Arc<Shared>,
-    thread: Option<JoinHandle<()>>,
 }
 
 /// What the listener's threads share.
 struct Shared {
-    password: String,
+    config: Config,
+    /// The password clients log in with, once the listener's thread has
+    /// read or made it.
+    password: OnceLock<String>,
     stop: AtomicBool,
-    connections: AtomicUsize,
+    /// Where the listener took its port, once it has.
+    bound: OnceLock<SocketAddr>,
+    /// The connections open from each address.
+    open: Mutex<FxHashMap<IpAddr, usize>>,
+    /// Each client's socket, which closing shuts down, by a number of its
+    /// own.
+    clients: Mutex<Vec<(u64, TcpStream)>>,
+    next_client: AtomicU64,
     /// The failed logins of each address within [`PENALTY`].
     strikes: Mutex<FxHashMap<IpAddr, Strikes>>,
     tools: Weak<Tools>,
@@ -116,51 +140,70 @@ impl core::fmt::Debug for Shared {
 }
 
 impl Listener {
-    /// Listens on the address of `config`.
+    /// Starts the remote console of `config` on a thread of its own, which
+    /// reads or makes the password and takes the port.
     ///
     /// # Errors
     ///
-    /// The reason the port does not open, such as another program on it.
+    /// The reason no thread starts.
     pub(crate) fn open(config: Config, tools: Weak<Tools>) -> io::Result<Self> {
-        let socket = TcpListener::bind(config.address)?;
-        socket.set_nonblocking(true)?;
-        let shared = Arc::new(Shared {
-            password: config.password.clone(),
-            stop: AtomicBool::new(false),
-            connections: AtomicUsize::new(0),
-            strikes: Mutex::new(FxHashMap::default()),
-            tools,
-        });
-        let accepting = Arc::clone(&shared);
-        let thread = std::thread::Builder::new()
+        let shared = Arc::new(Shared::new(config, tools));
+        let listening = Arc::clone(&shared);
+        std::thread::Builder::new()
             .name("admin-tools rcon".into())
-            .spawn(move || guarded(&accepting, || accept(&socket, &accepting)))?;
-        Ok(Self {
-            config,
-            shared,
-            thread: Some(thread),
-        })
+            .spawn(move || {
+                guarded(&listening, || listen_on(&listening));
+                // A console that never bound counts as closed, so the next
+                // change of settings opens it again.
+                listening.stop.store(true, Ordering::SeqCst);
+            })?;
+        Ok(Self { shared })
+    }
+
+    /// Whether its thread ended: closed, or it never took its port.
+    pub(crate) fn ended(&self) -> bool {
+        self.shared.stop.load(Ordering::SeqCst)
     }
 
     /// Where it listens and the password it takes.
-    pub(crate) const fn config(&self) -> &Config {
-        &self.config
+    pub(crate) fn config(&self) -> &Config {
+        &self.shared.config
     }
 
-    /// Stops listening and closes every connection within a poll.
-    pub(crate) fn close(mut self) {
-        self.shared.stop.store(true, Ordering::Release);
-        if let Some(thread) = self.thread.take() {
-            let _joined = thread.join();
+    /// Stops listening and shuts every connection down; the threads end on
+    /// their own, so the caller never waits for them.
+    pub(crate) fn close(self) {
+        self.shared.stop.store(true, Ordering::SeqCst);
+        // Pairs with the fence after `bound` is set: one side sees the other.
+        fence(Ordering::SeqCst);
+        if let Some(&bound) = self.shared.bound.get() {
+            // The connect may take up to WAKE; the caller is the game thread.
+            let _spawned = std::thread::Builder::new()
+                .name("admin-tools rcon wake".into())
+                .spawn(move || wake(bound));
+        }
+        for (_, client) in self.shared.clients.relock().iter() {
+            let _shut = client.shutdown(Shutdown::Both);
         }
     }
+}
+
+/// Connects to the listener at `bound` once, so its blocking accept returns
+/// and sees that the console closed.
+fn wake(bound: SocketAddr) {
+    let ip = match bound.ip() {
+        IpAddr::V4(ip) if ip.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(ip) if ip.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
+        ip => ip,
+    };
+    let _woken = TcpStream::connect_timeout(&SocketAddr::new(ip, bound.port()), WAKE);
 }
 
 /// Runs `body`; a panic in it turns the remote console off until the mod
 /// loads again, and the rest of the mod keeps running.
 fn guarded(shared: &Shared, body: impl FnOnce()) {
     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)).is_err() {
-        shared.stop.store(true, Ordering::Release);
+        shared.stop.store(true, Ordering::SeqCst);
         if let Some(tools) = shared.tools.upgrade() {
             tools.rcon_fused.store(true, Ordering::Release);
         }
@@ -168,45 +211,110 @@ fn guarded(shared: &Shared, body: impl FnOnce()) {
     }
 }
 
+/// The listener's thread: reads or makes the password, takes the port and
+/// takes connections until the console closes.
+fn listen_on(shared: &Arc<Shared>) {
+    let config = &shared.config;
+    let password = match (config.password.is_empty(), &config.file) {
+        (false, _) => config.password.clone(),
+        (true, Some(file)) => match generated_password(file) {
+            Ok(password) => password,
+            Err(why) => {
+                enshwick::warn!("the remote console is off: {}: {why}", file.display());
+                return;
+            }
+        },
+        (true, None) => return,
+    };
+    let _set = shared.password.set(password);
+    let Some(socket) = bind(shared) else {
+        return;
+    };
+    if let (true, Some(file)) = (config.password.is_empty(), &config.file) {
+        enshwick::info!("the remote console's password is in {}", file.display());
+    }
+    let _set = shared
+        .bound
+        .set(socket.local_addr().unwrap_or(config.address));
+    fence(Ordering::SeqCst);
+    accept(&socket, shared);
+}
+
+/// Takes the console's port, again while another socket still holds it;
+/// `None` once the console closed or every try failed.
+fn bind(shared: &Shared) -> Option<TcpListener> {
+    let address = shared.config.address;
+    for tries in 1..=BIND_TRIES {
+        if shared.stop.load(Ordering::SeqCst) {
+            return None;
+        }
+        match TcpListener::bind(address) {
+            Ok(socket) => {
+                enshwick::info!("the remote console listens on {address}");
+                return Some(socket);
+            }
+            Err(why) if tries == BIND_TRIES => {
+                enshwick::warn!("the remote console does not listen on {address}: {why}");
+            }
+            Err(_) => std::thread::sleep(RETRY),
+        }
+    }
+    None
+}
+
 /// Takes connections until the console closes.
 fn accept(socket: &TcpListener, shared: &Arc<Shared>) {
-    while !shared.stop.load(Ordering::Acquire) {
+    while !shared.stop.load(Ordering::SeqCst) {
         let (stream, from) = match socket.accept() {
             Ok(accepted) => accepted,
-            Err(why) if why.kind() == io::ErrorKind::WouldBlock => {
-                std::thread::sleep(POLL);
-                continue;
-            }
             Err(why) => {
                 enshwick::warn!("remote console: a connection failed: {why}");
-                std::thread::sleep(POLL);
+                std::thread::sleep(RETRY);
                 continue;
             }
         };
-        if shared.waits(from.ip()) || !shared.take_slot() {
+        let ip = from.ip();
+        if shared.stop.load(Ordering::SeqCst) || shared.waits(ip) || !shared.take_slot(ip) {
             continue;
         }
         let serving = Arc::clone(shared);
         let spawned = std::thread::Builder::new()
             .name("admin-tools rcon client".into())
             .spawn(move || {
+                let tracked = serving.track(&stream);
                 guarded(&serving, || {
-                    if let Err(why) = serve(stream, from.ip(), &serving) {
+                    if let Err(why) = serve(stream, ip, &serving) {
                         enshwick::info!("remote console: {from} closed: {why}");
                     }
                 });
-                serving.connections.fetch_sub(1, Ordering::AcqRel);
+                serving.untrack(tracked);
+                serving.free_slot(ip);
             });
         if let Err(why) = spawned {
-            shared.connections.fetch_sub(1, Ordering::AcqRel);
+            shared.free_slot(ip);
             enshwick::warn!("remote console: no thread for {from}: {why}");
         }
     }
 }
 
 impl Shared {
+    fn new(config: Config, tools: Weak<Tools>) -> Self {
+        Self {
+            config,
+            password: OnceLock::new(),
+            stop: AtomicBool::new(false),
+            bound: OnceLock::new(),
+            open: Mutex::default(),
+            clients: Mutex::default(),
+            next_client: AtomicU64::new(0),
+            strikes: Mutex::default(),
+            tools,
+        }
+    }
+
     /// Whether `ip` still waits after [`MAX_FAILURES`] failed logins.
     fn waits(&self, ip: IpAddr) -> bool {
+        let ip = network(ip);
         let mut strikes = self.strikes.relock();
         let now = Instant::now();
         strikes.retain(|_, strikes| now < strikes.last + PENALTY);
@@ -217,6 +325,7 @@ impl Shared {
 
     /// Counts a failed login from `ip`; whether the address now waits.
     fn strike(&self, ip: IpAddr) -> bool {
+        let ip = network(ip);
         let now = Instant::now();
         let mut strikes = self.strikes.relock();
         let strikes = strikes.entry(ip).or_insert(Strikes {
@@ -233,16 +342,56 @@ impl Shared {
 
     /// Forgets the failed logins of `ip` after it logged in.
     fn forgive(&self, ip: IpAddr) {
+        let ip = network(ip);
         self.strikes.relock().remove(&ip);
     }
 
-    /// Counts one more connection unless [`MAX_CONNECTIONS`] are open.
-    fn take_slot(&self) -> bool {
-        self.connections
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |open| {
-                (open < MAX_CONNECTIONS).then_some(open + 1)
-            })
-            .is_ok()
+    /// Counts one more connection from `ip` unless [`MAX_CONNECTIONS`] are
+    /// open, or [`MAX_PER_ADDRESS`] from `ip`.
+    fn take_slot(&self, ip: IpAddr) -> bool {
+        let ip = network(ip);
+        let mut open = self.open.relock();
+        let total: usize = open.values().sum();
+        let mine = open.get(&ip).copied().unwrap_or(0);
+        // Every local tool and tunnel arrives from loopback, which no crowd reaches.
+        if total >= MAX_CONNECTIONS || (mine >= MAX_PER_ADDRESS && !ip.is_loopback()) {
+            return false;
+        }
+        open.insert(ip, mine + 1);
+        true
+    }
+
+    /// Frees the slot of a connection from `ip` that closed.
+    fn free_slot(&self, ip: IpAddr) {
+        let ip = network(ip);
+        let mut open = self.open.relock();
+        if let Some(mine) = open.get_mut(&ip) {
+            *mine -= 1;
+            if *mine == 0 {
+                open.remove(&ip);
+            }
+        }
+    }
+
+    /// Keeps a handle on `stream` for closing to shut it down, and shuts it
+    /// down at once when the console closed already; its number, `None`
+    /// when no handle could be had.
+    fn track(&self, stream: &TcpStream) -> Option<u64> {
+        let handle = stream.try_clone().ok()?;
+        let id = self.next_client.fetch_add(1, Ordering::Relaxed);
+        let mut clients = self.clients.relock();
+        if self.stop.load(Ordering::SeqCst) {
+            let _shut = handle.shutdown(Shutdown::Both);
+        }
+        clients.push((id, handle));
+        Some(id)
+    }
+
+    /// Drops the handle of the client `id`.
+    fn untrack(&self, id: Option<u64>) {
+        if let Some(id) = id {
+            self.clients.relock().retain(|(client, _)| *client != id);
+        }
     }
 
     /// Writes a login to the audit log while it is on.
@@ -250,6 +399,17 @@ impl Shared {
         if let Some(tools) = self.tools.upgrade() {
             tools.log(&[label, "rcon", "login", "", outcome]);
         }
+    }
+}
+
+/// The address the limits count `ip` under: an IPv6 address by its /64
+/// network, which one client holds whole and can rotate within.
+fn network(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) if !v6.is_loopback() && v6.to_ipv4_mapped().is_none() => {
+            IpAddr::V6(Ipv6Addr::from(v6.to_bits() & !u128::from(u64::MAX)))
+        }
+        ip => ip.to_canonical(),
     }
 }
 
@@ -273,10 +433,12 @@ impl Pace {
 }
 
 /// Serves one client until it leaves, breaks a bound or the console
-/// closes.
+/// closes. A read that waited out its time closes the connection, since
+/// Windows leaves a socket whose receive timed out unusable.
 fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
-    stream.set_nonblocking(false)?;
-    stream.set_read_timeout(Some(POLL))?;
+    let Some(password) = shared.password.get() else {
+        return Err(io::Error::other("no password yet"));
+    };
     // A client that stops reading cannot keep its thread and slot for good.
     stream.set_write_timeout(Some(COMMAND_TIMEOUT))?;
     stream.set_nodelay(true)?;
@@ -284,32 +446,36 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
     let mut buffer = Vec::new();
     let mut chunk = [0u8; 1024];
     let opened = Instant::now();
-    let mut last = opened;
     let mut pace = Pace {
         since: opened,
         count: 0,
     };
     let mut logged_in = false;
-    while !shared.stop.load(Ordering::Acquire) {
-        if !logged_in && opened.elapsed() >= LOGIN_TIME {
+    while !shared.stop.load(Ordering::SeqCst) {
+        let wait = if logged_in {
+            IDLE
+        } else {
+            LOGIN_TIME.saturating_sub(opened.elapsed())
+        };
+        if wait.is_zero() {
             return Err(io::Error::other("no login in time"));
         }
+        stream.set_read_timeout(Some(wait))?;
         match stream.read(&mut chunk) {
             Ok(0) => return Ok(()),
-            Ok(read) => {
-                buffer.extend_from_slice(&chunk[..read]);
-                last = Instant::now();
-            }
+            Ok(read) => buffer.extend_from_slice(&chunk[..read]),
             Err(why)
                 if matches!(
                     why.kind(),
                     io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                 ) =>
             {
-                if last.elapsed() >= IDLE {
-                    return Err(io::Error::other("silent too long"));
-                }
-                continue;
+                let why = if logged_in {
+                    "silent too long"
+                } else {
+                    "no login in time"
+                };
+                return Err(io::Error::other(why));
             }
             Err(why) => return Err(why),
         }
@@ -320,7 +486,7 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
             }
             match packet.kind {
                 packet::AUTH => {
-                    logged_in = same(&packet.body, shared.password.as_bytes());
+                    logged_in = same(&packet.body, password.as_bytes());
                     let id = if logged_in { packet.id } else { -1 };
                     send(&mut stream, &Packet::answer(packet.id, ""))?;
                     send(
@@ -388,7 +554,10 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
         Ok(Err(RunCommandError::Unknown | RunCommandError::Empty)) => {
             let names: Vec<String> = commands::list()
                 .into_iter()
-                .map(|set| format!("{} ({})", set.alias, set.name))
+                .map(|set| match set.alias {
+                    Some(alias) => format!("{alias} ({})", set.name),
+                    None => set.name,
+                })
                 .collect();
             tools.say(
                 texts::REPLY_RCON_COMMANDS,
@@ -409,13 +578,15 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
 impl Tools {
     /// Opens, moves or closes the remote console as `settings` say: it
     /// listens while they turn it on and a world runs, and opens again
-    /// when the address or the password changes.
+    /// when the address or the password changes. Nothing here reads a file
+    /// or waits: the listener's thread does that.
     pub(crate) fn listen(&self, settings: &Settings) {
         let wanted = (settings.rcon_on(self.dedicated) && !self.rcon_fused.load(Ordering::Acquire))
             .then(|| self.rcon_config(settings))
             .flatten();
         let mut slot = self.rcon.relock();
-        if slot.as_ref().map(Listener::config) == wanted.as_ref() {
+        let alive = slot.as_ref().filter(|listener| !listener.ended());
+        if alive.map(Listener::config) == wanted.as_ref() {
             return;
         }
         if let Some(old) = slot.take() {
@@ -424,42 +595,25 @@ impl Tools {
         let Some(config) = wanted else {
             return;
         };
-        let address = config.address;
         match Listener::open(config, Weak::clone(&self.me)) {
-            Ok(listener) => {
-                enshwick::info!("the remote console listens on {address}");
-                if let (true, Some(dir)) =
-                    (settings.rcon_password.is_empty(), self.world.data_dir())
-                {
-                    let file = dir.join(PASSWORD_FILE);
-                    enshwick::info!("the remote console's password is in {}", file.display());
-                }
-                *slot = Some(listener);
-            }
-            Err(why) => enshwick::warn!("the remote console does not listen on {address}: {why}"),
+            Ok(listener) => *slot = Some(listener),
+            Err(why) => enshwick::warn!("the remote console does not start: {why}"),
         }
     }
 
     /// Where the remote console listens and its password: the world's, or
-    /// the one generated in its data folder, made on first use.
+    /// the one generated in its data folder; `None` for neither.
     fn rcon_config(&self, settings: &Settings) -> Option<Config> {
         let ip: IpAddr = settings.rcon_ip.parse().ok()?;
         let port = u16::try_from(settings.rcon_port).ok()?;
-        let password = if settings.rcon_password.is_empty() {
-            let file = self.world.data_dir()?.join(PASSWORD_FILE);
-            match generated_password(&file) {
-                Ok(password) => password,
-                Err(why) => {
-                    enshwick::warn!("the remote console is off: {}: {why}", file.display());
-                    return None;
-                }
-            }
-        } else {
-            settings.rcon_password.clone()
-        };
+        let file = self.world.data_dir().map(|dir| dir.join(PASSWORD_FILE));
+        if settings.rcon_password.is_empty() && file.is_none() {
+            return None;
+        }
         Some(Config {
             address: SocketAddr::new(ip, port),
-            password,
+            password: settings.rcon_password.clone(),
+            file,
         })
     }
 }
@@ -534,13 +688,14 @@ mod tests {
     }
 
     fn shared(password: &str) -> Shared {
-        Shared {
+        let config = Config {
+            address: SocketAddr::from(([127, 0, 0, 1], 0)),
             password: password.to_owned(),
-            stop: AtomicBool::new(false),
-            connections: AtomicUsize::new(0),
-            strikes: Mutex::new(FxHashMap::default()),
-            tools: Weak::new(),
-        }
+            file: None,
+        };
+        let shared = Shared::new(config, Weak::new());
+        shared.password.set(password.to_owned()).unwrap();
+        shared
     }
 
     #[test]
@@ -558,7 +713,7 @@ mod tests {
     }
 
     /// A connected client and the server's end of it, served on a thread.
-    fn client(shared: Arc<Shared>) -> (TcpStream, JoinHandle<io::Result<()>>) {
+    fn client(shared: Arc<Shared>) -> (TcpStream, std::thread::JoinHandle<io::Result<()>>) {
         let socket = TcpListener::bind("127.0.0.1:0").unwrap();
         let client = TcpStream::connect(socket.local_addr().unwrap()).unwrap();
         let (stream, from) = socket.accept().unwrap();
@@ -590,19 +745,161 @@ mod tests {
                 body: b"wrong".to_vec(),
             };
             client.write_all(&login.encode()).unwrap();
-            client.shutdown(std::net::Shutdown::Write).unwrap();
+            client.shutdown(Shutdown::Write).unwrap();
             let _closed = served.join().unwrap();
         }
         assert!(shared.waits("127.0.0.1".parse().unwrap()));
     }
 
     #[test]
-    fn connections_past_the_limit_get_no_slot_until_one_closes() {
+    fn connections_past_either_limit_get_no_slot_until_one_closes() {
         let shared = shared("");
-        assert!((0..MAX_CONNECTIONS).all(|_| shared.take_slot()));
-        assert!(!shared.take_slot());
-        shared.connections.fetch_sub(1, Ordering::AcqRel);
-        assert!(shared.take_slot());
+        let ip = |last: u8| IpAddr::from([10, 0, 0, last]);
+        assert!(shared.take_slot(ip(1)) && shared.take_slot(ip(1)));
+        assert!(!shared.take_slot(ip(1)), "two from one address");
+        assert!(shared.take_slot(ip(2)) && shared.take_slot(ip(3)));
+        assert!(!shared.take_slot(ip(4)), "four in all");
+        shared.free_slot(ip(1));
+        assert!(shared.take_slot(ip(4)));
+        assert!(!shared.take_slot(ip(5)));
+    }
+
+    #[test]
+    fn local_tools_share_every_slot_from_loopback() {
+        let shared = shared("");
+        let local = IpAddr::from([127, 0, 0, 1]);
+        for _ in 0..MAX_CONNECTIONS {
+            assert!(shared.take_slot(local));
+        }
+        assert!(!shared.take_slot(local), "four in all");
+    }
+
+    #[test]
+    fn an_ipv6_client_counts_as_its_whole_network_for_logins_and_slots() {
+        let shared = shared("");
+        let one: IpAddr = "2001:db8:1:2::a".parse().unwrap();
+        let same: IpAddr = "2001:db8:1:2:ffff::b".parse().unwrap();
+        let other: IpAddr = "2001:db8:1:3::a".parse().unwrap();
+        for _ in 0..MAX_FAILURES {
+            let _waits = shared.strike(one);
+        }
+        assert!(shared.waits(same), "another address of the same /64");
+        assert!(!shared.waits(other));
+        assert!(shared.take_slot(one) && shared.take_slot(same));
+        assert!(!shared.take_slot(one), "two from one network");
+        assert_eq!(
+            network("::1".parse().unwrap()),
+            "::1".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(
+            network("::ffff:10.0.0.1".parse().unwrap()),
+            IpAddr::from([10, 0, 0, 1])
+        );
+    }
+
+    #[test]
+    fn a_console_whose_password_file_cannot_be_made_counts_as_ended() {
+        let blocker =
+            std::env::temp_dir().join(format!("admin-tools-rcon-file-{}", std::process::id()));
+        std::fs::write(&blocker, "a file, not a folder").unwrap();
+        let config = Config {
+            address: SocketAddr::from(([127, 0, 0, 1], 0)),
+            password: String::new(),
+            file: Some(blocker.join(PASSWORD_FILE)),
+        };
+        let listener = Listener::open(config, Weak::new()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !listener.ended() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(listener.ended());
+        std::fs::remove_file(&blocker).unwrap();
+    }
+
+    /// A connection to the console on `port`, once its thread listens.
+    fn connect(port: u16) -> TcpStream {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => return stream,
+                Err(why) if Instant::now() >= deadline => panic!("no console: {why}"),
+                Err(_) => std::thread::sleep(Duration::from_millis(20)),
+            }
+        }
+    }
+
+    #[test]
+    fn closing_shuts_a_logged_in_client_down_and_the_port_opens_again_at_once() {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let config = Config {
+            address: SocketAddr::from(([127, 0, 0, 1], port)),
+            password: "a long enough password".into(),
+            file: None,
+        };
+        let first = Listener::open(config.clone(), Weak::new()).unwrap();
+        let mut client = connect(port);
+        let login = Packet {
+            id: 1,
+            kind: packet::AUTH,
+            body: config.password.clone().into_bytes(),
+        };
+        client.write_all(&login.encode()).unwrap();
+        let mut answer = [0u8; 14];
+        client.read_exact(&mut answer).unwrap();
+        let closed = Instant::now();
+        first.close();
+        let mut rest = Vec::new();
+        let _read = client.read_to_end(&mut rest);
+        assert!(
+            closed.elapsed() < Duration::from_secs(5),
+            "shut down, not left to idle"
+        );
+        let second = Listener::open(config, Weak::new()).unwrap();
+        let _again = connect(port);
+        second.close();
+    }
+
+    #[test]
+    fn each_tracked_client_gets_its_own_number_and_one_tracked_after_closing_is_shut_down() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(server.local_addr().unwrap()).unwrap();
+        let (stream, _) = server.accept().unwrap();
+        let shared = shared("pw");
+        let first = shared.track(&stream);
+        let second = shared.track(&stream);
+        assert!(first.is_some() && first != second, "{first:?} {second:?}");
+        assert_eq!(shared.clients.relock().len(), 2);
+        shared.untrack(first);
+        assert_eq!(shared.clients.relock().len(), 1);
+        shared.untrack(second);
+        assert!(shared.clients.relock().is_empty());
+        shared.stop.store(true, Ordering::SeqCst);
+        let _late = shared.track(&stream);
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut byte = [0u8; 1];
+        assert_eq!(client.read(&mut byte).unwrap(), 0, "shut down at once");
+    }
+
+    #[test]
+    fn the_console_takes_its_port_once_another_socket_lets_it_go() {
+        let holder = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut shared = shared("pw");
+        shared.config.address = holder.local_addr().unwrap();
+        let shared = Arc::new(shared);
+        let binding = Arc::clone(&shared);
+        let bound = std::thread::spawn(move || bind(&binding));
+        std::thread::sleep(RETRY * 2);
+        drop(holder);
+        assert!(
+            bound.join().unwrap().is_some(),
+            "retried until the port was free"
+        );
     }
 
     #[test]

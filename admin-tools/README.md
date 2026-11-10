@@ -43,9 +43,6 @@ may be left out.
 
 | Command | What it does | By default |
 | --- | --- | --- |
-| `/adm panel` | Opens the Admin Tools window. | Admins |
-| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. | Admins |
-| `/adm player <player>` | Opens the window of one player. | Admins |
 | `/adm online` | Lists the players online, their account ids and time online. | Everyone |
 | `/adm kick <player>` | Removes a player from the game. They may join again. | Admins |
 | `/adm muted <player> on` or `off` | Mutes a player in chat or lifts the mute. | Admins |
@@ -54,33 +51,36 @@ may be left out.
 | `/adm banned <player> on` or `off` | Bans a player or lifts a ban. | Admins |
 | `/adm allowed <player> on` or `off` | Puts a player on the allow-list or takes them off. | Admins |
 | `/adm account <id> ban`, `unban`, `allow` or `disallow` | Changes an account by its id, also one that never joined. | Admins |
+| `/adm mark <player>` | Moves a player to the waypoint on your map. | Admins |
+| `/adm goto <player>` | Takes you to a player. | Admins |
+| `/adm bring <player>` | Brings a player to you. | Admins |
+| `/adm send <player> <player>` | Moves the first player to the second. | Admins |
+| `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres. | Admins |
 | `/adm heal <player>` | Gives a player their full health. | Admins |
 | `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. | Admins |
 | `/adm learn <player> <recipe>` | Unlocks a recipe for a player. | Admins |
 | `/adm god <player> on` or `off` | Nothing damages the player until they leave. | Admins |
 | `/adm give <player> <item> [count]` | Gives a player items, one when the count is left out. | Admins |
-| `/adm chest <player> <item> [count]` | Places a chest of items beside a player. | Admins |
-| `/adm chestat <x> <y> <z> <item> [count]` | Places a chest of items at a position. | Admins |
 | `/adm clear <player>` | Destroys everything a player carries and wears. | Admins |
 | `/adm copy <player> <player>` | Gives the second player new items of everything the first carries. | Admins |
-| `/adm goto <player>` | Takes you to a player. | Admins |
-| `/adm bring <player>` | Brings a player to you. | Admins |
-| `/adm send <player> <player>` | Moves the first player to the second. | Admins |
-| `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres. | Admins |
-| `/adm mark <player>` | Moves a player to the waypoint on your map. | Admins |
-| `/adm time <time>` | Sets the time of day, such as `18:30`, or `6.5` for 06:30. | Admins |
-| `/adm weather <weather>` | Starts `clear`, `rain`, `blizzard`, or `any` for the game's choice. | Admins |
-| `/adm save` | Saves the world now. | Admins |
-| `/adm backup` | Copies the world to a backup folder while the server runs. | Admins |
-| `/adm world` | Shows the world, its last save and its game settings. | Admins |
-| `/adm status` | Shows the uptime, the world and the mod versions. | Everyone |
+| `/adm chest <player> <item> [count]` | Places a chest of items beside a player. | Admins |
+| `/adm chestat <x> <y> <z> <item> [count]` | Places a chest of items at a position. | Admins |
 | `/adm motd` | Shows the message of the day. | Everyone |
 | `/adm setmotd <text>` | Sets the message of the day. `-` goes back to the world's setting. | Admins |
 | `/adm say <text>` | Shows every player a line now. | Admins |
 | `/adm restart <minutes>` | Warns every player of a restart and saves when the time is up. `0` stops it. Only on a dedicated server. | Admins |
-| `/adm who <metres>` | Shows the last 10 changes to buildings and terrain near you, up to 200 metres. | Admins |
+| `/adm status` | Shows the uptime, the world and the mod versions. | Everyone |
+| `/adm time <time>` | Sets the time of day, such as `18:30`, or `6.5` for 06:30. | Admins |
+| `/adm weather <weather>` | Starts `clear`, `rain`, `blizzard`, or `any` for the game's choice. | Admins |
+| `/adm save` | Saves the world now. | Admins |
+| `/adm world` | Shows the world, its last save and its game settings. | Admins |
+| `/adm backup` | Copies the world to a backup folder while the server runs. | Admins |
 | `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. | Admins |
 | `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. | Admins |
+| `/adm who <metres>` | Shows the last 10 changes to buildings and terrain near you, up to 200 metres. | Admins |
+| `/adm panel` | Opens the Admin Tools window. | Admins |
+| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. | Admins |
+| `/adm player <player>` | Opens the window of one player. | Admins |
 
 Admins are the players whose user group gives `CanKickBan`. Name an item by
 its debug name, such as `Tool_Glider_T1`, its GUID or a mod's content id; in

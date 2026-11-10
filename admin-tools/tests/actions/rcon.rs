@@ -195,7 +195,21 @@ fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
     loader.set_settings("settings", &rcon_settings(second));
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
     let _moved = connect(second);
-    assert!(std::net::TcpStream::connect(("127.0.0.1", first)).is_err());
+    assert!(closes(first));
     assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
-    assert!(std::net::TcpStream::connect(("127.0.0.1", second)).is_err());
+    assert!(closes(second));
+}
+
+/// Whether the port stops taking connections within two seconds: a closed
+/// console's thread lets its port go on its own, without the game thread
+/// waiting for it.
+fn closes(port: u16) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while std::time::Instant::now() < deadline {
+        if std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    false
 }

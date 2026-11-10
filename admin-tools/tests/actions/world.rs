@@ -218,3 +218,29 @@ fn the_console_hears_where_a_backup_s_end_is_written() {
     );
     assert!(tick_until(&loader, || !loader.saves_held()));
 }
+
+#[test]
+fn every_page_lists_the_commands_the_help_lists_in_its_order() {
+    let dir = scratch("help-pages");
+    let _loader = server("", &dir);
+    let help = console::run("adm help").unwrap();
+    let helped: Vec<&str> = help
+        .lines()
+        .skip(1)
+        .filter(|line| !line.ends_with(':'))
+        .filter_map(|line| line.split([' ', ':']).next())
+        .collect();
+    assert_eq!(helped.len(), 38, "{help}");
+    for page in [
+        include_str!("../../README.md"),
+        include_str!("../../docs/player.md"),
+        include_str!("../../docs/player.uk.md"),
+    ] {
+        let listed: Vec<&str> = page
+            .lines()
+            .filter_map(|line| line.strip_prefix("| `/adm "))
+            .filter_map(|row| row.split([' ', '`']).next())
+            .collect();
+        assert_eq!(listed, helped);
+    }
+}

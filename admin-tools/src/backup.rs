@@ -8,7 +8,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use enshwick::actions::{Action, Outcome, Request};
 use enshwick::i18n::Language;
@@ -161,14 +161,7 @@ impl Tools {
     /// Waits until no save is being written, at most [`SAVE_WAIT`]: the
     /// hold keeps a new save from starting, never one under way.
     fn wait_for_save(&self) -> io::Result<()> {
-        let deadline = std::time::Instant::now() + SAVE_WAIT;
-        while self.saving.load(Ordering::Acquire) {
-            if std::time::Instant::now() >= deadline {
-                return Err(io::Error::other("the game is still writing the save"));
-            }
-            std::thread::sleep(SAVE_LOOK);
-        }
-        Ok(())
+        wait_while(&self.saving, SAVE_WAIT)
     }
 
     /// Copies the world while its saves stay held, after a save under way
@@ -222,6 +215,19 @@ impl Tools {
             }
         });
     }
+}
+
+/// Waits until `saving` is false, at most `limit`, looking every
+/// [`SAVE_LOOK`]; past it, the error that a save is still being written.
+fn wait_while(saving: &AtomicBool, limit: Duration) -> io::Result<()> {
+    let deadline = std::time::Instant::now() + limit;
+    while saving.load(Ordering::Acquire) {
+        if std::time::Instant::now() >= deadline {
+            return Err(io::Error::other("the game is still writing the save"));
+        }
+        std::thread::sleep(SAVE_LOOK);
+    }
+    Ok(())
 }
 
 /// A backup folder's name for `seconds` since 1970: the UTC time, sortable,
@@ -389,6 +395,27 @@ mod tests {
         assert!(!is_backup("photos"));
         assert!(!is_backup("2026-11-04 12-00-00"));
         assert!(!is_backup("2026-11-04_12-00-0x"));
+    }
+
+    #[test]
+    fn a_copy_waits_for_a_save_to_end_and_fails_when_it_never_does() {
+        let saving = AtomicBool::new(false);
+        assert!(
+            wait_while(&saving, Duration::ZERO).is_ok(),
+            "no save, no wait"
+        );
+        saving.store(true, Ordering::Release);
+        let started = std::time::Instant::now();
+        assert!(wait_while(&saving, Duration::from_millis(250)).is_err());
+        assert!(started.elapsed() >= Duration::from_millis(250));
+        let ended = std::sync::Arc::new(AtomicBool::new(true));
+        let ends = std::sync::Arc::clone(&ended);
+        let ender = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            ends.store(false, Ordering::Release);
+        });
+        assert!(wait_while(&ended, Duration::from_secs(5)).is_ok());
+        ender.join().unwrap();
     }
 
     #[test]

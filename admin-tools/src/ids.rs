@@ -88,21 +88,22 @@ pub(crate) const ALL: [&str; 38] = [
     PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
 ];
 
-/// The groups the command help lists the actions under: each group's text
-/// key and its actions.
+/// The groups the command help lists the actions under, each group's text
+/// key and its actions, in the order the help shows them: the order the
+/// mod declares them in.
 pub(crate) const GROUPS: [(&str, &[&str]); 9] = [
-    (texts::GROUP_WINDOWS, &[PANEL, OPEN, PLAYER]),
     (texts::GROUP_PLAYERS, &[ONLINE, KICK, MUTED]),
     (
         texts::GROUP_ACCOUNTS,
         &[BAN, BANS, BANNED, ALLOWED, ACCOUNT],
     ),
+    (texts::GROUP_MOVES, &[MARK, GOTO, BRING, SEND, PLACE]),
     (texts::GROUP_CHARACTER, &[HEAL, STATS, LEARN, GOD]),
-    (texts::GROUP_ITEMS, &[GIVE, CHEST, CHEST_AT, CLEAR, COPY]),
-    (texts::GROUP_MOVES, &[GOTO, BRING, SEND, PLACE, MARK]),
-    (texts::GROUP_WORLD, &[TIME, WEATHER, SAVE, BACKUP, WORLD]),
-    (texts::GROUP_SERVER, &[STATUS, MOTD, SET_MOTD, SAY, RESTART]),
-    (texts::GROUP_LOGS, &[WHO, AUDIT, CHAT]),
+    (texts::GROUP_ITEMS, &[GIVE, CLEAR, COPY, CHEST, CHEST_AT]),
+    (texts::GROUP_SERVER, &[MOTD, SET_MOTD, SAY, RESTART, STATUS]),
+    (texts::GROUP_WORLD, &[TIME, WEATHER, SAVE, WORLD, BACKUP]),
+    (texts::GROUP_LOGS, &[AUDIT, CHAT, WHO]),
+    (texts::GROUP_WINDOWS, &[PANEL, OPEN, PLAYER]),
 ];
 
 /// The group of the action `id`, a text key.

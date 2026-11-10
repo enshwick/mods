@@ -379,9 +379,16 @@ impl Tools {
                 &[
                     (texts::BUTTON_HEAL, ids::HEAL, them),
                     (texts::BUTTON_REVIVE, ids::REVIVE, them),
+                    (texts::BUTTON_STATS, ids::STATS, them),
+                ],
+                false,
+            )
+            .row(
+                texts::WINDOW_ROW_GOD,
+                &[],
+                &[
                     (texts::BUTTON_GOD_ON, ids::GOD, on),
                     (texts::BUTTON_GOD_OFF, ids::GOD, off),
-                    (texts::BUTTON_STATS, ids::STATS, them),
                 ],
                 false,
             )

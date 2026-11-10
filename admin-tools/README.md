@@ -12,8 +12,8 @@ commands.
 - **World and server:** the time of day, the weather, saves, backups while
   the server runs, the world's game settings, and audit, chat and build
   logs.
-- **Characters and items:** heal, set health, stamina and mana, teach
-  recipes, god mode, give items or chests, clear or copy an inventory.
+- **Characters and items:** heal, set health, stamina, mana and level,
+  revive in place, teach recipes, god mode, give items or chests, clear or copy an inventory.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
@@ -56,7 +56,8 @@ may be left out.
 | `/adm send <player> <player>` | Moves the first player to the second. | Admins |
 | `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres. | Admins |
 | `/adm heal <player>` | Gives a player their full health. | Admins |
-| `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. | Admins |
+| `/adm stats <player> health`, `stamina`, `mana` or `level` `<value>` | Sets a player's health, stamina, mana or level. | Admins |
+| `/adm revive <player>` | Revives a dead player where they lie, with full health. | Admins |
 | `/adm learn <player> <recipe>` | Unlocks a recipe for a player. | Admins |
 | `/adm god <player> on` or `off` | Nothing damages the player until they leave. | Admins |
 | `/adm give <player> <item> [count]` | Gives a player items, one when the count is left out. | Admins |
@@ -81,9 +82,10 @@ may be left out.
 | `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. | Admins |
 | `/adm player <player>` | Opens the window of one player. | Admins |
 
-Admins are the players whose user group gives `CanKickBan`. Name an item by
-its debug name, such as `Tool_Glider_T1`, its GUID or a mod's content id; in
-a game a player hosts, also by the name the game shows.
+Admins are the players whose user group gives `CanKickBan`. The window lists
+the items by the names your game shows. A typed command names an item by its
+debug name, such as `Tool_Glider_T1`, its GUID or a mod's content id; in a
+game a player hosts, also by the name the game shows.
 
 ## Window
 

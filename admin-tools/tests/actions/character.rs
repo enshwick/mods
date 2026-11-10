@@ -1,12 +1,12 @@
-//! Actions on a player's character: health, stamina and mana set to a
-//! value, and god mode until the player leaves.
+//! Actions on a player's character: health, stamina, mana and level set to
+//! a value, a revive in place, and god mode until the player leaves.
 
 use enshwick::Entity;
 use enshwick::abi::{DAMAGE_TYPES, DamageCheck, Header, KnowledgeInfo, PlayerData};
 use enshwick::events::PlayerLeft;
 use enshwick::knowledge::KnowledgeId;
 
-use super::game::{HEALTH, ann, bob, run, scratch, server};
+use super::game::{HEALTH, ann, bob, health, run, scratch, server};
 
 /// A fall that takes `total` health from `target`.
 fn fall(target: Entity, total: f32) -> DamageCheck {
@@ -40,6 +40,40 @@ fn stats_refuses_a_pool_the_character_lacks() {
     let loader = server("", &dir);
     let reply = run(&loader, &ann(), "stats", "p0000000000000002\tc1\tn50");
     assert!(reply.starts_with("0Bob: nothing changed"), "{reply}");
+}
+
+#[test]
+fn stats_sets_a_player_s_level_in_the_game_s_next_step() {
+    use enshwick::abi::PROGRESS_SET_LEVEL;
+
+    let dir = scratch("stats-level");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "stats", "p0000000000000002\tc3\tn10"),
+        "1Bob goes to level 10 in the game's next step."
+    );
+    assert_eq!(
+        loader.progress_writes(),
+        [(bob().entity, PROGRESS_SET_LEVEL, 10)]
+    );
+}
+
+#[test]
+fn revive_stands_a_dead_player_up_with_full_health_and_refuses_the_living() {
+    let dir = scratch("revive");
+    let loader = server("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "revive", "p0000000000000002"),
+        "0Bob is not dead."
+    );
+    assert!(loader.set_component(bob().entity, HEALTH, &health(0, 200)));
+    assert!(run(&loader, &bob(), "revive", "p0000000000000002").starts_with('0'));
+    assert_eq!(
+        run(&loader, &ann(), "revive", "p0000000000000002"),
+        "1Bob stands up with 200 of 200 health."
+    );
+    let bytes = loader.component_bytes(bob().entity, HEALTH).unwrap();
+    assert_eq!(i32::from_le_bytes(bytes[8..12].try_into().unwrap()), 200);
 }
 
 #[test]

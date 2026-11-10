@@ -347,13 +347,13 @@ const MAP_TRIES: u32 = 12;
 /// Reads the map's frame and markers, asking again after [`COUNT_FOR`]
 /// while the loader still reads the scene, at most `tries` times.
 fn map_reads(map: Map, scheduler: Scheduler, tries: u32) {
-    match map.frame() {
-        Err(WorldError::NotLoaded) if tries > 1 => {
-            scheduler.after(COUNT_FOR, move || map_reads(map, scheduler, tries - 1));
-        }
-        frame => {
-            report("map frame", frame);
-            report("map markers", map.markers().map(|markers| markers.len()));
-        }
+    let (frame, markers) = (map.frame(), map.markers());
+    let loading =
+        [frame.as_ref().err(), markers.as_ref().err()].contains(&Some(&WorldError::NotLoaded));
+    if loading && tries > 1 {
+        scheduler.after(COUNT_FOR, move || map_reads(map, scheduler, tries - 1));
+        return;
     }
+    report("map frame", frame);
+    report("map markers", markers.map(|markers| markers.len()));
 }

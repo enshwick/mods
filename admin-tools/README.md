@@ -3,18 +3,17 @@
 Admin Tools gives a server's admins what the game lacks, in a window and as
 commands.
 
+- **Remote console:** every command from an RCON tool, without joining the
+  game.
 - **Players and access:** who is online, kicks, bans with reasons, chat
   mutes, an allow-list. Players who are away can be banned too.
 - **Chat and announcements:** a message of the day, announcements on a
   timer, a line to everyone now, restart warnings.
-- **World:** the time of day, the weather, saves, backups while the server
-  runs, the world's game settings.
+- **World and server:** the time of day, the weather, saves, backups while
+  the server runs, the world's game settings, and audit, chat and build
+  logs.
 - **Characters and items:** heal, set health, stamina and mana, teach
-  recipes, god mode, give items or a chest of items, clear or copy an
-  inventory, move players.
-- **Remote console:** every command from an RCON tool, without joining the
-  game.
-- **Logs:** an audit log of admin actions, a chat log and a build log.
+  recipes, god mode, give items or chests, clear or copy an inventory.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 

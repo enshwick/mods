@@ -72,21 +72,17 @@ settings:
     applies: at-once
 ---
 
-Admin Tools gives a server's admins what the game lacks, in a window
-and as commands.
-
+- **Remote console:** every command from an RCON tool, without joining the
+  game.
 - **Players and access:** who is online, kicks, bans with reasons, chat
   mutes, an allow-list. Players who are away can be banned too.
 - **Chat and announcements:** a message of the day, announcements on a
   timer, a line to everyone now, restart warnings.
-- **World:** the time of day, the weather, saves, backups while the server
-  runs, the world's game settings.
+- **World and server:** the time of day, the weather, saves, backups while
+  the server runs, the world's game settings, and audit, chat and build
+  logs.
 - **Characters and items:** heal, set health, stamina and mana, teach
-  recipes, god mode, give items or a chest of items, clear or copy an
-  inventory, move players.
-- **Remote console:** every command from an RCON tool, without joining the
-  game.
-- **Logs:** an audit log of admin actions, a chat log and a build log.
+  recipes, god mode, give items or chests, clear or copy an inventory.
 
 ## How do I connect an RCON tool?
 
@@ -120,9 +116,10 @@ wrong passwords from one address, the address waits a minute.
 
 Every action is a command in chat, in the console window of a dedicated
 server and in an RCON tool. It starts with `/adm` or `/admin-tools`. In the
-console and an RCON tool, leave out the `/`. `/adm help` lists the actions
-you may use, and `/adm help <action>` explains one. An argument in square
-brackets may be left out.
+console and an RCON tool, leave out the `/`.
+
+`/adm help` lists the actions you may use, and `/adm help <action>` explains
+one. An argument in square brackets may be left out.
 
 | Command | What it does | By default |
 | --- | --- | --- |
@@ -167,10 +164,11 @@ brackets may be left out.
 
 Admins are the players whose user group gives `CanKickBan`. Admins and the
 host cannot be kicked, banned or muted. `goto`, `bring`, `mark` and
-`who` need a character, so the console cannot use them. A player who is away
-is named as they last joined this world: Admin Tools remembers the last 256
-accounts that tried to join, and every account on the ban list or the
-allow-list.
+`who` need a character, so the console cannot use them.
+
+A player who is away is named as they last joined this world. Admin Tools
+remembers the last 256 accounts that tried to join, and every account on the
+ban list or the allow-list.
 
 ## How do I name an item or a recipe?
 
@@ -183,6 +181,7 @@ allow-list.
 
 An unknown name lists the names near it. `give`, `chest` and `chestat` hand
 over as many stacks as the items need, and you read how many did not fit.
+
 Items from `copy` start new, without wear or level, and the look and
 currency slots are not copied. A chest outside every base is not saved.
 

@@ -187,7 +187,7 @@ fn give(tools: &Tools, request: &Request<'_>) -> Outcome {
 fn try_give(tools: &Tools, request: &Request<'_>) -> Result<Outcome, Outcome> {
     let [
         Value::Player { key, name },
-        Value::Text(text),
+        Value::Item(picked),
         Value::Number(count),
     ] = request.args
     else {
@@ -197,7 +197,7 @@ fn try_give(tools: &Tools, request: &Request<'_>) -> Result<Outcome, Outcome> {
         return Err(Tools::failed(request, name, &WorldError::Missing));
     };
     let count = crate::whole(request, *count)?;
-    let (item, shown) = items::known_item(tools, request, text)?;
+    let (item, shown) = tools.picked(*picked, request.language);
     let (Some(player), Some(late)) = (
         tools.world.player_by_key(*key),
         Late::new(tools, request, ids::GIVE),

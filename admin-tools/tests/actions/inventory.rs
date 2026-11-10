@@ -1,6 +1,6 @@
-//! Actions on what players carry: giving items by the game's name, GUID or
-//! number, in as many stacks as they need, once; what did not fit; the
-//! refusals, which the audit log keeps too.
+//! Actions on what players carry: giving an item a window picks or a typed
+//! line names, in as many stacks as they need, once; what did not fit; the
+//! refusals, which the audit log keeps when Admin Tools makes them.
 
 use enshwick::ItemId;
 use enshwick::abi::{
@@ -52,14 +52,14 @@ fn near(a: [f64; 3], b: [f64; 3]) -> bool {
 }
 
 #[test]
-fn give_hands_a_player_an_item_named_as_the_game_names_it_once() {
+fn give_hands_a_player_the_picked_item_told_by_its_debug_name_once() {
     let dir = scratch("give");
     let loader = server("", &dir);
     let reply = run(
         &loader,
         &ann(),
         "give",
-        "p0000000000000002\tttool_glider_t1\tn1",
+        &format!("p0000000000000002\ti{GLIDER}\tn1"),
     );
     assert_eq!(reply, "1Gave Tool_Glider_T1 × 1 to Bob.");
     let bob = u64::from(bob().entity.0);
@@ -79,21 +79,45 @@ fn a_typed_give_without_a_count_hands_over_one_item() {
 }
 
 #[test]
-fn give_takes_an_item_s_guid_or_number_and_more_than_a_stack() {
+fn every_action_that_takes_an_item_offers_the_client_s_item_picker() {
+    use enshwick::abi::ActionCall;
+    use enshwick::actions::sheet::{ArgView, decode};
+
+    let dir = scratch("give-picker");
+    let loader = server("", &dir);
+    let sheet = decode(
+        &loader
+            .ask_actions(ActionCall::SHEET, &ann(), 0, "", "")
+            .unwrap(),
+    );
+    for id in ["give", "chest", "chestat"] {
+        let entry = sheet.iter().find(|entry| entry.id == id).unwrap();
+        let items = entry.args.iter().filter(|arg| arg.kind == ArgView::ITEM);
+        assert_eq!(items.count(), 1, "{id}");
+    }
+}
+
+#[test]
+fn give_takes_a_typed_guid_and_more_than_a_stack() {
     let dir = scratch("give-ids");
     let loader = server("", &dir);
     let (wood, glider) = (ItemId::from_guid(WOOD), ItemId::from_guid(GLIDER));
-    let guid = format!("p0000000000000002\tt{WOOD}\tn100");
-    assert!(run(&loader, &ann(), "give", &guid).starts_with('1'));
-    let number = format!("p0000000000000002\tt{}\tn5", wood.get());
-    assert!(run(&loader, &ann(), "give", &number).starts_with('1'));
+    let typed = format!("/adm give Bob {WOOD} 100");
+    assert!(
+        loader
+            .type_in_chat(&ann(), 0, &typed)
+            .unwrap()
+            .starts_with('1')
+    );
+    let picked = format!("p0000000000000002\ti{WOOD}\tn5");
+    assert!(run(&loader, &ann(), "give", &picked).starts_with('1'));
     // A glider stacks to one; five of them take five slots.
     assert_eq!(
         run(
             &loader,
             &ann(),
             "give",
-            "p0000000000000002\ttTool_Glider_T1\tn5"
+            &format!("p0000000000000002\ti{GLIDER}\tn5")
         ),
         "1Gave Tool_Glider_T1 × 5 to Bob."
     );
@@ -106,38 +130,40 @@ fn give_takes_an_item_s_guid_or_number_and_more_than_a_stack() {
 }
 
 #[test]
-fn an_unknown_name_answers_with_the_names_near_it_and_goes_to_the_audit_log() {
+fn an_item_the_game_does_not_know_or_a_player_without_the_right_gives_nothing() {
     let dir = scratch("give-refused");
-    let loader = server("audit = \"on\"\n", &dir);
-    let reply = run(&loader, &ann(), "give", "p0000000000000002\ttGlider\tn1");
-    assert!(
-        reply.starts_with("0Admin Tools: nothing is named «Glider». Near: "),
-        "one line in the interface: {reply}"
-    );
-    assert!(reply.contains("Tool_Glider_T1"), "{reply}");
+    let loader = server("", &dir);
     let typed = loader
         .type_in_chat(&ann(), 0, "/adm give Bob Glider")
         .unwrap();
-    assert!(
-        typed.starts_with("0Admin Tools: nothing is named «Glider».\nNear: "),
-        "lines in chat: {typed}"
+    assert!(typed.starts_with('0'), "{typed}");
+    let unknown = format!(
+        "p0000000000000002\ti{}\tn1",
+        enshwick::content::Guid([0x7f; 16])
     );
-    assert!(
-        run(
-            &loader,
-            &bob(),
-            "give",
-            "p0000000000000002\ttTool_Glider_T1\tn1"
-        )
-        .starts_with('0')
-    );
+    assert!(run(&loader, &ann(), "give", &unknown).starts_with('0'));
+    let picked = format!("p0000000000000002\ti{GLIDER}\tn1");
+    assert!(run(&loader, &bob(), "give", &picked).starts_with('0'));
     assert!(gives(&loader).is_empty());
-    let audit = file_until(&dir, "audit.log", |text| text.contains("Glider"));
-    assert!(audit.contains("\tgive\tBob Glider 1\t"), "{audit}");
+}
+
+#[test]
+fn a_typed_give_takes_a_debug_name_offers_near_names_and_the_audit_log_keeps_the_debug_name() {
+    let dir = scratch("give-typed");
+    let loader = server("audit = \"on\"\n", &dir);
+    let given = loader
+        .type_in_chat(&ann(), 0, "/adm give Bob Tool_Glider_T1")
+        .unwrap();
+    assert_eq!(given, "1Gave Tool_Glider_T1 × 1 to Bob.");
+    let typo = loader
+        .type_in_chat(&ann(), 0, "/adm give Bob Tool_Glidr_T1")
+        .unwrap();
     assert!(
-        audit.lines().all(|line| line.ends_with("\trefused")),
-        "{audit}"
+        typo.starts_with('0') && typo.contains("Tool_Glider_T1"),
+        "{typo}"
     );
+    let audit = file_until(&dir, "audit.log", |text| text.contains("\tgive\t"));
+    assert!(audit.contains("\tgive\tBob Tool_Glider_T1 1\t"), "{audit}");
 }
 
 #[test]
@@ -149,7 +175,7 @@ fn a_give_the_game_turns_down_is_told_to_the_administrator_and_kept_in_the_audit
             &loader,
             &ann(),
             "give",
-            "p0000000000000002\ttTool_Glider_T1\tn1"
+            &format!("p0000000000000002\ti{GLIDER}\tn1")
         )
         .starts_with('1')
     );
@@ -173,7 +199,7 @@ fn a_count_with_a_fraction_is_refused_and_gives_nothing() {
             &loader,
             &ann(),
             "give",
-            "p0000000000000002\ttTool_Glider_T1\tn1.5"
+            &format!("p0000000000000002\ti{GLIDER}\tn1.5")
         ),
         "01.5 is not a whole number."
     );
@@ -182,7 +208,7 @@ fn a_count_with_a_fraction_is_refused_and_gives_nothing() {
             &loader,
             &ann(),
             "chestat",
-            "n10\tn20\tn30\ttResource_Wood\tn2.5"
+            &format!("n10\tn20\tn30\ti{WOOD}\tn2.5")
         ),
         "02.5 is not a whole number."
     );
@@ -286,7 +312,7 @@ fn a_chest_the_game_never_places_is_undone_and_gets_no_items() {
             &loader,
             &ann(),
             "chestat",
-            "n10\tn20\tn30\ttResource_Wood\tn5"
+            &format!("n10\tn20\tn30\ti{WOOD}\tn5")
         )
         .starts_with('1')
     );
@@ -320,7 +346,7 @@ fn a_chest_whose_placement_fails_is_told_kept_in_the_audit_log_and_gets_no_items
             &loader,
             &ann(),
             "chestat",
-            "n10\tn20\tn30\ttResource_Wood\tn5"
+            &format!("n10\tn20\tn30\ti{WOOD}\tn5")
         )
         .starts_with('1')
     );
@@ -346,7 +372,7 @@ fn what_did_not_fit_is_told_with_how_many_arrived() {
             &loader,
             &ann(),
             "give",
-            "p0000000000000002\ttResource_Wood\tn250"
+            &format!("p0000000000000002\ti{WOOD}\tn250")
         )
         .starts_with('1')
     );
@@ -400,7 +426,7 @@ fn a_chest_goes_up_at_a_position_and_then_gets_its_items() {
             &loader,
             &ann(),
             "chestat",
-            "n10\tn20\tn30\ttResource_Wood\tn250"
+            &format!("n10\tn20\tn30\ti{WOOD}\tn250")
         ),
         "1A chest with Resource_Wood × 250 goes up at 10, 20, 30."
     );
@@ -422,7 +448,7 @@ fn a_chest_at_a_player_stands_beside_them_and_bob_may_not_place_one() {
             &loader,
             &ann(),
             "chest",
-            "p0000000000000002\ttTool_Glider_T1\tn1"
+            &format!("p0000000000000002\ti{GLIDER}\tn1")
         ),
         "1A chest with Tool_Glider_T1 × 1 goes up at Bob."
     );
@@ -430,5 +456,13 @@ fn a_chest_at_a_player_stands_beside_them_and_bob_may_not_place_one() {
         .props()
         .iter()
         .any(|(_, _, at)| near(*at, [2.0, 20.0, 7.0]))));
-    assert!(run(&loader, &bob(), "chestat", "n0\tn0\tn0\ttResource_Wood\tn1").starts_with('0'));
+    assert!(
+        run(
+            &loader,
+            &bob(),
+            "chestat",
+            &format!("n0\tn0\tn0\ti{WOOD}\tn1")
+        )
+        .starts_with('0')
+    );
 }

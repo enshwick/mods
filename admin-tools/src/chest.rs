@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
-use enshwick::content::vanilla;
+use enshwick::content::{Guid, vanilla};
 use enshwick::inventory::{Batch, Op};
 use enshwick::world::{TransactionId, TransactionStatus, WorldTransform};
 use enshwick::{Entity, ItemId, Off, WorldError};
@@ -58,7 +58,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
 fn chest(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [
         Value::Player { key, name },
-        Value::Text(text),
+        Value::Item(item),
         Value::Number(count),
     ] = request.args
     else {
@@ -76,7 +76,7 @@ fn chest(tools: &Tools, request: &Request<'_>) -> Outcome {
         request,
         ids::CHEST,
         [x + BESIDE, y, z],
-        (*count, text),
+        (*count, *item),
         name,
     )
     .unwrap_or_else(|refused| refused)
@@ -88,7 +88,7 @@ fn chest_at(tools: &Tools, request: &Request<'_>) -> Outcome {
         Value::Number(x),
         Value::Number(y),
         Value::Number(z),
-        Value::Text(text),
+        Value::Item(item),
         Value::Number(count),
     ] = request.args
     else {
@@ -100,25 +100,25 @@ fn chest_at(tools: &Tools, request: &Request<'_>) -> Outcome {
         request,
         ids::CHEST_AT,
         [*x, *y, *z],
-        (*count, text),
+        (*count, *item),
         &at,
     )
     .unwrap_or_else(|refused| refused)
 }
 
 /// Places a wooden chest at `at` for the action `id` and, once the game
-/// has placed it, fills it with the `count` items `text` names;
-/// `whereabouts` names the place in the replies. A refusal is the error.
+/// has placed it, fills it with `count` of `picked`; `whereabouts` names
+/// the place in the replies. A refusal is the error.
 fn place(
     tools: &Tools,
     request: &Request<'_>,
     id: &'static str,
     at: [f64; 3],
-    (count, text): (f64, &str),
+    (count, picked): (f64, Guid),
     whereabouts: &str,
 ) -> Result<Outcome, Outcome> {
     let count = crate::whole(request, count)?;
-    let (item, shown) = items::known_item(tools, request, text)?;
+    let (item, shown) = tools.picked(picked, request.language);
     let Ok(chest) = vanilla::item(CHEST).map(ItemId::from_guid) else {
         return Err(Outcome::refused(request.say(texts::REPLY_NO_CHEST, &[])));
     };

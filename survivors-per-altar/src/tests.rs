@@ -1,6 +1,5 @@
 use enshwick::Entity;
-use enshwick::content::items::ItemLayout;
-use enshwick::content::{EngineFacts, types};
+use enshwick::content::EngineFacts;
 use enshwick::survivors::{Answer, NpcId};
 use enshwick::test::facts::{self, Fact};
 
@@ -397,13 +396,9 @@ fn copy_staffs_take_the_survivor_s_name_in_the_game_s_language() {
     use enshwick::survivors::WorkshopSurvivor;
 
     let tag = Guid::parse("ddda8053-f1f5-49fe-aab9-2a6cd460dc47");
-    let host = host();
-    let name_at = ItemLayout::resolve(&host).unwrap().name;
-    let item_info = host.hash(types::ITEM_INFO.id()).unwrap();
-    let mut info = vec![0u8; host.size(types::ITEM_INFO.id()).unwrap()];
-    info[name_at..name_at + 16].copy_from_slice(&tag.0);
     let alchemist = WorkshopSurvivor::find("alchemist").unwrap();
-    let loader = host
+    let loader = host()
+        .workshops()
         .side(Side::CLIENT)
         .settings(
             "per_altar = true
@@ -411,7 +406,7 @@ copy_staff_boss_chance = 0.0
 copy_staff_locked_chest_chance = 0.0
 ",
         )
-        .resource(alchemist.staff().key_by_hash(item_info), info)
+        .vanilla_item_names(&[(alchemist.staff(), tag)])
         .game_text(tag.fnv1a(), Language::EN_US, "Balthazar")
         .game_text(tag.fnv1a(), Language::UK_UA, "Бальтазар")
         .install();

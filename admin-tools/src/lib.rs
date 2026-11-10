@@ -2,7 +2,8 @@
 //! list, kicks, bans, the allow-list and chat mutes; the message of the
 //! day, scheduled announcements and restart warnings; the time of day and
 //! the weather; healing and teleports; items, chests of items and
-//! inventories; health, stamina and mana, recipes and god mode; saves,
+//! inventories; health, stamina, mana and level, revives, recipes and god
+//! mode; saves,
 //! backups and the world's
 //! settings; who may use each, per world; an audit log of what was done
 //! and a chat log.
@@ -28,12 +29,13 @@ mod settings;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
 use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Outcome, Request, Value, Via};
+use enshwick::content::Guid;
 use enshwick::daytime::Clock;
 use enshwick::effects::Effects;
 use enshwick::events::{
@@ -93,6 +95,8 @@ pub(crate) struct Tools {
     spots: Mutex<builds::Spots>,
     /// The map, for a player's waypoint; `None` on a build without it.
     map: Option<Map>,
+    /// The debug names of the game's items by GUID, read once a world loads.
+    item_names: OnceLock<FxHashMap<Guid, String>>,
     /// The ids of the actions declared, which a window may name.
     declared: Mutex<Vec<String>>,
     /// The windows each player opened, one of each id.
@@ -169,6 +173,7 @@ impl Mod for AdminTools {
             builds: Journal::new(builds::LOG),
             spots: Mutex::default(),
             map,
+            item_names: OnceLock::new(),
             declared: Mutex::default(),
             shown: Mutex::default(),
             ticker: Mutex::new(Ticker::default()),
@@ -225,7 +230,8 @@ impl Mod for AdminTools {
 impl Tools {
     /// Declares `action` with `handler`: only players the world's rights
     /// admit see and run it, and every run of an action that changes
-    /// something goes to the audit log, refused or done.
+    /// something goes to the audit log, refused or done; a run the platform
+    /// refuses before the handler never reaches it.
     fn add(self: &Arc<Self>, action: Action, handler: Handler) -> Result<(), Off> {
         let id = action.id().to_owned();
         let rules = Arc::clone(self);
@@ -272,9 +278,10 @@ impl Tools {
         self.declared.relock().iter().any(|declared| declared == id)
     }
 
-    /// Starts the world that loaded: the remote console listens when the
-    /// world's settings turn it on.
+    /// Starts the world that loaded: the item names are read and the remote
+    /// console listens when the world's settings turn it on.
     fn start(&self) {
+        self.read_item_names();
         // A save of the last world whose end was never heard is not this one's.
         self.saving.store(false, Ordering::Release);
         self.running.store(true, Ordering::Relaxed);
@@ -322,7 +329,7 @@ impl Tools {
 
     /// Writes a run of the action `id` to the audit log while it is on.
     fn record(&self, request: &Request<'_>, id: &str, outcome: &Outcome) {
-        let (who, via, args) = run_of(request);
+        let (who, via, args) = run_of(self, request);
         let ended = journal::outcome(outcome.is_done());
         self.log(&[&who, via, id, &args, outcome.text(), ended]);
     }
@@ -403,7 +410,7 @@ impl Late {
             caller: request.player.clone(),
             language: request.language,
             id,
-            run: run_of(request),
+            run: run_of(tools, request),
         }))
     }
 
@@ -420,14 +427,18 @@ impl Late {
 
 /// Who ran an action, from where and with which values, as the audit log
 /// writes them.
-fn run_of(request: &Request<'_>) -> (String, &'static str, String) {
+fn run_of(tools: &Tools, request: &Request<'_>) -> (String, &'static str, String) {
     let via = match request.via {
         Via::Interface => "interface",
         Via::Console => "console",
         Via::Chat => "chat",
         _ => "remote",
     };
-    let args: Vec<String> = request.args.iter().map(word).collect();
+    let args: Vec<String> = request
+        .args
+        .iter()
+        .map(|value| word(value, tools.item_names.get()))
+        .collect();
     let who = account(&request.player.name, request.player.key);
     (who, via, args.join(" "))
 }
@@ -481,14 +492,16 @@ pub(crate) fn account_id(key: PlayerKey) -> String {
     format!("{:016x}", key.0)
 }
 
-/// A value as a console line writes it, for the audit log.
-fn word(value: &Value) -> String {
+/// A value as a console line writes it, for the audit log; an item by its
+/// debug name, which reads the same in every language.
+fn word(value: &Value, item_names: Option<&FxHashMap<Guid, String>>) -> String {
     match value {
         Value::Player { name, .. } => name.clone(),
         Value::Choice(index) => index.to_string(),
         Value::Number(number) => number.to_string(),
         Value::Toggle(on) => if *on { "on" } else { "off" }.to_owned(),
         Value::Text(text) => text.clone(),
+        Value::Item(item) => items::told(*item, None, item_names),
         _ => String::new(),
     }
 }
@@ -502,7 +515,10 @@ mod tests {
 
     #[test]
     fn the_audit_log_writes_a_text_argument_as_typed() {
-        assert_eq!(word(&Value::Text("Stone Axe".to_owned())), "Stone Axe");
+        assert_eq!(
+            word(&Value::Text("Stone Axe".to_owned()), None),
+            "Stone Axe"
+        );
     }
 
     #[test]

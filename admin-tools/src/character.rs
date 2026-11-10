@@ -1,6 +1,6 @@
-//! Actions on a player's character: health, stamina and mana set to a
-//! value, recipes and other knowledge learnt, and god mode, in which
-//! nothing damages the character.
+//! Actions on a player's character: health, stamina, mana and level set to
+//! a value, a dead player revived where they lie, recipes and other
+//! knowledge learnt, and god mode, in which nothing damages the character.
 
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ use crate::players::no_player;
 use crate::{Tools, ids, items, texts};
 
 /// The highest value the stats action takes; the game keeps each pool at
-/// its maximum anyway.
+/// its maximum and the level at its cap anyway.
 const MAX_STAT: f64 = 100_000.0;
 
 /// How the world sets one pool of a character to a value.
@@ -28,9 +28,13 @@ const POOLS: [(&str, &str, SetPool); 3] = [
     ("mana", texts::POOL_MANA, World::set_mana),
 ];
 
+/// The level's word and label, the stats action's choice after the pools.
+const LEVEL: (&str, &str) = ("level", texts::POOL_LEVEL);
+
 /// Declares the actions on characters and the filter that keeps god mode.
 pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
-    let pools = POOLS.map(|(word, label, _)| (word, label));
+    let mut pools: Vec<(&str, &str)> = POOLS.map(|(word, label, _)| (word, label)).to_vec();
+    pools.push(LEVEL);
     tools.add(
         Action::new(ids::STATS, texts::ACTION_STATS)
             .help(texts::ACTION_STATS_HELP)
@@ -38,6 +42,12 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
             .arg(Arg::choice(texts::ARG_POOL, &pools))
             .arg(Arg::number(texts::ARG_VALUE, 0.0..=MAX_STAT, 1.0)),
         stats,
+    )?;
+    tools.add(
+        Action::new(ids::REVIVE, texts::ACTION_REVIVE)
+            .help(texts::ACTION_REVIVE_HELP)
+            .arg(Arg::player(texts::ARG_PLAYER)),
+        revive,
     )?;
     tools.add(
         Action::new(ids::LEARN, texts::ACTION_LEARN)
@@ -79,7 +89,8 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
 }
 
 /// Sets one of a player's pools to a value, which the game keeps within
-/// the pool's maximum.
+/// the pool's maximum, or their level, which the game sets in its next step
+/// and keeps between 1 and its cap.
 fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
     let [
         Value::Player { key, name },
@@ -89,15 +100,21 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
     else {
         return crate::players::bad_args(request);
     };
-    let (Some(player), Some((_, label, set))) = (tools.world.player_by_key(*key), POOLS.get(*pool))
-    else {
+    let Some(player) = tools.world.player_by_key(*key) else {
         return no_player(request);
     };
     let value = match crate::whole(request, *value) {
-        Ok(value) => i32::try_from(value).unwrap_or(i32::MAX),
+        Ok(value) => value,
         Err(refused) => return refused,
     };
-    match set(tools.world, player.entity, value) {
+    let Some((_, label, set)) = POOLS.get(*pool) else {
+        return set_level(tools, request, player.entity, name, value);
+    };
+    match set(
+        tools.world,
+        player.entity,
+        i32::try_from(value).unwrap_or(i32::MAX),
+    ) {
         Ok(now) => {
             let (current, max) = (now.current.to_string(), now.max.to_string());
             let pool = request.say(label, &[]);
@@ -110,6 +127,56 @@ fn stats(tools: &Tools, request: &Request<'_>) -> Outcome {
                     (texts::value::MAX, &max),
                 ],
             ))
+        }
+        Err(why) => Tools::failed(request, name, &why),
+    }
+}
+
+/// Sets the level of `name`'s character `entity` to `level`; the reply
+/// says the game keeps it between 1 and its cap, as the outcome comes only
+/// with the game's next level step.
+fn set_level(
+    tools: &Tools,
+    request: &Request<'_>,
+    entity: Entity,
+    name: &str,
+    level: u32,
+) -> Outcome {
+    match tools.world.set_level(entity, level) {
+        Ok(()) => Outcome::done(request.say(
+            texts::REPLY_LEVEL_SET,
+            &[
+                (texts::value::NAME, name),
+                (texts::value::CURRENT, &level.to_string()),
+            ],
+        )),
+        Err(why) => Tools::failed(request, name, &why),
+    }
+}
+
+/// Revives a dead player where they lie, with their full health.
+fn revive(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [Value::Player { key, name }] = request.args else {
+        return crate::players::bad_args(request);
+    };
+    let Some(player) = tools.world.player_by_key(*key) else {
+        return no_player(request);
+    };
+    let Some(full) = tools.world.vitals(player.entity).map(|v| v.health.max) else {
+        return Tools::failed(request, name, &WorldError::Missing);
+    };
+    match tools.world.revive(player.entity, full) {
+        Ok(now) => Outcome::done(request.say(
+            texts::REPLY_REVIVED,
+            &[
+                (texts::value::NAME, name),
+                (texts::value::CURRENT, &now.current.to_string()),
+                (texts::value::MAX, &now.max.to_string()),
+            ],
+        )),
+        // The game refuses a living character and a write it will not take alike.
+        Err(WorldError::Refused) => {
+            Outcome::refused(request.say(texts::REPLY_NOT_DEAD, &[(texts::value::NAME, name)]))
         }
         Err(why) => Tools::failed(request, name, &why),
     }
@@ -137,7 +204,7 @@ fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
         return items::refused(
             request,
             text,
-            &items::ResolveItemError::Name { near: Vec::new() },
+            &items::ResolveKnowledgeError::Name { near: Vec::new() },
         );
     };
     // A grant of the world's knowledge would unlock it for every player.

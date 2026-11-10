@@ -56,9 +56,9 @@ Each entry says what players notice; a release's notes show its section.
   take themselves off the allow-list.
 - A restart warning saves the world when its time is up; a game a player
   hosts offers no restart warning.
-- Administrators give a player items by the game's name in any case, its
-  GUID, a mod's content id or its number, in as many stacks as needed, and
-  read how many did not fit and were left out. An unknown name answers with the names near it.
+- Administrators give a player items in as many stacks as needed, and read
+  how many did not fit and were left out. An unknown name answers with the
+  names near it.
 - Administrators place a wooden chest of items beside a player or at a
   position.
 - Administrators clear a player's inventory or copy one player's inventory
@@ -72,8 +72,10 @@ Each entry says what players notice; a release's notes show its section.
 - God mode keeps all damage off a player until they leave or the world
   stops.
 - `/adm online` lists the players in chat, one player a line.
-- The audit log also keeps every refused run of an action that changes
-  something, and ends each line with `done` or `refused`.
+- The audit log also keeps the runs Admin Tools refuses of an action that
+  changes something, and ends each line with `done` or `refused`. A run
+  Enshwick refuses first, for an unknown player or item or a caller without
+  the right, is not in it.
 - A give, a chest, a clear or a copy the game later turns down, in whole or
   in part, adds a line to the audit log, so the console and RCON tools see
   it too.
@@ -97,3 +99,12 @@ Each entry says what players notice; a release's notes show its section.
   settings do, in the reader's language, and long replies such as
   `/adm status` arrive as a list in chat.
 - Short replies read naturally, such as "Time: 06:30" and "The world is saving."
+- Give and Chest in the window list the game's items by the names the
+  administrator's own game shows, with a search field, also on a dedicated
+  server. The list holds the game's own items; a mod's item is given with a
+  typed command. A typed command names an item by its debug name, GUID or a
+  mod's content id; an item number no longer names one. The audit log
+  names an item by its debug name.
+- Administrators set a player's level with `/adm stats <player> level`, and
+  revive a dead player where they lie, with full health, with `/adm revive`.
+- God mode has its own row in a player's window.

@@ -81,8 +81,8 @@ settings:
 - **World and server:** the time of day, the weather, saves, backups while
   the server runs, the world's game settings, and audit, chat and build
   logs.
-- **Characters and items:** heal, set health, stamina and mana, teach
-  recipes, god mode, give items or chests, clear or copy an inventory.
+- **Characters and items:** heal, set health, stamina, mana and level,
+  revive, teach recipes, god mode, give items or chests, clear or copy an inventory.
 
 ## How do I connect an RCON tool?
 
@@ -152,7 +152,8 @@ one. An argument in square brackets may be left out.
 | `/adm send <player> <player>` | Moves the first player to the second. | Admins |
 | `/adm place <player> <x> <y> <z>` | Moves a player to a position in metres. | Admins |
 | `/adm heal <player>` | Gives a player their full health. | Admins |
-| `/adm stats <player> health`, `stamina` or `mana` `<value>` | Sets a player's health, stamina or mana. | Admins |
+| `/adm stats <player> health`, `stamina`, `mana` or `level` `<value>` | Sets a player's health, stamina, mana or level. | Admins |
+| `/adm revive <player>` | Revives a dead player where they lie, with full health. | Admins |
 | `/adm learn <player> <recipe>` | Unlocks a recipe for a player. | Admins |
 | `/adm god <player> on` or `off` | Nothing damages the player until they leave. | Admins |
 | `/adm give <player> <item> [count]` | Gives a player items, one when the count is left out. | Admins |
@@ -187,14 +188,21 @@ ban list or the allow-list.
 
 ## How do I name an item or a recipe?
 
+In the window, **Give** and **Chest** list the game's items by the names
+your game shows, in your language, with a search field. This works on a
+dedicated server too. The list holds the game's own items, so give a mod's
+item with a typed command.
+
+In a typed command:
+
 - By its debug name, such as `Tool_Glider_T1`, in any case.
 - By its GUID, or by a mod's content id, such as `you.lockers:locker`.
 - In a game a player hosts, also by the name the game shows, such as
   `Glider`, in any language the game offers. A dedicated server does not
   have these names.
-- An item by its number, and any knowledge by its number for `learn`.
+- Any knowledge by its number for `learn`.
 
-An unknown name lists the names near it. `give`, `chest` and `chestat` hand
+An unknown item or recipe name lists the names near it. `give`, `chest` and `chestat` hand
 over as many stacks as the items need, and you read how many did not fit.
 
 Items from `copy` start new, without wear or level, and the look and
@@ -300,7 +308,7 @@ save. Each line starts with the time in UTC.
 
 | File | What it holds | On by default |
 | --- | --- | --- |
-| `audit.log` | Each run of an action that changes something, done or refused: who, from where, the action, its values and the answer. Also RCON logins, and a change the game made in part after the answer, such as a give. Reads such as `online` are left out. | On a dedicated server |
+| `audit.log` | Each run of an action that changes something, done or refused: who, from where, the action, its values and the answer. Also RCON logins, and a change the game made in part after the answer, such as a give. Reads such as `online` are left out, and so is a run Enshwick refuses first, for an unknown player or item or a player without the right. | On a dedicated server |
 | `chat.log` | Each chat line: the player's name and account id, the kind of line and its text. | On a dedicated server |
 | `builds.log` | Each building placed or removed, and each spot of building blocks or terrain changed, with who did it. | No |
 

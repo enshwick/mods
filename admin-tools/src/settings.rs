@@ -288,8 +288,10 @@ pub(crate) struct Rights {
     pub muted: String,
     /// Healing a player.
     pub heal: String,
-    /// Setting a player's health, stamina or mana.
+    /// Setting a player's health, stamina, mana or level.
     pub stats: String,
+    /// Reviving a dead player where they lie.
+    pub revive: String,
     /// Teaching a player a recipe or other knowledge.
     pub learn: String,
     /// God mode for a player.
@@ -364,6 +366,7 @@ impl Default for Rights {
             muted: admins(),
             heal: admins(),
             stats: admins(),
+            revive: admins(),
             learn: admins(),
             god: admins(),
             give: admins(),
@@ -411,6 +414,7 @@ impl Rights {
             ids::MUTED => &self.muted,
             ids::HEAL => &self.heal,
             ids::STATS => &self.stats,
+            ids::REVIVE => &self.revive,
             ids::LEARN => &self.learn,
             ids::GOD => &self.god,
             ids::GIVE => &self.give,

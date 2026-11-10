@@ -133,6 +133,10 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
     Ok(())
 }
 
+/// A button of a row: its label's key, its action and the action's first
+/// values.
+type Button<'a> = (&'a str, &'a str, &'a [Value]);
+
 /// A window under way for one viewer: an item goes in only when the viewer
 /// may run every action it names.
 struct Build<'a> {
@@ -174,7 +178,7 @@ impl<'a> Build<'a> {
         mut self,
         key: &str,
         values: &[(&str, &str)],
-        buttons: &[(&str, &str, &[Value])],
+        buttons: &[Button<'_>],
         bare: bool,
     ) -> Self {
         let mut row = Row::new(key, values);
@@ -222,14 +226,14 @@ impl Tools {
             Some(Shown::Section(Section::Accounts)) => self.accounts_window(viewer),
             Some(Shown::Section(Section::Server)) => self.server_window(viewer),
             Some(Shown::Section(Section::Builds)) => self.builds_window(viewer),
-            Some(Shown::Player(key)) => match self.world.player_by_key(key) {
-                Some(player) => self.player_window(viewer, &player),
-                None => {
+            Some(Shown::Player(key)) => {
+                let Some(player) = self.world.player_by_key(key) else {
                     // They left: the list they were on takes their window's place.
                     self.forget(viewer.key, Shown::Player(key));
                     return self.show(viewer, Some(Shown::Section(Section::Players)));
-                }
-            },
+                };
+                self.player_window(viewer, &player)
+            }
         };
         self.actions.show(window, &[viewer.key])?;
         if let Some(shown) = shown {
@@ -342,7 +346,7 @@ impl Tools {
             (texts::BUTTON_BRING, ids::BRING, them),
         ];
         // Their own window offers nothing that moves them to or removes them.
-        let (moves, moderate): (Vec<(&str, &str, &[Value])>, Vec<_>) = if player.key == viewer.key {
+        let (moves, moderate): (Vec<Button<'_>>, Vec<Button<'_>>) = if player.key == viewer.key {
             (vec![mark], mutes.to_vec())
         } else {
             (

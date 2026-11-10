@@ -2,6 +2,8 @@
 //! of the day set in game, announcements, the waypoint teleport and the
 //! build log.
 
+use std::fmt::Write as _;
+
 use enshwick::abi::{BuildingData, Header};
 use enshwick::console;
 use enshwick::events::{BuildingPlaced, BuildingRemoved, ShutdownStarted, WorldLoaded};
@@ -81,15 +83,16 @@ fn a_moderator_cannot_shut_themselves_out_where_the_game_would_let_them() {
 fn the_ban_list_reads_the_newest_fifty_under_the_count_of_all() {
     let dir = scratch("bans-many");
     std::fs::create_dir_all(&dir).unwrap();
-    let bans: String = (1..=60)
-        .map(|at| {
-            format!(
-                "[[bans]]\nkey = \"{:016x}\"\nname = \"P{at}\"\nby = \"Ann\"\nat = {at}\n",
-                at + 100
-            )
-        })
-        .collect();
-    std::fs::write(dir.join("accounts.toml"), format!("allowed = []\n{bans}")).unwrap();
+    let mut accounts = String::from("allowed = []\n");
+    for at in 1..=60 {
+        let key = at + 100;
+        writeln!(
+            accounts,
+            "[[bans]]\nkey = \"{key:016x}\"\nname = \"P{at}\"\nby = \"Ann\"\nat = {at}"
+        )
+        .unwrap();
+    }
+    std::fs::write(dir.join("accounts.toml"), accounts).unwrap();
     let loader = server("", &dir);
     let list = loader.type_in_chat(&ann(), 0, "/adm bans").unwrap();
     let lines: Vec<&str> = list.lines().collect();

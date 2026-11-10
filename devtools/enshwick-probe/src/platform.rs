@@ -18,10 +18,7 @@ use enshwick::voxels::{VoxelPos, Voxels};
 use enshwick::world::World;
 use enshwick::{Load, Off, WorldError};
 
-/// A reflected type every build has, and a field of it.
-// ast-grep-ignore: engine-names-stay-in-loader
-const SHAPE: &str = "keen::ecs::TriggerShape";
-/// The field of [`SHAPE`] the probe looks up.
+/// The field of the reflected type the probe looks up.
 const SHAPE_FIELD: &str = "rangeX";
 /// An ECS system every server build has.
 const SYSTEM: &str = "add_buildzones_server";
@@ -94,11 +91,15 @@ impl PlatformChecks {
                 load.hook(&SYSTEM_UPDATE, target)
             });
         }
+        // The smoke test checks that reflection resolves a type by the name
+        // the engine gives it, as a mod's low-level code would.
+        // ast-grep-ignore: engine-names-stay-in-loader
+        let shape = "keen::ecs::TriggerShape";
         report(
             "reflection: field offset",
-            load.field_offset(SHAPE, SHAPE_FIELD),
+            load.field_offset(shape, SHAPE_FIELD),
         );
-        report("reflection: type size", load.type_size(SHAPE));
+        report("reflection: type size", load.type_size(shape));
         report("symbol", load.symbol(SYMBOL).map(|address| address != 0));
         report("code section bytes", load.code().map(<[u8]>::len));
         report(
@@ -206,11 +207,15 @@ impl PlatformChecks {
                 "workshop recipe limit {limit}, under the game's 512"
             ));
         }
+        // The smoke test checks that the reflected types name a type as the
+        // engine does.
+        // ast-grep-ignore: engine-names-stay-in-loader
+        let shape = "keen::ecs::TriggerShape";
         match Registry::game() {
-            Ok(registry) if registry.named(SHAPE).is_some() => {
-                pass(&format!("reflected types name {SHAPE}"));
+            Ok(registry) if registry.named(shape).is_some() => {
+                pass(&format!("reflected types name {shape}"));
             }
-            Ok(_) => fail(&format!("reflected types lack {SHAPE}")),
+            Ok(_) => fail(&format!("reflected types lack {shape}")),
             Err(why) => fail(&format!("reflected types: {why}")),
         }
     }

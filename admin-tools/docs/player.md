@@ -187,14 +187,20 @@ ban list or the allow-list.
 
 ## How do I name an item or a recipe?
 
+In the window, **Give** and **Chest** list the game's items by the names
+your game shows, in your language, with a search field. This works on a
+dedicated server too.
+
+In a typed command:
+
 - By its debug name, such as `Tool_Glider_T1`, in any case.
 - By its GUID, or by a mod's content id, such as `you.lockers:locker`.
 - In a game a player hosts, also by the name the game shows, such as
   `Glider`, in any language the game offers. A dedicated server does not
   have these names.
-- An item by its number, and any knowledge by its number for `learn`.
+- Any knowledge by its number for `learn`.
 
-An unknown name lists the names near it. `give`, `chest` and `chestat` hand
+An unknown recipe name lists the names near it. `give`, `chest` and `chestat` hand
 over as many stacks as the items need, and you read how many did not fit.
 
 Items from `copy` start new, without wear or level, and the look and

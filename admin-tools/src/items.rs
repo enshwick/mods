@@ -1,13 +1,14 @@
-//! Items and recipes as an administrator names them: the game's own name,
-//! the GUID, a mod's content id or the number.
+//! Items as an administrator picks them and recipes as they name them: the
+//! game's own name, the GUID, a mod's content id or the number.
 
-use enshwick::ItemId;
 use enshwick::actions::{Arg, Outcome, Request, Value};
 use enshwick::content::Guid;
-use enshwick::content::vanilla::{self, VanillaError};
+use enshwick::content::items::vanilla_name;
+use enshwick::content::vanilla::{self, Vanilla, VanillaError};
+use enshwick::i18n::Language;
 use enshwick::knowledge::KnowledgeId;
 
-use crate::{Tools, texts};
+use crate::texts;
 
 /// The longest item or recipe name an action takes, in bytes.
 pub(crate) const MAX_NAME: usize = 120;
@@ -21,9 +22,21 @@ pub(crate) fn count_arg() -> Arg {
     Arg::number(texts::ARG_COUNT, 1.0..=MAX_COUNT, 1.0).optional(Value::Number(1.0))
 }
 
-/// The argument that names the item of a give.
+/// The item of a give: a window lists the game's items by the names the
+/// admin's own game shows; the platform checks the server knows the pick.
 pub(crate) fn item_arg() -> Arg {
-    Arg::text(texts::ARG_ITEM, MAX_NAME)
+    Arg::item(texts::ARG_ITEM)
+}
+
+/// The name to tell for `item`: the one the game shows in `language` where
+/// its texts read, else its debug name, else its GUID, as for a mod's item.
+pub(crate) fn name(item: Guid, language: Language) -> String {
+    if let Some(shown) = vanilla_name(item, language) {
+        return shown.to_owned();
+    }
+    Vanilla::game()
+        .and_then(|game| game.items().ok()?.iter().find(|i| i.guid == item))
+        .map_or_else(|| item.to_string(), |found| found.name.clone())
 }
 
 /// Why a name names nothing.
@@ -38,60 +51,6 @@ pub(crate) enum ResolveItemError {
     /// The game's list does not read.
     #[error("the game's list does not read")]
     Unreadable,
-}
-
-/// The item `text` names that the running game knows, with the name to
-/// show for it, or the refusal of a run that names none.
-pub(crate) fn known_item(
-    tools: &Tools,
-    request: &Request<'_>,
-    text: &str,
-) -> Result<(ItemId, String), Outcome> {
-    let (id, shown) = item(text).map_err(|why| refused(request, text, &why))?;
-    let known = tools
-        .inventories
-        .as_ref()
-        .is_some_and(|inventories| inventories.item_info(id).is_some());
-    if known {
-        Ok((id, shown))
-    } else {
-        let nothing = ResolveItemError::Name { near: Vec::new() };
-        Err(refused(request, text, &nothing))
-    }
-}
-
-/// The item `text` names, a GUID, a content id (`<mod>:<name>`), the game's
-/// debug name or the name it shows in any language, in any case, or the
-/// item's number, with the name to show for it.
-pub(crate) fn item(text: &str) -> Result<(ItemId, String), ResolveItemError> {
-    let named = |name: &str| either(name, vanilla::item, vanilla::item_by_display_name);
-    resolve(text, named, ItemId::from_guid, ItemId::new)
-}
-
-/// What `debug` finds by the debug name `name`, else what `shown` finds by
-/// the name the game shows, with the near names of both. The shown names
-/// read only where the game's texts do, not on a dedicated server, which
-/// then keeps to debug names.
-fn either(
-    name: &str,
-    debug: impl Fn(&str) -> Result<Guid, VanillaError>,
-    shown: impl Fn(&str) -> Result<Guid, VanillaError>,
-) -> Result<Guid, VanillaError> {
-    let near = match debug(name) {
-        Err(VanillaError::Unknown { near, .. }) => near,
-        found => return found,
-    };
-    match shown(name) {
-        Err(VanillaError::Unknown { near: more, .. }) => Err(VanillaError::Unknown {
-            name: name.to_owned(),
-            near: near.into_iter().chain(more).collect(),
-        }),
-        Err(VanillaError::Unreadable(_)) => Err(VanillaError::Unknown {
-            name: name.to_owned(),
-            near,
-        }),
-        found => found,
-    }
 }
 
 /// The knowledge `text` names, a recipe's GUID, content id or game's name
@@ -183,6 +142,8 @@ pub(crate) fn refused(request: &Request<'_>, text: &str, why: &ResolveItemError)
 
 #[cfg(test)]
 mod tests {
+    use enshwick::ItemId;
+
     use super::*;
 
     const GLIDER: Guid = Guid::parse("3f0c8d44-6b2a-4c1e-9d77-0a5be1c2d3e4");
@@ -230,23 +191,6 @@ mod tests {
     }
 
     #[test]
-    fn a_guid_a_content_id_and_a_number_each_name_an_item_without_the_game() {
-        assert_eq!(
-            item(" 3f0c8d44-6b2a-4c1e-9d77-0a5be1c2d3e4 ").map(|(id, _)| id),
-            Ok(ItemId::from_guid(GLIDER))
-        );
-        assert_eq!(
-            item("you.lockers:locker"),
-            Ok((
-                ItemId::named("you.lockers:locker"),
-                "you.lockers:locker".to_owned()
-            ))
-        );
-        assert_eq!(item("3073"), Ok((ItemId::new(3073), "3073".to_owned())));
-        assert_eq!(item("Tool_Glider_T1"), Err(ResolveItemError::Unreadable));
-    }
-
-    #[test]
     fn a_number_names_its_item_without_searching_the_names() {
         let searched = |_: &str| -> Result<Guid, VanillaError> { panic!("a name search") };
         assert_eq!(
@@ -280,39 +224,8 @@ mod tests {
         );
     }
 
-    fn shown(name: &str) -> Result<Guid, VanillaError> {
-        if name.eq_ignore_ascii_case("glider") {
-            return Ok(GLIDER);
-        }
-        Err(VanillaError::Unknown {
-            name: name.to_owned(),
-            near: vec!["Glider".into()],
-        })
-    }
-
-    fn no_texts(_: &str) -> Result<Guid, VanillaError> {
-        Err(VanillaError::Unreadable("texts"))
-    }
-
     #[test]
-    fn a_name_the_game_shows_names_its_item_where_the_texts_read() {
-        assert_eq!(either("glider", glider, shown), Ok(GLIDER));
-        assert_eq!(either("Tool_Glider_T1", glider, no_texts), Ok(GLIDER));
-    }
-
-    #[test]
-    fn an_unknown_name_offers_the_debug_and_shown_names_near_it() {
-        let Err(VanillaError::Unknown { near, .. }) = either("Glidr", glider, shown) else {
-            panic!("not unknown");
-        };
-        assert_eq!(near, ["Tool_Glider_T1", "Tool_Glider_T2", "Glider"]);
-    }
-
-    #[test]
-    fn without_the_game_s_texts_an_unknown_name_offers_only_debug_names() {
-        let Err(VanillaError::Unknown { near, .. }) = either("Glider", glider, no_texts) else {
-            panic!("not unknown");
-        };
-        assert_eq!(near, ["Tool_Glider_T1", "Tool_Glider_T2"]);
+    fn a_picked_item_outside_the_game_is_told_by_its_guid() {
+        assert_eq!(name(GLIDER, Language::EN_US), GLIDER.to_string());
     }
 }

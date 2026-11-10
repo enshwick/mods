@@ -489,6 +489,7 @@ fn word(value: &Value) -> String {
         Value::Number(number) => number.to_string(),
         Value::Toggle(on) => if *on { "on" } else { "off" }.to_owned(),
         Value::Text(text) => text.clone(),
+        Value::Item(item) => item.to_string(),
         _ => String::new(),
     }
 }

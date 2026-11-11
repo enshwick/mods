@@ -68,7 +68,10 @@ Ten seconds after the world has loaded, and again on the `check` action:
   refused;
 - a save on demand, followed by `WorldSaved`; the save on disk read, the
   first `WorldSaving`, and half a minute later the saves held, a save asked
-  meanwhile refused, and the saves let go;
+  meanwhile refused, and the saves let go; and from start, a `WorldSaving` line
+  as each save starts and a `WorldSaved` line with the world, the time the
+  save on disk was written and its size as each one ends, a player's saves
+  in a hosted game included;
 - the platform's other reads: the system its start hooked, run over five
   seconds with its caller's frame read; the task worker caps, the event
   loop's and the server loop's waits counted over five seconds; that this

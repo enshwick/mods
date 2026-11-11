@@ -46,7 +46,6 @@ impl SaveChecks {
     ///
     /// [`Off`] without the world or its events.
     pub(crate) fn new(load: &mut Load<'_>, scheduler: Scheduler) -> Result<Self, Off> {
-        let world = load.world()?;
         let seen = AtomicBool::new(false);
         load.on::<WorldSaving>(move |()| {
             if !seen.swap(true, Ordering::Relaxed) {
@@ -54,6 +53,7 @@ impl SaveChecks {
             }
             enshwick::info!("WorldSaving");
         })?;
+        let world = load.world()?;
         load.on::<WorldSaved>(move |()| enshwick::info!("{}", saved(world.save_info())))?;
         Ok(Self { world, scheduler })
     }

@@ -522,6 +522,7 @@ mod tests {
     use std::fmt::Write as _;
 
     use enshwick::config::Config as _;
+    use enshwick::i18n::{Language, Texts};
     use enshwick::{Entity, PlayerKey};
 
     use super::*;
@@ -533,6 +534,25 @@ mod tests {
             key: PlayerKey::new(key),
             permissions,
             name: "Ann".into(),
+        }
+    }
+
+    #[test]
+    fn every_language_names_the_rules_as_they_are_typed() {
+        let texts = Texts::parse(crate::texts::TOML).unwrap();
+        let key = crate::texts::CONFIG_RIGHTS_DOC;
+        let english = texts.get(key, Language::FALLBACK).unwrap();
+        // Any permission the game's user groups give is a rule; the text names some.
+        let permissions = crate::tests::words(english).filter(|word| word.starts_with("Can"));
+        let rules: Vec<&str> = [EVERYONE, NOBODY].into_iter().chain(permissions).collect();
+        assert!(rules.contains(&ADMINS), "{rules:?}");
+        for (language, text) in texts.translations(key) {
+            for rule in &rules {
+                assert!(
+                    crate::tests::words(text).any(|word| word == *rule),
+                    "{language:?}: {rule}"
+                );
+            }
         }
     }
 

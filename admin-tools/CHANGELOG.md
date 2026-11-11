@@ -108,3 +108,8 @@ Each entry says what players notice; a release's notes show its section.
 - Administrators set a player's level with `/adm stats <player> level`, and
   revive a dead player where they lie, with full health, with `/adm revive`.
 - God mode has its own row in a player's window.
+- Every text reads in each language the game offers: English, German,
+  French, Italian, Spanish, Russian, Polish, Japanese, Korean, Brazilian
+  Portuguese, Thai, Turkish, Simplified and Traditional Chinese, and
+  Ukrainian. World settings use the game's own names in each language.
+  Typed words, such as `clear` or `everyone`, stay English.

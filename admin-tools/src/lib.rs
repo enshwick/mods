@@ -522,9 +522,10 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_every_required_language() {
+    fn every_text_exists_in_all_languages() {
         let texts = Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.missing_in(Language::REQUIRED), []);
+        assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(Language::OFFERED), []);
     }
 
     #[test]

@@ -1,7 +1,11 @@
 [en]
 "mod.name" = "Test Content"
 "mod.description" = "Development only: content of its own for checking the platform in game"
+"altar.name" = "Test Flame Altar"
+"chest.name" = "Test Chest"
 
 [uk]
 "mod.name" = "Test Content"
 "mod.description" = "Лише для розробки: власний вміст для перевірки платформи в грі"
+"altar.name" = "Тестовий вівтар Полум'я"
+"chest.name" = "Тестова скриня"

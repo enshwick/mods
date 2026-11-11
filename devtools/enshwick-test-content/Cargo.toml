@@ -23,10 +23,10 @@ developer = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-enshwick = { workspace = true, features = ["typed"] }
+enshwick = { workspace = true, features = ["typed", "unstable"] }
 
 [dev-dependencies]
-enshwick = { workspace = true, features = ["test", "typed"] }
+enshwick = { workspace = true, features = ["test", "typed", "unstable"] }
 
 [lints]
 workspace = true

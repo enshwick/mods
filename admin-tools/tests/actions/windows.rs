@@ -80,7 +80,9 @@ fn whole_shape(view: &View, context: &str) -> (Vec<Option<usize>>, usize) {
             }
             ItemView::Row { text, buttons } => {
                 fits(text);
-                buttons.iter().for_each(|button| fits(&button.label));
+                for button in buttons {
+                    fits(&button.label);
+                }
                 Some(buttons.len())
             }
             _ => None,

@@ -528,25 +528,57 @@ mod tests {
         assert_eq!(texts.missing_in(Language::OFFERED), []);
     }
 
+    /// The ASCII words of `text`, as typed words are, keeping the `.` and `:`
+    /// inside numbers and times; a particle such as Korean `처럼` may follow
+    /// a word without a space.
+    pub(crate) fn words(text: &str) -> impl Iterator<Item = &str> {
+        text.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':')))
+            .map(|word| word.trim_end_matches(['.', ':']))
+    }
+
     #[test]
-    fn every_language_names_the_typed_words_in_english() {
-        let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
-        let rules = [settings::EVERYONE, settings::NOBODY, settings::ADMINS];
-        for (language, table) in &tables {
-            let text = |key: &str| table[key].as_str().unwrap().to_owned();
-            for (word, ..) in server::FORECASTS {
-                assert!(
-                    text(texts::REPLY_BAD_WEATHER).contains(word),
-                    "{language}: {word}"
-                );
-            }
-            for word in rules {
-                assert!(
-                    text(texts::CONFIG_RIGHTS_DOC).contains(word),
-                    "{language}: {word}"
-                );
+    fn every_language_names_the_typed_words_as_they_are_typed() {
+        let texts = Texts::parse(texts::TOML).unwrap();
+        let weathers = server::FORECASTS.map(|(word, ..)| word);
+        let typed: [(&str, &[&str]); 3] = [
+            (texts::REPLY_BAD_WEATHER, &weathers),
+            (texts::ACTION_TIME_HELP, &["18:30", "6.5", "06:30"]),
+            (texts::REPLY_RCON_COMMANDS, &["help", ids::ALIAS]),
+        ];
+        for (key, words_typed) in typed {
+            for (language, text) in texts.translations(key) {
+                for word in words_typed {
+                    assert!(
+                        words(text).any(|w| w == *word),
+                        "{language:?} {key}: {word}"
+                    );
+                }
             }
         }
+    }
+
+    #[test]
+    fn every_text_fits_where_the_platform_carries_it_in_every_language() {
+        // The loader cuts a notice at 255 bytes; a reply leaves room for its values.
+        const REPLY_BUDGET: usize = 190;
+        // A window cuts each line at MAX_LINE; a label leaves room to spare.
+        const LINE_BUDGET: usize = enshwick::actions::window::MAX_LINE - 10;
+        let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
+        let mut over = Vec::new();
+        for (language, table) in &tables {
+            for (key, text) in table.as_table().unwrap() {
+                let budget = match key.split('.').next() {
+                    Some("window" | "button" | "group" | "arg") => LINE_BUDGET,
+                    Some("reply" | "notice") if !key.starts_with("reply.rcon.") => REPLY_BUDGET,
+                    _ => continue,
+                };
+                let bytes = text.as_str().unwrap().len();
+                if bytes > budget {
+                    over.push(format!("{language} {key}: {bytes} bytes"));
+                }
+            }
+        }
+        assert_eq!(over, Vec::<String>::new());
     }
 
     #[test]

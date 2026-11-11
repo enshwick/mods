@@ -14,14 +14,14 @@ pub(crate) const MAX_TEXT: usize = 256;
 pub(crate) const MAX_ANNOUNCEMENTS: usize = 16;
 
 /// The rule that lets every player use an action.
-pub(crate) const EVERYONE: &str = "everyone";
+const EVERYONE: &str = "everyone";
 
 /// The rule that lets no player use an action; the console still may.
-pub(crate) const NOBODY: &str = "nobody";
+const NOBODY: &str = "nobody";
 
 /// The rule the actions that change something take unless the world says
 /// otherwise: the server's administrators.
-pub(crate) const ADMINS: &str = "CanKickBan";
+const ADMINS: &str = "CanKickBan";
 
 /// A switch that is on for a dedicated server and off for a hosted game.
 const AUTO: &str = "auto";
@@ -522,6 +522,7 @@ mod tests {
     use std::fmt::Write as _;
 
     use enshwick::config::Config as _;
+    use enshwick::i18n::{Language, Texts};
     use enshwick::{Entity, PlayerKey};
 
     use super::*;
@@ -533,6 +534,25 @@ mod tests {
             key: PlayerKey::new(key),
             permissions,
             name: "Ann".into(),
+        }
+    }
+
+    #[test]
+    fn every_language_names_the_rules_as_they_are_typed() {
+        let texts = Texts::parse(crate::texts::TOML).unwrap();
+        let key = crate::texts::CONFIG_RIGHTS_DOC;
+        let english = texts.get(key, Language::FALLBACK).unwrap();
+        // Any permission the game's user groups give is a rule; the text names some.
+        let permissions = crate::tests::words(english).filter(|word| word.starts_with("Can"));
+        let rules: Vec<&str> = [EVERYONE, NOBODY].into_iter().chain(permissions).collect();
+        assert!(rules.contains(&ADMINS), "{rules:?}");
+        for (language, text) in texts.translations(key) {
+            for rule in &rules {
+                assert!(
+                    crate::tests::words(text).any(|word| word == *rule),
+                    "{language:?}: {rule}"
+                );
+            }
         }
     }
 

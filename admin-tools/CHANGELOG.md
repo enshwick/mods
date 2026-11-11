@@ -112,4 +112,5 @@ Each entry says what players notice; a release's notes show its section.
   French, Italian, Spanish, Russian, Polish, Japanese, Korean, Brazilian
   Portuguese, Thai, Turkish, Simplified and Traditional Chinese, and
   Ukrainian. World settings use the game's own names in each language.
-  Typed words, such as `clear` or `everyone`, stay English.
+  Typed words, such as `clear` or `everyone`, stay English. Restart
+  warnings read in the server's language, English on a dedicated server.

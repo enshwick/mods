@@ -4,8 +4,9 @@
 use enshwick::PlayerKey;
 use enshwick::abi::{BuildingData, Header, PlayerInfo};
 use enshwick::actions::Value;
-use enshwick::actions::window::{ButtonView, ItemView, View, decode};
+use enshwick::actions::window::{ButtonView, ItemView, MAX_LINE, View, decode};
 use enshwick::events::BuildingPlaced;
+use enshwick::i18n::Language;
 use enshwick::test::Installed;
 use enshwick::{Entity, ItemId};
 
@@ -63,6 +64,31 @@ fn whole(view: &View) -> Vec<&str> {
         .collect()
 }
 
+/// The shape of `view` (its rows' button counts and its entries' count),
+/// after asserting none of its texts was cut to [`MAX_LINE`].
+fn whole_shape(view: &View, context: &str) -> (Vec<Option<usize>>, usize) {
+    // A cut line ends within one character of the limit, at most 4 bytes.
+    let fits = |text: &str| assert!(text.len() + 4 <= MAX_LINE, "{context}: cut {text}");
+    fits(&view.title);
+    let rows = view
+        .items
+        .iter()
+        .map(|item| match item {
+            ItemView::Text(text) => {
+                fits(text);
+                None
+            }
+            ItemView::Row { text, buttons } => {
+                fits(text);
+                buttons.iter().for_each(|button| fits(&button.label));
+                Some(buttons.len())
+            }
+            _ => None,
+        })
+        .collect();
+    (rows, view.entries.len())
+}
+
 fn player_value(key: u64) -> Value {
     Value::Player {
         key: PlayerKey::new(key),
@@ -109,13 +135,45 @@ fn the_panel_reads_in_ukrainian_for_a_player_whose_game_does() {
     let dir = scratch("panel-uk");
     let loader = server("", &dir);
     assert_eq!(run(&loader, &ann(), "open", "c0"), "1");
-    let held = loader.carried_windows(&ann(), enshwick::i18n::Language::UK_UA.0);
+    let held = loader.carried_windows(&ann(), Language::UK_UA.0);
     let players = decode(&held[0].1).unwrap();
     assert_eq!(players.title, "Гравці");
     assert_eq!(
         rows(&players)[1].1,
-        ["Дії", "До гравця", "Привести", "Вигнати"]
+        ["Дії", "Перейти", "Привести", "Вигнати"]
     );
+}
+
+#[test]
+fn every_window_carries_whole_in_every_offered_language() {
+    // A player reads in one language, so each language opens its own server.
+    let shapes = |language: Language| {
+        let dir = scratch(&format!("windows-{}", language.0));
+        let loader = server("build_log = true\n", &dir);
+        for (action, args) in [
+            ("panel", ""),
+            ("open", "c0"),
+            ("open", "c1"),
+            ("open", "c2"),
+            ("open", "c3"),
+            ("player", "p0000000000000002"),
+        ] {
+            assert_eq!(run(&loader, &ann(), action, args), "1", "{action}");
+        }
+        let held = loader.carried_windows(&ann(), language.0);
+        assert_eq!(held.len(), 6, "{language:?}");
+        held.iter()
+            .map(|(id, text)| {
+                let context = format!("{language:?} {id}");
+                let view = decode(text).unwrap_or_else(|| panic!("{context}: too big"));
+                (id.clone(), whole_shape(&view, &context))
+            })
+            .collect::<Vec<_>>()
+    };
+    let english = shapes(Language::FALLBACK);
+    for &language in Language::OFFERED {
+        assert_eq!(shapes(language), english, "{language:?}");
+    }
 }
 
 #[test]

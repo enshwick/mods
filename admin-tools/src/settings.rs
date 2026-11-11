@@ -14,14 +14,14 @@ pub(crate) const MAX_TEXT: usize = 256;
 pub(crate) const MAX_ANNOUNCEMENTS: usize = 16;
 
 /// The rule that lets every player use an action.
-const EVERYONE: &str = "everyone";
+pub(crate) const EVERYONE: &str = "everyone";
 
 /// The rule that lets no player use an action; the console still may.
-const NOBODY: &str = "nobody";
+pub(crate) const NOBODY: &str = "nobody";
 
 /// The rule the actions that change something take unless the world says
 /// otherwise: the server's administrators.
-const ADMINS: &str = "CanKickBan";
+pub(crate) const ADMINS: &str = "CanKickBan";
 
 /// A switch that is on for a dedicated server and off for a hosted game.
 const AUTO: &str = "auto";

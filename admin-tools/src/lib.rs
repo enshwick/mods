@@ -529,6 +529,27 @@ mod tests {
     }
 
     #[test]
+    fn every_language_names_the_typed_words_in_english() {
+        let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
+        let rules = [settings::EVERYONE, settings::NOBODY, settings::ADMINS];
+        for (language, table) in &tables {
+            let text = |key: &str| table[key].as_str().unwrap().to_owned();
+            for (word, ..) in server::FORECASTS {
+                assert!(
+                    text(texts::REPLY_BAD_WEATHER).contains(word),
+                    "{language}: {word}"
+                );
+            }
+            for word in rules {
+                assert!(
+                    text(texts::CONFIG_RIGHTS_DOC).contains(word),
+                    "{language}: {word}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn every_setting_and_group_has_its_label_and_description() {
         let schema = Settings::schema();
         let tables: toml::Table = toml::from_str(texts::TOML).unwrap();

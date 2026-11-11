@@ -214,7 +214,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "document-features",
  "enshwick-abi",
@@ -227,7 +227,7 @@ dependencies = [
 [[package]]
 name = "enshwick-abi"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "bytemuck",
  "enshwick-values",
@@ -281,7 +281,7 @@ dependencies = [
 [[package]]
 name = "enshwick-core"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "aho-corasick",
  "bcdec_rs",
@@ -307,7 +307,7 @@ dependencies = [
 [[package]]
 name = "enshwick-fake"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "bytemuck",
  "enshwick-core",
@@ -329,9 +329,9 @@ dependencies = [
 [[package]]
 name = "enshwick-gamedata"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
- "enshwick",
+ "enshwick-core",
  "iced-x86",
  "memchr",
  "rustc-hash",
@@ -347,10 +347,10 @@ dependencies = [
 [[package]]
 name = "enshwick-luau"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "arc-swap",
- "enshwick",
+ "enshwick-core",
  "mlua",
  "thiserror",
  "toml",
@@ -359,7 +359,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -447,7 +447,7 @@ dependencies = [
 [[package]]
 name = "enshwick-typed"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "enshwick-values",
  "thiserror",
@@ -456,7 +456,7 @@ dependencies = [
 [[package]]
 name = "enshwick-values"
 version = "1.0.0-alpha.14"
-source = "git+https://github.com/enshwick/enshwick?rev=5f1524256b747b5fbdffdad244f2c541aee88ac5#5f1524256b747b5fbdffdad244f2c541aee88ac5"
+source = "git+https://github.com/enshwick/enshwick?rev=3c715632f0ddb679fedb3e21fe32545445d1fe80#3c715632f0ddb679fedb3e21fe32545445d1fe80"
 dependencies = [
  "const-sha1",
  "const_format",

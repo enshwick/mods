@@ -107,13 +107,13 @@ impl Server {
                 return;
             }
         };
-        let Some([x, y, z]) = self.world.position(player.entity) else {
+        let Some(player_at) = self.world.position(player.entity) else {
             enshwick::warn!("the first player has no position");
             return;
         };
         let rotation = transform.orientation;
         let [dx, dz] = ahead([rotation.x, rotation.y, rotation.z, rotation.w]);
-        let at = [x + dx * ENEMY_AHEAD, y + ENEMY_LIFT, z + dz * ENEMY_AHEAD];
+        let at = in_front(player_at, [dx, dz]);
         let how = Spawn::new()
             .level(crate::ENEMY_LEVEL)
             .orientation_yaw(facing_back([dx, dz]))
@@ -142,6 +142,12 @@ fn ahead([x, y, z, w]: [f32; 4]) -> [f64; 2] {
     } else {
         [dx / length, dz / length]
     }
+}
+
+/// Where the enemy starts: [`ENEMY_AHEAD`] along the heading `[dx, dz]`
+/// from `[x, y, z]`, [`ENEMY_LIFT`] up.
+fn in_front([x, y, z]: [f64; 3], [dx, dz]: [f64; 2]) -> [f64; 3] {
+    [x + dx * ENEMY_AHEAD, y + ENEMY_LIFT, z + dz * ENEMY_AHEAD]
 }
 
 /// The yaw that turns +z to the opposite of `[dx, dz]`, to face back along
@@ -218,6 +224,24 @@ mod tests {
         let [dx, dz] = ahead(tilted);
         assert!((dx.hypot(dz) - 1.0).abs() < 1e-6, "{dx} {dz}");
         assert!(close([dx, dz], [1.0, 0.0]), "{dx} {dz}");
+    }
+
+    #[test]
+    fn a_tilt_alone_still_looks_along_plus_z_at_full_length() {
+        let (s, c) = (PI / 8.0).sin_cos();
+        assert!(
+            close(ahead([s, 0.0, 0.0, c]), [0.0, 1.0]),
+            "{:?}",
+            ahead([s, 0.0, 0.0, c])
+        );
+    }
+
+    #[test]
+    fn the_enemy_starts_ten_metres_ahead_and_two_up() {
+        assert_eq!(
+            in_front([5.0, 100.0, -3.0], [0.6, -0.8]),
+            [11.0, 102.0, -11.0]
+        );
     }
 
     #[test]

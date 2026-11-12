@@ -1,9 +1,9 @@
 # release-plz: each mod's version from the conventional commits that touch
-# its folder, so a change to one mod releases only it. A new loader alpha
-# releases every mod: `cargo xtask pin` adds a line to each mod's changelog,
-# since release-plz does not count a changed git `rev` as a change. Every
-# workspace member has an entry here; `cargo xtask check` refuses one
-# without. Each mod is tagged
+# its folder, so a change to one mod releases only it. The entries without
+# `release = false` are the release set: a new loader alpha releases each of
+# them, as `cargo xtask pin` adds a line to its changelog, since release-plz
+# does not count a changed git `rev` as a change. Every workspace member has
+# an entry here; `cargo xtask check` refuses one without. Each mod is tagged
 # `<package>-v<version>` and gets its own GitHub release. Its CHANGELOG.md is
 # written by hand for players, and `cargo xtask notes` makes the release
 # notes from it.
@@ -39,41 +39,50 @@ pr_body = """
 {% endfor %}"""
 
 [[package]]
+name = "enshwick-admin-tools"
+git_release_name = "Admin Tools {{ version }}"
+
+# These player mods are outside the release set: they build on the pinned
+# loader and keep their versions and changelogs.
+[[package]]
 name = "enshwick-area-loot"
+release = false
 git_release_name = "Area Loot {{ version }}"
 
 [[package]]
 name = "enshwick-better-altars"
+release = false
 git_release_name = "Better Altars {{ version }}"
 
 [[package]]
 name = "enshwick-build-camera"
+release = false
 git_release_name = "Build Camera {{ version }}"
 
 [[package]]
 name = "enshwick-game-rates"
+release = false
 git_release_name = "Game Rates {{ version }}"
 
 [[package]]
 name = "enshwick-optimizer"
+release = false
 git_release_name = "Optimizer {{ version }}"
 
 [[package]]
 name = "enshwick-personal-safes"
+release = false
 git_release_name = "Personal Safes {{ version }}"
 
 [[package]]
 name = "enshwick-shared-experience"
+release = false
 git_release_name = "Shared Experience {{ version }}"
 
 [[package]]
 name = "enshwick-survivors-per-altar"
-git_release_name = "Survivors per Altar {{ version }}"
-
-# Admin Tools is held back from the alphas: it ships after 1.0.
-[[package]]
-name = "enshwick-admin-tools"
 release = false
+git_release_name = "Survivors per Altar {{ version }}"
 
 # The developer mods are never shipped: nothing there is versioned or released.
 [[package]]

@@ -45,7 +45,8 @@ const WARNING: &str = "\
 /// not finished with `--unfinished`, and `releases.json` listing them; the
 /// files there are the mods a release takes, so a run that refuses one
 /// writes none. With either flag, a released mod built for another loader
-/// than the pinned one is refused too: a loader alpha releases every mod.
+/// than the pinned one is refused too: a loader alpha releases every mod of
+/// the release set.
 pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     let root = root();
     let mut out = root.join("target").join("notes");
@@ -135,10 +136,26 @@ pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     Ok(true)
 }
 
+/// The pre-release a mod's Cargo.toml carries until its first version is set
+/// by hand.
+const PLACEHOLDER: &str = "-dev";
+
+/// Refuses a mod still at its placeholder version, which no release ships.
+fn releasable(package: &Package) -> Result<(), String> {
+    if package.version.ends_with(PLACEHOLDER) {
+        return Err(format!(
+            "{}: {} is the version of a mod never released; set its first version in Cargo.toml and close its changelog under it",
+            package.name, package.version
+        ));
+    }
+    Ok(())
+}
+
 /// The notes of the package's version, built on the pinned `rev`; a version
 /// a stopped run tagged is released as tagged, so its changelog and loader
 /// come from the tag, which `assets` builds.
 fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<String, String> {
+    releasable(package)?;
     let path = package.dir.join(CHANGELOG);
     let tag = tag_of(package);
     let (changelog, rev) = if remote.released(&tag) {
@@ -749,6 +766,33 @@ mod tests {
         assert!(!ships(&package("area-loot", true), &["m".to_owned()]));
         assert!(!ships(&package("area-loot", false), &[]));
         assert!(!ships(&package("tools/xtask", true), &[]));
+    }
+
+    #[test]
+    fn until_1_0_admin_tools_is_the_only_mod_players_get() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let names: Vec<String> = shipped(&release_config(&root).unwrap())
+            .unwrap()
+            .into_iter()
+            .map(|package| package.name)
+            .collect();
+        assert_eq!(names, ["enshwick-admin-tools"]);
+    }
+
+    #[test]
+    fn a_mod_still_at_its_placeholder_version_is_not_releasable() {
+        let package = |version: &str| Package {
+            name: "m".to_owned(),
+            version: version.to_owned(),
+            dir: PathBuf::from("m"),
+            id: "m".to_owned(),
+            windows_only: false,
+            cdylib: true,
+            lib: true,
+        };
+        assert!(releasable(&package("0.0.0-dev")).is_err());
+        assert!(releasable(&package("0.1.0")).is_ok());
+        assert!(releasable(&package("1.0.0-alpha.1")).is_ok());
     }
 
     #[test]

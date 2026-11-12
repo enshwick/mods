@@ -145,8 +145,13 @@ The [player page](docs/player.md) explains each task step by step.
 
 ## Install
 
-Admin Tools comes in its own archive, `enshwick-admin-tools.zip`. It needs
-the [Enshwick](https://github.com/enshwick/enshwick) loader.
+Download `enshwick-admin-tools.zip` from its
+[newest release](https://github.com/enshwick/mods/releases?q=enshwick-admin-tools&expanded=true).
+Extract it into the folder with `enshrouded_server.exe`, or with
+`enshrouded.exe` when you host the world. The mod needs the Enshwick loader.
+Get `enshwick.zip` from the
+[Enshwick release](https://github.com/enshwick/enshwick/releases) that the
+mod's release notes name, and extract it into the same folder.
 
 ## Who needs it
 

@@ -1,9 +1,11 @@
 //! The two steps of a release that release-plz cannot take.
 //!
-//! `cargo xtask pin <loader tag>` pins the platform to a loader release and
-//! says so in the changelog of every mod players get that has nothing else
-//! under Unreleased, so each mod's folder changes and release-plz bumps
-//! every mod: a mod built for one loader alpha needs a rebuild for the next.
+//! `cargo xtask pin <loader tag>` pins the platform to a loader release for
+//! every crate, so every mod builds on it, and says so in the changelog of
+//! each mod in the release set (`release-plz.toml`) that has nothing else
+//! under Unreleased, so its folder changes and release-plz bumps it: a mod
+//! built for one loader alpha needs a rebuild for the next. A mod outside
+//! the set keeps its version and changelog.
 //!
 //! `cargo xtask close --date <YYYY-MM-DD>` runs on the release pull request's
 //! branch: it closes each bumped mod's Unreleased section as its new version,

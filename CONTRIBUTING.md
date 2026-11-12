@@ -70,15 +70,15 @@ A release goes in three steps:
 
 1. Pin the platform to the loader alpha the mods are built for:
    `cargo xtask pin v1.0.0-alpha.14` sets the commit of that release in the
-   root `Cargo.toml` and `Cargo.lock`. A mod whose released version was built
-   for another loader and that has nothing under `## [Unreleased]` gets the
-   line `- Built for Enshwick 1.0.0-alpha.14.` there, so its folder changes
+   root `Cargo.toml` and `Cargo.lock`, for every mod. A mod of the release
+   set whose released version was built for another loader and that has
+   nothing under `## [Unreleased]` gets the line `- Built for Enshwick 1.0.0-alpha.14.` there, so its folder changes
    and release-plz bumps it as well: release-plz does not count a changed
    git commit of a dependency as a change. A mod whose version has no tag
    yet is left alone, and pinning back to the loader a mod was released on
    drops its line. Merge this in an ordinary pull request.
 2. Run `release-pr`. It opens or updates the release pull request, which
-   bumps the mods whose folders changed, and then closes each bumped mod's
+   bumps the mods of the release set whose folders changed, and then closes each bumped mod's
    changelog on its branch: the `## [Unreleased]` section becomes
    `## [0.2.0] - 2026-11-05`, with an empty `## [Unreleased]` above it. A
    bumped mod with nothing under Unreleased keeps its released version, and
@@ -97,30 +97,35 @@ A release goes in three steps:
 `release-plz.yml` runs by hand:
 
 - `build`, from any branch, does what a release would and publishes
-  nothing: it writes the notes of every mod whose version has no tag yet and
-  builds those mods, every mod when a mod's notes are refused, and shows both
-  in the run's summary.
-- `release-pr` opens the release pull request for the mods that changed and
-  closes their changelogs with `cargo xtask close`.
-- `release` makes one prerelease for each mod whose version has no finished
-  release yet, with the notes of `cargo xtask notes`. A job per released mod
+  nothing: it writes the notes of every mod of the release set whose
+  version has no tag yet and builds those mods, every mod when a mod's notes
+  are refused, and shows both in the run's summary.
+- `release-pr` opens the release pull request for the mods of the release
+  set that changed and closes their changelogs with `cargo xtask close`.
+- `release` makes one prerelease for each mod of the release set whose
+  version has no finished release yet, with the notes of `cargo xtask notes`. A job per released mod
   then builds only that mod from its tag and attaches its zip, PDB, SBOM,
   `SHA256SUMS` and build provenance. Then the docs site builds again. A run
   that stops partway, after some tags or before the files, is finished by
   running `release` again: a tagged version without its release or its
   files counts as not released yet, and its notes come from its tag.
 
-`cargo xtask notes` opens each mod's notes with the alpha warning in English
-and Ukrainian, names the loader alpha and gives the mod's section of its
-version. It refuses a mod with changes under Unreleased or without its
-version's section, a released mod built for another loader than the pinned
+`cargo xtask notes` opens each mod's notes with the alpha warning in
+English, names the loader alpha and gives the mod's section of its version.
+It refuses a mod still at its placeholder version (`0.0.0-dev`), a mod with
+changes under Unreleased or without its version's section, a released mod built for another loader than the pinned
 one, and a workspace whose `enshwick` commit no loader release tags.
 `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
-`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. A mod that is
-not ready to ship, a developer mod and a tool have `release = false` in
-their entry: release-plz never tags them, and `cargo xtask notes` leaves
-them out. `cargo xtask check` refuses a member without an entry, an entry
+`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. The entries
+without `release = false` are the release set. A mod outside it, a developer
+mod and a tool have `release = false` in their entry: release-plz never
+bumps or tags them, `cargo xtask pin` and `cargo xtask close` leave their
+versions and changelogs alone, and `cargo xtask notes` leaves them out. A
+mod outside the set still builds on the pinned loader and passes
+`cargo xtask check`. To release it again, delete its `release = false` and
+run `cargo xtask pin` again, so its changelog names the loader it is now
+built for. `cargo xtask check` refuses a member without an entry, an entry
 without a member, and a released entry that is not a mod with a player
 page.

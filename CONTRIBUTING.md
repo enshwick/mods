@@ -55,7 +55,9 @@ build, so the shared dependencies compile once. A push to `main` runs
 Windows-only packages run natively on a Windows runner rather than under
 Wine. A pull request that changes only documents or repository settings
 compiles nothing. The job `check` sums up the others, and `ci / check` is
-the check a pull request needs to pass.
+the check a pull request needs to pass. In the merge queue it also needs
+`main`'s last run to have passed: while `main` is red only a `fix/` or
+revert branch merges, so the fix goes first.
 
 Every mod has its own version. release-plz, configured in
 `release-plz.toml`, versions each mod from the commits that touch its folder

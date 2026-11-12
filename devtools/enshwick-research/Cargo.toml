@@ -28,8 +28,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 enshwick = { workspace = true, features = ["unstable"] }
 rustc-hash.workspace = true
-toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "serde"] }
-windows-sys = { version = "0.61.2", default-features = false, features = [
+toml = { workspace = true, features = ["parse", "serde"] }
+windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Diagnostics_ToolHelp",

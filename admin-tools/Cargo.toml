@@ -22,18 +22,18 @@ name = "Admin Tools"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-arc-swap = { version = "1.9.3", default-features = false }
+arc-swap.workspace = true
 enshwick = { workspace = true, features = ["unstable"] }
 getrandom = { version = "0.4.3", default-features = false }
 rustc-hash.workspace = true
-serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
-thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "serde", "display"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+toml = { workspace = true, features = ["serde", "display"] }
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test"] }
-proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "serde", "display", "parse"] }
+proptest.workspace = true
+toml = { workspace = true, features = ["serde", "display", "parse"] }
 
 [lints]
 workspace = true

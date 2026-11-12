@@ -27,8 +27,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 enshwick.workspace = true
 rustc-hash.workspace = true
-serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
-windows-sys = { version = "0.61.2", default-features = false, features = [
+serde = { workspace = true, features = ["derive"] }
+windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_Security",
@@ -39,7 +39,7 @@ windows-sys = { version = "0.61.2", default-features = false, features = [
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test"] }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
+toml = { workspace = true, features = ["parse", "display", "serde"] }
 
 [lints]
 workspace = true

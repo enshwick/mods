@@ -15,23 +15,43 @@
 
 use std::path::PathBuf;
 
-use crate::changelog::{self, CHANGELOG};
-use crate::notes::{self, MANIFEST, PLATFORM, Remote};
-use crate::{Package, Step, say};
+mod built_for;
 
-const PIN_USAGE: &str = "usage: cargo xtask pin <loader tag>";
-const CLOSE_USAGE: &str =
-    "usage: cargo xtask close --date <YYYY-MM-DD> [--base <git ref>] [--body <file>]";
+use cargo_enshwick::changelog::{self, CHANGELOG, is_date};
+
+use self::built_for::built_for;
+use crate::commands::check::Step;
+use crate::commands::notes::{self, MANIFEST, PLATFORM, Remote};
+use crate::{Package, say};
+
+/// The command line `close` takes.
+#[derive(Debug, clap::Args)]
+pub(crate) struct CloseArgs {
+    /// The release date the sections carry, `YYYY-MM-DD`.
+    #[arg(long, value_parser = date)]
+    date: String,
+    /// The git ref whose manifests hold the versions released last.
+    #[arg(long, default_value = "origin/main")]
+    base: String,
+    /// The file to write the release pull request's body into.
+    #[arg(long)]
+    body: Option<PathBuf>,
+}
+
+fn date(text: &str) -> Result<String, String> {
+    if is_date(text) {
+        Ok(text.to_owned())
+    } else {
+        Err(format!("{text:?} is no date as YYYY-MM-DD"))
+    }
+}
 
 /// Pins every platform crate to the commit of `<loader tag>` and adds or
 /// updates the line naming the loader in the changelog of each shipped mod
 /// whose released version was built for another commit.
-pub(crate) fn pin(args: &[String]) -> Result<bool, String> {
-    let [tag] = args else {
-        return Err(PIN_USAGE.to_owned());
-    };
+pub(crate) fn pin(tag: &str) -> Result<bool, String> {
     let tag = if tag.starts_with('v') {
-        tag.clone()
+        tag.to_owned()
     } else {
         format!("v{tag}")
     };
@@ -77,8 +97,8 @@ pub(crate) fn pin(args: &[String]) -> Result<bool, String> {
         let path = package.dir.join(CHANGELOG);
         let changelog =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let updated = changelog::built_for(&changelog, line)
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let updated =
+            built_for(&changelog, line).map_err(|e| format!("{}: {e}", path.display()))?;
         if updated != changelog {
             std::fs::write(&path, updated).map_err(|e| format!("{}: {e}", path.display()))?;
             say(&format!(
@@ -132,7 +152,7 @@ fn platform_revs(manifest: &str) -> Result<Vec<String>, String> {
         .and_then(toml::Value::as_table)
         .into_iter()
         .flatten()
-        .filter(|(_, spec)| crate::mod_rules::from_the_platform(spec))
+        .filter(|(_, spec)| crate::check::mod_rules::from_the_platform(spec))
         .filter_map(|(_, spec)| spec.get("rev").and_then(toml::Value::as_str))
         .map(str::to_owned)
         .collect())
@@ -181,21 +201,8 @@ fn set_version(manifest: &str, from: &str, to: &str) -> Option<String> {
 /// sets a bumped mod back to its version on `--base` (`origin/main`) when
 /// that one is released and has nothing new under Unreleased or no finished
 /// release yet, and writes the release pull request's body to `--body`.
-pub(crate) fn close(args: &[String]) -> Result<bool, String> {
-    let mut date = None;
-    let mut base = "origin/main".to_owned();
-    let mut body_file = None;
-    let mut rest = args.iter();
-    while let Some(arg) = rest.next() {
-        let value = rest.next().ok_or(CLOSE_USAGE)?;
-        match arg.as_str() {
-            "--date" => date = Some(value.as_str()),
-            "--base" => base.clone_from(value),
-            "--body" => body_file = Some(value),
-            _ => return Err(CLOSE_USAGE.to_owned()),
-        }
-    }
-    let date = date.filter(|d| is_date(d)).ok_or(CLOSE_USAGE)?;
+pub(crate) fn close(args: &CloseArgs) -> Result<bool, String> {
+    let (date, base, body_file) = (args.date.as_str(), &args.base, args.body.as_ref());
     let shipped = notes::shipped(&notes::release_config(&notes::root())?)?;
     let base_manifest = |package: &Package| {
         let dir = package.dir.to_string_lossy();
@@ -210,7 +217,7 @@ pub(crate) fn close(args: &[String]) -> Result<bool, String> {
         return Ok(false);
     }
     if let Some(file) = body_file {
-        std::fs::write(file, closing.body).map_err(|e| format!("{file}: {e}"))?;
+        std::fs::write(file, closing.body).map_err(|e| format!("{}: {e}", file.display()))?;
     }
     Ok(true)
 }
@@ -294,9 +301,9 @@ fn close_one<'a>(
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let plan = plan(previous, &text, &package.version)?;
     let write = match plan {
-        Plan::Close => {
-            changelog::close(&text, &package.version, date)?.map(|closed| (path, closed))
-        }
+        Plan::Close => changelog::close(&text, &package.version, date)
+            .map_err(|e| format!("{}: {e}", path.display()))?
+            .map(|closed| (path, closed)),
         Plan::Kept(released, _) => Some(set_back(package, released)?),
     };
     Ok((plan, write))
@@ -397,24 +404,11 @@ fn set_back(package: &Package, released: &str) -> Result<(PathBuf, String), Stri
     Ok((path, kept))
 }
 
-/// Whether `text` is a date as `YYYY-MM-DD`.
-fn is_date(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    bytes.len() == 10
-        && bytes.iter().enumerate().all(|(i, b)| {
-            if i == 4 || i == 7 {
-                *b == b'-'
-            } else {
-                b.is_ascii_digit()
-            }
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::notes::Fake;
+    use crate::commands::notes::Fake;
 
     const OLD: &str = "1111111111111111111111111111111111111111";
     const NEW: &str = "2222222222222222222222222222222222222222";

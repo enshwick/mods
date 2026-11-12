@@ -23,9 +23,9 @@ developer = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-arc-swap = { version = "1.9.3", default-features = false }
+arc-swap.workspace = true
 enshwick = { workspace = true, features = ["typed", "unstable"] }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "serde"] }
+toml = { workspace = true, features = ["parse", "serde"] }
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test", "typed", "unstable"] }

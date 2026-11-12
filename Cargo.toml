@@ -22,8 +22,21 @@ resolver = "3"
 enshwick = { git = "https://github.com/enshwick/enshwick", rev = "1b576676d994ccd98cbcc7a0120b2cee07ee0222" }
 enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "1b576676d994ccd98cbcc7a0120b2cee07ee0222" }
 enshwick-luau = { git = "https://github.com/enshwick/enshwick", rev = "1b576676d994ccd98cbcc7a0120b2cee07ee0222" }
+# The crate rules and changelog reader the tasks share with the platform's.
+cargo-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "1b576676d994ccd98cbcc7a0120b2cee07ee0222", default-features = false }
 
+# What more than one package takes, each at one version; a member adds the
+# features it needs.
+arc-swap = { version = "1.9.3", default-features = false }
+clap = { version = "4.6.7", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
+serde = { version = "1.0.229", default-features = false, features = ["std"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["std"] }
+thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
+toml = { version = "=1.2.1", default-features = false, features = ["std"] }
+windows-sys = { version = "0.61.2", default-features = false }
+zip = { version = "9.1.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [workspace.lints.rust]
 missing_docs = "deny"

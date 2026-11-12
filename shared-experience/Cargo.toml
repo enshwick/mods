@@ -23,11 +23,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 enshwick.workspace = true
-serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test"] }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
+toml = { workspace = true, features = ["parse", "display", "serde"] }
 
 [lints]
 workspace = true

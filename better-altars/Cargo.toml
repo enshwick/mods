@@ -22,15 +22,15 @@ name = "Better Altars"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-arc-swap = { version = "1.9.3", default-features = false }
+arc-swap.workspace = true
 arrayvec = { version = "0.7.8", default-features = false, features = ["std"] }
 enshwick = { workspace = true, features = ["unstable"] }
-thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
+thiserror.workspace = true
 
 [dev-dependencies]
 enshwick = { workspace = true, features = ["test", "unstable"] }
-proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
+proptest.workspace = true
+toml = { workspace = true, features = ["parse", "display", "serde"] }
 
 [lints]
 workspace = true

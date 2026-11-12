@@ -19,9 +19,9 @@ resolver = "3"
 
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.
-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "f97585604c9024afa5c8eca59316e94ce96aa724" }
-enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "f97585604c9024afa5c8eca59316e94ce96aa724" }
-enshwick-luau = { git = "https://github.com/enshwick/enshwick", rev = "f97585604c9024afa5c8eca59316e94ce96aa724" }
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "3bb5b43564d41a1a41dc71ba00fc723671a77a03" }
+enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "3bb5b43564d41a1a41dc71ba00fc723671a77a03" }
+enshwick-luau = { git = "https://github.com/enshwick/enshwick", rev = "3bb5b43564d41a1a41dc71ba00fc723671a77a03" }
 
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 

@@ -28,6 +28,7 @@ jobs:
     outputs:
       skip: ${{ steps.scope.outputs.skip }}
       pages: ${{ steps.scope.outputs.pages }}
+      deny: ${{ steps.scope.outputs.deny }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,6 +73,13 @@ jobs:
           fi
           echo "skip=$reason" >> "$GITHUB_OUTPUT"
           echo "pages=$pages" >> "$GITHUB_OUTPUT"
+          # The full suite runs cargo-deny itself.
+          deny=false
+          if [ -z "$reason" ] && [ "$FULL" != true ] &&
+            git diff --name-only "$BASE...HEAD" | grep -qE '(^|/)Cargo\.(toml|lock)$|^deny\.toml$'; then
+            deny=true
+          fi
+          echo "deny=$deny" >> "$GITHUB_OUTPUT"
 
   # Every player page against the schema and rules the site builds it with,
   # from the site's own checker, so the two never disagree. The site stays at
@@ -160,6 +168,12 @@ jobs:
             cargo xtask check
           fi
 
+      # A change to a manifest, the lock file or the policy can bring in a
+      # dependency the policy refuses.
+      - name: cargo deny
+        if: needs.scope.outputs.deny == 'true'
+        run: cargo deny check
+
       # A release pull request merges only once `release` would take its
       # notes, choosing the mods as it does: each bumped mod's section
       # closed, a version tagged without its files finished from its tag,
@@ -237,9 +251,53 @@ jobs:
           fi
           exit "$status"
 
+  # Nothing merges while main is red: a merge queue entry fails while the
+  # newest finished run of this workflow on main failed, unless its pull
+  # request's branch is a fix (`fix/`), so the fix merges first.
+  main:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Main is green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          MAIN: ${{ github.event.repository.default_branch }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          api() {
+            curl --proto '=https' -sSf --retry 6 -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/$1"
+          }
+          # The caller's workflow file: a called workflow's context is its caller's.
+          workflow=${WORKFLOW_REF%%@*}
+          workflow=${workflow##*/}
+          # A cancelled or skipped run says nothing about main.
+          red=$(api "actions/workflows/$workflow/runs?branch=$MAIN&event=push&status=completed&per_page=20" |
+            jq -r '[.workflow_runs[] | select(.conclusion != "cancelled" and .conclusion != "skipped")][0]
+              | select(. != null and .conclusion != "success") | .html_url')
+          if [ -z "$red" ]; then
+            echo "$MAIN is green"
+            exit 0
+          fi
+          number=$(sed -nE 's|.*/pr-([0-9]+)-[0-9a-f]+$|\1|p' <<< "$HEAD_REF")
+          branch=""
+          if [ -n "$number" ]; then branch=$(api "pulls/$number" | jq -r .head.ref); fi
+          if [[ "$branch" == fix/* ]]; then
+            echo "$MAIN is red ($red); #$number is a fix ($branch) and goes first" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::error::$MAIN is red: $red; only a fix/ pull request merges until it is green"
+          echo "$MAIN is red: $red; only a fix/ pull request merges until it is green" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
   # The required check: every part passed, or there was nothing to prove.
   check:
-    needs: [scope, pages, rust, windows]
+    needs: [scope, pages, rust, windows, main]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 2
@@ -251,7 +309,8 @@ jobs:
           PAGES: ${{ needs.pages.result }}
           RUST: ${{ needs.rust.result }}
           WINDOWS: ${{ needs.windows.result }}
+          MAIN: ${{ needs.main.result }}
         run: |
-          echo "scope: $SCOPE, player pages: $PAGES, rust: $RUST, Windows tests: $WINDOWS"
+          echo "scope: $SCOPE, player pages: $PAGES, rust: $RUST, Windows tests: $WINDOWS, main green: $MAIN"
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
-          [ "$SCOPE" = success ] && ok "$PAGES" && ok "$RUST" && ok "$WINDOWS"
+          [ "$SCOPE" = success ] && ok "$PAGES" && ok "$RUST" && ok "$WINDOWS" && ok "$MAIN"

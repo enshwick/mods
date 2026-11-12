@@ -27,4 +27,6 @@ jobs:
     if: github.event.pull_request.draft != true
     uses: ./.github/workflows/check.yml
     permissions:
+      # The merge queue reads main's runs.
+      actions: read
       contents: read

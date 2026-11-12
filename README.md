@@ -6,13 +6,14 @@ and API for Enshrouded.
 
 [![Coverage](https://codecov.io/gh/enshwick/mods/graph/badge.svg)](https://codecov.io/gh/enshwick/mods)
 
-Each released mod has a page on [enshwick.com](https://enshwick.com/#mods)
-that says what it changes and links its archive.
+Enshwick 1.0 releases with one mod, Admin Tools. The other mods stay in this
+repository, and each one with a release keeps its page on
+[enshwick.com](https://enshwick.com) that says what it changes and links its
+archive.
 
 <!--
-Each line of the table is the mod's English line in src/data/mods.json of
-enshwick/docs, which the site's front page shows for each released mod.
-Change a line there first.
+Admin Tools' line in the table is its English line in src/data/mods.json of
+enshwick/docs, which the site's front page shows. Change it there first.
 -->
 
 | Mod | What it does |

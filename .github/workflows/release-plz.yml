@@ -1,10 +1,12 @@
 # Release pull requests and releases with release-plz (release-plz.toml), run
 # by hand. Until 1.0 each release is an alpha, a GitHub prerelease.
 # `release-pr`, on main, opens or updates the release pull request, which
-# bumps the mods whose folders changed (`cargo xtask pin` changes every
-# mod's folder when the loader moves), then closes each bumped mod's
-# changelog on its branch with `cargo xtask close`, so it is ready to merge.
-# `release`, on main, releases every mod whose version has no finished
+# bumps the mods of the release set (the entries of release-plz.toml without
+# `release = false`) whose folders changed (`cargo xtask pin` changes the
+# folder of each of them when the loader moves), then closes each bumped
+# mod's changelog on its branch with `cargo xtask close`, so it is ready to
+# merge. `release`, on main, releases every mod of the set whose version has
+# no finished
 # release yet: it refuses before tagging anything when a mod's notes are not
 # ready, then release-plz tags each new version `<package>-v<version>`, and
 # each such mod gets its prerelease with the notes of `cargo xtask notes`,

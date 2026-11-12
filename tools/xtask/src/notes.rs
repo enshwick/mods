@@ -45,7 +45,8 @@ const WARNING: &str = "\
 /// not finished with `--unfinished`, and `releases.json` listing them; the
 /// files there are the mods a release takes, so a run that refuses one
 /// writes none. With either flag, a released mod built for another loader
-/// than the pinned one is refused too: a loader alpha releases every mod.
+/// than the pinned one is refused too: a loader alpha releases every mod of
+/// the release set.
 pub(crate) fn run(args: &[String]) -> Result<bool, String> {
     let root = root();
     let mut out = root.join("target").join("notes");
@@ -749,6 +750,38 @@ mod tests {
         assert!(!ships(&package("area-loot", true), &["m".to_owned()]));
         assert!(!ships(&package("area-loot", false), &[]));
         assert!(!ships(&package("tools/xtask", true), &[]));
+    }
+
+    #[test]
+    fn until_1_0_the_release_set_is_admin_tools_and_every_other_player_mod_is_held_back() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let held = held_back(&release_config(&root).unwrap());
+        let package = |name: &str, dir: &str| Package {
+            name: name.to_owned(),
+            version: "0.1.0".to_owned(),
+            dir: root.join(dir),
+            id: name.to_owned(),
+            windows_only: false,
+            cdylib: true,
+            lib: true,
+        };
+        assert!(ships(
+            &package("enshwick-admin-tools", "admin-tools"),
+            &held
+        ));
+        for dir in [
+            "area-loot",
+            "better-altars",
+            "build-camera",
+            "game-rates",
+            "optimizer",
+            "personal-safes",
+            "shared-experience",
+            "survivors-per-altar",
+        ] {
+            let name = format!("enshwick-{dir}");
+            assert!(!ships(&package(&name, dir), &held), "{name}");
+        }
     }
 
     #[test]

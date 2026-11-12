@@ -70,7 +70,8 @@ A release goes in three steps:
 
 1. Pin the platform to the loader alpha the mods are built for:
    `cargo xtask pin v1.0.0-alpha.14` sets the commit of that release in the
-   root `Cargo.toml` and `Cargo.lock`. A mod whose released version was built
+   root `Cargo.toml` and `Cargo.lock`, for every mod. A mod of the release
+   set whose released version was built
    for another loader and that has nothing under `## [Unreleased]` gets the
    line `- Built for Enshwick 1.0.0-alpha.14.` there, so its folder changes
    and release-plz bumps it as well: release-plz does not count a changed
@@ -118,9 +119,11 @@ one, and a workspace whose `enshwick` commit no loader release tags.
 `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
-`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. A mod that is
-not ready to ship, a developer mod and a tool have `release = false` in
-their entry: release-plz never tags them, and `cargo xtask notes` leaves
-them out. `cargo xtask check` refuses a member without an entry, an entry
+`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. The entries without `release = false` are the release set. A mod outside it, a developer mod and a tool have
+`release = false` in their entry: release-plz never bumps or tags them,
+`cargo xtask pin` and `cargo xtask close` leave their versions and
+changelogs alone, and `cargo xtask notes` leaves them out. A mod outside the
+set still builds on the pinned loader and passes `cargo xtask check`; to
+release it again, delete its `release = false`. `cargo xtask check` refuses a member without an entry, an entry
 without a member, and a released entry that is not a mod with a player
 page.

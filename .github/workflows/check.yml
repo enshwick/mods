@@ -46,6 +46,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
+          # Read once: `grep -q` in a pipe can end `git diff` early, and
+          # pipefail then fails the test.
+          files=$(git diff --name-only "$BASE...HEAD")
           reason=""
           pages=true
           if [ "$EVENT" = merge_group ]; then
@@ -62,9 +65,9 @@ jobs:
           if [ -n "$reason" ]; then
             pages=false
           elif [ "$FULL" != true ]; then
-            git diff --name-only "$BASE...HEAD" | grep -qE '^([^/]+/docs/player[^/]*\.md|\.github/workflows/(ci|check)\.yml)$' || pages=false
+            grep -qE '^([^/]+/docs/player[^/]*\.md|\.github/workflows/(ci|check)\.yml)$' <<< "$files" || pages=false
             never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/(release-plz|coverage)\.yml|actions/release-files/.*)$|codecov\.yml$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
-            if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
+            if ! grep -qvE "$never" <<< "$files"; then
               reason="no file that builds changed"
             fi
           fi
@@ -76,7 +79,7 @@ jobs:
           # The full suite runs cargo-deny itself.
           deny=false
           if [ -z "$reason" ] && [ "$FULL" != true ] &&
-            git diff --name-only "$BASE...HEAD" | grep -qE '(^|/)Cargo\.(toml|lock)$|^deny\.toml$'; then
+            grep -qE '(^|/)Cargo\.(toml|lock)$|^deny\.toml$' <<< "$files"; then
             deny=true
           fi
           echo "deny=$deny" >> "$GITHUB_OUTPUT"

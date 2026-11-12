@@ -42,8 +42,8 @@ pr_body = """
 name = "enshwick-admin-tools"
 git_release_name = "Admin Tools {{ version }}"
 
-# Until 1.0 only the mods above are released; the ones below keep building
-# against main and keep their versions and open changelogs.
+# These player mods are outside the release set: they build on the pinned
+# loader and keep their versions and changelogs.
 [[package]]
 name = "enshwick-area-loot"
 release = false

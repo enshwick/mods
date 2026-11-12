@@ -6,9 +6,8 @@
 # folder of each of them when the loader moves), then closes each bumped
 # mod's changelog on its branch with `cargo xtask close`, so it is ready to
 # merge. `release`, on main, releases every mod of the set whose version has
-# no finished
-# release yet: it refuses before tagging anything when a mod's notes are not
-# ready, then release-plz tags each new version `<package>-v<version>`, and
+# no finished release yet: it refuses before tagging anything when a mod's
+# notes are not ready, then release-plz tags each new version `<package>-v<version>`, and
 # each such mod gets its prerelease with the notes of `cargo xtask notes`,
 # also when release-plz tagged it and stopped, so running `release` again
 # finishes a run that stopped partway; one job per released mod builds only

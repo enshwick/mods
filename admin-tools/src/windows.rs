@@ -384,6 +384,12 @@ impl Tools {
                 false,
             )
             .row(
+                texts::WINDOW_ROW_MAP,
+                &[],
+                &[(texts::BUTTON_UNCOVER, ids::UNCOVER, them)],
+                false,
+            )
+            .row(
                 texts::WINDOW_ROW_GOD,
                 &[],
                 &[

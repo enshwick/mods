@@ -1,12 +1,13 @@
 //! Actions on a player's character: health, stamina, mana and level set to
-//! a value, a revive in place, and god mode until the player leaves.
+//! a value, a revive in place, the whole map uncovered, and god mode until
+//! the player leaves.
 
 use enshwick::Entity;
 use enshwick::abi::{DAMAGE_TYPES, DamageCheck, Header, KnowledgeInfo, PlayerData};
 use enshwick::events::PlayerLeft;
 use enshwick::knowledge::KnowledgeId;
 
-use super::game::{HEALTH, ann, bob, health, run, scratch, server};
+use super::game::{HEALTH, MAP, ann, bob, health, run, scratch, server};
 
 /// A fall that takes `total` health from `target`.
 fn fall(target: Entity, total: f32) -> DamageCheck {
@@ -19,6 +20,33 @@ fn fall(target: Entity, total: f32) -> DamageCheck {
         amounts: [0.0; DAMAGE_TYPES],
         total,
     }
+}
+
+#[test]
+fn uncover_sends_the_whole_map_to_a_player_whose_game_runs_enshwick_and_says_when_it_cannot() {
+    let dir = scratch("uncover");
+    let loader = server("", &dir);
+    assert!(run(&loader, &bob(), "uncover", "p0000000000000001").starts_with('0'));
+    assert_eq!(
+        run(&loader, &ann(), "uncover", "p0000000000000001"),
+        "1The whole map of Ann is uncovered."
+    );
+    let sent = loader.fog_uncovers();
+    let [(player, centre, radius)] = sent.as_slice() else {
+        panic!("{sent:?}");
+    };
+    assert_eq!(*player, ann().key);
+    let middle = MAP.origin.map(|at| at + MAP.size[0] / 2.0);
+    assert_eq!(centre.map(f64::from), middle);
+    assert!(
+        f64::from(*radius) >= MAP.size[0].hypot(MAP.size[1]) / 2.0 - 1.0,
+        "{radius}"
+    );
+    assert_eq!(
+        run(&loader, &ann(), "uncover", "p0000000000000002"),
+        "0The map of Bob stays covered: their game does not run Enshwick, or this version of the game has no map."
+    );
+    assert_eq!(loader.fog_uncovers().len(), 1);
 }
 
 #[test]

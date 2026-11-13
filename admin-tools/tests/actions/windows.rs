@@ -258,6 +258,7 @@ fn one_player_s_window_groups_every_action_on_them() {
                 labels(&["Kick", "Ban", "Mute", "Unmute"])
             ),
             ("Health".to_owned(), labels(&["Heal", "Revive", "Set"])),
+            ("Map".to_owned(), labels(&["Uncover"])),
             ("God mode".to_owned(), labels(&["On", "Off"])),
             (
                 "Items and recipes".to_owned(),

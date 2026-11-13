@@ -5,10 +5,13 @@ use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use enshwick::abi::{ActionCall, DaytimeInfo, Header, PlayerData, PlayerInfo, Side, Status};
+use enshwick::abi::{
+    ActionCall, DaytimeInfo, Header, MapFrameInfo, PlayerData, PlayerInfo, Side, Status,
+};
 use enshwick::content::EngineFacts as _;
 use enshwick::content::Guid;
 use enshwick::events::{PlayerJoined, SettingsReplaced, WorldLoaded};
+use enshwick::net::Peer;
 use enshwick::test::{FakeHost, Installed, facts};
 use enshwick::{Entity, ItemId, PlayerKey};
 use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
@@ -35,6 +38,15 @@ pub(crate) const LOOKS: u32 = 0x5002;
 
 /// Where Ann set her map waypoint, in metres; Bob set none.
 pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, -80.0];
+
+/// The world's map: 10 240 metres a side around the origin, in cells of 8
+/// metres.
+pub(crate) const MAP: MapFrameInfo = MapFrameInfo {
+    origin: [-5120.0; 2],
+    size: [10240.0; 2],
+    metres_per_cell: 8.0,
+    ..MapFrameInfo::EMPTY
+};
 
 /// The game's number of the ordinary storage category.
 const GENERIC: u8 = 4;
@@ -226,6 +238,9 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     let host = if inventory { host.inventory() } else { host };
     let mut host = host
         .map_waypoints()
+        .map_frame(MAP)
+        // Only Ann's game runs Enshwick, so only hers takes a fog uncover.
+        .net_peer(Peer::Player(ann().key))
         .vanilla_items(&[
             (GLIDER, "Tool_Glider_T1"),
             (WOOD, "Resource_Wood"),

@@ -14,7 +14,6 @@ mod packet;
 use core::time::Duration;
 use std::io::{self, Read as _, Write as _};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering, fence};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -28,8 +27,9 @@ use crate::settings::Settings;
 use crate::{Tools, texts};
 use packet::Packet;
 
-/// The file in the world's data folder that holds the generated password.
-pub(crate) const PASSWORD_FILE: &str = "rcon-password.txt";
+/// The setting that holds the password, which the console writes when it
+/// is empty.
+const PASSWORD_KEY: &str = "rcon_password";
 
 /// The length of a generated password.
 const PASSWORD_LEN: usize = 24;
@@ -85,11 +85,8 @@ const WAKE: Duration = Duration::from_secs(1);
 pub(crate) struct Config {
     /// The address and port.
     pub address: SocketAddr,
-    /// The world's password, never shown or logged; empty for the one
-    /// generated in `file`.
+    /// The world's password, never shown or logged.
     pub password: String,
-    /// The file of the generated password in the world's data folder.
-    pub file: Option<PathBuf>,
 }
 
 impl core::fmt::Debug for Config {
@@ -109,9 +106,6 @@ pub(crate) struct Listener {
 /// What the listener's threads share.
 struct Shared {
     config: Config,
-    /// The password clients log in with, once the listener's thread has
-    /// read or made it.
-    password: OnceLock<String>,
     stop: AtomicBool,
     /// Where the listener took its port, once it has.
     bound: OnceLock<SocketAddr>,
@@ -141,12 +135,19 @@ impl core::fmt::Debug for Shared {
 
 impl Listener {
     /// Starts the remote console of `config` on a thread of its own, which
-    /// reads or makes the password and takes the port.
+    /// takes the port.
     ///
     /// # Errors
     ///
-    /// The reason no thread starts.
+    /// The reason no thread starts, or an empty password, which would let
+    /// any client log in.
     pub(crate) fn open(config: Config, tools: Weak<Tools>) -> io::Result<Self> {
+        if config.password.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "the remote console has no password",
+            ));
+        }
         // A unit test on every network raises the firewall prompt.
         if cfg!(test) && !config.address.ip().to_canonical().is_loopback() {
             return Err(io::Error::new(
@@ -218,31 +219,15 @@ fn guarded(shared: &Shared, body: impl FnOnce()) {
     }
 }
 
-/// The listener's thread: reads or makes the password, takes the port and
-/// takes connections until the console closes.
+/// The listener's thread: takes the port and takes connections until the
+/// console closes.
 fn listen_on(shared: &Arc<Shared>) {
-    let config = &shared.config;
-    let password = match (config.password.is_empty(), &config.file) {
-        (false, _) => config.password.clone(),
-        (true, Some(file)) => match generated_password(file) {
-            Ok(password) => password,
-            Err(why) => {
-                enshwick::warn!("the remote console is off: {}: {why}", file.display());
-                return;
-            }
-        },
-        (true, None) => return,
-    };
-    let _set = shared.password.set(password);
     let Some(socket) = bind(shared) else {
         return;
     };
-    if let (true, Some(file)) = (config.password.is_empty(), &config.file) {
-        enshwick::info!("the remote console's password is in {}", file.display());
-    }
     let _set = shared
         .bound
-        .set(socket.local_addr().unwrap_or(config.address));
+        .set(socket.local_addr().unwrap_or(shared.config.address));
     fence(Ordering::SeqCst);
     accept(&socket, shared);
 }
@@ -308,7 +293,6 @@ impl Shared {
     fn new(config: Config, tools: Weak<Tools>) -> Self {
         Self {
             config,
-            password: OnceLock::new(),
             stop: AtomicBool::new(false),
             bound: OnceLock::new(),
             open: Mutex::default(),
@@ -443,9 +427,7 @@ impl Pace {
 /// closes. A read that waited out its time closes the connection, since
 /// Windows leaves a socket whose receive timed out unusable.
 fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
-    let Some(password) = shared.password.get() else {
-        return Err(io::Error::other("no password yet"));
-    };
+    let password = &shared.config.password;
     // A client that stops reading cannot keep its thread and slot for good.
     stream.set_write_timeout(Some(COMMAND_TIMEOUT))?;
     stream.set_nodelay(true)?;
@@ -585,65 +567,61 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
 impl Tools {
     /// Opens, moves or closes the remote console as `settings` say: it
     /// listens while they turn it on and a world runs, and opens again
-    /// when the address or the password changes. Nothing here reads a file
-    /// or waits: the listener's thread does that.
+    /// when the address or the password changes. With no password, it
+    /// closes and writes a new one into the world's setting, whose change
+    /// opens it again: that write, once per world, is the one file this
+    /// reads or writes, and the listener's thread takes the port.
     pub(crate) fn listen(&self, settings: &Settings) {
-        let wanted = (settings.rcon_on(self.dedicated) && !self.rcon_fused.load(Ordering::Acquire))
-            .then(|| self.rcon_config(settings))
-            .flatten();
-        let mut slot = self.rcon.relock();
-        let alive = slot.as_ref().filter(|listener| !listener.ended());
-        if alive.map(Listener::config) == wanted.as_ref() {
-            return;
+        let on = settings.rcon_on(self.dedicated) && !self.rcon_fused.load(Ordering::Acquire);
+        let unset = on && settings.rcon_password.is_empty();
+        let wanted = (on && !unset).then(|| rcon_config(settings)).flatten();
+        {
+            let mut slot = self.rcon.relock();
+            let alive = slot.as_ref().filter(|listener| !listener.ended());
+            if alive.map(Listener::config) != wanted.as_ref() {
+                if let Some(old) = slot.take() {
+                    old.close();
+                }
+                if let Some(config) = wanted {
+                    match Listener::open(config, Weak::clone(&self.me)) {
+                        Ok(listener) => *slot = Some(listener),
+                        Err(why) => enshwick::warn!("the remote console does not start: {why}"),
+                    }
+                }
+            }
         }
-        if let Some(old) = slot.take() {
-            old.close();
+        // After the lock: the write's settings change comes back here.
+        if unset {
+            keep_new_password();
         }
-        let Some(config) = wanted else {
-            return;
-        };
-        match Listener::open(config, Weak::clone(&self.me)) {
-            Ok(listener) => *slot = Some(listener),
-            Err(why) => enshwick::warn!("the remote console does not start: {why}"),
-        }
-    }
-
-    /// Where the remote console listens and its password: the world's, or
-    /// the one generated in its data folder; `None` for neither.
-    fn rcon_config(&self, settings: &Settings) -> Option<Config> {
-        let ip: IpAddr = settings.rcon_ip.parse().ok()?;
-        let port = u16::try_from(settings.rcon_port).ok()?;
-        let file = self.world.data_dir().map(|dir| dir.join(PASSWORD_FILE));
-        if settings.rcon_password.is_empty() && file.is_none() {
-            return None;
-        }
-        Some(Config {
-            address: SocketAddr::new(ip, port),
-            password: settings.rcon_password.clone(),
-            file,
-        })
     }
 }
 
-/// The password kept in `file`, made and written there when the file is
-/// missing or empty.
-///
-/// # Errors
-///
-/// The reason the file does not read or write, or no random bytes.
-pub(crate) fn generated_password(file: &Path) -> io::Result<String> {
-    if let Some(kept) = enshwick::files::read_to_string_if_present(file)? {
-        let kept = kept.trim();
-        if !kept.is_empty() {
-            return Ok(kept.to_owned());
-        }
+/// Where the remote console listens and its password; `None` for an
+/// address the settings check would refuse.
+fn rcon_config(settings: &Settings) -> Option<Config> {
+    let ip: IpAddr = settings.rcon_ip.parse().ok()?;
+    let port = u16::try_from(settings.rcon_port).ok()?;
+    Some(Config {
+        address: SocketAddr::new(ip, port),
+        password: settings.rcon_password.clone(),
+    })
+}
+
+/// Makes a password and writes it into the world's `rcon_password`, a
+/// secret the log never shows; the console stays closed when it fails.
+fn keep_new_password() {
+    let written = random_password()
+        .map_err(|why| why.to_string())
+        .and_then(|password| {
+            enshwick::config::set::<Settings>(PASSWORD_KEY, password).map_err(|why| why.to_string())
+        });
+    match written {
+        Ok(()) => enshwick::info!(
+            "the remote console's password is new in the world's Admin Tools settings, {PASSWORD_KEY}"
+        ),
+        Err(why) => enshwick::warn!("the remote console is off: no password written: {why}"),
     }
-    let password = random_password()?;
-    if let Some(dir) = file.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    enshwick::files::write_atomically(file, format!("{password}\n"))?;
-    Ok(password)
 }
 
 /// A new password of [`PASSWORD_LEN`] characters of [`ALPHABET`], each
@@ -682,27 +660,28 @@ mod tests {
     }
 
     #[test]
-    fn a_generated_password_is_kept_and_read_back_the_next_time() {
-        let dir = std::env::temp_dir().join(format!("admin-tools-rcon-{}", std::process::id()));
-        let _gone = std::fs::remove_dir_all(&dir);
-        let file = dir.join(PASSWORD_FILE);
-        let first = generated_password(&file).unwrap();
+    fn a_new_password_is_long_enough_of_the_alphabet_and_goes_into_a_secret_setting() {
+        use enshwick::config::Config as _;
+        let first = random_password().unwrap();
         assert_eq!(first.len(), PASSWORD_LEN);
         assert!(first.bytes().all(|b| ALPHABET.contains(&b)));
-        assert_eq!(generated_password(&file).unwrap(), first);
         assert_ne!(random_password().unwrap(), first);
-        std::fs::remove_dir_all(&dir).unwrap();
+        let bounds = crate::settings::MIN_PASSWORD..=crate::settings::MAX_PASSWORD;
+        assert!(
+            bounds.contains(&PASSWORD_LEN),
+            "the setting's check takes it"
+        );
+        let schema = Settings::schema();
+        let field = schema.field(PASSWORD_KEY).unwrap();
+        assert!(field.secret, "never shown or logged");
     }
 
     fn shared(password: &str) -> Shared {
         let config = Config {
             address: SocketAddr::from(([127, 0, 0, 1], 0)),
             password: password.to_owned(),
-            file: None,
         };
-        let shared = Shared::new(config, Weak::new());
-        shared.password.set(password.to_owned()).unwrap();
-        shared
+        Shared::new(config, Weak::new())
     }
 
     #[test]
@@ -805,22 +784,13 @@ mod tests {
     }
 
     #[test]
-    fn a_console_whose_password_file_cannot_be_made_counts_as_ended() {
-        let blocker =
-            std::env::temp_dir().join(format!("admin-tools-rcon-file-{}", std::process::id()));
-        std::fs::write(&blocker, "a file, not a folder").unwrap();
+    fn a_console_without_a_password_never_listens() {
         let config = Config {
             address: SocketAddr::from(([127, 0, 0, 1], 0)),
             password: String::new(),
-            file: Some(blocker.join(PASSWORD_FILE)),
         };
-        let listener = Listener::open(config, Weak::new()).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while !listener.ended() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        assert!(listener.ended());
-        std::fs::remove_file(&blocker).unwrap();
+        let refused = Listener::open(config, Weak::new()).err().unwrap();
+        assert_eq!(refused.kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
@@ -833,8 +803,7 @@ mod tests {
         ] {
             let config = Config {
                 address,
-                password: String::new(),
-                file: None,
+                password: "a long enough password".into(),
             };
             let refused = Listener::open(config, Weak::new()).err().unwrap();
             assert_eq!(refused.kind(), io::ErrorKind::AddrNotAvailable, "{address}");
@@ -863,7 +832,6 @@ mod tests {
         let config = Config {
             address: SocketAddr::from(([127, 0, 0, 1], port)),
             password: "a long enough password".into(),
-            file: None,
         };
         let first = Listener::open(config.clone(), Weak::new()).unwrap();
         let mut client = connect(port);

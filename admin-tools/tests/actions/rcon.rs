@@ -173,35 +173,52 @@ fn rcon_closes_on_a_hostile_size_a_command_before_login_and_repeated_failures() 
     assert!(loader.removed().is_empty());
 }
 
+/// The remote console password the world's settings hold; `None` for none.
+fn kept_password(loader: &enshwick::test::Installed) -> Option<String> {
+    let text = loader.settings_text("settings")?;
+    let table: toml::Table = text.parse().unwrap();
+    let password = table.get("rcon_password")?.as_str()?;
+    (!password.is_empty()).then(|| password.to_owned())
+}
+
 #[test]
-fn a_dedicated_server_generates_the_rcon_password_and_logs_only_its_file() {
+fn a_dedicated_server_writes_a_new_rcon_password_into_its_setting_and_never_logs_it() {
+    use std::io::Write as _;
     let dir = scratch("rcon-generated");
     let port = free_port();
     let loader = server(
         &format!("rcon_ip = \"127.0.0.1\"\nrcon_port = {port}\n"),
         &dir,
     );
-    // The console's own thread makes the password, then listens.
-    let _stream = connect(port);
-    assert!(tick_until(&loader, || format!("{:?}", loader.logs())
-        .contains("rcon-password.txt")));
-    let password = std::fs::read_to_string(dir.join("rcon-password.txt")).unwrap();
-    let password = password.trim();
+    let password = kept_password(&loader).expect("the world's setting holds it");
     assert_eq!(password.len(), 24);
+    let client = std::thread::spawn({
+        let password = password.clone();
+        move || {
+            let mut stream = connect(port);
+            stream.write_all(&packet(1, 3, &password)).unwrap();
+            let _empty = read_packet(&mut stream);
+            read_packet(&mut stream)
+        }
+    });
+    assert!(tick_until(&loader, || client.is_finished()));
+    assert_eq!(client.join().unwrap(), Some((1, 2, String::new())));
     let logs = format!("{:?}", loader.logs());
-    assert!(!logs.contains(password), "the password is never logged");
+    assert!(logs.contains("rcon_password"), "{logs}");
+    assert!(!logs.contains(&password), "the password is never logged");
+    assert!(!dir.join("rcon-password.txt").exists());
 }
 
 #[test]
 fn a_hosted_game_opens_no_remote_console_unless_the_world_turns_it_on() {
     let dir = scratch("rcon-hosted");
     let port = free_port();
-    let _loader = hosted(
+    let loader = hosted(
         &format!("rcon_ip = \"127.0.0.1\"\nrcon_port = {port}\n"),
         &dir,
     );
     assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
-    assert!(!dir.join("rcon-password.txt").exists());
+    assert_eq!(kept_password(&loader), None, "no password is made");
 }
 
 #[test]
@@ -216,6 +233,35 @@ fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
     assert!(closes(first));
     assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
     assert!(closes(second));
+}
+
+/// The answer to a login with `password` on `port`: id 1 for in, -1 for
+/// refused.
+fn login(loader: &enshwick::test::Installed, port: u16, password: &str) -> i32 {
+    use std::io::Write as _;
+    let password = password.to_owned();
+    let client = std::thread::spawn(move || {
+        let mut stream = connect(port);
+        stream.write_all(&packet(1, 3, &password)).unwrap();
+        let _empty = read_packet(&mut stream);
+        read_packet(&mut stream).map_or(0, |(id, ..)| id)
+    });
+    assert!(tick_until(loader, || client.is_finished()));
+    client.join().unwrap()
+}
+
+#[test]
+fn clearing_the_rcon_password_closes_the_console_and_opens_it_again_with_a_new_one() {
+    let dir = scratch("rcon-cleared");
+    let port = free_port();
+    let loader = server(&rcon_settings(port), &dir);
+    assert_eq!(login(&loader, port, PASSWORD), 1);
+    loader.set_settings("settings", &rcon_settings(port).replace(PASSWORD, ""));
+    assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+    let new = kept_password(&loader).expect("a new password is written");
+    assert_ne!(new, PASSWORD);
+    assert_eq!(login(&loader, port, PASSWORD), -1, "the old one is gone");
+    assert_eq!(login(&loader, port, &new), 1);
 }
 
 /// Whether the port stops taking connections within two seconds: a closed

@@ -1,6 +1,7 @@
 //! Actions on a player's character: health, stamina, mana and level set to
 //! a value, a dead player revived where they lie, recipes and other
-//! knowledge learnt, and god mode, in which nothing damages the character.
+//! knowledge learnt, the whole map uncovered, and god mode, in which
+//! nothing damages the character.
 
 use std::sync::Arc;
 
@@ -56,6 +57,14 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
             .arg(Arg::text(texts::ARG_KNOWLEDGE, items::MAX_NAME)),
         learn,
     )?;
+    if tools.map.is_some() {
+        tools.add(
+            Action::new(ids::UNCOVER, texts::ACTION_UNCOVER)
+                .help(texts::ACTION_UNCOVER_HELP)
+                .arg(Arg::player(texts::ARG_PLAYER)),
+            uncover,
+        )?;
+    }
     let filtered = Arc::clone(tools);
     let god = load.on_damage(move |damage| {
         let target = damage.target();
@@ -223,6 +232,30 @@ fn learn(tools: &Tools, request: &Request<'_>) -> Outcome {
     };
     match tools.knowledge.grant(player.entity, id, grant) {
         Ok(()) => Outcome::done(request.say(texts::REPLY_LEARNED, &values)),
+        Err(why) => Tools::failed(request, name, &why),
+    }
+}
+
+/// Uncovers the whole map of a player online, as exploring all of it does;
+/// the loader on their computer hands it to the game, so a player whose
+/// game runs no Enshwick keeps their fog.
+fn uncover(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [Value::Player { key, name }] = request.args else {
+        return crate::players::bad_args(request);
+    };
+    if tools.world.player_by_key(*key).is_none() {
+        return no_player(request);
+    }
+    // The action exists only with the map, so `None` is never seen here.
+    match tools
+        .map
+        .map_or(Err(WorldError::Missing), |map| map.uncover_all(*key))
+    {
+        Ok(()) => Outcome::done(request.say(texts::REPLY_UNCOVERED, &[(texts::value::NAME, name)])),
+        Err(WorldError::Missing) => {
+            Outcome::refused(request.say(texts::REPLY_NOT_REACHED, &[(texts::value::NAME, name)]))
+        }
+        Err(WorldError::NotLoaded) => Outcome::refused(request.say(texts::REPLY_MAP_LOADING, &[])),
         Err(why) => Tools::failed(request, name, &why),
     }
 }

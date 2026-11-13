@@ -35,7 +35,8 @@ const OFF: &str = "off";
 /// The default port of the remote console, the one most RCON tools try.
 const RCON_PORT: u32 = 25_575;
 
-/// The longest remote console password.
+/// The longest remote console password, in characters; 4 bytes each still
+/// fit one login packet.
 pub(crate) const MAX_PASSWORD: usize = 128;
 
 /// The shortest remote console password a world may set, so a guess per
@@ -82,7 +83,7 @@ pub(crate) struct Settings {
     /// The TCP port the remote console listens on.
     #[config(range = 1..=65535)]
     pub rcon_port: u32,
-    /// The remote console's password; empty to use the one generated in `rcon-password.txt` in this world's data folder.
+    /// The remote console's password, 16 to 128 characters; when it is empty, Admin Tools writes a random one here.
     #[config(secret)]
     pub rcon_password: String,
     /// Who may use each action: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
@@ -151,7 +152,7 @@ impl Settings {
             return Err(CheckSettingsError::Address(self.rcon_ip.clone()));
         }
         if !self.rcon_password.is_empty()
-            && !(MIN_PASSWORD..=MAX_PASSWORD).contains(&self.rcon_password.len())
+            && !(MIN_PASSWORD..=MAX_PASSWORD).contains(&self.rcon_password.chars().count())
         {
             return Err(CheckSettingsError::Password);
         }
@@ -220,7 +221,7 @@ pub(crate) enum CheckSettingsError {
     Address(String),
     /// A remote console password shorter than [`MIN_PASSWORD`] or past
     /// [`MAX_PASSWORD`].
-    #[error("rcon_password must be {MIN_PASSWORD} to {MAX_PASSWORD} bytes long")]
+    #[error("rcon_password must be {MIN_PASSWORD} to {MAX_PASSWORD} characters long")]
     Password,
     /// A backup folder that leaves the saves' folder.
     #[error("backup_dir: {0} is no folder beside the save")]
@@ -294,6 +295,8 @@ pub(crate) struct Rights {
     pub revive: String,
     /// Teaching a player a recipe or other knowledge.
     pub learn: String,
+    /// Uncovering the whole map of a player.
+    pub uncover: String,
     /// God mode for a player.
     pub god: String,
     /// Giving a player items.
@@ -369,6 +372,7 @@ impl Default for Rights {
             revive: admins(),
             learn: admins(),
             god: admins(),
+            uncover: admins(),
             give: admins(),
             chest: admins(),
             chestat: admins(),
@@ -417,6 +421,7 @@ impl Rights {
             ids::REVIVE => &self.revive,
             ids::LEARN => &self.learn,
             ids::GOD => &self.god,
+            ids::UNCOVER => &self.uncover,
             ids::GIVE => &self.give,
             ids::CHEST => &self.chest,
             ids::CHEST_AT => &self.chestat,
@@ -689,7 +694,12 @@ mod tests {
         };
         assert_eq!(short.check(), Err(CheckSettingsError::Password));
         let generated = Settings::default();
-        assert_eq!(generated.check(), Ok(()), "empty uses the generated one");
+        assert_eq!(generated.check(), Ok(()), "empty asks for a new one");
+        let cyrillic = Settings {
+            rcon_password: "п".repeat(MAX_PASSWORD),
+            ..Settings::default()
+        };
+        assert_eq!(cyrillic.check(), Ok(()), "counted in characters, not bytes");
     }
 
     #[test]

@@ -234,6 +234,11 @@ fn an_announcement_reaches_every_player_at_once() {
     for key in [1, 2] {
         assert_eq!(said(&loader, key), ["Event at the keep in 5 min"]);
     }
+    // Ann's game runs Enshwick and reads a notice; Bob's reads a chat line.
+    let to =
+        |lines: Vec<(PlayerKey, String)>| lines.into_iter().map(|(to, _)| to).collect::<Vec<_>>();
+    assert_eq!(to(loader.notices()), [PlayerKey::new(1)]);
+    assert_eq!(to(loader.chat()), [PlayerKey::new(2)]);
     assert!(run(&loader, &bob(), "say", "tHello").starts_with('0'));
     assert_eq!(said(&loader, 1).len(), 1, "a refused line reaches nobody");
 }

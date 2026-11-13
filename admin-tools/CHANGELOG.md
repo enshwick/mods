@@ -30,7 +30,8 @@ Each entry says what players notice; a release's notes show its section.
   the uptime, the world and the Enshwick and mod versions.
 - RCON tools such as BattleMetrics or rcon-cli run every command on a
   dedicated server, on port 25575 of the server's own computer with a
-  password Admin Tools generates; a world setting opens it to other
+  password Admin Tools writes into the world's settings at the first start,
+  where it is never shown in the game or logged; a world setting opens it to other
   addresses, and a game a player hosts has it off unless the world turns it
   on.
 - A chat log beside the world's save keeps every chat line with the
@@ -54,8 +55,11 @@ Each entry says what players notice; a release's notes show its section.
   you.
 - A moderator who is not an administrator cannot kick or ban themselves or
   take themselves off the allow-list.
-- A restart warning saves the world when its time is up; a game a player
-  hosts offers no restart warning.
+- A restart warning stops the dedicated server when its time is up, as
+  Ctrl+C in its console does: the game saves the world and the server exits
+  for its host to start it again. It waits for a running backup, and saves
+  the world instead where the game cannot be stopped. A game a player hosts
+  offers no restart warning.
 - Administrators give a player items in as many stacks as needed, and read
   how many did not fit and were left out. An unknown name answers with the
   names near it.
@@ -89,9 +93,8 @@ Each entry says what players notice; a release's notes show its section.
 - A backup copies only the world's save, mod settings and mod data, never
   the game's rolling copies or folders set aside, and waits for a save that
   is being written.
-- The save before a restart waits for a running backup instead of being
-  lost, and the console and RCON tools read where a backup's result is
-  logged; a player reads it in their own language.
+- The console and RCON tools read where a backup's result is logged; a
+  player reads it in their own language.
 - The remote console waits without polling, closes its connections at once
   when its settings change, takes its port again reliably, and lets at most
   two connections come from one address.
@@ -108,6 +111,9 @@ Each entry says what players notice; a release's notes show its section.
 - Administrators set a player's level with `/adm stats <player> level`, and
   revive a dead player where they lie, with full health, with `/adm revive`.
 - God mode has its own row in a player's window.
+- Administrators uncover the whole map of a player online with
+  `/adm uncover` or the Map row of the player's window. The player's game
+  needs Enshwick; otherwise the answer says the map stays covered.
 - Every text reads in each language the game offers: English, German,
   French, Italian, Spanish, Russian, Polish, Japanese, Korean, Brazilian
   Portuguese, Thai, Turkish, Simplified and Traditional Chinese, and

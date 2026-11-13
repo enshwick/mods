@@ -370,9 +370,12 @@ impl PlatformChecks {
             // Another mod's cap may hold the bases below the probe's request.
             Some(limit) if limit.zones >= ZONES && limit.bases >= limit.vanilla_bases => {
                 pass(&format!("base limit {limit:?}"));
+                // shortcut: no call lists the other mods' caps, so a raise
+                // that did not take reads like one; a FAIL once the API
+                // tells caps apart.
                 if limit.bases < BASES {
-                    enshwick::info!(
-                        "bases held at {} below the {BASES} asked: another mod's cap",
+                    enshwick::warn!(
+                        "bases held at {} below the {BASES} asked: another mod's cap, or a raise that did not take; run the probe alone to tell",
                         limit.bases
                     );
                 }

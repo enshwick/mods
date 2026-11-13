@@ -64,7 +64,7 @@ settings:
     applies: at-once
   - key: rcon_password
     default: ""
-    meaning: The password RCON tools log in with, at least 16 characters. Empty uses the generated one in rcon-password.txt. Never shown or logged.
+    meaning: The password RCON tools log in with, 16 to 128 characters. When it is empty, Admin Tools writes a random one here. Never shown in the game or logged.
     applies: at-once
   - key: rights.<action>
     default: CanKickBan, and everyone for online, status and motd
@@ -82,7 +82,8 @@ settings:
   the server runs, the world's game settings, and audit, chat and build
   logs.
 - **Characters and items:** heal, set health, stamina, mana and level,
-  revive, teach recipes, god mode, give items or chests, clear or copy an inventory.
+  revive, teach recipes, uncover the whole map, god mode. Give items or
+  chests, clear or copy an inventory.
 
 ## How do I connect an RCON tool?
 
@@ -94,11 +95,12 @@ BattleMetrics.
 | --- | --- |
 | Address | `127.0.0.1`, the server's own computer |
 | Port | `25575` |
-| Password | in `rcon-password.txt` in `<save>-mod-data/enshwick.admin-tools/` beside the world's save |
+| Password | `rcon_password` in `settings.toml` in `<save>-mod-settings/enshwick.admin-tools/` beside the world's save |
 | On by default | on a dedicated server; off in a game a player hosts |
 
-1. Open `rcon-password.txt`. Admin Tools writes a random password there at
-   the first start, and the server's log names the file.
+1. Open `settings.toml` and copy the value of `rcon_password`. Admin Tools
+   writes a random password there at the first start. The Mods screen does
+   not show it.
 2. In the tool, enter the address, the port and that password.
 3. Send a command without the `/`, such as `adm online`. Send `help` to list
    the commands of every mod.
@@ -155,6 +157,7 @@ one. An argument in square brackets may be left out.
 | `/adm stats <player> health`, `stamina`, `mana` or `level` `<value>` | Sets a player's health, stamina, mana or level. | Admins |
 | `/adm revive <player>` | Revives a dead player where they lie, with full health. | Admins |
 | `/adm learn <player> <recipe>` | Unlocks a recipe for a player. | Admins |
+| `/adm uncover <player>` | Uncovers the whole map of a player online. Their game needs Enshwick. | Admins |
 | `/adm god <player> on` or `off` | Nothing damages the player until they leave. | Admins |
 | `/adm give <player> <item> [count]` | Gives a player items, one when the count is left out. | Admins |
 | `/adm clear <player>` | Destroys everything a player carries and wears. | Admins |
@@ -164,7 +167,7 @@ one. An argument in square brackets may be left out.
 | `/adm motd` | Shows the message of the day. | Everyone |
 | `/adm setmotd <text>` | Sets the message of the day. `-` goes back to the world's setting. | Admins |
 | `/adm say <text>` | Shows every player a line now. | Admins |
-| `/adm restart <minutes>` | Warns every player of a restart and saves when the time is up. `0` stops it. Only on a dedicated server. | Admins |
+| `/adm restart <minutes>` | Warns every player of a restart and stops the server when the time is up. `0` calls it off. Only on a dedicated server. | Admins |
 | `/adm status` | Shows the uptime, the world and the mod versions. | Everyone |
 | `/adm time <time>` | Sets the time of day, such as `18:30`, or `6.5` for 06:30. | Admins |
 | `/adm weather <weather>` | Starts `clear`, `rain`, `blizzard`, or `any` for the game's choice. | Admins |
@@ -215,7 +218,7 @@ sections, and each shows only the actions you may use:
 
 | Section | What it holds |
 | --- | --- |
-| Players | The players online. **Actions** opens one player's window: move, moderate, health, items and recipes. |
+| Players | The players online. **Actions** opens one player's window: move, moderate, health, map, god mode, items and recipes. |
 | Bans and the allow-list | The bans with their reasons, each with a button to lift it, and the allow-list. |
 | Server | The message of the day, the restart warning, the time of day, the weather, saves and backups. |
 | Build log | The changes near you, each with a button that takes you there. |
@@ -260,9 +263,10 @@ Type `/adm restart 10`. Every player reads that the server restarts in
 10 minutes. The warning comes again at 5, 2 and 1 minutes left, and once more
 when the time is up.
 
-When the time is up, Admin Tools saves the world. It does not stop the
-server: your host's panel or script stops it, so set the warning to end when
-the panel restarts the server.
+When the time is up, Admin Tools stops the server as Ctrl+C in its console
+does: the game saves the world, and the server exits. Your host's panel or
+service then starts the server again. A server that nothing starts again
+stays off.
 
 Type `/adm restart 0` to call the restart off. A game a player hosts has no
 restart warning.
@@ -328,7 +332,8 @@ put both archives.
 ## Multiplayer
 
 Only the server needs Admin Tools. Players without Enshwick can join and use
-the commands in chat.
+the commands in chat. To uncover a player's map, that player's game needs
+Enshwick.
 
 ## Problems
 

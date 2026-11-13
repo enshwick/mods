@@ -35,6 +35,8 @@ pub(crate) const LEARN: &str = "learn";
 pub(crate) const GOD: &str = "god";
 /// Revives a dead player where they lie.
 pub(crate) const REVIVE: &str = "revive";
+/// Uncovers the whole map of a player.
+pub(crate) const UNCOVER: &str = "uncover";
 /// Takes the caller to a player.
 pub(crate) const GOTO: &str = "goto";
 /// Brings a player to the caller.
@@ -84,10 +86,10 @@ pub(crate) const OPEN: &str = "open";
 pub(crate) const PLAYER: &str = "player";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 39] = [
+pub(crate) const ALL: [&str; 40] = [
     PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, SET_MOTD, SAY, KICK, BAN, BANS, BANNED, ALLOWED,
-    ACCOUNT, MUTED, HEAL, STATS, REVIVE, LEARN, GOD, GIVE, CHEST, CHEST_AT, CLEAR, COPY, GOTO,
-    BRING, SEND, PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
+    ACCOUNT, MUTED, HEAL, STATS, REVIVE, LEARN, UNCOVER, GOD, GIVE, CHEST, CHEST_AT, CLEAR, COPY,
+    GOTO, BRING, SEND, PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
 ];
 
 /// The groups the command help lists the actions under, each group's text
@@ -100,7 +102,10 @@ pub(crate) const GROUPS: [(&str, &[&str]); 9] = [
         &[BAN, BANS, BANNED, ALLOWED, ACCOUNT],
     ),
     (texts::GROUP_MOVES, &[MARK, GOTO, BRING, SEND, PLACE]),
-    (texts::GROUP_CHARACTER, &[HEAL, STATS, REVIVE, LEARN, GOD]),
+    (
+        texts::GROUP_CHARACTER,
+        &[HEAL, STATS, REVIVE, LEARN, UNCOVER, GOD],
+    ),
     (texts::GROUP_ITEMS, &[GIVE, CLEAR, COPY, CHEST, CHEST_AT]),
     (texts::GROUP_SERVER, &[MOTD, SET_MOTD, SAY, RESTART, STATUS]),
     (texts::GROUP_WORLD, &[TIME, WEATHER, SAVE, WORLD, BACKUP]),
@@ -118,8 +123,8 @@ pub(crate) fn group(id: &str) -> Option<&'static str> {
 
 /// The actions whose player lists offer the caller too: those an
 /// administrator uses on themselves as on anyone.
-pub(crate) const WITH_SELF: [&str; 12] = [
-    PLAYER, HEAL, STATS, REVIVE, LEARN, GOD, GIVE, CHEST, CLEAR, COPY, PLACE, MARK,
+pub(crate) const WITH_SELF: [&str; 13] = [
+    PLAYER, HEAL, STATS, REVIVE, LEARN, UNCOVER, GOD, GIVE, CHEST, CLEAR, COPY, PLACE, MARK,
 ];
 
 /// The actions that only read or open a window, which the audit log

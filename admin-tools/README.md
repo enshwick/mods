@@ -13,7 +13,8 @@ commands.
   the server runs, the world's game settings, and audit, chat and build
   logs.
 - **Characters and items:** heal, set health, stamina, mana and level,
-  revive, teach recipes, god mode, give items or chests, clear or copy an inventory.
+  revive, teach recipes, uncover the whole map, god mode. Give items or
+  chests, clear or copy an inventory.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 
@@ -27,7 +28,7 @@ BattleMetrics. Send a command without the `/`, such as `adm online`.
 | --- | --- |
 | Address | `127.0.0.1`, the server's own computer |
 | Port | `25575` |
-| Password | in `rcon-password.txt` in `<save>-mod-data/enshwick.admin-tools/` beside the world's save |
+| Password | `rcon_password` in `settings.toml` in `<save>-mod-settings/enshwick.admin-tools/` beside the world's save, written at the first start |
 | On by default | on a dedicated server; off in a game a player hosts |
 
 RCON is not encrypted: open the port only to computers you trust, or use an
@@ -59,6 +60,7 @@ may be left out.
 | `/adm stats <player> health`, `stamina`, `mana` or `level` `<value>` | Sets a player's health, stamina, mana or level. | Admins |
 | `/adm revive <player>` | Revives a dead player where they lie, with full health. | Admins |
 | `/adm learn <player> <recipe>` | Unlocks a recipe for a player. | Admins |
+| `/adm uncover <player>` | Uncovers the whole map of a player online. Their game needs Enshwick. | Admins |
 | `/adm god <player> on` or `off` | Nothing damages the player until they leave. | Admins |
 | `/adm give <player> <item> [count]` | Gives a player items, one when the count is left out. | Admins |
 | `/adm clear <player>` | Destroys everything a player carries and wears. | Admins |
@@ -68,7 +70,7 @@ may be left out.
 | `/adm motd` | Shows the message of the day. | Everyone |
 | `/adm setmotd <text>` | Sets the message of the day. `-` goes back to the world's setting. | Admins |
 | `/adm say <text>` | Shows every player a line now. | Admins |
-| `/adm restart <minutes>` | Warns every player of a restart and saves when the time is up. `0` stops it. Only on a dedicated server. | Admins |
+| `/adm restart <minutes>` | Warns every player of a restart and stops the server when the time is up. `0` calls it off. Only on a dedicated server. | Admins |
 | `/adm status` | Shows the uptime, the world and the mod versions. | Everyone |
 | `/adm time <time>` | Sets the time of day, such as `18:30`, or `6.5` for 06:30. | Admins |
 | `/adm weather <weather>` | Starts `clear`, `rain`, `blizzard`, or `any` for the game's choice. | Admins |
@@ -138,7 +140,7 @@ under `[rights]`. A change applies while the world runs.
 | `backup_dir` | empty | The folder backups go to, beside the world's save. Empty uses `backups/` in the world's data folder. |
 | `rcon` | auto | Whether RCON tools may connect. Auto is on for a dedicated server. |
 | `rcon_ip`, `rcon_port` | `127.0.0.1`, 25575 | Where the remote console listens. |
-| `rcon_password` | empty | The RCON password, at least 16 characters. Empty uses `rcon-password.txt`. |
+| `rcon_password` | empty | The RCON password, 16 to 128 characters. When it is empty, Admin Tools writes a random one here. |
 | `rights.<action>` | `CanKickBan`; `everyone` for `online`, `status` and `motd` | Who may use each action. |
 
 The [player page](docs/player.md) explains each task step by step.

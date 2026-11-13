@@ -28,7 +28,7 @@ mod server;
 mod settings;
 mod windows;
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
 
@@ -93,7 +93,8 @@ pub(crate) struct Tools {
     builds: Journal,
     /// The last terrain change the build log wrote for each player.
     spots: Mutex<builds::Spots>,
-    /// The map, for a player's waypoint; `None` on a build without it.
+    /// The map, for a player's waypoint and fog of war; `None` on a build
+    /// without it.
     map: Option<Map>,
     /// The debug names of the game's items by GUID, read once a world loads.
     item_names: OnceLock<FxHashMap<Guid, String>>,
@@ -114,9 +115,6 @@ pub(crate) struct Tools {
     /// Whether the game is writing the world's save, from its start to its
     /// end, which a backup waits for.
     saving: AtomicBool,
-    /// The tries left of the save a restart makes before it goes, which
-    /// waits while a backup holds the saves.
-    restart_save: AtomicU32,
     /// The remote console while it listens.
     rcon: Mutex<Option<rcon::Listener>>,
     /// Whether the remote console stopped after a panic, which keeps it
@@ -149,7 +147,7 @@ impl Mod for AdminTools {
             .ok();
         let map = load
             .map()
-            .inspect_err(|why| enshwick::warn!("the waypoint action is off: {why}"))
+            .inspect_err(|why| enshwick::warn!("the waypoint and uncover actions are off: {why}"))
             .ok();
         let actions = load.actions(texts.clone())?;
         let accounts = load.world_store(accounts::STORE)?;
@@ -182,7 +180,6 @@ impl Mod for AdminTools {
             started: Instant::now(),
             backing_up: AtomicBool::new(false),
             saving: AtomicBool::new(false),
-            restart_save: AtomicU32::new(0),
             rcon: Mutex::new(None),
             rcon_fused: AtomicBool::new(false),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
@@ -282,6 +279,10 @@ impl Tools {
     /// console listens when the world's settings turn it on.
     fn start(&self) {
         self.read_item_names();
+        // The first ask starts the loader's read of the map, which uncover needs.
+        if let Some(map) = self.map {
+            let _reading = map.frame();
+        }
         // A save of the last world whose end was never heard is not this one's.
         self.saving.store(false, Ordering::Release);
         self.running.store(true, Ordering::Relaxed);
@@ -300,7 +301,6 @@ impl Tools {
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);
-        self.restart_save.store(0, Ordering::Relaxed);
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();
         }

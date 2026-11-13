@@ -48,13 +48,19 @@ fn the_world_view_says_so_when_the_game_settings_do_not_read() {
 }
 
 #[test]
-fn a_restart_warning_that_runs_out_saves_the_world() {
-    let dir = scratch("restart-save");
-    let loader = server("", &dir);
+fn a_restart_warning_that_runs_out_stops_the_server_once_and_the_audit_log_keeps_it() {
+    let dir = scratch("restart-stop");
+    let loader = server("audit = \"on\"\n", &dir);
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
-    assert_eq!(loader.saves(), 0);
-    assert!(tick_until(&loader, || loader.saves() == 1));
+    assert!(!loader.stop_asked());
+    assert!(tick_until(&loader, || loader.stop_asked()));
     assert!(said(&loader, 2).contains(&"The server restarts now.".to_owned()));
+    // The game's own stop saves the world last.
+    assert_eq!(loader.saves(), 0);
+    let audit = file_until(&dir, "audit.log", |text| {
+        text.contains("server\t\trestart\t\t\tok")
+    });
+    assert_eq!(audit.matches("server\t\trestart").count(), 1, "{audit}");
 }
 
 #[test]
@@ -191,20 +197,18 @@ fn a_backup_is_refused_when_the_data_folder_is_not_beside_a_save() {
 }
 
 #[test]
-fn a_backup_waits_for_a_save_under_way_and_the_restart_save_waits_for_the_backup() {
+fn a_backup_waits_for_a_save_under_way_and_a_restart_stops_the_server_all_the_same() {
     let (_saves, data) = saves("backup-saving");
     let loader = server("", &data);
     assert!(loader.raise::<WorldSaving>(&()) >= 1);
     assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
-    assert!(tick_until(&loader, || said(&loader, 2)
-        .contains(&"The server restarts now.".to_owned())));
+    // The game's stop lets the backup's hold go before its last save.
+    assert!(tick_until(&loader, || loader.stop_asked()));
     assert!(loader.saves_held(), "the copy waits for the save to end");
     assert!(!data.join("backups").exists());
-    assert_eq!(loader.saves(), 0, "the restart save waits for the backup");
     assert!(loader.raise::<WorldSaved>(&()) >= 1);
-    assert!(tick_until(&loader, || loader.saves() == 1));
-    assert!(!loader.saves_held());
+    assert!(tick_until(&loader, || !loader.saves_held()));
     assert_eq!(std::fs::read_dir(data.join("backups")).unwrap().count(), 1);
 }
 
@@ -248,7 +252,7 @@ fn the_help_lists_every_action_under_its_group() {
         .filter(|line| !line.ends_with(':'))
         .filter_map(|line| line.split([' ', ':']).next())
         .collect();
-    assert_eq!(helped.len(), 39, "{help}");
+    assert_eq!(helped.len(), 40, "{help}");
     let groups = help.lines().filter(|line| line.ends_with(':')).count();
     assert_eq!(groups, 9, "the actions sit under their groups: {help}");
     // A unit test holds every page to the groups' order and the default rules.

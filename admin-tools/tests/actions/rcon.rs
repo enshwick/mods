@@ -73,6 +73,24 @@ fn rcon_settings(port: u16) -> String {
 }
 
 #[test]
+#[should_panic(expected = "tests listen on loopback only")]
+fn a_test_whose_remote_console_would_listen_on_every_network_fails_before_the_mod_starts() {
+    let _game = server(
+        // Refused before the mod starts, so nothing listens.
+        // ast-grep-ignore: tests-listen-on-loopback
+        "rcon = \"on\"\nrcon_ip = \"0.0.0.0\"\n",
+        &scratch("rcon-every"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "tests listen on loopback only")]
+fn a_settings_change_that_would_move_the_remote_console_off_loopback_fails_before_it_applies() {
+    let loader = server("", &scratch("rcon-moved"));
+    loader.set_settings("settings", "rcon = \"on\"\nrcon_ip = \"::\"\n");
+}
+
+#[test]
 fn an_rcon_tool_logs_in_and_runs_a_command_with_the_console_s_rights() {
     use std::io::Write as _;
     let dir = scratch("rcon");

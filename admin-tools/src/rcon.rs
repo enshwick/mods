@@ -147,6 +147,13 @@ impl Listener {
     ///
     /// The reason no thread starts.
     pub(crate) fn open(config: Config, tools: Weak<Tools>) -> io::Result<Self> {
+        // A unit test on every network raises the firewall prompt.
+        if cfg!(test) && !config.address.ip().to_canonical().is_loopback() {
+            return Err(io::Error::new(
+                io::ErrorKind::AddrNotAvailable,
+                "unit tests listen on loopback only",
+            ));
+        }
         let shared = Arc::new(Shared::new(config, tools));
         let listening = Arc::clone(&shared);
         std::thread::Builder::new()
@@ -814,6 +821,24 @@ mod tests {
         }
         assert!(listener.ended());
         std::fs::remove_file(&blocker).unwrap();
+    }
+
+    #[test]
+    fn a_unit_test_s_console_beyond_loopback_is_refused_before_it_listens() {
+        for address in [
+            SocketAddr::from(([0, 0, 0, 0], 0)),
+            // Refused before the thread starts, so nothing listens.
+            // ast-grep-ignore: test-modules-listen-on-loopback
+            SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)),
+        ] {
+            let config = Config {
+                address,
+                password: String::new(),
+                file: None,
+            };
+            let refused = Listener::open(config, Weak::new()).err().unwrap();
+            assert_eq!(refused.kind(), io::ErrorKind::AddrNotAvailable, "{address}");
+        }
     }
 
     /// A connection to the console on `port`, once its thread listens.

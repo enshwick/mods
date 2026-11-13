@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use enshwick::events::{SettingsReplaced, ShutdownStarted};
 
-use super::game::{file_until, hosted, listens_on_loopback, scratch, server, tick_until};
+use super::game::{file_until, hosted, scratch, server, tick_until};
 
 /// A port no program listens on now.
 fn free_port() -> u16 {
@@ -74,15 +74,20 @@ fn rcon_settings(port: u16) -> String {
 
 #[test]
 #[should_panic(expected = "tests listen on loopback only")]
-fn the_harness_fails_a_test_whose_remote_console_listens_beyond_loopback() {
-    listens_on_loopback("the remote console listens on 192.0.2.7:25575");
+fn a_test_whose_remote_console_would_listen_on_every_network_fails_before_the_mod_starts() {
+    let _game = server(
+        // Refused before the mod starts, so nothing listens.
+        // ast-grep-ignore: tests-listen-on-loopback
+        "rcon = \"on\"\nrcon_ip = \"0.0.0.0\"\n",
+        &scratch("rcon-every"),
+    );
 }
 
 #[test]
-fn the_harness_takes_a_remote_console_on_loopback_and_other_log_lines() {
-    listens_on_loopback("the remote console listens on 127.0.0.1:25575");
-    listens_on_loopback("the remote console listens on [::1]:25575");
-    listens_on_loopback("the remote console's password is in rcon-password.txt");
+#[should_panic(expected = "tests listen on loopback only")]
+fn a_settings_change_that_would_move_the_remote_console_off_loopback_fails_before_it_applies() {
+    let loader = server("", &scratch("rcon-moved"));
+    loader.set_settings("settings", "rcon = \"on\"\nrcon_ip = \"::\"\n");
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! The fake game the tests run in: a dedicated server or a hosted game
 //! with Ann, an administrator, and Bob online.
 
-use std::net::SocketAddr;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -202,12 +202,7 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
 
 /// [`game`], with the game's inventories only when `inventory`.
 fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventory: bool) -> Game {
-    // Parallel tests would all take the remote console's default port.
-    let settings = if settings.contains("rcon") {
-        settings.to_owned()
-    } else {
-        format!("rcon = \"off\"\n{settings}")
-    };
+    let settings = on_loopback(settings);
     let host = if hosted {
         FakeHost::new().side(Side::CLIENT).hosting(true)
     } else {
@@ -307,13 +302,17 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     Game(loader)
 }
 
-/// What the mod logs when its remote console takes its address.
-const LISTENS: &str = "the remote console listens on ";
-
-/// A test's game: the fake loader, which checks when the test ends that
-/// every address the remote console listened on was this computer's only,
-/// however the test's settings came to it.
+/// A test's game: the fake loader, whose settings changes keep the remote
+/// console on this computer as [`server`] does.
 pub(crate) struct Game(Installed);
+
+impl Game {
+    /// Replaces the world's settings file `file` with `text`, as
+    /// [`Installed::set_settings`] does, after [`on_loopback`].
+    pub(crate) fn set_settings(&self, file: &str, text: &str) {
+        self.0.set_settings(file, &on_loopback(text));
+    }
+}
 
 impl std::ops::Deref for Game {
     type Target = Installed;
@@ -323,29 +322,35 @@ impl std::ops::Deref for Game {
     }
 }
 
-impl Drop for Game {
-    fn drop(&mut self) {
-        if !std::thread::panicking() {
-            for (_, line) in self.0.logs() {
-                listens_on_loopback(&line);
-            }
+/// `settings` with the remote console off unless a key of its own names it, since
+/// parallel tests would all take its default port, and on loopback unless
+/// they name its address; fails, before the mod can listen, when that
+/// address is not loopback: a test on every network raises the firewall
+/// prompt.
+pub(crate) fn on_loopback(settings: &str) -> String {
+    let Ok(table) = settings.parse::<toml::Table>() else {
+        // The mod refuses settings that do not parse, so nothing listens.
+        return settings.to_owned();
+    };
+    let mut named = String::new();
+    if !table.keys().any(|key| key.starts_with("rcon")) {
+        named.push_str("rcon = \"off\"\n");
+    }
+    match table.get("rcon_ip") {
+        None => named.push_str("rcon_ip = \"127.0.0.1\"\n"),
+        // An address that does not parse is refused, so nothing listens.
+        Some(ip) => {
+            let ip = ip.as_str().unwrap_or_default();
+            let beyond = ip
+                .parse::<IpAddr>()
+                .is_ok_and(|ip| !ip.to_canonical().is_loopback());
+            assert!(
+                !beyond,
+                "a test's remote console would listen on {ip}; tests listen on loopback only"
+            );
         }
     }
-}
-
-/// Fails when `line` says the remote console listens on an address other
-/// than loopback: a test on every network raises the firewall prompt.
-pub(crate) fn listens_on_loopback(line: &str) {
-    let Some((_, address)) = line.split_once(LISTENS) else {
-        return;
-    };
-    let address: SocketAddr = address
-        .parse()
-        .unwrap_or_else(|why| panic!("the remote console's address {address:?}: {why}"));
-    assert!(
-        address.ip().is_loopback(),
-        "a test's remote console listens on {address}; tests listen on loopback only"
-    );
+    named + settings
 }
 
 /// A `CurrentTransform` standing at `[x, y, z]` metres.
@@ -396,4 +401,47 @@ pub(crate) fn said(loader: &Installed, key: u64) -> Vec<String> {
         .filter(|(to, _)| *to == PlayerKey::new(key))
         .map(|(_, text)| text)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::on_loopback;
+
+    #[test]
+    fn settings_that_name_no_remote_console_turn_it_off_on_loopback() {
+        assert_eq!(
+            on_loopback("audit = \"on\"\n"),
+            "rcon = \"off\"\nrcon_ip = \"127.0.0.1\"\naudit = \"on\"\n"
+        );
+    }
+
+    #[test]
+    fn a_remote_console_on_a_loopback_address_keeps_the_test_s_own_settings() {
+        for ip in ["127.0.0.1", "::1", "::ffff:127.0.0.1"] {
+            let settings = format!("rcon = \"on\"\nrcon_ip = \"{ip}\"\n");
+            assert_eq!(on_loopback(&settings), settings);
+        }
+    }
+
+    #[test]
+    fn a_remote_console_key_keeps_the_mod_s_choice_on_loopback() {
+        assert_eq!(
+            on_loopback("rcon_port = 4242\n"),
+            "rcon_ip = \"127.0.0.1\"\nrcon_port = 4242\n"
+        );
+    }
+
+    #[test]
+    fn a_value_that_mentions_the_remote_console_leaves_it_off() {
+        let settings = "backup_dir = \"rcon-backups\"\n";
+        assert!(on_loopback(settings).starts_with("rcon = \"off\"\n"));
+    }
+
+    #[test]
+    #[should_panic(expected = "tests listen on loopback only")]
+    fn a_remote_console_on_every_network_fails_the_test() {
+        // Refused before the mod starts, so nothing listens.
+        // ast-grep-ignore: tests-listen-on-loopback
+        on_loopback("rcon = \"on\"\nrcon_ip = \"0.0.0.0\"\n");
+    }
 }

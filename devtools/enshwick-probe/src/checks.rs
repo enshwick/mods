@@ -508,22 +508,27 @@ impl Checks {
         format!("{how:?}")
     }
 
-    /// The `notices` action: shows the player `count` notices at once, with
-    /// the texts 1 to `count`, so a burst past the client's queue shows which
-    /// texts the game kept.
-    pub(crate) fn notices(&self, player: &enshwick::world::Player, count: u32) -> String {
-        Self::burst(self.world, player, count)
+    /// The `notices` action: shows the player [`crate::NOTICES`] notices at
+    /// once, with the texts 1 to that count, so a burst past the client's
+    /// queue shows which texts the game kept. The summary goes to the log
+    /// only: a reply would be one more notice behind a full queue.
+    pub(crate) fn notices(&self, player: &enshwick::world::Player) {
+        Self::burst(self.world, player);
     }
 
-    fn burst(world: World, player: &enshwick::world::Player, count: u32) -> String {
-        let on_screen = (1..=count)
-            .filter(|n| world.notify(player, &n.to_string()) == Notice::OnScreen)
+    /// Sends the burst of [`Self::notices`] and answers how many of its
+    /// notices the loader carried to the client as notices.
+    fn burst(world: World, player: &enshwick::world::Player) -> usize {
+        let carried = (1..=crate::NOTICES)
+            .map(|n| world.notify(player, &n.to_string()))
+            .filter(|how| *how == Notice::OnScreen)
             .count();
         enshwick::info!(
-            "notices 1 to {count} to {}: {on_screen} on screen, the rest in chat",
+            "notices 1 to {} to {}: {carried} carried as notices",
+            crate::NOTICES,
             player.name
         );
-        format!("{count} notices, {on_screen} on screen")
+        carried
     }
 
     /// The `destroy` action.
@@ -716,9 +721,10 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, _) = RESOLVED.get().unwrap();
         let ann = world.players().remove(0);
-        assert_eq!(Checks::burst(*world, &ann, 20), "20 notices, 20 on screen");
-        let texts: Vec<String> = loader.notices().into_iter().map(|(_, text)| text).collect();
-        let expected: Vec<String> = (1..=20).map(|n| n.to_string()).collect();
-        assert_eq!(texts, expected);
+        let count = crate::NOTICES;
+        assert_eq!(Checks::burst(*world, &ann), count as usize);
+        let sent = loader.notices();
+        let expected: Vec<_> = (1..=count).map(|n| (key, n.to_string())).collect();
+        assert_eq!(sent, expected);
     }
 }

@@ -202,18 +202,19 @@ const fn id(value: f64) -> u32 {
     value as u32
 }
 
-/// The keys of the actions, as action and default key: Shift with F2 to F6,
-/// F9 and F11, and Ctrl+F6 beside the single notice, clear of the game's F1
-/// (its tutorial), the research mod's F7 and F8 and the test UI's Shift+F10.
-/// The last two need the affix checks.
+/// The keys of the actions, as action and default key: Shift with F2 to F6
+/// and F11, Ctrl+Shift on F6 for the burst beside the single notice and on
+/// F9, where Admin Tools' panel takes Shift+F9. The set is clear of the
+/// game's F1 (its tutorial), the research mod's F7 and F8 and the test UI's
+/// Shift+F10. The last two need the affix checks.
 const CONTROLS: [(&str, &str); 8] = [
     ("census", "Shift+F2"),
     ("check", "Shift+F3"),
     ("key", "Shift+F4"),
     ("my-vitals", "Shift+F5"),
     ("notice", "Shift+F6"),
-    ("notices", "Ctrl+F6"),
-    ("stats", "Shift+F9"),
+    ("notices", "Ctrl+Shift+F6"),
+    ("stats", "Ctrl+Shift+F9"),
     ("affix", "Shift+F11"),
 ];
 
@@ -281,8 +282,11 @@ fn actions(
     })?;
     let bursting = Arc::clone(checks);
     actions.add(
-        admin("notices", "Show yourself 20 numbered notices at once"),
-        move |request| Outcome::done(bursting.notices(request.player, NOTICES)),
+        admin("notices", "Show yourself numbered notices at once"),
+        move |request| {
+            bursting.notices(request.player);
+            Outcome::done("")
+        },
     )?;
     if let Some(affix_checks) = affix_checks {
         let rolling = Arc::clone(&affix_checks);
@@ -545,6 +549,24 @@ mod keys {
         for (name, key) in CONTROLS {
             let code = Key::parse(key).unwrap().code();
             assert!(!taken.contains(&code), "{name} on {key}");
+        }
+    }
+
+    #[test]
+    fn no_two_keys_fire_together_when_all_their_modifiers_are_held() {
+        // The loader fires every control on a key whose modifiers are held
+        // and as many as the most specific one's, so two controls on one key
+        // with equally many modifiers both fire while both chords are held.
+        for (i, (name, key)) in CONTROLS.iter().enumerate() {
+            let key = Key::parse(key).unwrap();
+            for (other, other_key) in &CONTROLS[i + 1..] {
+                let other_key = Key::parse(other_key).unwrap();
+                assert!(
+                    key.code() != other_key.code()
+                        || key.modifiers().count_ones() != other_key.modifiers().count_ones(),
+                    "{name} and {other}"
+                );
+            }
         }
     }
 

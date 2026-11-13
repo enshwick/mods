@@ -57,6 +57,9 @@ const CENSUS_PERIOD: Duration = Duration::from_secs(60);
 const CHECK_DELAY: Duration = Duration::from_secs(10);
 /// The text `notice` shows.
 const NOTICE: &str = "Probe notice";
+/// How many notices `notices` sends at once: four past the 16 a client
+/// queues for its next steps, so the burst overflows that queue.
+const NOTICES: u32 = 20;
 
 /// Probe settings, read at start.
 #[enshwick::config]
@@ -200,14 +203,16 @@ const fn id(value: f64) -> u32 {
 }
 
 /// The keys of the actions, as action and default key: Shift with F2 to F6,
-/// F9 and F11, clear of the game's F1 (its tutorial) and the research mod's
-/// F7 and F8. The last two need the affix checks.
-const CONTROLS: [(&str, &str); 7] = [
+/// F9 and F11, and Ctrl+F6 beside the single notice, clear of the game's F1
+/// (its tutorial), the research mod's F7 and F8 and the test UI's Shift+F10.
+/// The last two need the affix checks.
+const CONTROLS: [(&str, &str); 8] = [
     ("census", "Shift+F2"),
     ("check", "Shift+F3"),
     ("key", "Shift+F4"),
     ("my-vitals", "Shift+F5"),
     ("notice", "Shift+F6"),
+    ("notices", "Ctrl+F6"),
     ("stats", "Shift+F9"),
     ("affix", "Shift+F11"),
 ];
@@ -274,6 +279,11 @@ fn actions(
     actions.add(admin("notice", "Show yourself a notice"), move |request| {
         Outcome::done(noticing.notice(request.player, NOTICE))
     })?;
+    let bursting = Arc::clone(checks);
+    actions.add(
+        admin("notices", "Show yourself 20 numbered notices at once"),
+        move |request| Outcome::done(bursting.notices(request.player, NOTICES)),
+    )?;
     if let Some(affix_checks) = affix_checks {
         let rolling = Arc::clone(&affix_checks);
         actions.add(admin("stats", "Your changed stats"), move |request| {
@@ -516,7 +526,10 @@ mod keys {
     #[test]
     fn without_the_affix_checks_the_stats_and_affix_keys_are_left_out() {
         let names: Vec<&str> = super::keyed(false).iter().map(|c| c.0).collect();
-        assert_eq!(names, ["census", "check", "key", "my-vitals", "notice"]);
+        assert_eq!(
+            names,
+            ["census", "check", "key", "my-vitals", "notice", "notices"]
+        );
         assert_eq!(super::keyed(true), CONTROLS);
     }
 

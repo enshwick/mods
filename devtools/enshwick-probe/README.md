@@ -117,6 +117,7 @@ rest on a player.
 | `key`       | `Shift+F4`  | your account key                                                                                            |
 | `my-vitals` | `Shift+F5`  | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
 | `notice`    | `Shift+F6`  | shows a notice on your screen, or in chat without Enshwick                                                  |
+| `notices`   | `Ctrl+F6`   | shows 20 notices at once, with the texts 1 to 20: four more than a client queues                            |
 | `stats`     | `Shift+F9`  | your stats that differ from the defaults, and their sources                                                 |
 | `affix`     | `Shift+F11` | rolls one to three affixes anew on everything you wear                                                      |
 | `vitals`    | console     | an entity's vitals and progress, against its replicated health                                              |

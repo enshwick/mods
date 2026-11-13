@@ -235,6 +235,35 @@ fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
     assert!(closes(second));
 }
 
+/// The answer to a login with `password` on `port`: id 1 for in, -1 for
+/// refused.
+fn login(loader: &enshwick::test::Installed, port: u16, password: &str) -> i32 {
+    use std::io::Write as _;
+    let password = password.to_owned();
+    let client = std::thread::spawn(move || {
+        let mut stream = connect(port);
+        stream.write_all(&packet(1, 3, &password)).unwrap();
+        let _empty = read_packet(&mut stream);
+        read_packet(&mut stream).map_or(0, |(id, ..)| id)
+    });
+    assert!(tick_until(loader, || client.is_finished()));
+    client.join().unwrap()
+}
+
+#[test]
+fn clearing_the_rcon_password_closes_the_console_and_opens_it_again_with_a_new_one() {
+    let dir = scratch("rcon-cleared");
+    let port = free_port();
+    let loader = server(&rcon_settings(port), &dir);
+    assert_eq!(login(&loader, port, PASSWORD), 1);
+    loader.set_settings("settings", &rcon_settings(port).replace(PASSWORD, ""));
+    assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+    let new = kept_password(&loader).expect("a new password is written");
+    assert_ne!(new, PASSWORD);
+    assert_eq!(login(&loader, port, PASSWORD), -1, "the old one is gone");
+    assert_eq!(login(&loader, port, &new), 1);
+}
+
 /// Whether the port stops taking connections within two seconds: a closed
 /// console's thread lets its port go on its own, without the game thread
 /// waiting for it.

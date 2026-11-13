@@ -28,7 +28,7 @@ mod server;
 mod settings;
 mod windows;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
 
@@ -115,6 +115,10 @@ pub(crate) struct Tools {
     /// Whether the game is writing the world's save, from its start to its
     /// end, which a backup waits for.
     saving: AtomicBool,
+    /// The ticks left to end a restart whose warning ran out: the stop,
+    /// which waits while a backup holds the saves, then the save asked for
+    /// instead when the game does not stop; 0 for none.
+    restart_left: AtomicU32,
     /// The remote console while it listens.
     rcon: Mutex<Option<rcon::Listener>>,
     /// Whether the remote console stopped after a panic, which keeps it
@@ -180,6 +184,7 @@ impl Mod for AdminTools {
             started: Instant::now(),
             backing_up: AtomicBool::new(false),
             saving: AtomicBool::new(false),
+            restart_left: AtomicU32::new(0),
             rcon: Mutex::new(None),
             rcon_fused: AtomicBool::new(false),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
@@ -301,6 +306,7 @@ impl Tools {
         // A copy still waiting to start ends with the game's tasks; the
         // loader lets the saves go at shutdown.
         self.backing_up.store(false, Ordering::Release);
+        self.restart_left.store(0, Ordering::Relaxed);
         if let Some(listener) = self.rcon.relock().take() {
             listener.close();
         }
@@ -522,10 +528,9 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_all_languages() {
+    fn every_text_exists_in_english_and_ukrainian_and_the_other_languages_fall_back_to_english() {
         let texts = Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
-        assert_eq!(texts.missing_in(Language::OFFERED), []);
+        assert_eq!(texts.missing_in(&[Language::FALLBACK, Language::UK_UA]), []);
     }
 
     /// The ASCII words of `text`, as typed words are, keeping the `.` and `:`
@@ -592,9 +597,10 @@ mod tests {
             .chain(schema.fields.iter().map(|field| field.text.clone()))
             .flat_map(|key| [format!("{key}.doc"), key]);
         for key in keys {
-            for (language, table) in &tables {
+            // Before 1.0 a new text comes in these two; the rest fall back to English.
+            for language in ["en", "uk"] {
                 assert!(
-                    table.as_table().unwrap().contains_key(&key),
+                    tables[language].as_table().unwrap().contains_key(&key),
                     "{language}: {key}"
                 );
             }

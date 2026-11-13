@@ -57,8 +57,9 @@ Each entry says what players notice; a release's notes show its section.
   take themselves off the allow-list.
 - A restart warning stops the dedicated server when its time is up, as
   Ctrl+C in its console does: the game saves the world and the server exits
-  for its host to start it again. A game a player hosts offers no restart
-  warning.
+  for its host to start it again. It waits for a running backup, and saves
+  the world instead where the game cannot be stopped. A game a player hosts
+  offers no restart warning.
 - Administrators give a player items in as many stacks as needed, and read
   how many did not fit and were left out. An unknown name answers with the
   names near it.

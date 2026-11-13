@@ -35,7 +35,8 @@ const OFF: &str = "off";
 /// The default port of the remote console, the one most RCON tools try.
 const RCON_PORT: u32 = 25_575;
 
-/// The longest remote console password.
+/// The longest remote console password, in characters; 4 bytes each still
+/// fit one login packet.
 pub(crate) const MAX_PASSWORD: usize = 128;
 
 /// The shortest remote console password a world may set, so a guess per
@@ -151,7 +152,7 @@ impl Settings {
             return Err(CheckSettingsError::Address(self.rcon_ip.clone()));
         }
         if !self.rcon_password.is_empty()
-            && !(MIN_PASSWORD..=MAX_PASSWORD).contains(&self.rcon_password.len())
+            && !(MIN_PASSWORD..=MAX_PASSWORD).contains(&self.rcon_password.chars().count())
         {
             return Err(CheckSettingsError::Password);
         }
@@ -220,7 +221,7 @@ pub(crate) enum CheckSettingsError {
     Address(String),
     /// A remote console password shorter than [`MIN_PASSWORD`] or past
     /// [`MAX_PASSWORD`].
-    #[error("rcon_password must be {MIN_PASSWORD} to {MAX_PASSWORD} bytes long")]
+    #[error("rcon_password must be {MIN_PASSWORD} to {MAX_PASSWORD} characters long")]
     Password,
     /// A backup folder that leaves the saves' folder.
     #[error("backup_dir: {0} is no folder beside the save")]
@@ -694,6 +695,11 @@ mod tests {
         assert_eq!(short.check(), Err(CheckSettingsError::Password));
         let generated = Settings::default();
         assert_eq!(generated.check(), Ok(()), "empty asks for a new one");
+        let cyrillic = Settings {
+            rcon_password: "п".repeat(MAX_PASSWORD),
+            ..Settings::default()
+        };
+        assert_eq!(cyrillic.check(), Ok(()), "counted in characters, not bytes");
     }
 
     #[test]

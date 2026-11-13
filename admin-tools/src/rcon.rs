@@ -139,8 +139,15 @@ impl Listener {
     ///
     /// # Errors
     ///
-    /// The reason no thread starts.
+    /// The reason no thread starts, or an empty password, which would let
+    /// any client log in.
     pub(crate) fn open(config: Config, tools: Weak<Tools>) -> io::Result<Self> {
+        if config.password.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "the remote console has no password",
+            ));
+        }
         // A unit test on every network raises the firewall prompt.
         if cfg!(test) && !config.address.ip().to_canonical().is_loopback() {
             return Err(io::Error::new(
@@ -560,30 +567,32 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
 impl Tools {
     /// Opens, moves or closes the remote console as `settings` say: it
     /// listens while they turn it on and a world runs, and opens again
-    /// when the address or the password changes. With no password yet, it
-    /// writes a new one into the world's setting, whose change opens it.
-    /// Nothing here waits: the listener's thread takes the port.
+    /// when the address or the password changes. With no password, it
+    /// closes and writes a new one into the world's setting, whose change
+    /// opens it again: that write, once per world, is the one file this
+    /// reads or writes, and the listener's thread takes the port.
     pub(crate) fn listen(&self, settings: &Settings) {
         let on = settings.rcon_on(self.dedicated) && !self.rcon_fused.load(Ordering::Acquire);
-        if on && settings.rcon_password.is_empty() {
+        let unset = on && settings.rcon_password.is_empty();
+        let wanted = (on && !unset).then(|| rcon_config(settings)).flatten();
+        {
+            let mut slot = self.rcon.relock();
+            let alive = slot.as_ref().filter(|listener| !listener.ended());
+            if alive.map(Listener::config) != wanted.as_ref() {
+                if let Some(old) = slot.take() {
+                    old.close();
+                }
+                if let Some(config) = wanted {
+                    match Listener::open(config, Weak::clone(&self.me)) {
+                        Ok(listener) => *slot = Some(listener),
+                        Err(why) => enshwick::warn!("the remote console does not start: {why}"),
+                    }
+                }
+            }
+        }
+        // After the lock: the write's settings change comes back here.
+        if unset {
             keep_new_password();
-            return;
-        }
-        let wanted = on.then(|| rcon_config(settings)).flatten();
-        let mut slot = self.rcon.relock();
-        let alive = slot.as_ref().filter(|listener| !listener.ended());
-        if alive.map(Listener::config) == wanted.as_ref() {
-            return;
-        }
-        if let Some(old) = slot.take() {
-            old.close();
-        }
-        let Some(config) = wanted else {
-            return;
-        };
-        match Listener::open(config, Weak::clone(&self.me)) {
-            Ok(listener) => *slot = Some(listener),
-            Err(why) => enshwick::warn!("the remote console does not start: {why}"),
         }
     }
 }
@@ -775,6 +784,16 @@ mod tests {
     }
 
     #[test]
+    fn a_console_without_a_password_never_listens() {
+        let config = Config {
+            address: SocketAddr::from(([127, 0, 0, 1], 0)),
+            password: String::new(),
+        };
+        let refused = Listener::open(config, Weak::new()).err().unwrap();
+        assert_eq!(refused.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
     fn a_unit_test_s_console_beyond_loopback_is_refused_before_it_listens() {
         for address in [
             SocketAddr::from(([0, 0, 0, 0], 0)),
@@ -784,7 +803,7 @@ mod tests {
         ] {
             let config = Config {
                 address,
-                password: String::new(),
+                password: "a long enough password".into(),
             };
             let refused = Listener::open(config, Weak::new()).err().unwrap();
             assert_eq!(refused.kind(), io::ErrorKind::AddrNotAvailable, "{address}");

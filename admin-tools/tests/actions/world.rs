@@ -197,19 +197,43 @@ fn a_backup_is_refused_when_the_data_folder_is_not_beside_a_save() {
 }
 
 #[test]
-fn a_backup_waits_for_a_save_under_way_and_a_restart_stops_the_server_all_the_same() {
+fn a_backup_waits_for_a_save_under_way_and_the_restart_stops_the_server_once_it_is_copied() {
     let (_saves, data) = saves("backup-saving");
     let loader = server("", &data);
     assert!(loader.raise::<WorldSaving>(&()) >= 1);
     assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
-    // The game's stop lets the backup's hold go before its last save.
-    assert!(tick_until(&loader, || loader.stop_asked()));
+    assert!(tick_until(&loader, || said(&loader, 2)
+        .contains(&"The server restarts now.".to_owned())));
     assert!(loader.saves_held(), "the copy waits for the save to end");
-    assert!(!data.join("backups").exists());
+    assert!(!loader.stop_asked(), "the stop waits for the backup");
     assert!(loader.raise::<WorldSaved>(&()) >= 1);
-    assert!(tick_until(&loader, || !loader.saves_held()));
+    assert!(tick_until(&loader, || loader.stop_asked()));
+    assert!(!loader.saves_held());
     assert_eq!(std::fs::read_dir(data.join("backups")).unwrap().count(), 1);
+}
+
+#[test]
+fn a_restart_the_game_refuses_to_stop_saves_the_world_instead_and_the_audit_log_says_so() {
+    let dir = scratch("restart-refused");
+    let loader = server("audit = \"on\"\n", &dir);
+    assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
+    assert!(tick_until(&loader, || loader.stop_asked()));
+    assert_eq!(loader.saves(), 0);
+    // The game takes one stop; a second warning's stop is refused.
+    assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
+    assert!(tick_until(&loader, || loader.saves() == 1));
+    let audit = file_until(&dir, "audit.log", |text| {
+        text.matches("server\t\trestart").count() == 2
+    });
+    let restarts: Vec<&str> = audit
+        .lines()
+        .filter(|line| line.contains("server\t\trestart"))
+        .collect();
+    assert!(
+        restarts[0].ends_with("\tdone") && restarts[1].ends_with("\trefused"),
+        "{audit}"
+    );
 }
 
 #[test]

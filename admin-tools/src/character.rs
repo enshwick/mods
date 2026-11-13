@@ -246,10 +246,11 @@ fn uncover(tools: &Tools, request: &Request<'_>) -> Outcome {
     if tools.world.player_by_key(*key).is_none() {
         return no_player(request);
     }
-    let Some(map) = tools.map else {
-        return Tools::failed(request, name, &WorldError::Missing);
-    };
-    match map.uncover_all(*key) {
+    // The action exists only with the map, so `None` is never seen here.
+    match tools
+        .map
+        .map_or(Err(WorldError::Missing), |map| map.uncover_all(*key))
+    {
         Ok(()) => Outcome::done(request.say(texts::REPLY_UNCOVERED, &[(texts::value::NAME, name)])),
         Err(WorldError::Missing) => {
             Outcome::refused(request.say(texts::REPLY_NOT_REACHED, &[(texts::value::NAME, name)]))

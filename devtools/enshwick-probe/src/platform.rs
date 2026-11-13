@@ -19,7 +19,7 @@ use enshwick::schedule::Scheduler;
 use enshwick::state::ModLocal;
 use enshwick::voxels::{VoxelPos, Voxels};
 use enshwick::world::World;
-use enshwick::{Load, Off, WorldError};
+use enshwick::{Load, WorldError};
 
 use crate::checks::{fail, pass};
 
@@ -104,15 +104,66 @@ fn report_found<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
     }
 }
 
-/// The checks, and the counts their hooks keep.
-#[derive(Debug)]
+/// The part `what` some checks need, or `None` with a `FAIL` naming it, so
+/// only those checks stay off.
+fn part<T, E: core::fmt::Display>(what: &str, got: Result<T, E>) -> Option<T> {
+    got.map_err(|why| fail(&format!("platform: {what}: {why}; its checks are off")))
+        .ok()
+}
+
+/// The base limit the probe requested, and a cap below it that reads back
+/// and is let go again.
+fn bases() {
+    let before = base_limit();
+    match before {
+        Some(limit) if limit_holds(limit.zones, limit.max_bases) => {
+            pass(&format!("base limit {limit:?}"));
+            if limit.bases < BASES {
+                enshwick::info!(
+                    "bases held at {} below the {BASES} asked, by another mod's lower cap",
+                    limit.bases
+                );
+            }
+        }
+        other => fail(&format!(
+            "base limit {other:?}, asked {ZONES} zones in {BASES} bases"
+        )),
+    }
+    enshwick::info!("grouping: {:?}", grouping());
+    // The lowest cap of every mod holds, so the probe lets go of its own at
+    // once: other mods keep the bases they asked for.
+    let capped = set_base_cap(CAP).map(|()| base_limit());
+    let released = set_base_cap(u32::MAX).map(|()| base_limit());
+    match (before, capped, released) {
+        (Some(before), Ok(Some(low)), Ok(Some(back))) => {
+            match cap_reads_back(before.bases, low.bases, back.bases) {
+                Some(true) => pass(&format!(
+                    "base cap {CAP} reads back, and {} once let go",
+                    back.bases
+                )),
+                Some(false) => fail(&format!(
+                    "base cap {CAP} read {}, then {} once let go, from {}",
+                    low.bases, back.bases, before.bases
+                )),
+                None => enshwick::info!(
+                    "SKIP base cap {CAP}: the bases are at {} already",
+                    before.bases
+                ),
+            }
+        }
+        (_, capped, released) => fail(&format!(
+            "base cap {CAP}, then let go: {capped:?}, {released:?}, from {before:?}"
+        )),
+    }
+}
+
 pub(crate) struct PlatformChecks {
-    world: World,
+    world: Option<World>,
     effects: Effects,
     voxels: Voxels,
-    altars: Altars,
-    zones: ZoneSizes,
-    map: Map,
+    altars: Option<Altars>,
+    zones: Option<ZoneSizes>,
+    map: Option<Map>,
     scheduler: Scheduler,
     zone_calls: Arc<AtomicUsize>,
     loop_waits: Arc<AtomicUsize>,
@@ -120,8 +171,9 @@ pub(crate) struct PlatformChecks {
 }
 
 impl PlatformChecks {
-    /// Runs the checks that only init may make, and sets up the rest.
-    pub(crate) fn new(load: &mut Load<'_>, scheduler: Scheduler) -> Result<Self, Off> {
+    /// Runs the checks that only init may make, and sets up the rest; a part
+    /// the loader does not give turns off only the checks that need it.
+    pub(crate) fn new(load: &mut Load<'_>, scheduler: Scheduler) -> Self {
         let system = load.system(SYSTEM);
         report("reflection: system", system.as_ref().map(|_| ()));
         if let Ok(target) = system {
@@ -170,30 +222,40 @@ impl PlatformChecks {
         );
         let zone_calls = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&zone_calls);
-        let zones = load.on_altar_zone(move |_| {
-            counted.fetch_add(1, Ordering::Relaxed);
-        })?;
-        Ok(Self {
-            world: load.world()?,
+        let zones = part(
+            "altar zone filter",
+            load.on_altar_zone(move |_| {
+                counted.fetch_add(1, Ordering::Relaxed);
+            }),
+        );
+        Self {
+            world: part("world", load.world()),
             effects: load.effects(),
             voxels: load.voxels(),
-            altars: load.altars()?,
+            altars: part("altars", load.altars()),
             zones,
-            map: load.map()?,
+            map: part("map", load.map()),
             scheduler,
             zone_calls,
             loop_waits,
             server_waits,
-        })
+        }
     }
 
     /// Runs every check on the game thread.
     pub(crate) fn run(&self) {
         Self::host();
         Self::archive();
-        self.world();
-        self.altars();
-        self.map();
+        if let Some(world) = self.world {
+            self.world(world);
+        }
+        bases();
+        if let Some(altars) = &self.altars {
+            self.altars(altars);
+        }
+        if let Some(map) = self.map {
+            map_reads(map, self.scheduler, MAP_TRIES);
+        }
         report("console line", enshwick::console::run(CONSOLE_LINE));
         let (loops, servers) = (Arc::clone(&self.loop_waits), Arc::clone(&self.server_waits));
         let (loops_before, servers_before) = (
@@ -315,10 +377,9 @@ impl PlatformChecks {
         }
     }
 
-    fn world(&self) {
-        let Some((entity, at)) = self
-            .world
-            .entities(self.world.transform_type())
+    fn world(&self, world: World) {
+        let Some((entity, at)) = world
+            .entities(world.transform_type())
             .first()
             .map(|placed| (placed.entity, placed.position))
         else {
@@ -326,11 +387,10 @@ impl PlatformChecks {
             return;
         };
         let [x, y, z] = at;
-        self.label_own_copy(entity, [x, y + 3.0, z]);
+        self.label_own_copy(world, entity, [x, y + 3.0, z]);
         report(
             "a save keeps the box at the first entity",
-            self.world
-                .persists([x - 1.0, y - 1.0, z - 1.0], [x + 1.0, y + 1.0, z + 1.0]),
+            world.persists([x - 1.0, y - 1.0, z - 1.0], [x + 1.0, y + 1.0, z + 1.0]),
         );
         match VoxelPos::from_metres(at) {
             Some(voxel) => report(
@@ -344,8 +404,8 @@ impl PlatformChecks {
     /// Labels a copy of `entity` the probe spawns at `at`, out of the save,
     /// then destroys it: a label is saved with the world and would replace
     /// a name the entity already had.
-    fn label_own_copy(&self, entity: enshwick::Entity, at: [f64; 3]) {
-        let Some(template) = self.world.template(entity) else {
+    fn label_own_copy(&self, world: World, entity: enshwick::Entity, at: [f64; 3]) {
+        let Some(template) = world.template(entity) else {
             enshwick::info!("SKIP label: entity {} has no template", entity.0);
             return;
         };
@@ -356,7 +416,6 @@ impl PlatformChecks {
                 return;
             }
         };
-        let world = self.world;
         // A spawned entity joins the world with the game's next steps.
         self.scheduler.after(SPAWN_WAIT, move || {
             if world.set_label(copy, "probe") && world.set_label(copy, "") {
@@ -370,57 +429,19 @@ impl PlatformChecks {
         });
     }
 
-    fn altars(&self) {
-        let altars = self.altars.list();
+    fn altars(&self, altars: &Altars) {
+        let altars = altars.list();
         pass(&format!("altars: {}", altars.len()));
-        let before = base_limit();
-        match before {
-            Some(limit) if limit_holds(limit.zones, limit.max_bases) => {
-                pass(&format!("base limit {limit:?}"));
-                if limit.bases < BASES {
-                    enshwick::info!(
-                        "bases held at {} below the {BASES} asked, by another mod's lower cap",
-                        limit.bases
-                    );
-                }
-            }
-            other => fail(&format!(
-                "base limit {other:?}, asked {ZONES} zones in {BASES} bases"
-            )),
-        }
-        enshwick::info!("grouping: {:?}", grouping());
-        // The lowest cap of every mod holds, so the probe lets go of its own
-        // at once: other mods keep the bases they asked for.
-        let capped = set_base_cap(CAP).map(|()| base_limit());
-        let released = set_base_cap(u32::MAX).map(|()| base_limit());
-        match (before, capped, released) {
-            (Some(before), Ok(Some(low)), Ok(Some(back))) => {
-                match cap_reads_back(before.bases, low.bases, back.bases) {
-                    Some(true) => pass(&format!(
-                        "base cap {CAP} reads back, and {} once let go",
-                        back.bases
-                    )),
-                    Some(false) => fail(&format!(
-                        "base cap {CAP} read {}, then {} once let go, from {}",
-                        low.bases, back.bases, before.bases
-                    )),
-                    None => enshwick::info!(
-                        "SKIP base cap {CAP}: the bases are at {} already",
-                        before.bases
-                    ),
-                }
-            }
-            (_, capped, released) => fail(&format!(
-                "base cap {CAP}, then let go: {capped:?}, {released:?}, from {before:?}"
-            )),
-        }
         if altars.is_empty() {
             enshwick::info!("SKIP altar zone filter: no altar in the world");
             return;
         }
+        let Some(zones) = &self.zones else {
+            return;
+        };
         let calls = Arc::clone(&self.zone_calls);
         let before = calls.load(Ordering::Relaxed);
-        if let Err(why) = self.zones.changed() {
+        if let Err(why) = zones.changed() {
             fail(&format!("altar zones changed: {why}"));
             return;
         }
@@ -437,10 +458,6 @@ impl PlatformChecks {
                 ));
             }
         });
-    }
-
-    fn map(&self) {
-        map_reads(self.map, self.scheduler, MAP_TRIES);
     }
 }
 
@@ -463,7 +480,139 @@ fn map_reads(map: Map, scheduler: Scheduler, tries: u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{BASES, CAP, ZONES, cap_reads_back, limit_holds};
+    use std::sync::OnceLock;
+
+    use enshwick::abi::{MapFrameInfo, Status};
+    use enshwick::test::{FakeHost, Installed};
+    use enshwick::{Mod, Off};
+
+    use super::*;
+
+    static CHECKS: OnceLock<PlatformChecks> = OnceLock::new();
+
+    struct Platform;
+
+    impl Mod for Platform {
+        fn init(load: &mut Load<'_>) -> Result<Self, Off> {
+            report_found::<&str>("found", Ok(true));
+            report_found::<&str>("absent", Ok(false));
+            report_found("broken", Err("refused"));
+            let scheduler = load.scheduler()?;
+            let _first = CHECKS.set(PlatformChecks::new(load, scheduler));
+            Ok(Self)
+        }
+    }
+
+    enshwick::test::declare_mod!(
+        Platform,
+        r#"
+        id = "probe.platform"
+        side = "server"
+        "#
+    );
+
+    fn started(host: FakeHost) -> (Installed, &'static PlatformChecks) {
+        let loader = host.install();
+        // SAFETY: both functions are the exports of this module's `declare_mod!(Platform)`.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        (loader, CHECKS.get().unwrap())
+    }
+
+    fn logged(loader: &Installed, line: &str) -> bool {
+        loader.logs().iter().any(|(_, logged)| logged == line)
+    }
+
+    fn logged_starting(loader: &Installed, start: &str) -> bool {
+        loader
+            .logs()
+            .iter()
+            .any(|(_, logged)| logged.starts_with(start))
+    }
+
+    #[test]
+    fn only_a_found_capability_passes_and_one_not_found_fails() {
+        let (loader, _) = started(FakeHost::new().world());
+        assert!(logged(&loader, "PASS found"), "{:?}", loader.logs());
+        assert!(logged(&loader, "FAIL absent: not found on this build"));
+        assert!(logged(&loader, "FAIL broken: refused"));
+    }
+
+    #[test]
+    fn a_missing_world_turns_off_only_the_checks_that_need_it() {
+        let (loader, checks) =
+            started(FakeHost::new().without_fact(enshwick::test::facts::CURRENT_TRANSFORM));
+        assert!(
+            logged_starting(&loader, "FAIL platform: world: "),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(logged_starting(&loader, "FAIL platform: map: "));
+        assert!(checks.world.is_none() && checks.map.is_none());
+        assert!(checks.altars.is_some() && checks.zones.is_some());
+        checks.run();
+        assert!(
+            logged_starting(&loader, "PASS altars: "),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(logged_starting(&loader, "PASS base cap "));
+    }
+
+    #[test]
+    fn the_map_is_read_again_while_the_loader_reads_the_scene() {
+        let frame = MapFrameInfo {
+            size: [10240.0; 2],
+            metres_per_cell: 8.0,
+            ..MapFrameInfo::EMPTY
+        };
+        let (loader, checks) = started(FakeHost::new().world().map_frame(frame));
+        let map = checks.map.unwrap();
+        // The loader answers a world's first read of the map that it still
+        // reads the scene. The scheduler waits on the wall clock, so the
+        // test makes the retry's call itself.
+        map_reads(map, checks.scheduler, MAP_TRIES);
+        assert!(
+            !logged_starting(&loader, "PASS map") && !logged_starting(&loader, "FAIL map"),
+            "{:?}",
+            loader.logs()
+        );
+        map_reads(map, checks.scheduler, MAP_TRIES - 1);
+        assert!(
+            logged_starting(&loader, "PASS map frame"),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(logged_starting(&loader, "PASS map markers"));
+    }
+
+    #[test]
+    fn a_map_still_loading_after_the_last_try_fails() {
+        let (loader, checks) = started(FakeHost::new().world());
+        loader.read_map_markers(true);
+        map_reads(checks.map.unwrap(), checks.scheduler, 1);
+        assert!(
+            logged_starting(&loader, "FAIL map markers: "),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn the_base_cap_is_let_go_back_to_the_request() {
+        let (loader, _) = started(FakeHost::new().world());
+        assert_eq!(loader.requested_base_limits(), Some((ZONES, BASES)));
+        bases();
+        assert!(
+            logged(
+                &loader,
+                &format!("PASS base cap {CAP} reads back, and {BASES} once let go")
+            ),
+            "{:?}",
+            loader.logs()
+        );
+    }
 
     #[test]
     fn the_limit_holds_while_bases_past_16_are_within_reach() {

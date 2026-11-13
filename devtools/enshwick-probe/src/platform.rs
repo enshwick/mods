@@ -605,6 +605,11 @@ mod tests {
         assert_eq!(loader.requested_base_limits(), Some((ZONES, BASES)));
         bases();
         assert!(
+            logged_starting(&loader, "PASS base limit BaseLimit "),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(
             logged(
                 &loader,
                 &format!("PASS base cap {CAP} reads back, and {BASES} once let go")
@@ -646,5 +651,17 @@ mod tests {
     fn a_cap_that_does_not_hold_or_does_not_let_go_fails() {
         assert_eq!(cap_reads_back(BASES, BASES, BASES), Some(false));
         assert_eq!(cap_reads_back(BASES, CAP, CAP), Some(false));
+    }
+
+    #[test]
+    fn a_build_without_bases_past_16_fails_the_limit_and_skips_the_cap() {
+        let (loader, _) = started(FakeHost::new().world().without_bases_past_16());
+        bases();
+        assert!(
+            logged_starting(&loader, "FAIL base limit "),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(logged_starting(&loader, &format!("SKIP base cap {CAP}: ")));
     }
 }

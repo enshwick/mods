@@ -107,8 +107,14 @@ fn report_found<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
 /// The part `what` some checks need, or `None` with a `FAIL` naming it, so
 /// only those checks stay off.
 fn part<T, E: core::fmt::Display>(what: &str, got: Result<T, E>) -> Option<T> {
-    got.map_err(|why| fail(&format!("platform: {what}: {why}; its checks are off")))
+    got.inspect_err(|why| fail(&format!("platform: {what}: {why}; its checks are off")))
         .ok()
+}
+
+/// Says on every run that the checks of the part `what` are off, so a run
+/// without them never reads as clean.
+fn off(what: &str) {
+    enshwick::info!("SKIP platform: {what} is off");
 }
 
 /// The base limit the probe requested, and a cap below it that reads back
@@ -157,6 +163,8 @@ fn bases() {
     }
 }
 
+/// The checks, the parts they need, and the counts their hooks keep.
+#[derive(Debug)]
 pub(crate) struct PlatformChecks {
     world: Option<World>,
     effects: Effects,
@@ -246,15 +254,18 @@ impl PlatformChecks {
     pub(crate) fn run(&self) {
         Self::host();
         Self::archive();
-        if let Some(world) = self.world {
-            self.world(world);
+        match self.world {
+            Some(world) => self.world(world),
+            None => off("world"),
         }
         bases();
-        if let Some(altars) = &self.altars {
-            self.altars(altars);
+        match &self.altars {
+            Some(altars) => self.altars(altars),
+            None => off("altars"),
         }
-        if let Some(map) = self.map {
-            map_reads(map, self.scheduler, MAP_TRIES);
+        match self.map {
+            Some(map) => map_reads(map, self.scheduler, MAP_TRIES),
+            None => off("map"),
         }
         report("console line", enshwick::console::run(CONSOLE_LINE));
         let (loops, servers) = (Arc::clone(&self.loop_waits), Arc::clone(&self.server_waits));
@@ -437,6 +448,7 @@ impl PlatformChecks {
             return;
         }
         let Some(zones) = &self.zones else {
+            off("altar zone filter");
             return;
         };
         let calls = Arc::clone(&self.zone_calls);
@@ -480,7 +492,7 @@ fn map_reads(map: Map, scheduler: Scheduler, tries: u32) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
+    use std::sync::Mutex;
 
     use enshwick::abi::{MapFrameInfo, Status};
     use enshwick::test::{FakeHost, Installed};
@@ -488,17 +500,16 @@ mod tests {
 
     use super::*;
 
-    static CHECKS: OnceLock<PlatformChecks> = OnceLock::new();
+    /// The checks the last init made; each test's init replaces them, so
+    /// tests that share a process under `cargo test` never read another's.
+    static CHECKS: Mutex<Option<PlatformChecks>> = Mutex::new(None);
 
     struct Platform;
 
     impl Mod for Platform {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-            report_found::<&str>("found", Ok(true));
-            report_found::<&str>("absent", Ok(false));
-            report_found("broken", Err("refused"));
             let scheduler = load.scheduler()?;
-            let _first = CHECKS.set(PlatformChecks::new(load, scheduler));
+            *CHECKS.lock().unwrap() = Some(PlatformChecks::new(load, scheduler));
             Ok(Self)
         }
     }
@@ -511,16 +522,17 @@ mod tests {
         "#
     );
 
-    fn started(host: FakeHost) -> (Installed, &'static PlatformChecks) {
+    fn started(host: FakeHost) -> (Installed, PlatformChecks) {
         let loader = host.install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Platform)`.
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        (loader, CHECKS.get().unwrap())
+        let checks = CHECKS.lock().unwrap().take().unwrap();
+        (loader, checks)
     }
 
-    fn logged(loader: &Installed, line: &str) -> bool {
+    fn logged_exactly(loader: &Installed, line: &str) -> bool {
         loader.logs().iter().any(|(_, logged)| logged == line)
     }
 
@@ -534,15 +546,40 @@ mod tests {
     #[test]
     fn only_a_found_capability_passes_and_one_not_found_fails() {
         let (loader, _) = started(FakeHost::new().world());
-        assert!(logged(&loader, "PASS found"), "{:?}", loader.logs());
-        assert!(logged(&loader, "FAIL absent: not found on this build"));
-        assert!(logged(&loader, "FAIL broken: refused"));
+        report_found::<&str>("found", Ok(true));
+        report_found::<&str>("absent", Ok(false));
+        report_found("broken", Err("refused"));
+        assert!(logged_exactly(&loader, "PASS found"), "{:?}", loader.logs());
+        assert!(logged_exactly(
+            &loader,
+            "FAIL absent: not found on this build"
+        ));
+        assert!(logged_exactly(&loader, "FAIL broken: refused"));
+    }
+
+    #[test]
+    fn a_run_with_every_part_runs_the_checks_of_each() {
+        let (loader, checks) = started(FakeHost::new().world());
+        assert!(checks.world.is_some() && checks.map.is_some());
+        assert!(checks.altars.is_some() && checks.zones.is_some());
+        checks.run();
+        let logs = loader.logs();
+        assert!(
+            logged_exactly(&loader, "SKIP world reads: no placed entity"),
+            "{logs:?}"
+        );
+        assert!(logged_starting(&loader, "PASS altars: "), "{logs:?}");
+        assert!(logged_starting(&loader, "PASS base cap "), "{logs:?}");
+        assert!(!logged_starting(&loader, "SKIP platform: "), "{logs:?}");
     }
 
     #[test]
     fn a_missing_world_turns_off_only_the_checks_that_need_it() {
-        let (loader, checks) =
-            started(FakeHost::new().without_fact(enshwick::test::facts::CURRENT_TRANSFORM));
+        let (loader, checks) = started(
+            FakeHost::new()
+                .world()
+                .without_fact(enshwick::test::facts::CURRENT_TRANSFORM),
+        );
         assert!(
             logged_starting(&loader, "FAIL platform: world: "),
             "{:?}",
@@ -558,6 +595,8 @@ mod tests {
             loader.logs()
         );
         assert!(logged_starting(&loader, "PASS base cap "));
+        assert!(logged_exactly(&loader, "SKIP platform: world is off"));
+        assert!(logged_exactly(&loader, "SKIP platform: map is off"));
     }
 
     #[test]
@@ -610,7 +649,7 @@ mod tests {
             loader.logs()
         );
         assert!(
-            logged(
+            logged_exactly(
                 &loader,
                 &format!("PASS base cap {CAP} reads back, and {BASES} once let go")
             ),

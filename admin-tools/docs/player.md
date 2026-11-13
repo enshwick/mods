@@ -266,9 +266,10 @@ when the time is up.
 When the time is up, Admin Tools stops the server as Ctrl+C in its console
 does: the game saves the world, and the server exits. Your host's panel or
 service then starts the server again. A server that nothing starts again
-stays off. A running backup finishes before the server stops. If this
-version of the game cannot be stopped this way, Admin Tools saves the world
-instead.
+stays off.
+
+A running backup finishes before the server stops. If this version of the
+game cannot be stopped this way, Admin Tools saves the world instead.
 
 Type `/adm restart 0` to call the restart off. A game a player hosts has no
 restart warning.

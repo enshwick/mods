@@ -79,8 +79,10 @@ Ten seconds after the world has loaded, and again on the `check` action:
   reflected types; resource keys, a resource read from the archive and as
   served, and a content read; a label on an entity of its own; whether a
   save keeps the box at the first placed entity and its voxel; the altars,
-  the base limits it asked for at start (40 zones in 20 bases), a cap of 18
-  read back and let go, and the altar zone filter's calls once the zones are
+  the base limits it asked for at start (40 zones, and bases past 16 within
+  reach; another mod's lower cap may hold the bases under the 20 it asked),
+  a cap of 18 read back and let go (skipped when the bases are at 18 or
+  fewer already), and the altar zone filter's calls once the zones are
   sized again; the map's frame and markers; and its own `census` run as a
   console line. A run with `scenario_only` skips these.
 
@@ -110,18 +112,19 @@ there the `check` key runs the same vitals, spawn and destroy checks on the
 world's entities. The scenarios `teleport`, `stats` and `knowledge` check the
 rest on a player.
 
-| Action      | Key         | What it does                                                                                                |
-| ----------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `census`    | `Shift+F2`  | the game events counted so far, by type                                                                     |
-| `check`     | `Shift+F3`  | runs the checks again                                                                                       |
-| `key`       | `Shift+F4`  | your account key                                                                                            |
-| `my-vitals` | `Shift+F5`  | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
-| `notice`    | `Shift+F6`  | shows a notice on your screen, or in chat without Enshwick                                                  |
-| `stats`     | `Shift+F9`  | your stats that differ from the defaults, and their sources                                                 |
-| `affix`     | `Shift+F11` | rolls one to three affixes anew on everything you wear                                                      |
-| `vitals`    | console     | an entity's vitals and progress, against its replicated health                                              |
-| `destroy`   | console     | asks the world to destroy an entity; on a copy of a world only                                              |
-| `spawn`     | console     | spawns a copy of an entity above it and follows it as the checks do                                         |
+| Action      | Key             | What it does                                                                                                |
+| ----------- | --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `census`    | `Shift+F2`      | the game events counted so far, by type                                                                     |
+| `check`     | `Shift+F3`      | runs the checks again                                                                                       |
+| `key`       | `Shift+F4`      | your account key                                                                                            |
+| `my-vitals` | `Shift+F5`      | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
+| `notice`    | `Shift+F6`      | shows a notice on your screen, or in chat without Enshwick                                                  |
+| `notices`   | `Ctrl+Shift+F6` | shows 20 notices at once, with the texts 1 to 20: four more than a client queues; the count goes to the log |
+| `stats`     | `Ctrl+Shift+F9` | your stats that differ from the defaults, and their sources                                                 |
+| `affix`     | `Shift+F11`     | rolls one to three affixes anew on everything you wear                                                      |
+| `vitals`    | console         | an entity's vitals and progress, against its replicated health                                              |
+| `destroy`   | console         | asks the world to destroy an entity; on a copy of a world only                                              |
+| `spawn`     | console         | spawns a copy of an entity above it and follows it as the checks do                                         |
 
 ## Settings
 

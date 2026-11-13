@@ -11,7 +11,7 @@ use enshwick::entity_data::{EntityData, Replication};
 use enshwick::game_events::{EventType, RawGameEvent};
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
-use enshwick::world::{ContainerKinds, World, WritableType};
+use enshwick::world::{ContainerKinds, Notice, World, WritableType};
 use enshwick::{Load, Off, WorldError};
 
 /// Entities whose stats a check compares.
@@ -508,6 +508,29 @@ impl Checks {
         format!("{how:?}")
     }
 
+    /// The `notices` action: shows the player [`crate::NOTICES`] notices at
+    /// once, with the texts 1 to that count, so a burst past the client's
+    /// queue shows which texts the game kept. The summary goes to the log
+    /// only: a reply would be one more notice behind a full queue.
+    pub(crate) fn notices(&self, player: &enshwick::world::Player) {
+        Self::burst(self.world, player);
+    }
+
+    /// Sends the burst of [`Self::notices`] and answers how many of its
+    /// notices the loader carried to the client as notices.
+    fn burst(world: World, player: &enshwick::world::Player) -> usize {
+        let carried = (1..=crate::NOTICES)
+            .map(|n| world.notify(player, &n.to_string()))
+            .filter(|how| *how == Notice::OnScreen)
+            .count();
+        enshwick::info!(
+            "notices 1 to {} to {}: {carried} carried as notices",
+            crate::NOTICES,
+            player.name
+        );
+        carried
+    }
+
     /// The `destroy` action.
     pub(crate) fn destroy(&self, entity: Entity) -> String {
         let template = self.world.template(entity);
@@ -665,5 +688,43 @@ mod tests {
             "{logs:?}"
         );
         assert_eq!(loader.component_bytes(Entity(3), 7), Some(vec![0; 8]));
+    }
+
+    #[test]
+    fn a_burst_shows_the_player_each_number_once_in_order() {
+        use enshwick::PlayerKey;
+        use enshwick::abi::{Header, PlayerInfo};
+        use enshwick::net::Peer;
+
+        let key = PlayerKey::new(7);
+        let mut name = [0u8; 64];
+        name[..3].copy_from_slice(b"Ann");
+        let loader = enshwick::test::FakeHost::new()
+            .developer_tools(true)
+            .net_peer(Peer::Player(key))
+            .world()
+            .type_hash(NETWORK_HEALTH, 7)
+            .type_size(NETWORK_HEALTH, 8)
+            .player(PlayerInfo {
+                header: Header::of::<PlayerInfo>(),
+                slot: 0,
+                entity: Entity(10),
+                key,
+                permissions: 0,
+                name_len: 3,
+                name,
+            })
+            .install();
+        // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        let (world, _) = RESOLVED.get().unwrap();
+        let ann = world.players().remove(0);
+        let count = crate::NOTICES;
+        assert_eq!(Checks::burst(*world, &ann), count as usize);
+        let sent = loader.notices();
+        let expected: Vec<_> = (1..=count).map(|n| (key, n.to_string())).collect();
+        assert_eq!(sent, expected);
     }
 }

@@ -53,6 +53,20 @@ static SYSTEM_RUNS: ModLocal<AtomicUsize> = ModLocal::new();
 /// last count began.
 static FRAME_SEEN: ModLocal<AtomicBool> = ModLocal::new();
 
+/// Whether the base limit holds the probe's request: its zones, and bases
+/// past 16 within reach (`max_bases` falls to 16 when they fail to arm).
+/// The bases themselves may sit lower under another mod's cap.
+fn limit_holds(zones: u32, max_bases: u32) -> bool {
+    zones >= ZONES && max_bases >= BASES
+}
+
+/// Whether the probe's cap of [`CAP`] read back and letting go of it lifted
+/// the bases above it again; `None` when the bases read before were at or
+/// below the cap already, so a cap cannot show.
+fn cap_reads_back(before: u32, capped: u32, released: u32) -> Option<bool> {
+    (before > CAP).then_some(capped == CAP && released > CAP)
+}
+
 fn system_runs() -> &'static AtomicUsize {
     SYSTEM_RUNS.get_or_init(AtomicUsize::default)
 }
@@ -359,9 +373,16 @@ impl PlatformChecks {
     fn altars(&self) {
         let altars = self.altars.list();
         pass(&format!("altars: {}", altars.len()));
-        match base_limit() {
-            Some(limit) if limit.zones >= ZONES && limit.bases >= BASES => {
+        let before = base_limit();
+        match before {
+            Some(limit) if limit_holds(limit.zones, limit.max_bases) => {
                 pass(&format!("base limit {limit:?}"));
+                if limit.bases < BASES {
+                    enshwick::info!(
+                        "bases held at {} below the {BASES} asked, by another mod's lower cap",
+                        limit.bases
+                    );
+                }
             }
             other => fail(&format!(
                 "base limit {other:?}, asked {ZONES} zones in {BASES} bases"
@@ -372,14 +393,26 @@ impl PlatformChecks {
         // at once: other mods keep the bases they asked for.
         let capped = set_base_cap(CAP).map(|()| base_limit());
         let released = set_base_cap(u32::MAX).map(|()| base_limit());
-        match (capped, released) {
-            (Ok(Some(low)), Ok(Some(back))) if low.bases == CAP && back.bases >= BASES => {
-                pass(&format!(
-                    "base cap {CAP} reads back, and {} once let go",
-                    back.bases
-                ));
+        match (before, capped, released) {
+            (Some(before), Ok(Some(low)), Ok(Some(back))) => {
+                match cap_reads_back(before.bases, low.bases, back.bases) {
+                    Some(true) => pass(&format!(
+                        "base cap {CAP} reads back, and {} once let go",
+                        back.bases
+                    )),
+                    Some(false) => fail(&format!(
+                        "base cap {CAP} read {}, then {} once let go, from {}",
+                        low.bases, back.bases, before.bases
+                    )),
+                    None => enshwick::info!(
+                        "SKIP base cap {CAP}: the bases are at {} already",
+                        before.bases
+                    ),
+                }
             }
-            other => fail(&format!("base cap {CAP}, then let go: {other:?}")),
+            (_, capped, released) => fail(&format!(
+                "base cap {CAP}, then let go: {capped:?}, {released:?}, from {before:?}"
+            )),
         }
         if altars.is_empty() {
             enshwick::info!("SKIP altar zone filter: no altar in the world");
@@ -426,4 +459,43 @@ fn map_reads(map: Map, scheduler: Scheduler, tries: u32) {
     }
     report("map frame", frame);
     report("map markers", markers.map(|markers| markers.len()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BASES, CAP, ZONES, cap_reads_back, limit_holds};
+
+    #[test]
+    fn the_limit_holds_while_bases_past_16_are_within_reach() {
+        assert!(limit_holds(ZONES, 179));
+        assert!(limit_holds(ZONES, BASES));
+    }
+
+    #[test]
+    fn bases_past_16_out_of_reach_fail_the_limit() {
+        assert!(!limit_holds(ZONES, 16));
+        assert!(!limit_holds(ZONES - 1, 179));
+    }
+
+    #[test]
+    fn alone_the_cap_reads_back_and_letting_go_lifts_the_bases() {
+        assert_eq!(cap_reads_back(BASES, CAP, BASES), Some(true));
+    }
+
+    #[test]
+    fn under_another_mods_cap_above_the_probes_the_cap_still_shows() {
+        assert_eq!(cap_reads_back(CAP + 1, CAP, CAP + 1), Some(true));
+    }
+
+    #[test]
+    fn bases_already_at_or_below_the_cap_skip_the_cap_check() {
+        assert_eq!(cap_reads_back(16, 16, 16), None);
+        assert_eq!(cap_reads_back(CAP, CAP, CAP), None);
+    }
+
+    #[test]
+    fn a_cap_that_does_not_hold_or_does_not_let_go_fails() {
+        assert_eq!(cap_reads_back(BASES, BASES, BASES), Some(false));
+        assert_eq!(cap_reads_back(BASES, CAP, CAP), Some(false));
+    }
 }

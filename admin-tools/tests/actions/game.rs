@@ -1,6 +1,7 @@
 //! The fake game the tests run in: a dedicated server or a hosted game
 //! with Ann, an administrator, and Bob online.
 
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -161,17 +162,17 @@ pub(crate) fn file_until(dir: &Path, name: &str, holds: impl Fn(&str) -> bool) -
 /// A dedicated server with Ann (admin) and Bob online, `settings` for
 /// the world, its data in `dir`, and the mod started with the world
 /// loaded.
-pub(crate) fn server(settings: &str, dir: &Path) -> Installed {
+pub(crate) fn server(settings: &str, dir: &Path) -> Game {
     server_with(settings, dir, &[])
 }
 
 /// [`server`] with `more` players online beside Ann and Bob.
-pub(crate) fn server_with(settings: &str, dir: &Path, more: &[PlayerInfo]) -> Installed {
+pub(crate) fn server_with(settings: &str, dir: &Path, more: &[PlayerInfo]) -> Game {
     game(settings, dir, more, false)
 }
 
 /// [`server`] in a game a player hosts.
-pub(crate) fn hosted(settings: &str, dir: &Path) -> Installed {
+pub(crate) fn hosted(settings: &str, dir: &Path) -> Game {
     game(settings, dir, &[], true)
 }
 
@@ -189,24 +190,18 @@ fn waypoint(host: &FakeHost) -> (u32, Vec<u8>) {
 
 /// [`server`] on a game build whose inventories do not resolve, so the
 /// mod declares no action on what players carry.
-pub(crate) fn without_inventories(settings: &str, dir: &Path) -> Installed {
+pub(crate) fn without_inventories(settings: &str, dir: &Path) -> Game {
     world(settings, dir, &[], false, false)
 }
 
 /// [`server_with`] on a dedicated server, or in a game a player hosts
 /// when `hosted`.
-pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Installed {
+pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Game {
     world(settings, dir, more, hosted, true)
 }
 
 /// [`game`], with the game's inventories only when `inventory`.
-fn world(
-    settings: &str,
-    dir: &Path,
-    more: &[PlayerInfo],
-    hosted: bool,
-    inventory: bool,
-) -> Installed {
+fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventory: bool) -> Game {
     // Parallel tests would all take the remote console's default port.
     let settings = if settings.contains("rcon") {
         settings.to_owned()
@@ -309,7 +304,48 @@ fn world(
     loader.set_weather([1.0, 0.0, 0.0, 0.0], &[]);
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
     assert!(loader.raise::<WorldLoaded>(&()) >= 1);
-    loader
+    Game(loader)
+}
+
+/// What the mod logs when its remote console takes its address.
+const LISTENS: &str = "the remote console listens on ";
+
+/// A test's game: the fake loader, which checks when the test ends that
+/// every address the remote console listened on was this computer's only,
+/// however the test's settings came to it.
+pub(crate) struct Game(Installed);
+
+impl std::ops::Deref for Game {
+    type Target = Installed;
+
+    fn deref(&self) -> &Installed {
+        &self.0
+    }
+}
+
+impl Drop for Game {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            for (_, line) in self.0.logs() {
+                listens_on_loopback(&line);
+            }
+        }
+    }
+}
+
+/// Fails when `line` says the remote console listens on an address other
+/// than loopback: a test on every network raises the firewall prompt.
+pub(crate) fn listens_on_loopback(line: &str) {
+    let Some((_, address)) = line.split_once(LISTENS) else {
+        return;
+    };
+    let address: SocketAddr = address
+        .parse()
+        .unwrap_or_else(|why| panic!("the remote console's address {address:?}: {why}"));
+    assert!(
+        address.ip().is_loopback(),
+        "a test's remote console listens on {address}; tests listen on loopback only"
+    );
 }
 
 /// A `CurrentTransform` standing at `[x, y, z]` metres.

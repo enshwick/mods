@@ -133,10 +133,8 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
     if settings.scenario_only {
         enshwick::info!("SKIP platform: the run plays only its scenario");
     } else {
-        match platform::PlatformChecks::new(load, scheduler) {
-            Ok(platform) => extras.push(Box::new(move || platform.run())),
-            Err(off) => enshwick::warn!("FAIL platform: {off}"),
-        }
+        let platform = platform::PlatformChecks::new(load, scheduler);
+        extras.push(Box::new(move || platform.run()));
     }
     extras
 }

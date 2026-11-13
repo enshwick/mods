@@ -9,11 +9,28 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::changelog::{self, CHANGELOG};
+use cargo_enshwick::changelog::{self, ALPHA_WARNING, CHANGELOG};
+
 use crate::{Package, packages, say};
 
-const USAGE: &str =
-    "usage: cargo xtask notes (--unreleased | --unfinished | --package <name>...) [--out <dir>]";
+/// The command line `notes` takes: exactly one way to choose the mods.
+#[derive(Debug, clap::Args)]
+#[group(required = true, multiple = false, id = "choice")]
+pub(crate) struct Args {
+    /// Every shipped mod not released yet.
+    #[arg(long, group = "choice")]
+    unreleased: bool,
+    /// Every shipped mod whose release is not finished.
+    #[arg(long, group = "choice")]
+    unfinished: bool,
+    /// The named mods.
+    #[arg(long, group = "choice")]
+    package: Vec<String>,
+    /// The folder to write into; `target/notes` of the workspace when left
+    /// out.
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
 /// Where the platform comes from; its tags name the loader's releases.
 pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
 /// The workspace dependency whose commit names the loader a mod builds on.
@@ -33,12 +50,6 @@ const SUMS: &str = "SHA256SUMS";
 const RELEASES: &str = "releases.json";
 /// GitHub refuses a release body longer than this, in characters.
 const MAX_BODY: usize = 125_000;
-const WARNING: &str = "\
-> [!WARNING]
-> This is an alpha. Before 1.0 anything may change, including the API, the
-> ABI, file layouts, settings and mod ids. Mods built for one alpha may need a
-> rebuild for the next. Back up your saves.
-";
 
 /// Writes `<package>.md` into `--out` (`target/notes` by default) for each
 /// chosen mod, or for every mod not released yet with `--unreleased` or
@@ -47,31 +58,14 @@ const WARNING: &str = "\
 /// writes none. With either flag, a released mod built for another loader
 /// than the pinned one is refused too: a loader alpha releases every mod of
 /// the release set.
-pub(crate) fn run(args: &[String]) -> Result<bool, String> {
+pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let root = root();
-    let mut out = root.join("target").join("notes");
-    let mut unreleased = false;
-    let mut unfinished = false;
-    let mut chosen: Vec<&str> = Vec::new();
-    let mut rest = args.iter();
-    while let Some(arg) = rest.next() {
-        match arg.as_str() {
-            "--unreleased" => unreleased = true,
-            "--unfinished" => unfinished = true,
-            "--package" => chosen.push(rest.next().ok_or(USAGE)?),
-            "--out" => out = PathBuf::from(rest.next().ok_or(USAGE)?),
-            _ => return Err(USAGE.to_owned()),
-        }
-    }
-    // Exactly one of the three ways to choose.
-    if [unreleased, unfinished, !chosen.is_empty()]
-        .iter()
-        .filter(|way| **way)
-        .count()
-        != 1
-    {
-        return Err(USAGE.to_owned());
-    }
+    let out = args
+        .out
+        .clone()
+        .unwrap_or_else(|| root.join("target").join("notes"));
+    let (unreleased, unfinished) = (args.unreleased, args.unfinished);
+    let chosen: Vec<&str> = args.package.iter().map(String::as_str).collect();
     let config = release_config(&root)?;
     let shipped = shipped(&config)?;
     if let Some(missing) = chosen
@@ -173,7 +167,14 @@ fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<Strin
     };
     let loader = loader_tag(&rev)?;
     let section = changelog::closed(&changelog, &package.version)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .ok_or_else(|| {
+            format!(
+                "{}: no changes under `## [{}]`",
+                path.display(),
+                package.version
+            )
+        })?;
     notes(&package.name, &loader, section)
 }
 
@@ -564,7 +565,7 @@ fn version_of(tag: &str) -> Option<VersionKey<'_>> {
 fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
     let version = loader.strip_prefix('v').unwrap_or(loader);
     let text = format!(
-        "{WARNING}\nBuilt for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
+        "{ALPHA_WARNING}\nBuilt for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
     );
     let length = text.chars().count();
     if length > MAX_BODY {

@@ -3,7 +3,6 @@
 //! builds a DLL, the developer mods of `devtools/` included.
 
 use std::path::Path;
-use std::process::Command;
 
 /// Where the platform crates come from.
 const PLATFORM: &str = "https://github.com/enshwick/enshwick";
@@ -17,19 +16,18 @@ const DEPENDENCY_TABLES: [&str; 3] = ["dependencies", "dev-dependencies", "build
 /// When `cargo metadata` does not run, or a manifest or
 /// `rust-toolchain.toml` does not read.
 pub(crate) fn check() -> Result<Vec<String>, String> {
-    let output = Command::new(crate::cargo())
-        .args(["metadata", "--format-version", "1", "--no-deps"])
-        .output()
-        .map_err(|error| format!("running cargo metadata: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
-    }
-    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("reading cargo metadata: {error}"))?;
+    let metadata = crate::metadata()?;
     let root = Path::new(metadata["workspace_root"].as_str().unwrap_or("."));
     let toolchain = toolchain(&manifest(&root.join("rust-toolchain.toml"))?)
         .ok_or("rust-toolchain.toml names no channel")?;
-    let mut problems = platform_pins(&manifest(&root.join("Cargo.toml"))?);
+    let workspace = manifest(&root.join("Cargo.toml"))?;
+    let shared = workspace
+        .get("workspace")
+        .and_then(|w| w.get("dependencies"))
+        .and_then(toml::Value::as_table)
+        .cloned()
+        .unwrap_or_default();
+    let mut problems = platform_pins(&workspace);
     let packages: Vec<&serde_json::Value> = metadata["packages"]
         .as_array()
         .into_iter()
@@ -48,15 +46,15 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         .iter()
         .filter(|package| {
             let manifest = Path::new(package["manifest_path"].as_str().unwrap_or_default());
-            crate::notes::for_players(
+            crate::commands::notes::for_players(
                 manifest.parent().unwrap_or(Path::new(".")),
                 builds_a_dll(package),
             )
         })
         .filter_map(|package| package["name"].as_str())
         .collect();
-    let release_config = crate::notes::release_config(root)?;
-    let held = crate::notes::held_back(&release_config);
+    let release_config = crate::commands::notes::release_config(root)?;
+    let held = crate::commands::notes::held_back(&release_config);
     problems.extend(release_entries(&members, &shipping, &release_config));
     for package in packages {
         let name = package["name"].as_str().unwrap_or_default();
@@ -64,7 +62,9 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         let dir = path.parent().unwrap_or(Path::new("."));
         problems.extend(feature_names(name, package));
         problems.extend(rust_version(name, package, &toolchain));
-        problems.extend(platform_outside_workspace(name, &manifest(path)?));
+        let own = manifest(path)?;
+        problems.extend(platform_outside_workspace(name, &own));
+        problems.extend(inline_workspace_dependency(name, &own, &shared));
         if !mods.contains(&name) {
             continue;
         }
@@ -86,7 +86,7 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
 /// A mod players get without a changelog, which its release notes come
 /// from (`cargo xtask notes`).
 fn changelog_problem(name: &str, dir: &Path, shipping: bool) -> Option<String> {
-    (shipping && !dir.join(crate::changelog::CHANGELOG).is_file())
+    (shipping && !dir.join(cargo_enshwick::changelog::CHANGELOG).is_file())
         .then(|| format!("{name}: no CHANGELOG.md; a mod players get keeps one by hand"))
 }
 
@@ -223,9 +223,9 @@ fn release_entries(members: &[&str], shipping: &[&str], entries: &[toml::Table])
     problems
 }
 
-/// A platform crate a member's `manifest` takes from git itself rather than
-/// from `[workspace.dependencies]`.
-fn platform_outside_workspace(name: &str, manifest: &toml::Table) -> Vec<String> {
+/// Every dependency of a member's `manifest`, of every kind and target, by
+/// name and spec.
+fn dependencies(manifest: &toml::Table) -> impl Iterator<Item = (&String, &toml::Value)> {
     let targets = manifest
         .get("target")
         .and_then(toml::Value::as_table)
@@ -240,6 +240,33 @@ fn platform_outside_workspace(name: &str, manifest: &toml::Table) -> Vec<String>
                 .filter_map(|key| table.get(*key).and_then(toml::Value::as_table))
         })
         .flatten()
+}
+
+/// A dependency of a member's `manifest` that `[workspace.dependencies]`
+/// lists (`shared`) but the member names with a version of its own, so two
+/// members could drift apart.
+fn inline_workspace_dependency(
+    name: &str,
+    manifest: &toml::Table,
+    shared: &toml::Table,
+) -> Vec<String> {
+    dependencies(manifest)
+        .filter(|(dependency, spec)| {
+            shared.contains_key(dependency.as_str())
+                && spec.get("workspace").and_then(toml::Value::as_bool) != Some(true)
+        })
+        .map(|(dependency, _)| {
+            format!(
+                "{name}: {dependency} is in [workspace.dependencies]; take it with `workspace = true` and add only features"
+            )
+        })
+        .collect()
+}
+
+/// A platform crate a member's `manifest` takes from git itself rather than
+/// from `[workspace.dependencies]`.
+fn platform_outside_workspace(name: &str, manifest: &toml::Table) -> Vec<String> {
+    dependencies(manifest)
         .filter(|(_, spec)| from_the_platform(spec))
         .map(|(dependency, _)| {
             format!(
@@ -304,7 +331,7 @@ fn installs_the_fake_host(dir: &Path) -> Result<bool, String> {
 
 /// Whether the Rust `text` names `FakeHost` outside comments and literals.
 fn names_the_fake_host(text: &str) -> bool {
-    crate::crate_rules::code(text)
+    cargo_enshwick::rules::code(text)
         .split(|c: char| !(c.is_alphanumeric() || c == '_'))
         .any(|word| word == "FakeHost")
 }
@@ -457,8 +484,30 @@ mod tests {
     }
 
     #[test]
+    fn a_workspace_dependency_named_with_its_own_version_is_a_problem() {
+        let shared: toml::Table = "toml = { version = \"=1.2.1\", default-features = false }\n\
+                                   serde = \"1\"\n"
+            .parse()
+            .unwrap();
+        let member: toml::Table = "[dependencies]\n\
+             toml = { workspace = true, features = [\"parse\"] }\n\
+             serde = { version = \"1\", features = [\"derive\"] }\n\
+             getrandom = \"0.4\"\n\
+             [target.'cfg(windows)'.dev-dependencies]\n\
+             toml = \"1.1.8\"\n"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            inline_workspace_dependency("a", &member, &shared),
+            [
+                "a: serde is in [workspace.dependencies]; take it with `workspace = true` and add only features",
+                "a: toml is in [workspace.dependencies]; take it with `workspace = true` and add only features",
+            ]
+        );
+    }
+    #[test]
     fn every_member_has_a_release_entry_and_only_a_shipped_mod_is_released() {
-        let entries = crate::notes::entries(
+        let entries = crate::commands::notes::entries(
             "[[package]]\nname = \"loot\"\n\
              [[package]]\nname = \"probe\"\nrelease = false\n\
              [[package]]\nname = \"tool\"\n\
@@ -533,7 +582,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let without = changelog_problem("m", &dir, true);
         let unshipped = changelog_problem("m", &dir, false);
-        std::fs::write(dir.join(crate::changelog::CHANGELOG), "## [Unreleased]\n").unwrap();
+        std::fs::write(
+            dir.join(cargo_enshwick::changelog::CHANGELOG),
+            "## [Unreleased]\n",
+        )
+        .unwrap();
         let with = changelog_problem("m", &dir, true);
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(without.is_some());

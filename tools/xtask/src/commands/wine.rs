@@ -15,7 +15,8 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{Step, WINDOWS_TARGET, say};
+use crate::commands::check::{Step, WINDOWS_TARGET};
+use crate::say;
 
 const IMAGE: &str = "enshwick-wine-test:trixie";
 const RUNNER_ENV: &str = "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER";

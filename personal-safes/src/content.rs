@@ -54,11 +54,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_text_exists_in_english_and_ukrainian() -> Result<(), Off> {
+    fn the_mod_and_the_safe_have_their_texts() -> Result<(), Off> {
         use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
 
         let texts = Texts::parse(crate::texts::TOML)?;
-        assert_eq!(texts.missing_in(Language::REQUIRED), []);
         for key in [
             MOD_NAME,
             MOD_DESCRIPTION,

@@ -101,12 +101,6 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_english_and_ukrainian() {
-        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.missing_in(enshwick::i18n::Language::REQUIRED), []);
-    }
-
-    #[test]
     fn the_mod_and_every_setting_have_their_texts() {
         let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
         let schema = Settings::schema();

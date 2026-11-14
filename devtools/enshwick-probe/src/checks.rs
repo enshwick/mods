@@ -24,6 +24,24 @@ const REPLICATION_WAIT: Duration = Duration::from_secs(1);
 const PING_AT: [f64; 3] = [-12345.0, -500.0, 777.0];
 /// When the probe looks at a teleported entity's components.
 const TELEPORT_PEEK: Duration = Duration::from_millis(500);
+/// How high above its source the probe spawns a copy, so it never spawns in
+/// the ground.
+pub(crate) const SPAWN_LIFT: f64 = 3.0;
+/// How far a placed entity may stand from the place asked on any axis when
+/// nothing moved it.
+const PLACE_SLACK: f64 = 0.5;
+/// How far sideways a copy that fell may step before it stands.
+const LANDING_STEP: f64 = 2.0;
+
+/// Whether an entity placed `SPAWN_LIFT` above the ground at `at` stands
+/// where it landed: where a player is near, as on a hosted client, the game
+/// moves it at once, so it falls up to the lift and may take a step sideways;
+/// it never rises.
+fn landed(p: [f64; 3], at: [f64; 3]) -> bool {
+    let fell = at[1] - p[1];
+    let step = (p[0] - at[0]).hypot(p[2] - at[2]);
+    (-PLACE_SLACK..=SPAWN_LIFT + PLACE_SLACK).contains(&fell) && step <= LANDING_STEP
+}
 
 /// What the probe keeps per world: how often it checked it.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -190,7 +208,7 @@ impl Checks {
             enshwick::info!("SKIP vitals: no actor with replicated health in the loaded world");
         }
         for placed in actors.iter().take(SAMPLE) {
-            self.compare(placed.entity);
+            Self::compare(self.world, self.network_health, placed.entity);
         }
         match self.world.players().first() {
             Some(player) => match self.world.progress(player.entity) {
@@ -322,7 +340,7 @@ impl Checks {
         }
     }
 
-    /// Spawns a copy of an entity in the world three metres above it,
+    /// Spawns a copy of an entity in the world [`SPAWN_LIFT`] above it,
     /// preferring a survivor or an animal, then checks it arrived, writes its
     /// health, teleports it and destroys it.
     fn spawns(&self) {
@@ -336,7 +354,7 @@ impl Checks {
             enshwick::info!("SKIP spawns: no entity with a template in the world");
             return;
         };
-        self.spawn(template, [x, y + 3.0, z]);
+        self.spawn(template, [x, y + SPAWN_LIFT, z]);
     }
 
     /// Spawns one entity of `template` at `at` and follows it through
@@ -368,7 +386,7 @@ impl Checks {
                 return;
             }
             match world.position(entity) {
-                Some(p) if (0..3).all(|i| (p[i] - at[i]).abs() < 0.5) => {
+                Some(p) if landed(p, at) => {
                     pass(&format!("spawned entity {entity} stands at {p:?}"));
                 }
                 other => fail(&format!(
@@ -407,7 +425,7 @@ impl Checks {
             });
             scheduler.after(DESTROY_WAIT, move || {
                 match world.position(entity) {
-                    Some(p) if (p[0] - to[0]).abs() < 0.5 => {
+                    Some(p) if landed(p, to) => {
                         pass(&format!("teleported entity {entity} stands at {p:?}"));
                     }
                     other => fail(&format!(
@@ -432,23 +450,20 @@ impl Checks {
 
     /// Compares `entity`'s vitals with the health the server replicates,
     /// and logs its time in the shroud.
-    fn compare(&self, entity: Entity) {
+    fn compare(world: World, network_health: ComponentType, entity: Entity) {
         enshwick::info!(
             "shroud of entity {}: {:?}, in it {:?}; skills {:?}",
             entity,
-            self.world.shroud_time(entity),
-            self.world.in_shroud(entity),
-            self.world.skills(entity)
+            world.shroud_time(entity),
+            world.in_shroud(entity),
+            world.skills(entity)
         );
-        let vitals = self.world.vitals(entity);
-        let replicated = self
-            .world
-            .component(entity, self.network_health)
-            .map(|data| {
-                // SAFETY: NetworkHealth is health then its maximum, two u32,
-                // read at once on the game thread.
-                unsafe { data.cast::<[u32; 2]>().read_unaligned() }
-            });
+        let vitals = world.vitals(entity);
+        let replicated = world.component(entity, network_health).map(|data| {
+            // SAFETY: NetworkHealth is health then its maximum, two u32,
+            // read at once on the game thread.
+            unsafe { data.cast::<[u32; 2]>().read_unaligned() }
+        });
         match (vitals, replicated) {
             (Some(v), Some([health, max]))
                 if v.health.current.cast_unsigned() == health
@@ -459,6 +474,9 @@ impl Checks {
             (Some(v), None) => pass(&format!(
                 "vitals of entity {entity}: {v:?}, none replicated"
             )),
+            (None, Some([0, 0])) => enshwick::info!(
+                "SKIP vitals of entity {entity}: none, and its replicated health is 0 of 0"
+            ),
             (v, r) => fail(&format!(
                 "vitals of entity {entity}: {v:?}, replicated {r:?}"
             )),
@@ -485,7 +503,7 @@ impl Checks {
 
     /// The `vitals` action: an entity's vitals and progress.
     pub(crate) fn vitals_of(&self, entity: Entity) -> String {
-        self.compare(entity);
+        Self::compare(self.world, self.network_health, entity);
         format!(
             "vitals {:?}, progress {:?}",
             self.world.vitals(entity),
@@ -493,10 +511,10 @@ impl Checks {
         )
     }
 
-    /// The `spawn` action: a copy of an entity three metres above it.
+    /// The `spawn` action: a copy of an entity [`SPAWN_LIFT`] above it.
     pub(crate) fn spawn_copy(&self, entity: Entity) -> String {
         match (self.world.template(entity), self.world.position(entity)) {
-            (Some(template), Some([x, y, z])) => self.spawn(template, [x, y + 3.0, z]),
+            (Some(template), Some([x, y, z])) => self.spawn(template, [x, y + SPAWN_LIFT, z]),
             _ => format!("entity {entity} has no template or place"),
         }
     }
@@ -635,16 +653,43 @@ mod tests {
     use std::sync::OnceLock;
 
     use enshwick::abi::Status;
+    use enshwick::ecs::ComponentType;
     use enshwick::world::{World, WritableType};
     use enshwick::{Entity, Load, Mod, Off};
 
-    use super::Checks;
+    use super::{Checks, landed};
+
+    #[test]
+    fn a_spawned_entity_counts_as_landed_within_the_lift_of_the_place_asked() {
+        let at = [3807.37, 941.25, 1133.87];
+        assert!(
+            landed(at, at),
+            "unmoved, as on a server with no player near"
+        );
+        assert!(
+            landed([3808.48, 939.34, 1134.75], at),
+            "fallen and stepped, as on a hosted client"
+        );
+        assert!(
+            landed([3808.0, 938.25, 1133.87], at),
+            "fallen the whole lift, then a step"
+        );
+        assert!(!landed([3812.0, 941.25, 1133.87], at), "moved past a step");
+        assert!(
+            !landed([3807.37, 944.15, 1133.87], at),
+            "risen, which no fall does"
+        );
+        assert!(
+            !landed([3807.37, 937.65, 1133.87], at),
+            "sunk below the ground it was lifted from"
+        );
+    }
 
     // The replicated health, by the engine name the probe resolves it with.
     // ast-grep-ignore: engine-names-stay-in-loader
     const NETWORK_HEALTH: &str = "keen::ecs::NetworkHealth";
 
-    static RESOLVED: OnceLock<(World, WritableType)> = OnceLock::new();
+    static RESOLVED: OnceLock<(World, WritableType, ComponentType)> = OnceLock::new();
 
     struct Copies;
 
@@ -652,7 +697,8 @@ mod tests {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
             let world = load.world()?;
             let copy = WritableType::resolve(load, NETWORK_HEALTH)?;
-            let _first = RESOLVED.set((world, copy));
+            let health = ComponentType::resolve(load, NETWORK_HEALTH)?;
+            let _first = RESOLVED.set((world, copy, health));
             Ok(Self)
         }
     }
@@ -679,7 +725,7 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        let (world, copy) = RESOLVED.get().unwrap();
+        let (world, copy, _) = RESOLVED.get().unwrap();
         Checks::copy_write(*world, *copy, Entity(3));
         let logs = loader.logs();
         assert!(
@@ -688,6 +734,30 @@ mod tests {
             "{logs:?}"
         );
         assert_eq!(loader.component_bytes(Entity(3), 7), Some(vec![0; 8]));
+    }
+
+    #[test]
+    fn an_actor_without_vitals_at_zero_of_zero_health_is_skipped_not_passed() {
+        let loader = enshwick::test::FakeHost::new()
+            .world()
+            .type_hash(NETWORK_HEALTH, 7)
+            .type_size(NETWORK_HEALTH, 8)
+            .component(Entity(3), 7, &[0; 8])
+            .install();
+        // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        let (world, _, health) = RESOLVED.get().unwrap();
+        Checks::compare(*world, *health, Entity(3));
+        let logs = loader.logs();
+        assert!(
+            logs.iter()
+                .any(|(_, line)| line.starts_with("SKIP vitals of entity ")
+                    && line.ends_with("replicated health is 0 of 0")),
+            "{logs:?}"
+        );
+        assert!(!logs.iter().any(|(_, line)| line.starts_with("PASS vitals")));
     }
 
     #[test]
@@ -719,7 +789,7 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        let (world, _) = RESOLVED.get().unwrap();
+        let (world, _, _) = RESOLVED.get().unwrap();
         let ann = world.players().remove(0);
         let count = crate::NOTICES;
         assert_eq!(Checks::burst(*world, &ann), count as usize);

@@ -165,10 +165,24 @@ mod tests {
 
     /// Runs server steps of 100 ms for `time`.
     fn run_for(loader: &Installed, time: Duration) {
-        let step = Duration::from_millis(100);
+        run_in_steps(loader, time, Duration::from_millis(100));
+    }
+
+    /// Runs server steps of `step` for `time`, and fails if the scripts
+    /// passed their budget of time per real second.
+    ///
+    /// The fake host runs minutes of server time within one real second, so a
+    /// long wait in fine steps can pass that budget on a slow machine.
+    #[track_caller]
+    fn run_in_steps(loader: &Installed, time: Duration, step: Duration) {
         for _ in 0..time.as_millis() / step.as_millis() {
             let _handlers = loader.tick(step);
         }
+        assert!(
+            !logged(loader, "past their budget"),
+            "the scripts ran past their budget; take coarser steps: {:#?}",
+            loader.logs()
+        );
     }
 
     fn logged(loader: &Installed, text: &str) -> bool {
@@ -403,7 +417,7 @@ mod tests {
             loader.say(ANN, "hello probe").as_deref(),
             Some("hello probe")
         );
-        run_for(&loader, Duration::from_secs(301));
+        run_in_steps(&loader, Duration::from_secs(301), Duration::from_secs(1));
         assert_logged(&loader, "no ChatTyped within 300 s");
         assert!(
             !logged(&loader, "scenario chat: step 1"),

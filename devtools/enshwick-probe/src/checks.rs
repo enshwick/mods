@@ -24,6 +24,16 @@ const REPLICATION_WAIT: Duration = Duration::from_secs(1);
 const PING_AT: [f64; 3] = [-12345.0, -500.0, 777.0];
 /// When the probe looks at a teleported entity's components.
 const TELEPORT_PEEK: Duration = Duration::from_millis(500);
+/// How high above its source the probe spawns a copy, so it never spawns in
+/// the ground.
+const SPAWN_LIFT: f64 = 3.0;
+
+/// Whether an entity spawned at `at` stands where it landed: within the lift
+/// of the place asked, since where a player is near, as on a hosted client,
+/// the game moves it at once, so it falls to the ground and may take a step.
+fn landed(p: [f64; 3], at: [f64; 3]) -> bool {
+    (0..3).map(|i| (p[i] - at[i]).powi(2)).sum::<f64>() <= SPAWN_LIFT.powi(2)
+}
 
 /// What the probe keeps per world: how often it checked it.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -336,7 +346,7 @@ impl Checks {
             enshwick::info!("SKIP spawns: no entity with a template in the world");
             return;
         };
-        self.spawn(template, [x, y + 3.0, z]);
+        self.spawn(template, [x, y + SPAWN_LIFT, z]);
     }
 
     /// Spawns one entity of `template` at `at` and follows it through
@@ -368,7 +378,7 @@ impl Checks {
                 return;
             }
             match world.position(entity) {
-                Some(p) if (0..3).all(|i| (p[i] - at[i]).abs() < 0.5) => {
+                Some(p) if landed(p, at) => {
                     pass(&format!("spawned entity {entity} stands at {p:?}"));
                 }
                 other => fail(&format!(
@@ -459,6 +469,9 @@ impl Checks {
             (Some(v), None) => pass(&format!(
                 "vitals of entity {entity}: {v:?}, none replicated"
             )),
+            (None, Some([0, 0])) => pass(&format!(
+                "vitals of entity {entity}: none, and its replicated health is 0 of 0"
+            )),
             (v, r) => fail(&format!(
                 "vitals of entity {entity}: {v:?}, replicated {r:?}"
             )),
@@ -496,7 +509,7 @@ impl Checks {
     /// The `spawn` action: a copy of an entity three metres above it.
     pub(crate) fn spawn_copy(&self, entity: Entity) -> String {
         match (self.world.template(entity), self.world.position(entity)) {
-            (Some(template), Some([x, y, z])) => self.spawn(template, [x, y + 3.0, z]),
+            (Some(template), Some([x, y, z])) => self.spawn(template, [x, y + SPAWN_LIFT, z]),
             _ => format!("entity {entity} has no template or place"),
         }
     }
@@ -638,7 +651,24 @@ mod tests {
     use enshwick::world::{World, WritableType};
     use enshwick::{Entity, Load, Mod, Off};
 
-    use super::Checks;
+    use super::{Checks, landed};
+
+    #[test]
+    fn a_spawned_entity_counts_as_landed_within_the_lift_of_the_place_asked() {
+        let at = [3807.37, 941.25, 1133.87];
+        assert!(
+            landed(at, at),
+            "unmoved, as on a server with no player near"
+        );
+        assert!(
+            landed([3808.48, 939.34, 1134.75], at),
+            "fallen and stepped, as on a hosted client"
+        );
+        assert!(
+            !landed([3812.0, 941.25, 1133.87], at),
+            "moved past the lift"
+        );
+    }
 
     // The replicated health, by the engine name the probe resolves it with.
     // ast-grep-ignore: engine-names-stay-in-loader

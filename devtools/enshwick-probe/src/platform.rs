@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use enshwick::abi::HookFlags;
+use enshwick::abi::{HookFlags, Side};
 use enshwick::{Next, hook};
 
 use enshwick::altars::{Altars, ZoneSizes, base_limit, grouping, set_base_cap};
@@ -100,6 +100,16 @@ fn report_found<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
     match result {
         Ok(true) => pass(what),
         Ok(false) => fail(&format!("{what}: not found on this build")),
+        Err(why) => fail(&format!("{what}: {why}")),
+    }
+}
+
+/// Logs `PASS` for `Ok(false)`, where the API promises the loader links
+/// nothing on this side; `Ok(true)` or an error is a `FAIL`.
+fn report_absent<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
+    match result {
+        Ok(false) => pass(&format!("{what}: none on this side, as promised")),
+        Ok(true) => fail(&format!("{what}: linked on this side")),
         Err(why) => fail(&format!("{what}: {why}")),
     }
 }
@@ -202,10 +212,16 @@ impl PlatformChecks {
         report("reflection: type size", load.type_size(shape));
         report("symbol", load.symbol(SYMBOL).map(|_| ()));
         report("code section bytes", load.code().map(<[u8]>::len));
-        report_found(
-            "task worker caps found",
-            load.cap_task_workers(TaskWorkers::at_most(u8::MAX)),
-        );
+        let dedicated = enshwick::host().is_some_and(|host| host.build().side == Side::SERVER);
+        let caps = load.cap_task_workers(TaskWorkers::at_most(u8::MAX));
+        if dedicated {
+            report_found("task worker caps found", caps);
+        } else {
+            report_absent(
+                "task worker caps, which a client's task system takes before the hooks arm",
+                caps,
+            );
+        }
         report_found("base limit raised", load.raise_base_limit());
         report_found(
             "base limits requested",

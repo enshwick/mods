@@ -73,7 +73,8 @@ Ten seconds after the world has loaded, and again on the `check` action:
   save on disk was written and its size as each one ends, a player's saves
   in a hosted game included;
 - the platform's other reads: the system its start hooked, run over five
-  seconds with its caller's frame read; the task worker caps, the event
+  seconds with its caller's frame read; the task worker caps, linked on a
+  dedicated server and on a client none, as the API promises; the event
   loop's and the server loop's waits counted over five seconds; that this
   process hosts, the archive's version, the workshop recipe limit and the
   reflected types; resource keys, a resource read from the archive and as

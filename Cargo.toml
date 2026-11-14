@@ -17,6 +17,11 @@ members = [
 ]
 resolver = "3"
 
+# The loader release the next release of the mods builds on and `release`
+# pins: `cargo xtask built-for` names it in the release pull request.
+[workspace.metadata.release]
+loader = "v1.0.0-alpha.15"
+
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.
 enshwick = { git = "https://github.com/enshwick/enshwick", rev = "079514f2cd30e660b4454696e29c6a8e618f5d62" }

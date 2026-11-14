@@ -11,6 +11,7 @@ use std::process::Command;
 
 use cargo_enshwick::changelog::{self, ALPHA_WARNING, CHANGELOG};
 
+use crate::commands::release::{Loader, built_for};
 use crate::{Package, packages, say};
 
 /// The command line `notes` takes: one way to choose the mods and where to
@@ -23,6 +24,10 @@ pub(crate) struct Args {
     /// out.
     #[arg(long)]
     out: Option<PathBuf>,
+    /// Refuses unless the platform is pinned to the loader the release set
+    /// is for, as the run that builds the release pins it.
+    #[arg(long)]
+    pinned: bool,
 }
 
 /// Exactly one way to choose the mods.
@@ -78,8 +83,8 @@ const MAX_BODY: usize = 125_000;
 /// not finished with `--unfinished`, and `releases.json` listing them; the
 /// files there are the mods a release takes, so a run that refuses one
 /// writes none. With either flag, a released mod built for another loader
-/// than the pinned one is refused too: a loader alpha releases every mod of
-/// the release set.
+/// than the one `[workspace.metadata.release]` names is refused too: a
+/// loader alpha releases every mod of the release set.
 pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let root = root();
     let out = args
@@ -96,12 +101,18 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     {
         return Err(format!("{missing} is not a mod players get"));
     }
-    let rev = pinned_rev(&std::fs::read_to_string(root.join(MANIFEST)).map_err(|e| e.to_string())?)
-        .ok_or_else(|| format!("Cargo.toml: no `rev` of {API}"))?;
+    let manifest = std::fs::read_to_string(root.join(MANIFEST)).map_err(|e| e.to_string())?;
+    let loader = Loader::of_release(&manifest)?;
+    if args.pinned && pinned_rev(&manifest).as_deref() != Some(&loader.commit) {
+        return Err(format!(
+            "the platform is not pinned to {0}, the loader [workspace.metadata.release] names for the release set: release for {0}, or run release-pr for the other loader first",
+            loader.tag
+        ));
+    }
     clear(&out, &shipped)?;
     let way = args.choice.way();
     let remote = GitHub::read()?;
-    let Some(mods) = choose(shipped, way, &rev, &remote)? else {
+    let Some(mods) = choose(shipped, way, &loader.commit, &remote)? else {
         return Ok(false);
     };
     if mods.is_empty() {
@@ -111,8 +122,8 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let mut ok = true;
     let mut written = Vec::new();
     for package in &mods {
-        match mod_notes(package, &rev, &remote) {
-            Ok(text) => written.push((package, text)),
+        match mod_notes(package, &loader, &remote) {
+            Ok((text, loader)) => written.push((package, text, loader)),
             Err(error) => {
                 say(&error);
                 ok = false;
@@ -124,11 +135,12 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     }
     let releases = written
         .iter()
-        .map(|(package, _)| {
+        .map(|(package, _, loader)| {
             Ok(serde_json::json!({
                 "tag": tag_of(package),
                 "package_name": package.name,
                 "version": package.version,
+                "loader": loader,
                 "title": title(&config, package)?,
                 "files": built_files(&package.name),
                 "sums": SUMS,
@@ -136,7 +148,7 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
         })
         .collect::<Result<Vec<serde_json::Value>, String>>()?;
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
-    for (package, text) in &written {
+    for (package, text, _) in &written {
         let file = out.join(format!("{}.md", package.name));
         std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
         say(&format!("wrote {}", file.display()));
@@ -180,27 +192,31 @@ fn releasable(package: &Package) -> Result<(), String> {
     Ok(())
 }
 
-/// The notes of the package's version, built on the pinned `rev`; a version
-/// a stopped run tagged is released as tagged, so its changelog and loader
-/// come from the tag, which `assets` builds.
-fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<String, String> {
+/// The notes of the package's version and the loader tag it is built on,
+/// the release set's `loader`; a version a stopped run tagged is released
+/// as tagged, so its changelog and loader come from the tag, which `assets`
+/// builds.
+fn mod_notes(
+    package: &Package,
+    loader: &Loader,
+    remote: &impl Remote,
+) -> Result<(String, String), String> {
     releasable(package)?;
     let path = package.dir.join(CHANGELOG);
     let tag = tag_of(package);
-    let (changelog, rev) = if remote.released(&tag) {
+    let (changelog, loader) = if remote.released(&tag) {
         let rev =
             built_on(&tag)?.ok_or_else(|| format!("{tag}: Cargo.toml has no `rev` of {API}"))?;
         let dir = package.dir.to_string_lossy();
         (
             git(&["-C", &dir, "show", &format!("{tag}:./{CHANGELOG}")])?,
-            rev,
+            loader_tag(&rev)?,
         )
     } else {
         let changelog =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        (changelog, rev.to_owned())
+        (changelog, loader.tag.clone())
     };
-    let loader = loader_tag(&rev)?;
     let section = changelog::closed(&changelog, &package.version)
         .map_err(|e| format!("{}: {e}", path.display()))?
         .ok_or_else(|| {
@@ -210,7 +226,7 @@ fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<Strin
                 package.version
             )
         })?;
-    notes(&package.name, &loader, section)
+    Ok((notes(&package.name, &loader, section)?, loader))
 }
 
 /// How a run chooses the mods it takes.
@@ -225,7 +241,7 @@ enum Way<'a> {
 }
 
 /// The shipped mods `way` takes; `None` when a released mod that is not
-/// taken was built for another loader than `rev`, said on stderr.
+/// taken was built for another loader commit than `rev`, said on stderr.
 fn choose(
     shipped: Vec<Package>,
     way: Way<'_>,
@@ -245,7 +261,7 @@ fn choose(
             mods.push(package);
         } else if !matches!(way, Way::Chosen(_)) && built_on(&tag)?.as_deref() != Some(rev) {
             say(&format!(
-                "{tag} was built for another loader than the pinned one; run `cargo xtask pin <loader tag>` so release-pr bumps it"
+                "{tag} was built for another loader than the release set's; run release-pr for this loader so it bumps the mod"
             ));
             ok = false;
         }
@@ -537,7 +553,7 @@ fn loader_tag(rev: &str) -> Result<String, String> {
     let listing = git(&["ls-remote", "--tags", PLATFORM, "refs/tags/v*"])?;
     release_at(&listing, rev).map(str::to_owned).ok_or_else(|| {
         format!(
-            "{API} is pinned to {rev}, which no loader release tags; run `cargo xtask pin <loader tag>` with the loader alpha the mods are built for"
+            "{API} is pinned to {rev}, which no loader release tags; pin the loader alpha the mods are built for with `cargo xtask pin <loader tag>`"
         )
     })
 }
@@ -597,8 +613,16 @@ fn version_of(tag: &str) -> Option<VersionKey<'_>> {
     Some((major, minor, patch, pre.is_none(), identifiers))
 }
 
+/// The release notes of `package` built for the `loader` tag; refused when
+/// its `changes` name another loader, which only a hand edit leaves, since
+/// `built-for` refuses to move on while such a version waits.
 fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
     let version = loader.strip_prefix('v').unwrap_or(loader);
+    if let Some(named) = built_for::named(changes).filter(|named| *named != version) {
+        return Err(format!(
+            "{package}: its changes say built for Enshwick {named}, but it builds on {loader}; name v{named} in [workspace.metadata.release] to release it on that loader, or correct the line"
+        ));
+    }
     let text = format!(
         "{ALPHA_WARNING}\nBuilt for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
     );
@@ -903,6 +927,13 @@ mod tests {
         ));
         assert!(text.contains("`enshwick-game-rates.zip`"));
         assert!(text.ends_with("## What's new\n\n- More loot.\n"));
+    }
+
+    #[test]
+    fn notes_naming_another_loader_than_the_build_are_refused() {
+        let changes = "### Changed\n\n- Built for Enshwick 1.0.0-alpha.15.\n";
+        assert!(notes("m", "v1.0.0-alpha.15", changes).is_ok());
+        assert!(notes("m", "v1.0.0-alpha.16", changes).is_err());
     }
 
     #[test]

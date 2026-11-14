@@ -1,22 +1,32 @@
 # Release pull requests and releases with release-plz (release-plz.toml), run
-# by hand. Until 1.0 each release is an alpha, a GitHub prerelease.
-# `release-pr`, on main, opens or updates the release pull request, which
-# bumps the mods of the release set (the entries of release-plz.toml without
-# `release = false`) whose folders changed (`cargo xtask pin` changes the
-# folder of each of them when the loader moves), then closes each bumped
+# by hand for the loader release named in `loader`. Until 1.0 each release is
+# an alpha, a GitHub prerelease. main follows the platform's main, as
+# Renovate moves it; only the commit a release tags is pinned to the loader.
+# `release-pr`, on main, names the loader in Cargo.toml's
+# `[workspace.metadata.release]` and in the changelog of each mod of the
+# release set (the entries of release-plz.toml without `release = false`)
+# built for another one (`cargo xtask built-for`), commits that on top of
+# main, and opens or updates the release pull request from there, which
+# bumps the mods of the set whose folders changed, then closes each bumped
 # mod's changelog on its branch with `cargo xtask close`, so it is ready to
-# merge. `release`, on main, releases every mod of the set whose version has
-# no finished release yet: it refuses before tagging anything when a mod's
-# notes are not ready, then release-plz tags each new version `<package>-v<version>`, and
-# each such mod gets its prerelease with the notes of `cargo xtask notes`,
-# also when release-plz tagged it and stopped, so running `release` again
-# finishes a run that stopped partway; one job per released mod builds only
-# that mod from its tag and attaches its zip, PDB, SBOM, their sums and a
-# build provenance attestation of each, which players check with
-# `gh attestation verify <file> --owner enshwick`. On Windows each attached DLL must report the version
-# of its tag, and the docs site builds again for the new downloads. `build`,
-# from any branch, writes the notes and builds the files a release would, and
-# publishes nothing.
+# merge. `release`, on main, pins the platform to the loader
+# (`cargo xtask pin`), which must be the one the release pull request
+# named, and releases every mod of the set whose version has no finished
+# release yet: it refuses before tagging anything when a mod's notes are
+# not ready or the pinned tree does not build, then commits the pin on top
+# of main, on no branch,
+# and release-plz tags that commit for each new version
+# `<package>-v<version>`; each such mod gets its prerelease with the notes
+# of `cargo xtask notes`, also when release-plz tagged it and stopped, so
+# running `release` again finishes a run that stopped partway; one job per
+# released mod builds only that mod from its tag and attaches its zip, PDB,
+# SBOM, their sums and a build provenance attestation of each, which
+# players check with `gh attestation verify <file> --owner enshwick`. On
+# Windows each attached DLL must report the version of its tag, read by the
+# loader release's own cargo-enshwick, and the docs site builds again for
+# the new downloads. `build`, from any branch, names and pins the loader,
+# writes the notes and builds the files a release would, and publishes
+# nothing.
 name: release-plz
 
 on:
@@ -30,6 +40,10 @@ on:
           - release-pr
           - release
         default: build
+      loader:
+        description: The loader release the mods are built for, such as v1.0.0-alpha.15; release takes the one release-pr named
+        type: string
+        required: true
 
 permissions: {}
 
@@ -60,15 +74,43 @@ jobs:
         with:
           gh: true
 
-      # A release goes out with its notes or not at all: a mod with changes
-      # still under Unreleased, a released mod built for another loader, or
-      # a platform pin no loader alpha tags, stops the run before anything is
-      # tagged. A mod tagged by a run that stopped partway is taken again.
+      - name: The loader's tag
+        id: loader
+        env:
+          LOADER: ${{ inputs.loader }}
+        run: echo "tag=v${LOADER#v}" >> "$GITHUB_OUTPUT"
+
+      # The release pull request names the loader in Cargo.toml, as the one
+      # `release` builds on, and a mod of the release set built for another
+      # loader gets a line naming this one, so release-plz bumps it.
+      - name: Name the loader
+        if: inputs.command == 'release-pr'
+        env:
+          LOADER: ${{ steps.loader.outputs.tag }}
+        run: cargo xtask built-for "$LOADER"
+
+      - name: Pin the loader
+        if: inputs.command == 'release'
+        env:
+          LOADER: ${{ steps.loader.outputs.tag }}
+        run: cargo xtask pin "$LOADER"
+
+      # A release goes out with its notes or not at all: a pin to another
+      # loader than the release pull request named, a mod with changes still
+      # under Unreleased, a released mod built for another loader, or notes
+      # naming another loader, stops the run before anything is tagged. A
+      # mod tagged by a run that stopped partway is taken again.
       - name: Notes of the mods to release
         if: inputs.command == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo xtask notes --unfinished --out "$RUNNER_TEMP/notes"
+        run: cargo xtask notes --unfinished --pinned --out "$RUNNER_TEMP/notes"
+
+      # main's checks build on the platform's main, never on the loader:
+      # the tree the tags name must build on it before anything is tagged.
+      - name: Build on the loader
+        if: inputs.command == 'release'
+        run: cargo check --workspace --locked
 
       # The app pushes the release branch and tags, makes the releases and
       # opens the release pull request, which then runs CI as any other; the
@@ -82,6 +124,17 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-pull-requests: write
+
+      # release-plz tags and branches from HEAD through the API, so the
+      # changes above go on top of main as a commit on GitHub that no branch
+      # names: the release pull request carries the loader and the changelog
+      # lines into main, while the pin stays only in the commit the tags
+      # name.
+      - name: Commit the changes on GitHub
+        uses: ./.github/actions/commit-on-github
+        with:
+          token: ${{ steps.token.outputs.token }}
+          message: "${{ inputs.command == 'release' && format('chore(release): build on enshwick {0}', steps.loader.outputs.tag) || format('fix(deps): build the release set for enshwick {0}', steps.loader.outputs.tag) }}"
 
       # On `release` it only pushes the tags (release-plz.toml); the next
       # step makes the releases.
@@ -154,7 +207,7 @@ jobs:
         release: ${{ fromJSON(needs.release-plz.outputs.releases) }}
     # A fresh machine, as above.
     runs-on: ubuntu-26.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     permissions:
       contents: write
       id-token: write
@@ -175,15 +228,14 @@ jobs:
           ref: ${{ matrix.release.tag }}
           persist-credentials: false
 
-      # The Windows SDK and CRT that cargo-xwin downloads, 7 to 9 minutes
+      # The Windows SDK and CRT that cargo-xwin downloads, over 12 minutes
       # from Microsoft on a hosted runner: Microsoft's files only, no build
-      # output, under a key of their own that only a release from main saves.
+      # output, as the check of each push to main saves them (check.yml).
       - name: Restore the Windows SDK
-        id: xwin
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/xwin
-          key: xwin-release-${{ runner.os }}-0.23.1-v1
+          key: xwin-${{ runner.os }}-0.23.1-v1
       - uses: ./.github/actions/setup-rust
         with:
           gh: true
@@ -193,14 +245,6 @@ jobs:
         with:
           packages: ${{ matrix.release.package_name }}
           out: ${{ env.OUT }}
-
-      # Beside other mods' jobs only the first save wins, which is enough.
-      - name: Save the Windows SDK
-        if: steps.xwin.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.tool_cache }}/xwin
-          key: xwin-release-${{ runner.os }}-0.23.1-v1
 
       - name: Sums
         working-directory: ${{ env.OUT }}
@@ -240,7 +284,7 @@ jobs:
       matrix:
         release: ${{ fromJSON(needs.release-plz.outputs.releases) }}
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     defaults:
@@ -250,24 +294,17 @@ jobs:
       TAG: ${{ matrix.release.tag }}
       PACKAGE: ${{ matrix.release.package_name }}
       VERSION: ${{ matrix.release.version }}
-      CARGO_TERM_COLOR: always
+      LOADER: ${{ matrix.release.loader }}
+      CLI: cargo-enshwick-x86_64-pc-windows-msvc.exe
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ matrix.release.tag }}
-          persist-credentials: false
-
-      - name: Install the toolchain
+      # The CLI of the loader release the mod was built on, as that release
+      # attaches it, checked against the release's build provenance.
+      - name: The loader's cargo-enshwick
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          rustup toolchain install
-          rustc --version
-
-      # The CLI of the platform commit the mod was built on.
-      - name: Install cargo-enshwick
-        run: |
-          rev=$(sed -n 's/^enshwick = .*rev = "\([0-9a-f]\{40\}\)".*/\1/p' Cargo.toml)
-          test -n "$rev"
-          cargo install --locked --git https://github.com/enshwick/enshwick --rev "$rev" cargo-enshwick
+          gh release download "$LOADER" --repo enshwick/enshwick --pattern "$CLI" --dir "$RUNNER_TEMP/bin"
+          gh attestation verify "$RUNNER_TEMP/bin/$CLI" --repo enshwick/enshwick
 
       - name: The released DLL's version
         env:
@@ -278,7 +315,8 @@ jobs:
           # The archive holds one mod folder, mods/<id>/, named by the mod's id.
           dlls=("$RUNNER_TEMP"/release/mods/*/"$PACKAGE.dll")
           test "${#dlls[@]}" -eq 1 && test -f "${dlls[0]}"
-          cargo enshwick manifest "${dlls[0]}" --expect-version "$VERSION"
+          # Run by its own name, it takes the subcommand cargo would pass.
+          "$RUNNER_TEMP/bin/$CLI" enshwick manifest "${dlls[0]}" --expect-version "$VERSION"
 
   # The site links each mod's newest release, read when it builds. It builds
   # on Cloudflare Workers Builds, whose deploy hook builds its main again.
@@ -302,7 +340,7 @@ jobs:
     if: inputs.command == 'build'
     # A fresh machine, as above, without the release environment's secrets.
     runs-on: ubuntu-26.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -310,20 +348,29 @@ jobs:
         with:
           persist-credentials: false
 
+      # main's Windows SDK, as in `assets`.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/xwin
-          key: xwin-release-${{ runner.os }}-0.23.1-v1
+          key: xwin-${{ runner.os }}-0.23.1-v1
       - uses: ./.github/actions/setup-rust
         with:
           gh: true
           tools: cargo-cyclonedx@0.5.10,cargo-auditable@0.7.7
 
+      # As `release-pr` and `release` would, from this branch.
+      - name: Name and pin the loader
+        env:
+          LOADER: ${{ inputs.loader }}
+        run: |
+          cargo xtask built-for "$LOADER"
+          cargo xtask pin "$LOADER"
+
       - name: Notes
         id: notes
         continue-on-error: true
         run: |
-          cargo xtask notes --unreleased --out "$RUNNER_TEMP/notes"
+          cargo xtask notes --unreleased --pinned --out "$RUNNER_TEMP/notes"
           packages=$(find "$RUNNER_TEMP/notes" -name '*.md' -printf '%f\n' 2> /dev/null | sed 's/\.md$//' | sort | tr '\n' ' ')
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
 

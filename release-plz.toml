@@ -1,7 +1,8 @@
 # release-plz: each mod's version from the conventional commits that touch
 # its folder, so a change to one mod releases only it. The entries without
 # `release = false` are the release set: a new loader alpha releases each of
-# them, as `cargo xtask pin` adds a line to its changelog, since release-plz
+# them, as `cargo xtask built-for` adds a line to its changelog in the
+# `release-pr` run (release-plz.yml), since release-plz
 # does not count a changed git `rev` as a change. Every workspace member has
 # an entry here; `cargo xtask check` refuses one without. Each mod is tagged
 # `<package>-v<version>` and gets its own GitHub release. Its CHANGELOG.md is
@@ -42,8 +43,8 @@ pr_body = """
 name = "enshwick-admin-tools"
 git_release_name = "Admin Tools {{ version }}"
 
-# These player mods are outside the release set: they build on the pinned
-# loader and keep their versions and changelogs.
+# These player mods are outside the release set: they build on the
+# platform main builds on and keep their versions and changelogs.
 [[package]]
 name = "enshwick-area-loot"
 release = false

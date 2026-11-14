@@ -35,6 +35,12 @@ enum Task {
         /// The loader's tag, such as `v1.0.0-alpha.14`.
         tag: String,
     },
+    /// Names a loader tag as the next release's, in the root manifest and in
+    /// the changelog of each mod of the release set built for another one.
+    BuiltFor {
+        /// The loader's tag, such as `v1.0.0-alpha.14`.
+        tag: String,
+    },
     /// Closes the changelog of each mod about to be released.
     Close(commands::release::CloseArgs),
     /// Runs one Windows executable under Wine; cargo calls this as the
@@ -54,6 +60,7 @@ fn main() -> ExitCode {
         Task::Dist(args) => commands::dist::run(args),
         Task::Notes(args) => commands::notes::run(args),
         Task::Pin { tag } => commands::release::pin(tag),
+        Task::BuiltFor { tag } => commands::release::built_for_loader(tag),
         Task::Close(args) => commands::release::close(args),
         Task::WineRun { args } => commands::wine::run_one(args),
     };
@@ -176,6 +183,9 @@ mod tests {
         );
         assert!(parse(&["dist", "--out", "x", "--package", "a", "--package", "b"]).is_ok());
         assert!(parse(&["dist", "--out", "x"]).is_ok());
+        assert!(parse(&["pin", "v1.0.0-alpha.15"]).is_ok());
+        assert!(parse(&["built-for", "v1.0.0-alpha.15"]).is_ok());
+        assert!(parse(&["built-for"]).is_err());
         let Task::WineRun { args } = parse(&["wine-run", "a.exe", "--nocapture"]).unwrap().task
         else {
             panic!("not wine-run");

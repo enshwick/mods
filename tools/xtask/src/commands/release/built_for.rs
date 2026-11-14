@@ -49,6 +49,15 @@ pub(crate) fn built_for(changelog: &str, version: Option<&str>) -> Result<String
     ))
 }
 
+/// The loader version a changelog `section`'s loader line names, if it has
+/// one.
+pub(crate) fn named(section: &str) -> Option<&str> {
+    section
+        .lines()
+        .find_map(|line| line.strip_prefix(BUILT_FOR))
+        .map(|rest| rest.trim_end().trim_end_matches('.'))
+}
+
 /// The lines, each ended by a newline.
 fn join_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> String {
     lines.into_iter().fold(String::new(), |mut text, line| {
@@ -66,7 +75,7 @@ mod tests {
     const RELEASED: &str = "## [0.1.0] - 2026-11-05\n\n### Added\n\n- First.\n";
 
     #[test]
-    fn pinning_back_drops_a_loader_line_and_keeps_other_changes() {
+    fn naming_the_released_loader_drops_its_line_and_keeps_other_changes() {
         let changelog = format!("{HEAD}\n{RELEASED}");
         let built = built_for(&changelog, Some("1.0.0-alpha.14")).unwrap();
         assert_eq!(built_for(&built, None).unwrap(), changelog);
@@ -94,6 +103,15 @@ mod tests {
             built_for(&format!("{HEAD}\n"), Some("1.0.0")).unwrap(),
             format!("{HEAD}\n### Changed\n\n- Built for Enshwick 1.0.0.\n\n")
         );
+    }
+
+    #[test]
+    fn the_loader_line_names_its_version_without_the_final_period() {
+        assert_eq!(
+            named("### Changed\n\n- Other.\n- Built for Enshwick 1.0.0-alpha.15.\n"),
+            Some("1.0.0-alpha.15")
+        );
+        assert_eq!(named("### Fixed\n\n- A bug.\n"), None);
     }
 
     #[test]

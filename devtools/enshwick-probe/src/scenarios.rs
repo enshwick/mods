@@ -69,12 +69,11 @@ fn schema(list: &[(&str, &str)]) -> Schema {
 ///
 /// [`Off`] when a script does not compile or fails at start.
 pub(crate) fn start(load: &mut Load<'_>) -> Result<(), Off> {
-    run(load, &SCENARIOS)
+    run(load, &SCENARIOS, Limits::default())
 }
 
-/// Starts the runner over the scenarios of `list`.
-fn run(load: &mut Load<'_>, list: &[(&str, &str)]) -> Result<(), Off> {
-    let limits = Limits::default();
+/// Starts the runner over the scenarios of `list` within `limits`.
+fn run(load: &mut Load<'_>, list: &[(&str, &str)], limits: Limits) -> Result<(), Off> {
     enshwick_luau::start(load, ID, scripts(list), Some(schema(list)), limits).map(drop)
 }
 
@@ -87,6 +86,7 @@ mod tests {
     use enshwick::events::{SettingsReplaced, WorldLoaded, WorldSaved};
     use enshwick::test::{FakeHost, Installed};
     use enshwick::{Entity, Load, Mod, Off, PlayerKey};
+    use enshwick_luau::Limits;
 
     use super::SCENARIOS;
 
@@ -97,14 +97,19 @@ mod tests {
     /// The scenarios a test runs, set before the mod starts.
     static LIST: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
 
+    /// The shipped limits with one real second of script time per real
+    /// second: the fake host packs minutes of server time into milliseconds,
+    /// so a budget per real second would measure only the machine's speed.
+    fn limits() -> Limits {
+        Limits::default().with_per_second(Duration::from_secs(1))
+    }
+
     struct Runner;
 
     impl Mod for Runner {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-            match LIST.get() {
-                Some(list) => super::run(load, list)?,
-                None => super::start(load)?,
-            }
+            let list = LIST.get().map_or(&SCENARIOS[..], Vec::as_slice);
+            super::run(load, list, limits())?;
             crate::chat::register(load);
             Ok(Self)
         }
@@ -163,24 +168,18 @@ mod tests {
         loader
     }
 
-    /// Runs server steps of 100 ms for `time`.
-    fn run_for(loader: &Installed, time: Duration) {
-        run_in_steps(loader, time, Duration::from_millis(100));
-    }
-
-    /// Runs server steps of `step` for `time`, and fails if the scripts
-    /// passed their budget of time per real second.
-    ///
-    /// The fake host runs minutes of server time within one real second, so a
-    /// long wait in fine steps can pass that budget on a slow machine.
+    /// Runs server steps of 100 ms for `time`, and fails if the scripts
+    /// turned off, so a test fails with that cause, not a missing line.
     #[track_caller]
-    fn run_in_steps(loader: &Installed, time: Duration, step: Duration) {
+    fn run_for(loader: &Installed, time: Duration) {
+        let step = Duration::from_millis(100);
         for _ in 0..time.as_millis() / step.as_millis() {
             let _handlers = loader.tick(step);
         }
+        let faults = loader.faults();
         assert!(
-            !logged(loader, "past their budget"),
-            "the scripts ran past their budget; take coarser steps: {:#?}",
+            faults.is_empty(),
+            "the scripts turned off: {faults:?} {:#?}",
             loader.logs()
         );
     }
@@ -192,6 +191,11 @@ mod tests {
     #[track_caller]
     fn assert_logged(loader: &Installed, text: &str) {
         assert!(logged(loader, text), "no {text:?} in {:#?}", loader.logs());
+    }
+
+    #[track_caller]
+    fn assert_not_logged(loader: &Installed, text: &str) {
+        assert!(!logged(loader, text), "{text:?} in {:#?}", loader.logs());
     }
 
     #[test]
@@ -215,7 +219,7 @@ mod tests {
     fn every_shipped_scenario_compiles_and_none_runs_without_the_setting() {
         let loader = start(None, "");
         run_for(&loader, Duration::from_secs(5));
-        assert!(!logged(&loader, "starts in"), "{:#?}", loader.logs());
+        assert_not_logged(&loader, "starts in");
         let schema = loader.config_schema("settings").unwrap();
         let choices = &schema.field(super::SETTING).unwrap().choices;
         for (name, _) in SCENARIOS {
@@ -242,7 +246,7 @@ mod tests {
         assert_logged(&loader, "scenario t: start: waits and hears");
         run_for(&loader, Duration::from_secs(2));
         assert_logged(&loader, "scenario t: step 1 waits a second: PASS");
-        assert!(!logged(&loader, "scenario t: PASS"));
+        assert_not_logged(&loader, "scenario t: PASS");
         let _handled = loader.raise::<WorldSaved>(&());
         run_for(&loader, Duration::from_millis(200));
         assert_logged(&loader, "scenario t: step 2 hears a save: PASS");
@@ -264,7 +268,22 @@ mod tests {
         let loader = start(Some(vec![("t", FAILS)]), "t");
         assert_logged(&loader, "scenario t: FAIL at step 1 adds: ");
         assert_logged(&loader, "the sum: expected 3, got 2");
-        assert!(!logged(&loader, "never runs"), "{:#?}", loader.logs());
+        assert_not_logged(&loader, "never runs");
+    }
+
+    const SPINS: &str = r#"
+        return {
+            about = "spins",
+            run = function(s)
+                s.step("spins", function() while true do end end)
+            end,
+        }
+    "#;
+
+    #[test]
+    #[should_panic(expected = "the scripts turned off")]
+    fn a_run_fails_with_the_cause_when_the_scripts_turn_off() {
+        let _loader = start(Some(vec![("t", SPINS)]), "t");
     }
 
     const WAITS: &str = r#"
@@ -280,12 +299,12 @@ mod tests {
     fn an_event_that_does_not_come_in_time_fails_its_step() {
         let loader = start(Some(vec![("t", WAITS)]), "t");
         run_for(&loader, Duration::from_secs(1));
-        assert!(!logged(&loader, "FAIL"), "{:#?}", loader.logs());
+        assert_not_logged(&loader, "FAIL");
         run_for(&loader, Duration::from_secs(2));
         assert_logged(&loader, "scenario t: FAIL at step 1 hears a save: ");
         assert_logged(&loader, "no WorldSaved within 2 s");
         let _handled = loader.raise::<WorldSaved>(&());
-        assert!(!logged(&loader, "scenario t: PASS"), "{:#?}", loader.logs());
+        assert_not_logged(&loader, "scenario t: PASS");
     }
 
     const BAD_TEST: &str = r#"
@@ -369,11 +388,7 @@ mod tests {
     fn the_runner_hears_every_event_it_hooks() {
         let loader = start(None, "");
         for event in HOOKED {
-            assert!(
-                !logged(&loader, &format!("{event} is not heard")),
-                "{:#?}",
-                loader.logs()
-            );
+            assert_not_logged(&loader, &format!("{event} is not heard"));
         }
     }
 
@@ -417,13 +432,9 @@ mod tests {
             loader.say(ANN, "hello probe").as_deref(),
             Some("hello probe")
         );
-        run_in_steps(&loader, Duration::from_secs(301), Duration::from_secs(1));
+        run_for(&loader, Duration::from_secs(301));
         assert_logged(&loader, "no ChatTyped within 300 s");
-        assert!(
-            !logged(&loader, "scenario chat: step 1"),
-            "{:#?}",
-            loader.logs()
-        );
+        assert_not_logged(&loader, "scenario chat: step 1");
     }
 
     #[test]
@@ -488,10 +499,6 @@ mod tests {
         let loader = start(None, "stats");
         run_for(&loader, Duration::from_secs(2));
         assert_logged(&loader, "scenario stats: step 1");
-        assert!(
-            !logged(&loader, "scenario stats: FAIL at step 1"),
-            "{:#?}",
-            loader.logs()
-        );
+        assert_not_logged(&loader, "scenario stats: FAIL at step 1");
     }
 }

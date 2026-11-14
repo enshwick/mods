@@ -84,12 +84,11 @@ settings:
   timer, a line to everyone now, restart warnings.
 - **World and server:** the time of day, the weather, saves, backups while
   the server runs, the world's game settings, and audit, chat and build
-  logs.
+  logs. Protected zones where only admins build, and creatures and props
+  spawned at a player or a position.
 - **Characters and items:** heal, set health, stamina, mana and level,
   revive, teach recipes, uncover the whole map, god mode. Give items or
   chests, clear or copy an inventory.
-- **Zones and spawns:** protected zones where only admins build. Spawn
-  creatures and place props at a player or a position.
 
 ## How do I connect an RCON tool?
 
@@ -336,15 +335,18 @@ The log keeps nothing from before you turned it on.
 
 From then on, the server refuses each building piece, prop or other
 placement inside the zone, and the builder reads why. Players without
-Enshwick are refused the same way. Admins may still build there. To let
-others build too, set **Zone builders** (`zone_builders`) in
-[the settings](#how-do-i-change-the-settings) to a permission of their user
-group, such as `CanEditBase`, or to `everyone`.
+Enshwick are refused the same way.
+
+Admins may still build there. To let others build too, set **Zone builders**
+(`zone_builders`) in [the settings](#how-do-i-change-the-settings) to a
+permission of their user group, such as `CanEditBase`, or to `everyone`.
 
 `/adm zones` lists the zones. `/adm zoneswitch market off` lets everyone
 build in the zone until you switch it on again, and `/adm unzone market`
-removes it. A name with spaces goes in quotes. A world keeps up to 64 zones,
-in `zones.toml` in `<save>-mod-data/enshwick.admin-tools/`.
+removes it. A name with spaces goes in quotes.
+
+A world keeps up to 64 zones, in `zones.toml` in
+`<save>-mod-data/enshwick.admin-tools/`.
 
 A zone refuses placing things. It does not refuse digging or opening chests.
 
@@ -352,8 +354,9 @@ A zone refuses placing things. It does not refuse digging or opening chests.
 
 Type `/adm spawn <player> Enemy_Wildbeast_Wolf 3` to spawn three wolves
 around a player. Name the creature by the game's template name or its GUID.
-An unknown name lists the names near it. The values after the name may be
-left out:
+An unknown name lists the names near it.
+
+The values after the name may be left out:
 
 | Value | Default | What it does |
 | --- | --- | --- |
@@ -366,9 +369,10 @@ left out:
 
 Type `/adm prop <player> <item>` to place a prop, such as a workbench, beside
 a player, or `/adm propat <x> <y> <z> <item>` at a position. The item is
-named as for giving one, and the window lists the game's items. `/adm unprop`
-takes back the last prop you placed while you stay online. A prop outside
-every base is not saved.
+named as for giving one, and the window lists the game's items.
+
+`/adm unprop` takes back the last prop you placed while you stay online. A
+prop outside every base is not saved.
 
 ## Where are the logs?
 

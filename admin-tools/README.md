@@ -11,12 +11,11 @@ commands.
   timer, a line to everyone now, restart warnings.
 - **World and server:** the time of day, the weather, saves, backups while
   the server runs, the world's game settings, and audit, chat and build
-  logs.
+  logs. Protected zones where only admins build, and creatures and props
+  spawned at a player or a position.
 - **Characters and items:** heal, set health, stamina, mana and level,
   revive, teach recipes, uncover the whole map, god mode. Give items or
   chests, clear or copy an inventory.
-- **Zones and spawns:** protected zones where only admins build. Spawn
-  creatures and place props at a player or a position.
 
 Built on [Enshwick](https://github.com/enshwick/enshwick).
 

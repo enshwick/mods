@@ -21,8 +21,14 @@ mod players;
 #[path = "actions/rcon.rs"]
 mod rcon;
 #[cfg(test)]
+#[path = "actions/spawns.rs"]
+mod spawns;
+#[cfg(test)]
 #[path = "actions/windows.rs"]
 mod windows;
 #[cfg(test)]
 #[path = "actions/world.rs"]
 mod world;
+#[cfg(test)]
+#[path = "actions/zones.rs"]
+mod zones;

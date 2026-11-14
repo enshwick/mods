@@ -29,6 +29,8 @@ const SERVER: &str = "server";
 const BUILDS: &str = "builds";
 const PLAYER: &str = "player";
 const CHANGES: &str = "changes";
+const ZONES: &str = "zones";
+const SPAWNS: &str = "spawns";
 
 /// A section of the panel, each a window of its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,15 +39,19 @@ pub(crate) enum Section {
     Accounts,
     Server,
     Builds,
+    Zones,
+    Spawns,
 }
 
 /// The panel's sections: each its word in a command, which is also its
 /// window's id, its label's key and the section.
-const SECTIONS: [(&str, &str, Section); 4] = [
+const SECTIONS: [(&str, &str, Section); 6] = [
     (PLAYERS, texts::WINDOW_PLAYERS, Section::Players),
     (ACCOUNTS, texts::WINDOW_ACCOUNTS, Section::Accounts),
     (SERVER, texts::WINDOW_SERVER, Section::Server),
     (BUILDS, texts::WINDOW_BUILDS, Section::Builds),
+    (ZONES, texts::WINDOW_ZONES, Section::Zones),
+    (SPAWNS, texts::WINDOW_SPAWNS, Section::Spawns),
 ];
 
 /// The most rows of players or bans a window lists, so its text stays
@@ -64,6 +70,9 @@ pub(crate) enum Shown {
     Player(PlayerKey),
 }
 
+/// The actions that change the protected zones.
+const ZONE_CHANGES: [&str; 4] = [ids::ZONE, ids::ZONE_BOX, ids::ZONE_SWITCH, ids::UNZONE];
+
 /// The actions that take a player online off the server.
 const REMOVES: [&str; 4] = [ids::KICK, ids::BAN, ids::BANNED, ids::ACCOUNT];
 
@@ -75,6 +84,8 @@ impl Shown {
             Self::Section(Section::Accounts) => ACCOUNTS,
             Self::Section(Section::Server) => SERVER,
             Self::Section(Section::Builds) => BUILDS,
+            Self::Section(Section::Zones) => ZONES,
+            Self::Section(Section::Spawns) => SPAWNS,
             Self::Player(_) => PLAYER,
         }
     }
@@ -87,7 +98,8 @@ impl Shown {
                 &[ids::BAN, ids::BANNED, ids::ALLOWED, ids::ACCOUNT]
             }
             Self::Section(Section::Server) => &[ids::SET_MOTD, ids::RESTART],
-            Self::Section(Section::Builds) => &[],
+            Self::Section(Section::Zones) => &ZONE_CHANGES,
+            Self::Section(Section::Builds | Section::Spawns) => &[],
         };
         lists.contains(&id)
     }
@@ -226,6 +238,8 @@ impl Tools {
             Some(Shown::Section(Section::Accounts)) => self.accounts_window(viewer),
             Some(Shown::Section(Section::Server)) => self.server_window(viewer),
             Some(Shown::Section(Section::Builds)) => self.builds_window(viewer),
+            Some(Shown::Section(Section::Zones)) => self.zones_window(viewer),
+            Some(Shown::Section(Section::Spawns)) => self.spawns_window(viewer),
             Some(Shown::Player(key)) => {
                 let Some(player) = self.world.player_by_key(key) else {
                     // They left: the list they were on takes their window's place.
@@ -515,6 +529,56 @@ impl Tools {
         Build::new(self, viewer, BUILDS, texts::WINDOW_BUILDS)
             .text(state, &[])
             .action(ids::WHO)
+            .window
+    }
+
+    /// Making zones, then each zone with buttons to switch it and remove
+    /// it: the platform cuts a window too big from its end, so the forms
+    /// come first.
+    fn zones_window(&self, viewer: &Player) -> Window {
+        let build = Build::new(self, viewer, ZONES, texts::WINDOW_ZONES);
+        let Some(zones) = self.zones.with(|zones| zones.zones.clone()) else {
+            // Zones that do not read are no empty list.
+            let why = self.zones.shut_reason().unwrap_or_default();
+            return build
+                .text(texts::REPLY_ZONES_SHUT, &[(texts::value::WHY, &why)])
+                .window;
+        };
+        let count = zones.len().to_string();
+        let mut build = build
+            .action(ids::ZONE)
+            .action(ids::ZONE_BOX)
+            .text(texts::REPLY_ZONES, &[(texts::value::COUNT, &count)]);
+        for zone in zones.iter().take(MAX_ROWS) {
+            let (key, values) = crate::zones::row(zone);
+            let name = Value::Text(zone.name.clone());
+            let switch: &[Value] = &[name.clone(), Value::Toggle(!zone.on)];
+            let label = if zone.on {
+                texts::BUTTON_ZONE_OFF
+            } else {
+                texts::BUTTON_ZONE_ON
+            };
+            build = build.row(
+                key,
+                &crate::pairs(&values),
+                &[
+                    (label, ids::ZONE_SWITCH, switch),
+                    (texts::BUTTON_UNZONE, ids::UNZONE, &[name]),
+                ],
+                true,
+            );
+        }
+        build.window
+    }
+
+    /// Spawning creatures and placing props, at a player or a position.
+    fn spawns_window(&self, viewer: &Player) -> Window {
+        Build::new(self, viewer, SPAWNS, texts::WINDOW_SPAWNS)
+            .action(ids::SPAWN)
+            .action(ids::SPAWN_AT)
+            .action(ids::PROP)
+            .action(ids::PROP_AT)
+            .action(ids::UNPROP)
             .window
     }
 

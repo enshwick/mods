@@ -116,7 +116,9 @@ fn the_panel_opens_for_an_administrator_with_a_row_to_open_each_section() {
             ("Players".to_owned(), open.clone()),
             ("Bans and the allow-list".to_owned(), open.clone()),
             ("Server".to_owned(), open.clone()),
-            ("Build log".to_owned(), open),
+            ("Build log".to_owned(), open.clone()),
+            ("Protected zones".to_owned(), open.clone()),
+            ("Spawns and props".to_owned(), open),
         ]
     );
     let server = button(&panel, "Server", "Open");
@@ -158,12 +160,14 @@ fn every_window_carries_whole_in_every_offered_language() {
             ("open", "c1"),
             ("open", "c2"),
             ("open", "c3"),
+            ("open", "c4"),
+            ("open", "c5"),
             ("player", "p0000000000000002"),
         ] {
             assert_eq!(run(&loader, &ann(), action, args), "1", "{action}");
         }
         let held = loader.carried_windows(&ann(), language.0);
-        assert_eq!(held.len(), 6, "{language:?}");
+        assert_eq!(held.len(), 8, "{language:?}");
         held.iter()
             .map(|(id, text)| {
                 let context = format!("{language:?} {id}");
@@ -526,5 +530,61 @@ fn a_lookup_from_the_interface_shows_the_changes_in_a_window_with_a_way_there() 
             Value::Number(20.0),
             Value::Number(7.0)
         ]
+    );
+}
+
+#[test]
+fn the_zones_section_lists_each_zone_with_its_switch_and_carries_whole_when_full() {
+    let longest = |n: usize| format!("{n:02}{}", "z".repeat(30));
+    let shapes = |language: Language| {
+        let dir = scratch(&format!("zones-window-{}", language.0));
+        let loader = server("", &dir);
+        // A window lists 16 rows; each name as long as the action takes.
+        for n in 0..16 {
+            let line = format!("t{}\tn1000\tn2000\tn2000", longest(n));
+            assert!(run(&loader, &ann(), "zonebox", &line).starts_with('1'));
+        }
+        let off = format!("t{}\tb0", longest(0));
+        assert!(run(&loader, &ann(), "zoneswitch", &off).starts_with('1'));
+        assert_eq!(run(&loader, &ann(), "open", "c4"), "1");
+        let held = loader.carried_windows(&ann(), language.0);
+        let view = decode(&held[0].1).unwrap_or_else(|| panic!("{language:?}: too big"));
+        whole_shape(&view, &format!("{language:?} zones"))
+    };
+    let english = shapes(Language::FALLBACK);
+    assert_eq!(english.0.iter().filter(|row| row.is_some()).count(), 16);
+    for &language in Language::OFFERED {
+        assert_eq!(shapes(language), english, "{language:?}");
+    }
+}
+
+#[test]
+fn a_zone_s_buttons_switch_it_the_other_way_and_remove_it() {
+    let dir = scratch("zones-buttons");
+    let loader = server("", &dir);
+    assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
+    assert_eq!(run(&loader, &ann(), "open", "c4"), "1");
+    let zones = window(&loader, &ann(), "zones");
+    assert_eq!(
+        rows(&zones),
+        [(
+            "market (on): 10 m around 40, -3".to_owned(),
+            vec!["Off".to_owned(), "Remove".to_owned()]
+        )]
+    );
+    let off = button(&zones, "market", "Off");
+    assert_eq!(
+        (off.action.as_str(), &off.args[..]),
+        (
+            "zoneswitch",
+            &[Value::Text("market".into()), Value::Toggle(false)][..]
+        )
+    );
+    assert!(run(&loader, &ann(), "zoneswitch", "tmarket\tb0").starts_with('1'));
+    let shown = window(&loader, &ann(), "zones");
+    assert_eq!(
+        rows(&shown)[0].1,
+        ["On", "Remove"],
+        "shown again after the change"
     );
 }

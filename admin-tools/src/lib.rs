@@ -3,7 +3,7 @@
 //! day, scheduled announcements and restart warnings; the time of day and
 //! the weather; healing and teleports; items, chests of items and
 //! inventories; health, stamina, mana and level, revives, recipes and god
-//! mode; saves,
+//! mode; protected zones, spawned creatures and props; saves,
 //! backups and the world's
 //! settings; who may use each, per world; an audit log of what was done
 //! and a chat log.
@@ -26,7 +26,9 @@ mod rcon;
 mod schedule;
 mod server;
 mod settings;
+mod spawn;
 mod windows;
+mod zones;
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -129,6 +131,16 @@ pub(crate) struct Tools {
     dedicated: bool,
     /// Whether a world runs, from its load to its shutdown.
     running: AtomicBool,
+    /// The world's protected zones.
+    zones: WorldStore<zones::Zones>,
+    /// The shapes of the zones that are on, read without a lock by the build
+    /// filter.
+    guarded: ArcSwap<Vec<zones::Shape>>,
+    /// The characters that may build in a zone, read without a lock by the
+    /// build filter.
+    zone_builders: ArcSwap<Vec<Entity>>,
+    /// The last prop each caller placed, which they may take back.
+    props: Mutex<FxHashMap<PlayerKey, spawn::Placed>>,
 }
 
 /// A handler of one of the mod's actions.
@@ -155,6 +167,9 @@ impl Mod for AdminTools {
             .ok();
         let actions = load.actions(texts.clone())?;
         let accounts = load.world_store(accounts::STORE)?;
+        // Opened before the mod's own world start, which reads them.
+        let zones = load.world_store(zones::STORE)?;
+        spawn::name_templates();
         let tools = Arc::new_cyclic(|me| Tools {
             me: Weak::clone(me),
             world,
@@ -189,6 +204,10 @@ impl Mod for AdminTools {
             rcon_fused: AtomicBool::new(false),
             dedicated: enshwick::host().is_some_and(|host| host.build().side == Side::SERVER),
             running: AtomicBool::new(false),
+            zones,
+            guarded: ArcSwap::from_pointee(Vec::new()),
+            zone_builders: ArcSwap::from_pointee(Vec::new()),
+            props: Mutex::default(),
         });
         let loaded = Arc::clone(&tools);
         load.on::<WorldLoaded>(move |()| loaded.start())?;
@@ -205,31 +224,44 @@ impl Mod for AdminTools {
         server::add(&tools)?;
         backup::add(&tools)?;
         builds::add(&tools, load)?;
+        zones::add(&tools, load)?;
+        spawn::add(&tools)?;
         windows::add(&tools)?;
         tools.actions.commands(ids::ALIAS)?;
-
-        let changed = Arc::clone(&tools);
-        load.on_settings_change(move |settings: &Settings| changed.apply(settings))?;
-        let heard = Arc::clone(&tools);
-        load.on_chat_said(move |line| heard.heard(line))?;
-        let joins = Arc::clone(&tools);
-        load.on::<PlayerJoined>(move |joined| joins.welcome(joined.key))?;
-        let leaves = Arc::clone(&tools);
-        load.on::<PlayerLeft>(move |left| {
-            leaves.joined.relock().remove(&left.key);
-            leaves.forget_window(left.key);
-            leaves.set_god(left.key, None);
-        })?;
-        let ticks = Arc::clone(&tools);
-        load.on_tick(TICK, move |tick| {
-            ticks.tick(core::time::Duration::from_nanos(tick.elapsed_nanos));
-            ticks.drop_stale_gods();
-        })?;
+        tools.hear(load)?;
         Ok(Self)
     }
 }
 
 impl Tools {
+    /// Follows what the running game tells the mod: settings, chat, players
+    /// coming and going, and time.
+    fn hear(self: &Arc<Self>, load: &mut Load<'_>) -> Result<(), Off> {
+        let changed = Arc::clone(self);
+        load.on_settings_change(move |settings: &Settings| changed.apply(settings))?;
+        let heard = Arc::clone(self);
+        load.on_chat_said(move |line| heard.heard(line))?;
+        let joins = Arc::clone(self);
+        load.on::<PlayerJoined>(move |joined| {
+            joins.welcome(joined.key);
+            joins.find_zone_builders();
+        })?;
+        let leaves = Arc::clone(self);
+        load.on::<PlayerLeft>(move |left| {
+            leaves.joined.relock().remove(&left.key);
+            leaves.forget_window(left.key);
+            leaves.set_god(left.key, None);
+            leaves.props.relock().remove(&left.key);
+        })?;
+        let ticks = Arc::clone(self);
+        load.on_tick(TICK, move |tick| {
+            ticks.tick(core::time::Duration::from_nanos(tick.elapsed_nanos));
+            ticks.drop_stale_gods();
+            ticks.find_zone_builders();
+        })?;
+        Ok(())
+    }
+
     /// Declares `action` with `handler`: only players the world's rights
     /// admit see and run it, and every run of an action that changes
     /// something goes to the audit log, refused or done; a run the platform
@@ -291,6 +323,7 @@ impl Tools {
         // A save of the last world whose end was never heard is not this one's.
         self.saving.store(false, Ordering::Release);
         self.running.store(true, Ordering::Relaxed);
+        self.guard_zones();
         self.listen(&self.settings.load());
     }
 
@@ -312,24 +345,35 @@ impl Tools {
         }
         self.shown.relock().clear();
         self.spots.relock().clear();
+        self.drop_zones();
+        self.props.relock().clear();
         self.audit.finish();
         self.chat.finish();
         self.builds.finish();
     }
 
-    /// Writes the ban list and allow-list now, on a thread of their own, so
-    /// a change holds even when the server stops before the world saves.
+    /// Writes the ban list and allow-list now, as [`Tools::keep`] does.
     fn keep_accounts(&self) {
-        let accounts = self.accounts.clone();
+        Self::keep(&self.accounts, accounts::STORE);
+    }
+
+    /// Writes the world store `store`, named `name`, now, on a thread of
+    /// its own, so a change holds even when the server stops before the
+    /// world saves.
+    fn keep<T>(store: &WorldStore<T>, name: &'static str)
+    where
+        T: serde::de::DeserializeOwned + serde::Serialize + Default + Send + 'static,
+    {
+        let store = store.clone();
         let spawned = std::thread::Builder::new()
-            .name("admin-tools accounts".into())
+            .name(format!("admin-tools {name}"))
             .spawn(move || {
-                if let Err(why) = accounts.flush() {
-                    enshwick::warn!("accounts not written yet: {why}");
+                if let Err(why) = store.flush() {
+                    enshwick::warn!("{name} not written yet: {why}");
                 }
             });
         if let Err(why) = spawned {
-            enshwick::warn!("accounts written when the world saves: {why}");
+            enshwick::warn!("{name} written when the world saves: {why}");
         }
     }
 
@@ -370,6 +414,7 @@ impl Tools {
         if !self.running.load(Ordering::Relaxed) {
             return;
         }
+        self.find_zone_builders();
         self.listen(settings);
         let changed = server::changed_keys(&old, settings);
         // The change that turns the log off is its last line.
@@ -451,6 +496,14 @@ fn run_of(tools: &Tools, request: &Request<'_>) -> (String, &'static str, String
 
 /// Between the lines of a reply.
 pub(crate) const LINE: &str = "\n";
+
+/// `values` as a text's values borrow them.
+pub(crate) fn pairs<'a>(values: &'a [(&'static str, String)]) -> Vec<(&'a str, &'a str)> {
+    values
+        .iter()
+        .map(|(name, value)| (*name, value.as_str()))
+        .collect()
+}
 
 /// `parts` as one reply: a line each in chat, the console and a remote
 /// console, and one line in the interface, whose notice shows only one.

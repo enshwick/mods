@@ -66,6 +66,10 @@ settings:
     default: ""
     meaning: The password RCON tools log in with, 16 to 128 characters. When it is empty, Admin Tools writes a random one here. Never shown in the game or logged.
     applies: at-once
+  - key: zone_builders
+    default: CanKickBan
+    meaning: Who may still build inside a protected zone. everyone, nobody, or a permission of the player's user group.
+    applies: at-once
   - key: rights.<action>
     default: CanKickBan, and everyone for online, status and motd
     meaning: Who may use each action. everyone, nobody, or a permission of the player's user group.
@@ -84,6 +88,8 @@ settings:
 - **Characters and items:** heal, set health, stamina, mana and level,
   revive, teach recipes, uncover the whole map, god mode. Give items or
   chests, clear or copy an inventory.
+- **Zones and spawns:** protected zones where only admins build. Spawn
+  creatures and place props at a player or a position.
 
 ## How do I connect an RCON tool?
 
@@ -177,13 +183,23 @@ one. An argument in square brackets may be left out.
 | `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. | Admins |
 | `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. | Admins |
 | `/adm who <metres>` | Shows the last 10 changes to buildings and terrain near you, up to 200 metres. | Admins |
+| `/adm zone <name> <metres>` | Protects a circle this many metres around you, at every height, from building. | Admins |
+| `/adm zonebox <name> <width> <height> <depth>` | Protects a box centred on you from building, its sides in metres. | Admins |
+| `/adm zones` | Lists the protected zones. | Admins |
+| `/adm zoneswitch <name> on` or `off` | Switches a protected zone on or off. | Admins |
+| `/adm unzone <name>` | Removes a protected zone. | Admins |
+| `/adm spawn <player> <template> [count] [level] [minutes] [keep]` | Spawns creatures around a player. | Admins |
+| `/adm spawnat <x> <y> <z> <template> [count] [level] [minutes] [keep]` | Spawns creatures at a position. | Admins |
+| `/adm prop <player> <item>` | Places a prop, such as a workbench, beside a player. | Admins |
+| `/adm propat <x> <y> <z> <item>` | Places a prop at a position. | Admins |
+| `/adm unprop` | Takes back the last prop you placed. | Admins |
 | `/adm panel` | Opens the Admin Tools window. | Admins |
-| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. | Admins |
+| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server`, `builds`, `zones` or `spawns`. | Admins |
 | `/adm player <player>` | Opens the window of one player. | Admins |
 
 Admins are the players whose user group gives `CanKickBan`. Admins and the
-host cannot be kicked, banned or muted. `goto`, `bring`, `mark` and
-`who` need a character, so the console cannot use them.
+host cannot be kicked, banned or muted. `goto`, `bring`, `mark`, `who`,
+`zone` and `zonebox` need a character, so the console cannot use them.
 
 A player who is away is named as they last joined this world. Admin Tools
 remembers the last 256 accounts that tried to join, and every account on the
@@ -213,7 +229,7 @@ currency slots are not copied. A chest outside every base is not saved.
 
 ## How do I open the Admin Tools window?
 
-Press Shift+F9 in the game, or type `/adm panel`. The window has four
+Press Shift+F9 in the game, or type `/adm panel`. The window has six
 sections, and each shows only the actions you may use:
 
 | Section | What it holds |
@@ -222,6 +238,8 @@ sections, and each shows only the actions you may use:
 | Bans and the allow-list | The bans with their reasons, each with a button to lift it, and the allow-list. |
 | Server | The message of the day, the restart warning, the time of day, the weather, saves and backups. |
 | Build log | The changes near you, each with a button that takes you there. |
+| Protected zones | New zones around you, and each zone with buttons to switch it on or off and to remove it. |
+| Spawns and props | Creatures and props at a player or a position, and taking back your last prop. |
 
 To change the key, open the Mods screen, select Admin Tools and change it
 under **Key bindings**.
@@ -307,6 +325,50 @@ metres, since the game does not say who made them.
 3. Press **Go there** beside a change to stand where it happened.
 
 The log keeps nothing from before you turned it on.
+
+## How do I stop players building in a place?
+
+1. Stand in the middle of the place.
+2. Type `/adm zone market 40` to protect everything within 40 metres, at
+   every height. For a box, type `/adm zonebox hall 30 20 30`: 30 metres
+   wide, 20 high and 30 deep, centred on you. The **Protected zones**
+   section of the window makes zones too.
+
+From then on, the server refuses each building piece, prop or other
+placement inside the zone, and the builder reads why. Players without
+Enshwick are refused the same way. Admins may still build there. To let
+others build too, set **Zone builders** (`zone_builders`) in
+[the settings](#how-do-i-change-the-settings) to a permission of their user
+group, such as `CanEditBase`, or to `everyone`.
+
+`/adm zones` lists the zones. `/adm zoneswitch market off` lets everyone
+build in the zone until you switch it on again, and `/adm unzone market`
+removes it. A name with spaces goes in quotes. A world keeps up to 64 zones,
+in `zones.toml` in `<save>-mod-data/enshwick.admin-tools/`.
+
+A zone refuses placing things. It does not refuse digging or opening chests.
+
+## How do I spawn a creature or place a prop?
+
+Type `/adm spawn <player> Enemy_Wildbeast_Wolf 3` to spawn three wolves
+around a player. Name the creature by the game's template name or its GUID.
+An unknown name lists the names near it. The values after the name may be
+left out:
+
+| Value | Default | What it does |
+| --- | --- | --- |
+| count | 1 | How many, up to 20. |
+| level | 0 | The level the game scales the creature to. 0 keeps the template's own. |
+| minutes | 0 | Minutes until the game removes the creature, up to 1440. 0 keeps it. |
+| keep | off | `on` keeps the creature in the save. Otherwise it is gone when the world loads again. |
+
+`/adm spawnat <x> <y> <z> <template>` spawns at a position in metres.
+
+Type `/adm prop <player> <item>` to place a prop, such as a workbench, beside
+a player, or `/adm propat <x> <y> <z> <item>` at a position. The item is
+named as for giving one, and the window lists the game's items. `/adm unprop`
+takes back the last prop you placed while you stay online. A prop outside
+every base is not saved.
 
 ## Where are the logs?
 

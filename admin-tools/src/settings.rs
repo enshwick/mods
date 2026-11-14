@@ -13,6 +13,9 @@ pub(crate) const MAX_TEXT: usize = 256;
 /// The most announcements the schedule takes.
 pub(crate) const MAX_ANNOUNCEMENTS: usize = 16;
 
+/// The key of the rule of who builds inside protected zones.
+const ZONE_BUILDERS: &str = "zone_builders";
+
 /// The rule that lets every player use an action.
 const EVERYONE: &str = "everyone";
 
@@ -86,6 +89,8 @@ pub(crate) struct Settings {
     /// The remote console's password, 16 to 128 characters; when it is empty, Admin Tools writes a random one here.
     #[config(secret)]
     pub rcon_password: String,
+    /// Who may still build inside a protected zone: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
+    pub zone_builders: String,
     /// Who may use each action: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
     #[config(group)]
     pub rights: Rights,
@@ -108,6 +113,7 @@ impl Default for Settings {
             rcon_ip: RCON_IP.to_owned(),
             rcon_port: RCON_PORT,
             rcon_password: String::new(),
+            zone_builders: ADMINS.to_owned(),
             rights: Rights::default(),
         }
     }
@@ -130,6 +136,7 @@ impl core::fmt::Debug for Settings {
             .field("rcon", &self.rcon)
             .field("rcon_ip", &self.rcon_ip)
             .field("rcon_port", &self.rcon_port)
+            .field("zone_builders", &self.zone_builders)
             .field("rights", &self.rights)
             .finish_non_exhaustive()
     }
@@ -159,17 +166,31 @@ impl Settings {
         if !beside_the_save(&self.backup_dir) {
             return Err(CheckSettingsError::Folder(self.backup_dir.clone()));
         }
-        for id in ids::ALL {
-            let rule = self.rights.rule(id);
+        let rules = ids::ALL
+            .iter()
+            .map(|id| {
+                (
+                    format!("rights.{}", id.replace('-', "_")),
+                    self.rights.rule(id),
+                )
+            })
+            .chain([(ZONE_BUILDERS.to_owned(), self.zone_builders.as_str())]);
+        for (field, rule) in rules {
             if Who::parse(rule).is_none() {
                 return Err(CheckSettingsError::Rule {
-                    field: id.replace('-', "_"),
+                    field,
                     rule: rule.to_owned(),
                     words: Who::words().join(", "),
                 });
             }
         }
         Ok(())
+    }
+
+    /// Whether `player` may build inside a protected zone; a rule the check
+    /// would refuse lets nobody.
+    pub(crate) fn builds_in_zones(&self, player: &Player) -> bool {
+        Who::parse(&self.zone_builders).is_some_and(|who| who.admits(player))
     }
 
     /// Whether the audit log is on, `dedicated` saying whether this is a
@@ -227,9 +248,9 @@ pub(crate) enum CheckSettingsError {
     #[error("backup_dir: {0} is no folder beside the save")]
     Folder(String),
     /// A rule that names no permission.
-    #[error("rights.{field}: {rule} is none of {words}")]
+    #[error("{field}: {rule} is none of {words}")]
     Rule {
-        /// The rule's key in the group.
+        /// The rule's key in the settings.
         field: String,
         /// What the world's file says.
         rule: String,
@@ -355,6 +376,26 @@ pub(crate) struct Rights {
     pub open: String,
     /// Opening the window of one player.
     pub player: String,
+    /// Protecting a circle from building.
+    pub zone: String,
+    /// Protecting a box from building.
+    pub zonebox: String,
+    /// Reading the protected zones.
+    pub zones: String,
+    /// Switching a protected zone on or off.
+    pub zoneswitch: String,
+    /// Removing a protected zone.
+    pub unzone: String,
+    /// Spawning creatures beside a player.
+    pub spawn: String,
+    /// Spawning creatures at a position.
+    pub spawnat: String,
+    /// Placing a prop beside a player.
+    pub prop: String,
+    /// Placing a prop at a position.
+    pub propat: String,
+    /// Taking back the last prop placed.
+    pub unprop: String,
 }
 
 impl Default for Rights {
@@ -401,6 +442,16 @@ impl Default for Rights {
             panel: admins(),
             open: admins(),
             player: admins(),
+            zone: admins(),
+            zonebox: admins(),
+            zones: admins(),
+            zoneswitch: admins(),
+            unzone: admins(),
+            spawn: admins(),
+            spawnat: admins(),
+            prop: admins(),
+            propat: admins(),
+            unprop: admins(),
         }
     }
 }
@@ -450,6 +501,16 @@ impl Rights {
             ids::PANEL => &self.panel,
             ids::OPEN => &self.open,
             ids::PLAYER => &self.player,
+            ids::ZONE => &self.zone,
+            ids::ZONE_BOX => &self.zonebox,
+            ids::ZONES => &self.zones,
+            ids::ZONE_SWITCH => &self.zoneswitch,
+            ids::UNZONE => &self.unzone,
+            ids::SPAWN => &self.spawn,
+            ids::SPAWN_AT => &self.spawnat,
+            ids::PROP => &self.prop,
+            ids::PROP_AT => &self.propat,
+            ids::UNPROP => &self.unprop,
             _ => ADMINS,
         }
     }
@@ -480,11 +541,7 @@ impl Rules {
             .map_or(Who::Permission(PlayerPermissions::CanKickBan), |at| {
                 self.0[at]
             });
-        match who {
-            Who::Everyone => true,
-            Who::Permission(permission) => player.has(permission),
-            Who::Nobody => false,
-        }
+        who.admits(player)
     }
 }
 
@@ -511,6 +568,15 @@ impl Who {
             .into_iter()
             .find(|permission| format!("{permission:?}").eq_ignore_ascii_case(word))
             .map(Self::Permission)
+    }
+
+    /// Whether the rule lets `player` in.
+    fn admits(self, player: &Player) -> bool {
+        match self {
+            Self::Everyone => true,
+            Self::Permission(permission) => player.has(permission),
+            Self::Nobody => false,
+        }
     }
 
     /// Every word a rule takes.
@@ -631,6 +697,26 @@ mod tests {
             ..Settings::default()
         };
         assert!(many.check().is_err());
+    }
+
+    #[test]
+    fn zone_builders_are_administrators_unless_the_world_names_a_rule_the_check_takes() {
+        let admin = player(1, PlayerPermissions::CanKickBan.bit());
+        let builder = player(2, PlayerPermissions::CanEditBase.bit());
+        let defaults = Settings::default();
+        assert!(defaults.builds_in_zones(&admin) && !defaults.builds_in_zones(&builder));
+        let bases = Settings {
+            zone_builders: "CanEditBase".into(),
+            ..Settings::default()
+        };
+        assert!(bases.builds_in_zones(&builder));
+        let typo = Settings {
+            zone_builders: "builders".into(),
+            ..Settings::default()
+        };
+        assert!(!typo.builds_in_zones(&admin), "a bad rule lets nobody");
+        let refused = typo.check().unwrap_err().to_string();
+        assert!(refused.starts_with("zone_builders: builders"), "{refused}");
     }
 
     #[test]

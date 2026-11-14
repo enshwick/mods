@@ -188,7 +188,7 @@ jobs:
         if: startsWith(github.head_ref || github.ref_name, 'release-plz-')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo xtask notes --unfinished
+        run: cargo xtask notes --unfinished --out "$RUNNER_TEMP/notes"
 
   # The tests of the crates marked `windows-only`, natively on Windows.
   windows:

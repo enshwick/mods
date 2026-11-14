@@ -159,6 +159,23 @@ mod tests {
         assert!(parse(&["notes", "--unreleased", "--package", "a"]).is_err());
         assert!(parse(&["notes"]).is_err());
         assert!(parse(&["close", "--date", "13.11.2026"]).is_err());
+        // The command lines of release-plz.yml and the release-files action.
+        assert!(parse(&["notes", "--unfinished", "--out", "x"]).is_ok());
+        assert!(parse(&["notes", "--unreleased", "--out", "x"]).is_ok());
+        assert!(
+            parse(&[
+                "close",
+                "--date",
+                "2026-11-14",
+                "--base",
+                "origin/main",
+                "--body",
+                "b.md"
+            ])
+            .is_ok()
+        );
+        assert!(parse(&["dist", "--out", "x", "--package", "a", "--package", "b"]).is_ok());
+        assert!(parse(&["dist", "--out", "x"]).is_ok());
         let Task::WineRun { args } = parse(&["wine-run", "a.exe", "--nocapture"]).unwrap().task
         else {
             panic!("not wine-run");

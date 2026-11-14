@@ -13,24 +13,46 @@ use cargo_enshwick::changelog::{self, ALPHA_WARNING, CHANGELOG};
 
 use crate::{Package, packages, say};
 
-/// The command line `notes` takes: exactly one way to choose the mods.
+/// The command line `notes` takes: one way to choose the mods and where to
+/// write their notes.
 #[derive(Debug, clap::Args)]
-#[group(required = true, multiple = false, id = "choice")]
 pub(crate) struct Args {
-    /// Every shipped mod not released yet.
-    #[arg(long, group = "choice")]
-    unreleased: bool,
-    /// Every shipped mod whose release is not finished.
-    #[arg(long, group = "choice")]
-    unfinished: bool,
-    /// The named mods.
-    #[arg(long, group = "choice")]
-    package: Vec<String>,
+    #[command(flatten)]
+    choice: Choice,
     /// The folder to write into; `target/notes` of the workspace when left
     /// out.
     #[arg(long)]
     out: Option<PathBuf>,
 }
+
+/// Exactly one way to choose the mods.
+// Its own struct: clap puts every field of a grouped struct in the group.
+#[derive(Debug, clap::Args)]
+#[group(required = true, multiple = false)]
+struct Choice {
+    /// Every shipped mod not released yet.
+    #[arg(long)]
+    unreleased: bool,
+    /// Every shipped mod whose release is not finished.
+    #[arg(long)]
+    unfinished: bool,
+    /// The named mods.
+    #[arg(long)]
+    package: Vec<String>,
+}
+
+impl Choice {
+    fn way(&self) -> Way<'_> {
+        if self.unfinished {
+            Way::Unfinished
+        } else if self.unreleased {
+            Way::Unreleased
+        } else {
+            Way::Chosen(&self.package)
+        }
+    }
+}
+
 /// Where the platform comes from; its tags name the loader's releases.
 pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
 /// The workspace dependency whose commit names the loader a mod builds on.
@@ -64,11 +86,11 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
         .out
         .clone()
         .unwrap_or_else(|| root.join("target").join("notes"));
-    let (unreleased, unfinished) = (args.unreleased, args.unfinished);
-    let chosen: Vec<&str> = args.package.iter().map(String::as_str).collect();
     let config = release_config(&root)?;
     let shipped = shipped(&config)?;
-    if let Some(missing) = chosen
+    if let Some(missing) = args
+        .choice
+        .package
         .iter()
         .find(|name| !shipped.iter().any(|p| p.name == **name))
     {
@@ -76,13 +98,8 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     }
     let rev = pinned_rev(&std::fs::read_to_string(root.join(MANIFEST)).map_err(|e| e.to_string())?)
         .ok_or_else(|| format!("Cargo.toml: no `rev` of {API}"))?;
-    let way = if unfinished {
-        Way::Unfinished
-    } else if unreleased {
-        Way::Unreleased
-    } else {
-        Way::Chosen(&chosen)
-    };
+    clear(&out, &shipped)?;
+    let way = args.choice.way();
     let remote = GitHub::read()?;
     let Some(mods) = choose(shipped, way, &rev, &remote)? else {
         return Ok(false);
@@ -128,6 +145,24 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     std::fs::write(&file, serde_json::Value::from(releases).to_string())
         .map_err(|e| format!("{}: {e}", file.display()))?;
     Ok(true)
+}
+
+/// Removes the files an earlier run wrote into `out`, so a run that takes
+/// or writes no mod leaves none of them behind; other files stay.
+fn clear(out: &Path, shipped: &[Package]) -> Result<(), String> {
+    let written = shipped
+        .iter()
+        .map(|package| out.join(format!("{}.md", package.name)))
+        .chain([out.join(RELEASES)]);
+    for file in written {
+        match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(format!("{}: {e}", file.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// The pre-release a mod's Cargo.toml carries until its first version is set
@@ -186,7 +221,7 @@ enum Way<'a> {
     /// Those whose tag is not on the remote or has no finished release.
     Unfinished,
     /// The named ones.
-    Chosen(&'a [&'a str]),
+    Chosen(&'a [String]),
 }
 
 /// The shipped mods `way` takes; `None` when a released mod that is not
@@ -204,7 +239,7 @@ fn choose(
         let take = match way {
             Way::Unfinished => !remote.finished(&tag, &package.name)?,
             Way::Unreleased => !remote.released(&tag),
-            Way::Chosen(chosen) => chosen.contains(&package.name.as_str()),
+            Way::Chosen(chosen) => chosen.contains(&package.name),
         };
         if take {
             mods.push(package);
@@ -583,6 +618,59 @@ mod tests {
     const REV: &str = "30693a6f24efd923047903f0245336e31136cd35";
 
     #[test]
+    fn each_way_to_choose_takes_a_folder_to_write_into() {
+        use clap::Parser as _;
+
+        let parse = |line: &[&str]| {
+            let cli = crate::Cli::try_parse_from(["cargo xtask", "notes"].iter().chain(line));
+            let crate::Task::Notes(args) = cli.unwrap().task else {
+                panic!("not notes");
+            };
+            args
+        };
+        let args = parse(&["--unfinished", "--out", "x"]);
+        assert!(matches!(args.choice.way(), Way::Unfinished));
+        assert_eq!(args.out, Some(PathBuf::from("x")));
+        assert!(matches!(
+            parse(&["--unreleased", "--out", "x"]).choice.way(),
+            Way::Unreleased
+        ));
+        let args = parse(&["--package", "a", "--package", "b", "--out", "x"]);
+        let Way::Chosen(names) = args.choice.way() else {
+            panic!("not chosen");
+        };
+        assert_eq!(names, ["a", "b"]);
+        assert_eq!(args.out, Some(PathBuf::from("x")));
+        assert_eq!(parse(&["--unfinished"]).out, None);
+    }
+
+    #[test]
+    fn a_new_run_removes_the_notes_an_earlier_run_wrote() {
+        let out = std::env::temp_dir().join(format!("xtask-clear-{}", std::process::id()));
+        std::fs::create_dir_all(&out).unwrap();
+        for file in ["m.md", RELEASES, "kept.txt"] {
+            std::fs::write(out.join(file), "").unwrap();
+        }
+        let package = |name: &str| Package {
+            name: name.to_owned(),
+            version: "0.1.0".to_owned(),
+            dir: out.join(name),
+            id: name.to_owned(),
+            windows_only: false,
+            cdylib: true,
+            lib: true,
+        };
+        clear(&out, &[package("m"), package("n")]).unwrap();
+        let mut left: Vec<_> = std::fs::read_dir(&out)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        left.sort();
+        std::fs::remove_dir_all(&out).unwrap();
+        assert_eq!(left, ["kept.txt"]);
+    }
+
+    #[test]
     fn the_loader_release_is_the_version_tag_at_the_pinned_commit() {
         let listing = format!(
             "1111111111111111111111111111111111111111\trefs/tags/v1.0.0-alpha.11\n\
@@ -688,7 +776,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(names(Way::Unfinished), ["m", "n"]);
-        assert_eq!(names(Way::Chosen(&["n"])), ["n"]);
+        assert_eq!(names(Way::Chosen(&["n".to_owned()])), ["n"]);
         let untagged = || vec![package("m"), package("o")];
         let taken = choose(untagged(), Way::Unreleased, REV, &remote).unwrap();
         assert_eq!(taken.map(|mods| mods.len()), Some(2));

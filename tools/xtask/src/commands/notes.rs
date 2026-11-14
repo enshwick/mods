@@ -13,23 +13,32 @@ use cargo_enshwick::changelog::{self, ALPHA_WARNING, CHANGELOG};
 
 use crate::{Package, packages, say};
 
-/// The command line `notes` takes: exactly one way to choose the mods.
+/// The command line `notes` takes: one way to choose the mods and where to
+/// write their notes.
 #[derive(Debug, clap::Args)]
-#[group(required = true, multiple = false, id = "choice")]
 pub(crate) struct Args {
-    /// Every shipped mod not released yet.
-    #[arg(long, group = "choice")]
-    unreleased: bool,
-    /// Every shipped mod whose release is not finished.
-    #[arg(long, group = "choice")]
-    unfinished: bool,
-    /// The named mods.
-    #[arg(long, group = "choice")]
-    package: Vec<String>,
+    #[command(flatten)]
+    choice: Choice,
     /// The folder to write into; `target/notes` of the workspace when left
     /// out.
     #[arg(long)]
     out: Option<PathBuf>,
+}
+
+/// Exactly one way to choose the mods. Its own struct, since clap puts
+/// every field of a grouped struct in the group, `--out` too.
+#[derive(Debug, clap::Args)]
+#[group(required = true, multiple = false)]
+struct Choice {
+    /// Every shipped mod not released yet.
+    #[arg(long)]
+    unreleased: bool,
+    /// Every shipped mod whose release is not finished.
+    #[arg(long)]
+    unfinished: bool,
+    /// The named mods.
+    #[arg(long)]
+    package: Vec<String>,
 }
 /// Where the platform comes from; its tags name the loader's releases.
 pub(crate) const PLATFORM: &str = "https://github.com/enshwick/enshwick";
@@ -64,8 +73,8 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
         .out
         .clone()
         .unwrap_or_else(|| root.join("target").join("notes"));
-    let (unreleased, unfinished) = (args.unreleased, args.unfinished);
-    let chosen: Vec<&str> = args.package.iter().map(String::as_str).collect();
+    let (unreleased, unfinished) = (args.choice.unreleased, args.choice.unfinished);
+    let chosen: Vec<&str> = args.choice.package.iter().map(String::as_str).collect();
     let config = release_config(&root)?;
     let shipped = shipped(&config)?;
     if let Some(missing) = chosen
@@ -581,6 +590,25 @@ mod tests {
     use super::*;
 
     const REV: &str = "30693a6f24efd923047903f0245336e31136cd35";
+
+    #[derive(Debug, clap::Parser)]
+    struct Notes {
+        #[command(flatten)]
+        args: Args,
+    }
+
+    #[test]
+    fn the_release_run_names_one_way_to_choose_and_a_folder_to_write_into() {
+        use clap::Parser as _;
+
+        for way in ["--unfinished", "--unreleased"] {
+            let parsed = Notes::try_parse_from(["notes", way, "--out", "target/notes"]);
+            assert!(parsed.is_ok(), "{way} --out: {parsed:?}");
+        }
+        assert!(Notes::try_parse_from(["notes", "--package", "a", "--package", "b"]).is_ok());
+        assert!(Notes::try_parse_from(["notes", "--out", "target/notes"]).is_err());
+        assert!(Notes::try_parse_from(["notes", "--unfinished", "--unreleased"]).is_err());
+    }
 
     #[test]
     fn the_loader_release_is_the_version_tag_at_the_pinned_commit() {

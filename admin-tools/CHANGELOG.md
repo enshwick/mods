@@ -6,6 +6,8 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-14
+
 ### Added
 
 - First alpha. A server's administrators mute players in chat from the
@@ -120,3 +122,4 @@ Each entry says what players notice; a release's notes show its section.
   Ukrainian. World settings use the game's own names in each language.
   Typed words, such as `clear` or `everyone`, stay English. Restart
   warnings read in the server's language, English on a dedicated server.
+

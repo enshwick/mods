@@ -1,11 +1,13 @@
-//! The two steps of a release that release-plz cannot take.
+//! The steps of a release that release-plz cannot take.
 //!
-//! `cargo xtask built-for <loader tag>` says in the changelog of each mod in
-//! the release set (`release-plz.toml`) whose released version was built
-//! for another loader, and that has nothing else under Unreleased, which
-//! loader it is built for now, so its folder changes and release-plz bumps
-//! it: a mod built for one loader alpha needs a rebuild for the next. A mod
-//! outside the set keeps its version and changelog.
+//! `cargo xtask built-for <loader tag>` names the loader in the root
+//! manifest's `[workspace.metadata.release]`, as the loader the next release
+//! builds on, and says in the changelog of each mod in the release set
+//! (`release-plz.toml`) whose released version was built for another
+//! loader, and that has nothing else under Unreleased, which loader it is
+//! built for now, so its folder changes and release-plz bumps it: a mod
+//! built for one loader alpha needs a rebuild for the next. A mod outside
+//! the set keeps its version and changelog.
 //!
 //! `cargo xtask pin <loader tag>` pins the platform to a loader release for
 //! every crate, so every mod builds on it. The `release` workflow pins in
@@ -51,12 +53,21 @@ fn date(text: &str) -> Result<String, String> {
 }
 
 /// A loader release: its tag and the platform commit the tag names.
-struct Loader {
-    tag: String,
-    commit: String,
+pub(crate) struct Loader {
+    pub(crate) tag: String,
+    pub(crate) commit: String,
 }
 
+/// The table of the root manifest that names the loader of the next release.
+const RELEASE_TABLE: &str = "[workspace.metadata.release]";
+
 impl Loader {
+    /// The loader the release set is built for, as the root `manifest`'s
+    /// `[workspace.metadata.release]` names it.
+    pub(crate) fn of_release(manifest: &str) -> Result<Self, String> {
+        Self::read(&release_loader(manifest)?)
+    }
+
     /// The loader release tagged `tag`, with or without its `v`, read from
     /// the platform's remote.
     fn read(tag: &str) -> Result<Self, String> {
@@ -82,15 +93,67 @@ impl Loader {
         } else {
             format!("v{text}")
         };
-        notes::version_of(&tag)
-            .map(|_| tag.clone())
-            .ok_or_else(|| format!("{text:?} is no loader tag such as v1.0.0-alpha.15"))
+        if is_version(&tag[1..]) {
+            Ok(tag)
+        } else {
+            Err(format!("{text:?} is no loader tag such as v1.0.0-alpha.15"))
+        }
     }
 
     /// The loader's version, its tag without the `v`.
     fn version(&self) -> &str {
         &self.tag[1..]
     }
+}
+
+/// Whether `text` is a SemVer version without build metadata: three numbers
+/// without leading zeros, then optional dot-separated identifiers of ASCII
+/// letters, digits and hyphens.
+fn is_version(text: &str) -> bool {
+    let (core, pre) = text
+        .split_once('-')
+        .map_or((text, None), |(core, pre)| (core, Some(pre)));
+    let number = |part: &str| {
+        !part.is_empty()
+            && part.bytes().all(|b| b.is_ascii_digit())
+            && (part == "0" || !part.starts_with('0'))
+    };
+    let identifier = |part: &str| {
+        !part.is_empty() && part.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    };
+    core.split('.').count() == 3
+        && core.split('.').all(number)
+        && pre.is_none_or(|pre| pre.split('.').all(identifier))
+}
+
+/// The loader tag the root `manifest`'s `[workspace.metadata.release]` names.
+fn release_loader(manifest: &str) -> Result<String, String> {
+    let table: toml::Table = toml::from_str(manifest).map_err(|e| e.to_string())?;
+    ["workspace", "metadata", "release", "loader"]
+        .iter()
+        .try_fold(&toml::Value::Table(table), |value, key| value.get(key))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            format!("{MANIFEST}: no `loader` in {RELEASE_TABLE}; run release-pr for the loader the mods are built for")
+        })
+}
+
+/// The root `manifest` with `[workspace.metadata.release]` naming `tag`, its
+/// layout kept.
+fn with_release_loader(manifest: &str, tag: &str) -> Result<String, String> {
+    let old = release_loader(manifest)?;
+    let named = manifest.replacen(
+        &format!("loader = \"{old}\""),
+        &format!("loader = \"{tag}\""),
+        1,
+    );
+    if release_loader(&named)? != tag {
+        return Err(format!(
+            "{MANIFEST}: the `loader` of {RELEASE_TABLE} is not written as `loader = \"<tag>\"`; set it by hand"
+        ));
+    }
+    Ok(named)
 }
 
 /// Pins every platform crate to the commit of `<loader tag>`, in the root
@@ -114,14 +177,22 @@ pub(crate) fn pin(tag: &str) -> Result<bool, String> {
     Ok(Step::new(&["update", "--workspace"]).run(false))
 }
 
-/// Adds or updates the line naming `<loader tag>` in the changelog of each
-/// shipped mod whose released version was built for another commit, and
-/// drops it where the release was built on that loader.
+/// Names `<loader tag>` in the root manifest's `[workspace.metadata.release]`
+/// and adds or updates the line naming it in the changelog of each shipped
+/// mod whose released version was built for another commit, and drops it
+/// where the release was built on that loader; refused while a closed
+/// version without its tag names another loader, which `release` builds
+/// first.
 pub(crate) fn built_for_loader(tag: &str) -> Result<bool, String> {
     let loader = Loader::read(tag)?;
     let (commit, version) = (loader.commit.as_str(), loader.version());
+    let root = notes::root();
+    let manifest_path = root.join(MANIFEST);
+    let manifest = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
     let remote = notes::GitHub::read()?;
-    for package in notes::shipped(&notes::release_config(&notes::root())?)? {
+    let mut ok = true;
+    for package in notes::shipped(&notes::release_config(&root)?)? {
         let tag = notes::tag_of(&package);
         let released = remote.released(&tag);
         let built = if released {
@@ -129,14 +200,26 @@ pub(crate) fn built_for_loader(tag: &str) -> Result<bool, String> {
         } else {
             None
         };
-        let line = match loader_line(released, built.as_deref(), commit, version) {
-            LoaderLine::Keep => continue,
-            LoaderLine::Drop => None,
-            LoaderLine::Name(version) => Some(version),
-        };
         let path = package.dir.join(CHANGELOG);
         let changelog =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let closed = changelog::closed(&changelog, &package.version)
+            .ok()
+            .flatten()
+            .and_then(built_for::named);
+        let line = match loader_line(released, built.as_deref(), closed, commit, version) {
+            LoaderLine::Keep => continue,
+            LoaderLine::Drop => None,
+            LoaderLine::Name(version) => Some(version),
+            LoaderLine::Refuse(named) => {
+                say(&format!(
+                    "{} {} is closed for Enshwick {named} and not released yet; run release with v{named} first",
+                    package.name, package.version
+                ));
+                ok = false;
+                continue;
+            }
+        };
         let updated =
             built_for(&changelog, line).map_err(|e| format!("{}: {e}", path.display()))?;
         if updated != changelog {
@@ -150,7 +233,13 @@ pub(crate) fn built_for_loader(tag: &str) -> Result<bool, String> {
             ));
         }
     }
-    Ok(true)
+    if ok {
+        let named = with_release_loader(&manifest, &loader.tag)
+            .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
+        std::fs::write(&manifest_path, named)
+            .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
+    }
+    Ok(ok)
 }
 
 /// The commit `git ls-remote` lists for `tag`: the one an annotated tag
@@ -198,27 +287,36 @@ fn platform_revs(manifest: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// What `pin` does to a shipped mod's loader line.
+/// What `built-for` does to a shipped mod's loader line.
 #[derive(Debug, PartialEq, Eq)]
 enum LoaderLine<'a> {
     /// Leave the changelog alone.
     Keep,
-    /// Drop the line: the release was built on the pinned commit.
+    /// Drop the line: the release was built on the loader's commit.
     Drop,
     /// Name this loader version.
     Name(&'a str),
+    /// Refuse the loader: the version, closed but untagged, names this other
+    /// one.
+    Refuse(&'a str),
 }
 
 /// The [`LoaderLine`] of a mod whose version is `released` or not, built on
-/// the commit `built`: an untagged version is built on the new pin anyway.
+/// the commit `built`, its closed section naming the loader `closed`: an
+/// untagged version builds on the new loader anyway, unless its section
+/// names another one.
 fn loader_line<'a>(
     released: bool,
     built: Option<&str>,
+    closed: Option<&'a str>,
     commit: &str,
     version: &'a str,
 ) -> LoaderLine<'a> {
     if !released {
-        LoaderLine::Keep
+        match closed {
+            Some(named) if named != version => LoaderLine::Refuse(named),
+            _ => LoaderLine::Keep,
+        }
     } else if built == Some(commit) {
         LoaderLine::Drop
     } else {
@@ -467,7 +565,18 @@ mod tests {
     fn a_loader_tag_is_a_version_with_or_without_its_v() {
         assert_eq!(Loader::tag("1.0.0-alpha.15").unwrap(), "v1.0.0-alpha.15");
         assert_eq!(Loader::tag("v1.0.0").unwrap(), "v1.0.0");
-        for text in ["", "main", "v1.0", "--upload-pack=x", "v1.0.0-"] {
+        assert_eq!(Loader::tag("v0.10.0-rc-1.2").unwrap(), "v0.10.0-rc-1.2");
+        for text in [
+            "",
+            "main",
+            "v1.0",
+            "--upload-pack=x",
+            "v1.0.0-",
+            "v1.0.0-a b/../x",
+            "v1.0.0-alpha..15",
+            "v01.0.0",
+            "v1.0.0+build",
+        ] {
             assert!(Loader::tag(text).is_err(), "{text}");
         }
     }
@@ -495,12 +604,33 @@ mod tests {
     }
 
     #[test]
-    fn pin_leaves_an_untagged_version_alone_and_drops_the_line_of_a_release_on_the_pin() {
-        let line = |released, built| loader_line(released, built, NEW, "1.0.0-alpha.14");
+    fn built_for_leaves_an_untagged_version_alone_and_drops_the_line_of_a_release_on_the_loader() {
+        let line = |released, built| loader_line(released, built, None, NEW, "1.0.0-alpha.14");
         assert_eq!(line(false, None), LoaderLine::Keep);
         assert_eq!(line(true, Some(NEW)), LoaderLine::Drop);
         assert_eq!(line(true, Some(OLD)), LoaderLine::Name("1.0.0-alpha.14"));
         assert_eq!(line(true, None), LoaderLine::Name("1.0.0-alpha.14"));
+    }
+
+    #[test]
+    fn built_for_refuses_another_loader_while_an_untagged_version_is_closed_for_one() {
+        let line = |closed| loader_line(false, None, closed, NEW, "1.0.0-alpha.16");
+        assert_eq!(
+            line(Some("1.0.0-alpha.15")),
+            LoaderLine::Refuse("1.0.0-alpha.15")
+        );
+        assert_eq!(line(Some("1.0.0-alpha.16")), LoaderLine::Keep);
+    }
+
+    #[test]
+    fn the_release_loader_is_read_and_renamed_in_place() {
+        let manifest = "[workspace]\n\n# Why.\n[workspace.metadata.release]\nloader = \"v1.0.0-alpha.15\"\n\n[workspace.dependencies]\nx = \"1\"\n";
+        assert_eq!(release_loader(manifest).unwrap(), "v1.0.0-alpha.15");
+        let named = with_release_loader(manifest, "v1.0.0-alpha.16").unwrap();
+        assert_eq!(named, manifest.replace("alpha.15", "alpha.16"));
+        assert!(release_loader("[workspace]\n").is_err());
+        let spelt = manifest.replace("loader = ", "loader= ");
+        assert!(with_release_loader(&spelt, "v1.0.0-alpha.16").is_err());
     }
 
     /// A changelog with a change under Unreleased.

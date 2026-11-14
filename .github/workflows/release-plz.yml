@@ -2,16 +2,19 @@
 # by hand for the loader release named in `loader`. Until 1.0 each release is
 # an alpha, a GitHub prerelease. main follows the platform's main, as
 # Renovate moves it; only the commit a release tags is pinned to the loader.
-# `release-pr`, on main, names the loader in the changelog of each mod of the
+# `release-pr`, on main, names the loader in Cargo.toml's
+# `[workspace.metadata.release]` and in the changelog of each mod of the
 # release set (the entries of release-plz.toml without `release = false`)
 # built for another one (`cargo xtask built-for`), commits that on top of
 # main, and opens or updates the release pull request from there, which
 # bumps the mods of the set whose folders changed, then closes each bumped
 # mod's changelog on its branch with `cargo xtask close`, so it is ready to
 # merge. `release`, on main, pins the platform to the loader
-# (`cargo xtask pin`) and releases every mod of the set whose version has
-# no finished release yet: it refuses before tagging anything when a mod's
-# notes are not ready, then commits the pin on top of main, on no branch,
+# (`cargo xtask pin`), which must be the one the release pull request
+# named, and releases every mod of the set whose version has no finished
+# release yet: it refuses before tagging anything when a mod's notes are
+# not ready or the pinned tree does not build, then commits the pin on top
+# of main, on no branch,
 # and release-plz tags that commit for each new version
 # `<package>-v<version>`; each such mod gets its prerelease with the notes
 # of `cargo xtask notes`, also when release-plz tagged it and stopped, so
@@ -21,8 +24,9 @@
 # players check with `gh attestation verify <file> --owner enshwick`. On
 # Windows each attached DLL must report the version of its tag, read by the
 # loader release's own cargo-enshwick, and the docs site builds again for
-# the new downloads. `build`, from any branch, pins the loader, writes the
-# notes and builds the files a release would, and publishes nothing.
+# the new downloads. `build`, from any branch, names and pins the loader,
+# writes the notes and builds the files a release would, and publishes
+# nothing.
 name: release-plz
 
 on:
@@ -37,7 +41,7 @@ on:
           - release
         default: build
       loader:
-        description: The loader release the mods are built for, such as v1.0.0-alpha.15
+        description: The loader release the mods are built for, such as v1.0.0-alpha.15; release takes the one release-pr named
         type: string
         required: true
 
@@ -70,30 +74,43 @@ jobs:
         with:
           gh: true
 
-      # A mod of the release set built for another loader gets a line naming
-      # this one, so release-plz bumps it.
-      - name: Name the loader in the changelogs
-        if: inputs.command == 'release-pr'
+      - name: The loader's tag
+        id: loader
         env:
           LOADER: ${{ inputs.loader }}
+        run: echo "tag=v${LOADER#v}" >> "$GITHUB_OUTPUT"
+
+      # The release pull request names the loader in Cargo.toml, as the one
+      # `release` builds on, and a mod of the release set built for another
+      # loader gets a line naming this one, so release-plz bumps it.
+      - name: Name the loader
+        if: inputs.command == 'release-pr'
+        env:
+          LOADER: ${{ steps.loader.outputs.tag }}
         run: cargo xtask built-for "$LOADER"
 
       - name: Pin the loader
         if: inputs.command == 'release'
         env:
-          LOADER: ${{ inputs.loader }}
+          LOADER: ${{ steps.loader.outputs.tag }}
         run: cargo xtask pin "$LOADER"
 
-      # A release goes out with its notes or not at all: a mod with changes
-      # still under Unreleased, a released mod built for another loader, or
-      # notes naming another loader than the pinned one, stops the run before
-      # anything is tagged. A mod tagged by a run that stopped partway is
-      # taken again.
+      # A release goes out with its notes or not at all: a pin to another
+      # loader than the release pull request named, a mod with changes still
+      # under Unreleased, a released mod built for another loader, or notes
+      # naming another loader, stops the run before anything is tagged. A
+      # mod tagged by a run that stopped partway is taken again.
       - name: Notes of the mods to release
         if: inputs.command == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo xtask notes --unfinished --out "$RUNNER_TEMP/notes"
+        run: cargo xtask notes --unfinished --pinned --out "$RUNNER_TEMP/notes"
+
+      # main's checks build on the platform's main, never on the loader:
+      # the tree the tags name must build on it before anything is tagged.
+      - name: Build on the loader
+        if: inputs.command == 'release'
+        run: cargo check --workspace --locked
 
       # The app pushes the release branch and tags, makes the releases and
       # opens the release pull request, which then runs CI as any other; the
@@ -110,13 +127,14 @@ jobs:
 
       # release-plz tags and branches from HEAD through the API, so the
       # changes above go on top of main as a commit on GitHub that no branch
-      # names: the release pull request carries the changelog lines into
-      # main, while the pin stays only in the commit the tags name.
+      # names: the release pull request carries the loader and the changelog
+      # lines into main, while the pin stays only in the commit the tags
+      # name.
       - name: Commit the changes on GitHub
         uses: ./.github/actions/commit-on-github
         with:
           token: ${{ steps.token.outputs.token }}
-          message: "${{ inputs.command == 'release' && format('chore(release): build on enshwick {0}', inputs.loader) || format('fix(deps): build the release set for enshwick {0}', inputs.loader) }}"
+          message: "${{ inputs.command == 'release' && format('chore(release): build on enshwick {0}', steps.loader.outputs.tag) || format('fix(deps): build the release set for enshwick {0}', steps.loader.outputs.tag) }}"
 
       # On `release` it only pushes the tags (release-plz.toml); the next
       # step makes the releases.
@@ -189,7 +207,7 @@ jobs:
         release: ${{ fromJSON(needs.release-plz.outputs.releases) }}
     # A fresh machine, as above.
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: write
       id-token: write
@@ -322,7 +340,7 @@ jobs:
     if: inputs.command == 'build'
     # A fresh machine, as above, without the release environment's secrets.
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -340,16 +358,19 @@ jobs:
           gh: true
           tools: cargo-cyclonedx@0.5.10,cargo-auditable@0.7.7
 
-      - name: Pin the loader
+      # As `release-pr` and `release` would, from this branch.
+      - name: Name and pin the loader
         env:
           LOADER: ${{ inputs.loader }}
-        run: cargo xtask pin "$LOADER"
+        run: |
+          cargo xtask built-for "$LOADER"
+          cargo xtask pin "$LOADER"
 
       - name: Notes
         id: notes
         continue-on-error: true
         run: |
-          cargo xtask notes --unreleased --out "$RUNNER_TEMP/notes"
+          cargo xtask notes --unreleased --pinned --out "$RUNNER_TEMP/notes"
           packages=$(find "$RUNNER_TEMP/notes" -name '*.md' -printf '%f\n' 2> /dev/null | sed 's/\.md$//' | sort | tr '\n' ' ')
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
 

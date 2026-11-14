@@ -66,7 +66,7 @@ jobs:
             pages=false
           elif [ "$FULL" != true ]; then
             git diff --name-only "$BASE...HEAD" | grep -qE '^([^/]+/docs/player[^/]*\.md|\.github/workflows/(ci|check)\.yml)$' || pages=false
-            never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/(release-plz|coverage)\.yml|actions/release-files/.*)$|codecov\.yml$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
+            never='^(\.github/(actionlint\.yaml|zizmor\.yml|workflows/(release-plz|coverage)\.yml|actions/(release-files|commit-on-github)/.*)$|codecov\.yml$|[^/]+\.md$|(.*/)?(README|CHANGELOG|ARCHITECTURE)\.md$|[^/]+/docs/|(.*/)?LICENSE$|tools/wine/|\.gitignore$|renovate\.json$|_typos\.toml$|\.rumdl\.toml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$)'
             if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
               reason="no file that builds changed"
             fi
@@ -182,8 +182,8 @@ jobs:
       # A release pull request merges only once `release` would take its
       # notes, choosing the mods as it does: each bumped mod's section
       # closed, a version tagged without its files finished from its tag,
-      # every other mod built for the pinned loader, the platform on a
-      # loader alpha.
+      # every other mod built for the loader the pull request names in
+      # `[workspace.metadata.release]`, a release of that loader.
       - name: Notes of the mods to release
         if: startsWith(github.head_ref || github.ref_name, 'release-plz-')
         env:

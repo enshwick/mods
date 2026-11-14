@@ -35,8 +35,8 @@ enum Task {
         /// The loader's tag, such as `v1.0.0-alpha.14`.
         tag: String,
     },
-    /// Names a loader tag in the changelog of each mod of the release set
-    /// whose released version was built for another loader.
+    /// Names a loader tag as the next release's, in the root manifest and in
+    /// the changelog of each mod of the release set built for another one.
     BuiltFor {
         /// The loader's tag, such as `v1.0.0-alpha.14`.
         tag: String,

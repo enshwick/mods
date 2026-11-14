@@ -75,7 +75,7 @@ mod tests {
     const RELEASED: &str = "## [0.1.0] - 2026-11-05\n\n### Added\n\n- First.\n";
 
     #[test]
-    fn pinning_back_drops_a_loader_line_and_keeps_other_changes() {
+    fn naming_the_released_loader_drops_its_line_and_keeps_other_changes() {
         let changelog = format!("{HEAD}\n{RELEASED}");
         let built = built_for(&changelog, Some("1.0.0-alpha.14")).unwrap();
         assert_eq!(built_for(&built, None).unwrap(), changelog);

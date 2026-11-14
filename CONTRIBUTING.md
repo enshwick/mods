@@ -83,8 +83,11 @@ the mods are built for, such as `v1.0.0-alpha.14`:
    release-plz bumps it as well: release-plz does not count a changed git
    commit of a dependency as a change. A mod whose version has no tag yet
    is left alone, and naming the loader a mod was released on drops its
-   line. The run commits those lines on top of `main` and opens or updates
-   the release pull request from there, which
+   line. A version closed for another loader but not released yet is
+   refused: run `release` for that loader first. The loader also goes into
+   `loader` under `[workspace.metadata.release]` in the root `Cargo.toml`,
+   as the one the release builds on. The run commits these changes on top
+   of `main` and opens or updates the release pull request from there, which
    bumps the mods of the release set whose folders changed, and then closes each bumped mod's
    changelog on its branch: the `## [Unreleased]` section becomes
    `## [0.2.0] - 2026-11-05`, with an empty `## [Unreleased]` above it. A
@@ -99,15 +102,16 @@ the mods are built for, such as `v1.0.0-alpha.14`:
    Review and merge it. A mod never released has no tag to bump from, so
    release-plz opens no pull request for it: set its version and close its
    section in an ordinary pull request.
-2. Run `release` on `main` with the same `loader`. It pins the platform to
-   that loader (`cargo xtask pin v1.0.0-alpha.14`, the commit of that
-   release in the root `Cargo.toml` and `Cargo.lock`), commits the pin on
-   top of `main` on no branch, and tags that commit.
+2. Run `release` on `main` with the same `loader`; another one is refused.
+   It pins the platform to that loader (`cargo xtask pin v1.0.0-alpha.14`,
+   the commit of that release in the root `Cargo.toml` and `Cargo.lock`),
+   checks that the pinned workspace builds, commits the pin on top of
+   `main` on no branch, and tags that commit.
 
 `release-plz.yml` runs by hand, each time for the loader alpha in `loader`:
 
-- `build`, from any branch, pins that loader, does what a release would and
-  publishes nothing: it writes the notes of every mod of the release set whose
+- `build`, from any branch, names and pins that loader as `release-pr` and
+  `release` would, does what a release would and publishes nothing: it writes the notes of every mod of the release set whose
   version has no tag yet and builds those mods, every mod when a mod's notes
   are refused, and shows both in the run's summary.
 - `release-pr` opens the release pull request for the mods of the release
@@ -125,10 +129,11 @@ the mods are built for, such as `v1.0.0-alpha.14`:
 `cargo xtask notes` opens each mod's notes with the alpha warning in
 English, names the loader alpha and gives the mod's section of its version.
 It refuses a mod still at its placeholder version (`0.0.0-dev`), a mod with
-changes under Unreleased or without its version's section, a released mod built for another loader than the pinned
-one, a section whose `Built for Enshwick` line names another loader than
-the pinned one, and a workspace whose `enshwick` commit no loader release
-tags.
+changes under Unreleased or without its version's section, a released mod
+built for another loader than the one `[workspace.metadata.release]` names,
+a section whose `Built for Enshwick` line names another loader, and a
+loader no release of the platform tags. With `--pinned`, as `release` and
+`build` run it, it also refuses a platform pinned to another loader.
 `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root

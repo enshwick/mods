@@ -11,7 +11,7 @@ use std::process::Command;
 
 use cargo_enshwick::changelog::{self, ALPHA_WARNING, CHANGELOG};
 
-use crate::commands::release::built_for;
+use crate::commands::release::{Loader, built_for};
 use crate::{Package, packages, say};
 
 /// The command line `notes` takes: one way to choose the mods and where to
@@ -24,6 +24,10 @@ pub(crate) struct Args {
     /// out.
     #[arg(long)]
     out: Option<PathBuf>,
+    /// Refuses unless the platform is pinned to the loader the release set
+    /// is for, as the run that builds the release pins it.
+    #[arg(long)]
+    pinned: bool,
 }
 
 /// Exactly one way to choose the mods.
@@ -79,8 +83,8 @@ const MAX_BODY: usize = 125_000;
 /// not finished with `--unfinished`, and `releases.json` listing them; the
 /// files there are the mods a release takes, so a run that refuses one
 /// writes none. With either flag, a released mod built for another loader
-/// than the pinned one is refused too: a loader alpha releases every mod of
-/// the release set.
+/// than the one `[workspace.metadata.release]` names is refused too: a
+/// loader alpha releases every mod of the release set.
 pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let root = root();
     let out = args
@@ -97,12 +101,18 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     {
         return Err(format!("{missing} is not a mod players get"));
     }
-    let rev = pinned_rev(&std::fs::read_to_string(root.join(MANIFEST)).map_err(|e| e.to_string())?)
-        .ok_or_else(|| format!("Cargo.toml: no `rev` of {API}"))?;
+    let manifest = std::fs::read_to_string(root.join(MANIFEST)).map_err(|e| e.to_string())?;
+    let loader = Loader::of_release(&manifest)?;
+    if args.pinned && pinned_rev(&manifest).as_deref() != Some(&loader.commit) {
+        return Err(format!(
+            "the platform is not pinned to {0}, the loader [workspace.metadata.release] names for the release set: release for {0}, or run release-pr for the other loader first",
+            loader.tag
+        ));
+    }
     clear(&out, &shipped)?;
     let way = args.choice.way();
     let remote = GitHub::read()?;
-    let Some(mods) = choose(shipped, way, &rev, &remote)? else {
+    let Some(mods) = choose(shipped, way, &loader.commit, &remote)? else {
         return Ok(false);
     };
     if mods.is_empty() {
@@ -112,7 +122,7 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let mut ok = true;
     let mut written = Vec::new();
     for package in &mods {
-        match mod_notes(package, &rev, &remote) {
+        match mod_notes(package, &loader, &remote) {
             Ok((text, loader)) => written.push((package, text, loader)),
             Err(error) => {
                 say(&error);
@@ -183,30 +193,30 @@ fn releasable(package: &Package) -> Result<(), String> {
 }
 
 /// The notes of the package's version and the loader tag it is built on,
-/// the pinned `rev`; a version a stopped run tagged is released as tagged,
-/// so its changelog and loader come from the tag, which `assets` builds.
+/// the release set's `loader`; a version a stopped run tagged is released
+/// as tagged, so its changelog and loader come from the tag, which `assets`
+/// builds.
 fn mod_notes(
     package: &Package,
-    rev: &str,
+    loader: &Loader,
     remote: &impl Remote,
 ) -> Result<(String, String), String> {
     releasable(package)?;
     let path = package.dir.join(CHANGELOG);
     let tag = tag_of(package);
-    let (changelog, rev) = if remote.released(&tag) {
+    let (changelog, loader) = if remote.released(&tag) {
         let rev =
             built_on(&tag)?.ok_or_else(|| format!("{tag}: Cargo.toml has no `rev` of {API}"))?;
         let dir = package.dir.to_string_lossy();
         (
             git(&["-C", &dir, "show", &format!("{tag}:./{CHANGELOG}")])?,
-            rev,
+            loader_tag(&rev)?,
         )
     } else {
         let changelog =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        (changelog, rev.to_owned())
+        (changelog, loader.tag.clone())
     };
-    let loader = loader_tag(&rev)?;
     let section = changelog::closed(&changelog, &package.version)
         .map_err(|e| format!("{}: {e}", path.display()))?
         .ok_or_else(|| {
@@ -231,7 +241,7 @@ enum Way<'a> {
 }
 
 /// The shipped mods `way` takes; `None` when a released mod that is not
-/// taken was built for another loader than `rev`, said on stderr.
+/// taken was built for another loader commit than `rev`, said on stderr.
 fn choose(
     shipped: Vec<Package>,
     way: Way<'_>,
@@ -251,7 +261,7 @@ fn choose(
             mods.push(package);
         } else if !matches!(way, Way::Chosen(_)) && built_on(&tag)?.as_deref() != Some(rev) {
             say(&format!(
-                "{tag} was built for another loader than the pinned one; run release-pr for this loader so it bumps the mod"
+                "{tag} was built for another loader than the release set's; run release-pr for this loader so it bumps the mod"
             ));
             ok = false;
         }
@@ -576,12 +586,12 @@ fn release_at<'a>(listing: &'a str, rev: &str) -> Option<&'a str> {
 
 /// Major, minor, patch, whether it is a release, and each prerelease
 /// identifier as (alphanumeric, number, text).
-pub(crate) type VersionKey<'a> = (u64, u64, u64, bool, Vec<(bool, u64, &'a str)>);
+type VersionKey<'a> = (u64, u64, u64, bool, Vec<(bool, u64, &'a str)>);
 
 /// A tag `v<major>.<minor>.<patch>[-<pre>]` as a key that orders as SemVer
 /// does: a release after its prereleases, numeric identifiers by number and
 /// before alphanumeric ones; `None` for any other tag.
-pub(crate) fn version_of(tag: &str) -> Option<VersionKey<'_>> {
+fn version_of(tag: &str) -> Option<VersionKey<'_>> {
     let version = tag.strip_prefix('v')?;
     let (core, pre) = version
         .split_once('-')
@@ -604,13 +614,13 @@ pub(crate) fn version_of(tag: &str) -> Option<VersionKey<'_>> {
 }
 
 /// The release notes of `package` built for the `loader` tag; refused when
-/// its `changes` name another loader, which `release-pr` wrote for a loader
-/// other than the one `release` built on.
+/// its `changes` name another loader, which only a hand edit leaves, since
+/// `built-for` refuses to move on while such a version waits.
 fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
     let version = loader.strip_prefix('v').unwrap_or(loader);
     if let Some(named) = built_for::named(changes).filter(|named| *named != version) {
         return Err(format!(
-            "{package}: its changes say built for Enshwick {named}, but it builds on {loader}; release it on v{named} or run release-pr for {loader}"
+            "{package}: its changes say built for Enshwick {named}, but it builds on {loader}; name v{named} in [workspace.metadata.release] to release it on that loader, or correct the line"
         ));
     }
     let text = format!(

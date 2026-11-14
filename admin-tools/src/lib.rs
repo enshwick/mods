@@ -527,12 +527,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn every_text_exists_in_english_and_ukrainian_and_the_other_languages_fall_back_to_english() {
-        let texts = Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.missing_in(&[Language::FALLBACK, Language::UK_UA]), []);
-    }
-
     /// The ASCII words of `text`, as typed words are, keeping the `.` and `:`
     /// inside numbers and times; a particle such as Korean `처럼` may follow
     /// a word without a space.
@@ -597,8 +591,7 @@ mod tests {
             .chain(schema.fields.iter().map(|field| field.text.clone()))
             .flat_map(|key| [format!("{key}.doc"), key]);
         for key in keys {
-            // Before 1.0 a new text comes in these two; the rest fall back to English.
-            for language in ["en", "uk"] {
+            for language in Language::REQUIRED.iter().map(|language| language.code()) {
                 assert!(
                     tables[language].as_table().unwrap().contains_key(&key),
                     "{language}: {key}"

@@ -85,7 +85,9 @@ then shows the reason in the player's language. A change applies while the game
 runs, to Safes named after the change. The panel and the
 Shift+L notice use each player's own language.
 
-The texts come in every language of [texts.toml](src/texts.toml).
+The texts come in English and Ukrainian, and in the other languages of
+[texts.toml](src/texts.toml) where they are translated; an untranslated text
+shows in English.
 
 The mod keeps owners and allowed players per world, beside the world's save, in
 `<save>-mod-data/enshwick.personal-safes/owners.toml`. Each world a player

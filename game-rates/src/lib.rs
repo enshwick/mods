@@ -443,13 +443,7 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_all_languages() {
-        let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
-    }
-
-    #[test]
-    fn the_mod_and_every_setting_have_their_texts_in_each_table() {
+    fn the_mod_and_every_setting_have_their_texts_and_no_table_keeps_a_stale_one() {
         let schema = Settings::schema();
         let keys: Vec<String> = std::iter::once(schema.text.clone())
             .chain(schema.groups.iter().map(|group| group.text.clone()))
@@ -459,12 +453,16 @@ mod tests {
             .chain([enshwick::i18n::MOD_NAME, enshwick::i18n::MOD_DESCRIPTION].map(str::to_owned))
             .collect();
         let tables: toml::Table = toml::from_str(texts::TOML).unwrap();
-        for (language, table) in &tables {
-            let table = table.as_table().unwrap();
+        for language in enshwick::i18n::Language::REQUIRED {
+            let table = tables[language.code()].as_table().unwrap();
             for key in &keys {
-                assert!(table.contains_key(key), "{language}: {key}");
+                assert!(table.contains_key(key), "{}: {key}", language.code());
             }
-            assert_eq!(table.len(), keys.len(), "{language}: no stale keys");
+        }
+        for (language, table) in &tables {
+            for key in table.as_table().unwrap().keys() {
+                assert!(keys.contains(key), "{language}: stale {key}");
+            }
         }
     }
 

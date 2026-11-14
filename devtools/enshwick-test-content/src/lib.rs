@@ -233,15 +233,8 @@ enshwick::declare_mod!(TestContent);
 #[cfg(test)]
 mod tests {
     use enshwick::abi::Status;
-    use enshwick::i18n::Texts;
 
     use super::*;
-
-    #[test]
-    fn every_text_exists_in_all_languages() {
-        let texts = Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
-    }
 
     #[test]
     fn the_enemy_altar_and_chest_carry_their_own_values_and_names() {

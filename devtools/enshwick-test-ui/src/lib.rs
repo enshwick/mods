@@ -227,12 +227,6 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_all_languages() {
-        let texts = Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
-    }
-
-    #[test]
     fn it_starts_on_every_side_without_a_panic() {
         for (side, hosting) in [
             (Side::SERVER, false),

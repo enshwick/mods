@@ -267,11 +267,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_text_exists_in_all_languages() {
+    fn the_mod_and_every_setting_and_choice_have_their_texts() {
         use enshwick::i18n::{MOD_DESCRIPTION, MOD_NAME};
 
         let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
         let schema = Settings::schema();
         let mut keys = vec![
             MOD_NAME.to_owned(),

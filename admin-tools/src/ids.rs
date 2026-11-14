@@ -85,17 +85,85 @@ pub(crate) const OPEN: &str = "open";
 /// Opens the window of one player.
 pub(crate) const PLAYER: &str = "player";
 
+/// Protects a circle around the caller from building.
+pub(crate) const ZONE: &str = "zone";
+/// Protects a box around the caller from building.
+pub(crate) const ZONE_BOX: &str = "zonebox";
+/// Lists the protected zones.
+pub(crate) const ZONES: &str = "zones";
+/// Switches a protected zone on or off.
+pub(crate) const ZONE_SWITCH: &str = "zoneswitch";
+/// Removes a protected zone.
+pub(crate) const UNZONE: &str = "unzone";
+/// Spawns creatures beside a player.
+pub(crate) const SPAWN: &str = "spawn";
+/// Spawns creatures at a position.
+pub(crate) const SPAWN_AT: &str = "spawnat";
+/// Places a prop beside a player.
+pub(crate) const PROP: &str = "prop";
+/// Places a prop at a position.
+pub(crate) const PROP_AT: &str = "propat";
+/// Takes back the last prop the caller placed.
+pub(crate) const UNPROP: &str = "unprop";
+
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 40] = [
-    PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, SET_MOTD, SAY, KICK, BAN, BANS, BANNED, ALLOWED,
-    ACCOUNT, MUTED, HEAL, STATS, REVIVE, LEARN, UNCOVER, GOD, GIVE, CHEST, CHEST_AT, CLEAR, COPY,
-    GOTO, BRING, SEND, PLACE, MARK, TIME, WEATHER, RESTART, SAVE, BACKUP, WORLD, WHO, AUDIT, CHAT,
+pub(crate) const ALL: [&str; 50] = [
+    PANEL,
+    OPEN,
+    PLAYER,
+    ONLINE,
+    STATUS,
+    MOTD,
+    SET_MOTD,
+    SAY,
+    KICK,
+    BAN,
+    BANS,
+    BANNED,
+    ALLOWED,
+    ACCOUNT,
+    MUTED,
+    HEAL,
+    STATS,
+    REVIVE,
+    LEARN,
+    UNCOVER,
+    GOD,
+    GIVE,
+    CHEST,
+    CHEST_AT,
+    CLEAR,
+    COPY,
+    GOTO,
+    BRING,
+    SEND,
+    PLACE,
+    MARK,
+    TIME,
+    WEATHER,
+    RESTART,
+    SAVE,
+    BACKUP,
+    WORLD,
+    WHO,
+    AUDIT,
+    CHAT,
+    ZONE,
+    ZONE_BOX,
+    ZONES,
+    ZONE_SWITCH,
+    UNZONE,
+    SPAWN,
+    SPAWN_AT,
+    PROP,
+    PROP_AT,
+    UNPROP,
 ];
 
 /// The groups the command help lists the actions under, each group's text
 /// key and its actions, in the order the help shows them: the order the
 /// mod declares them in.
-pub(crate) const GROUPS: [(&str, &[&str]); 9] = [
+pub(crate) const GROUPS: [(&str, &[&str]); 11] = [
     (texts::GROUP_PLAYERS, &[ONLINE, KICK, MUTED]),
     (
         texts::GROUP_ACCOUNTS,
@@ -110,6 +178,14 @@ pub(crate) const GROUPS: [(&str, &[&str]); 9] = [
     (texts::GROUP_SERVER, &[MOTD, SET_MOTD, SAY, RESTART, STATUS]),
     (texts::GROUP_WORLD, &[TIME, WEATHER, SAVE, WORLD, BACKUP]),
     (texts::GROUP_LOGS, &[AUDIT, CHAT, WHO]),
+    (
+        texts::GROUP_ZONES,
+        &[ZONE, ZONE_BOX, ZONES, ZONE_SWITCH, UNZONE],
+    ),
+    (
+        texts::GROUP_SPAWNS,
+        &[SPAWN, SPAWN_AT, PROP, PROP_AT, UNPROP],
+    ),
     (texts::GROUP_WINDOWS, &[PANEL, OPEN, PLAYER]),
 ];
 
@@ -123,14 +199,15 @@ pub(crate) fn group(id: &str) -> Option<&'static str> {
 
 /// The actions whose player lists offer the caller too: those an
 /// administrator uses on themselves as on anyone.
-pub(crate) const WITH_SELF: [&str; 13] = [
-    PLAYER, HEAL, STATS, REVIVE, LEARN, UNCOVER, GOD, GIVE, CHEST, CLEAR, COPY, PLACE, MARK,
+pub(crate) const WITH_SELF: [&str; 15] = [
+    PLAYER, HEAL, STATS, REVIVE, LEARN, UNCOVER, GOD, GIVE, CHEST, CLEAR, COPY, PLACE, MARK, SPAWN,
+    PROP,
 ];
 
 /// The actions that only read or open a window, which the audit log
 /// leaves out.
-pub(crate) const READS: [&str; 11] = [
-    PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, BANS, WORLD, WHO, AUDIT, CHAT,
+pub(crate) const READS: [&str; 12] = [
+    PANEL, OPEN, PLAYER, ONLINE, STATUS, MOTD, BANS, WORLD, WHO, AUDIT, CHAT, ZONES,
 ];
 
 /// The command's short alias.

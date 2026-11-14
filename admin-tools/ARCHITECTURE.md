@@ -26,6 +26,8 @@ the server checks a press as it checks a command.
 | `src/accounts.rs` | the ban list, the allow-list, the accounts last seen at the door and the message of the day set in game, kept in the world's data |
 | `src/windows.rs` | the Admin Tools window, its sections and each player's window, built per viewer from the actions they may use, and shown again after their change |
 | `src/builds.rs` | the build log: buildings placed and removed, building blocks and terrain changed, and the lookup of what changed near a spot |
+| `src/zones.rs` | protected zones kept in the world's data, their actions, and the build filter that reads the active shapes and the zone builders without a lock |
+| `src/spawn.rs` | creatures spawned by template, and props placed and taken back by world transactions |
 | `src/schedule.rs` | announcements and restart warnings as plain state |
 | `src/journal.rs` | the audit and chat logs, each written by a thread of its own |
 | `src/backup.rs` | backups: the saves held, the copy on a thread of its own, old backups removed |

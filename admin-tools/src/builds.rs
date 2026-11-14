@@ -216,10 +216,7 @@ fn who(tools: &Tools, request: &Request<'_>) -> Outcome {
     }
     let rows = found.iter().map(|change| {
         let kind = request.say(change.kind_text(), &[]);
-        request.say(
-            texts::REPLY_WHO_ROW,
-            &crate::players::borrowed(&row(change, kind)),
-        )
+        request.say(texts::REPLY_WHO_ROW, &crate::pairs(&row(change, kind)))
     });
     Outcome::done(
         core::iter::once(head)

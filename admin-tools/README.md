@@ -11,7 +11,8 @@ commands.
   timer, a line to everyone now, restart warnings.
 - **World and server:** the time of day, the weather, saves, backups while
   the server runs, the world's game settings, and audit, chat and build
-  logs.
+  logs. Protected zones where only admins build, and creatures and props
+  spawned at a player or a position.
 - **Characters and items:** heal, set health, stamina, mana and level,
   revive, teach recipes, uncover the whole map, god mode. Give items or
   chests, clear or copy an inventory.
@@ -80,8 +81,18 @@ may be left out.
 | `/adm audit <lines>` | Shows the last lines of the audit log, up to 50. | Admins |
 | `/adm chat <lines>` | Shows the last lines of the chat log, up to 50. | Admins |
 | `/adm who <metres>` | Shows the last 10 changes to buildings and terrain near you, up to 200 metres. | Admins |
+| `/adm zone <name> <metres>` | Protects a circle this many metres around you, at every height, from building. | Admins |
+| `/adm zonebox <name> <width> <height> <depth>` | Protects a box centred on you from building, its sides in metres. | Admins |
+| `/adm zones` | Lists the protected zones. | Admins |
+| `/adm zoneswitch <name> on` or `off` | Switches a protected zone on or off. | Admins |
+| `/adm unzone <name>` | Removes a protected zone. | Admins |
+| `/adm spawn <player> <template> [count] [level] [minutes] [keep]` | Spawns creatures around a player, such as `Enemy_Wildbeast_Wolf`. They leave with the next world load unless `keep` is `on`. | Admins |
+| `/adm spawnat <x> <y> <z> <template> [count] [level] [minutes] [keep]` | Spawns creatures at a position. | Admins |
+| `/adm prop <player> <item>` | Places a prop, such as a workbench, beside a player. | Admins |
+| `/adm propat <x> <y> <z> <item>` | Places a prop at a position. | Admins |
+| `/adm unprop` | Takes back the last prop you placed. | Admins |
 | `/adm panel` | Opens the Admin Tools window. | Admins |
-| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server` or `builds`. | Admins |
+| `/adm open <section>` | Opens one section of the window: `players`, `accounts`, `server`, `builds`, `zones` or `spawns`. | Admins |
 | `/adm player <player>` | Opens the window of one player. | Admins |
 
 Admins are the players whose user group gives `CanKickBan`. The window lists
@@ -93,8 +104,20 @@ game a player hosts, also by the name the game shows.
 ## Window
 
 Shift+F9 opens the Admin Tools window, with the players and each player's
-actions, the bans and the allow-list, the server, and the build log. Each
-section shows only the actions you may use.
+actions, the bans and the allow-list, the server, the build log, the
+protected zones, and spawns and props. Each section shows only the actions
+you may use.
+
+## Protected zones
+
+In a protected zone the server refuses every placement of a building piece
+or prop, also from players without Enshwick, and tells the builder why.
+Admins may still build there; `zone_builders` in the settings names who
+else may. A zone does not refuse digging or opening chests. The zones are
+kept in `zones.toml` in `<save>-mod-data/enshwick.admin-tools/`, up to 64.
+While that file does not read, only zone builders build anywhere in the
+world, and `/adm zones` says why; a zone edited by hand to a size the
+actions would not make guards nothing, and the log names it.
 
 ## Who may use each action
 
@@ -141,6 +164,7 @@ under `[rights]`. A change applies while the world runs.
 | `rcon` | auto | Whether RCON tools may connect. Auto is on for a dedicated server. |
 | `rcon_ip`, `rcon_port` | `127.0.0.1`, 25575 | Where the remote console listens. |
 | `rcon_password` | empty | The RCON password, 16 to 128 characters. When it is empty, Admin Tools writes a random one here. |
+| `zone_builders` | `CanKickBan` | Who may still build inside a protected zone, with the rules of [who may use each action](#who-may-use-each-action). |
 | `rights.<action>` | `CanKickBan`; `everyone` for `online`, `status` and `motd` | Who may use each action. |
 
 The [player page](docs/player.md) explains each task step by step.

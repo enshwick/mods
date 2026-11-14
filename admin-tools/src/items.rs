@@ -103,24 +103,29 @@ pub(crate) fn knowledge(text: &str) -> Result<(KnowledgeId, String), ResolveKnow
 
 /// What `lookup` finds named `name`, with the game's spelling; a name that
 /// differs only in case from one the lookup suggests names that one.
-fn by_name(
+pub(crate) fn by_name(
     name: &str,
     lookup: impl Fn(&str) -> Result<Guid, VanillaError>,
 ) -> Result<(Guid, String), ResolveKnowledgeError> {
     match lookup(name) {
         Ok(guid) => Ok((guid, name.to_owned())),
-        Err(VanillaError::Unknown { near, .. } | VanillaError::UnknownRecipe { near, .. }) => {
-            match near.iter().find(|near| near.eq_ignore_ascii_case(name)) {
-                Some(exact) => lookup(exact)
-                    .map(|guid| (guid, exact.clone()))
-                    .map_err(|_| ResolveKnowledgeError::Name { near }),
-                None => Err(ResolveKnowledgeError::Name { near }),
-            }
-        }
+        Err(
+            VanillaError::Unknown { near, .. }
+            | VanillaError::UnknownRecipe { near, .. }
+            | VanillaError::UnknownTemplate { near, .. },
+        ) => match near.iter().find(|near| near.eq_ignore_ascii_case(name)) {
+            Some(exact) => lookup(exact)
+                .map(|guid| (guid, exact.clone()))
+                .map_err(|_| ResolveKnowledgeError::Name { near }),
+            None => Err(ResolveKnowledgeError::Name { near }),
+        },
         Err(
             VanillaError::Ambiguous { items: several, .. }
             | VanillaError::AmbiguousRecipe {
                 recipes: several, ..
+            }
+            | VanillaError::AmbiguousTemplate {
+                templates: several, ..
             },
         ) => Err(ResolveKnowledgeError::Several(several)),
         Err(_) => Err(ResolveKnowledgeError::Unreadable),

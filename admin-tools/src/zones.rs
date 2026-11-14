@@ -11,6 +11,7 @@ use enshwick::{Entity, Load, Off};
 use serde::{Deserialize, Serialize};
 
 use crate::players::{bad_args, character};
+use crate::settings::Who;
 use crate::{Tools, ids, texts};
 
 /// The world store's file name, `zones.toml`.
@@ -71,6 +72,19 @@ impl Shape {
         }
     }
 
+    /// Whether the actions could have made it: finite, within the sizes
+    /// they take, so a hand-edited file cannot cover the whole map.
+    fn usable(&self) -> bool {
+        match *self {
+            Self::Circle { x, z, radius } => {
+                x.is_finite() && z.is_finite() && (MIN_SIZE..=MAX_RADIUS).contains(&radius)
+            }
+            Self::Box { min, max } => min.iter().zip(&max).all(|(low, high)| {
+                low.is_finite() && (MIN_SIZE..=MAX_SIDE).contains(&(high - low))
+            }),
+        }
+    }
+
     /// Whether `at` lies inside, edges included; a shape with a NaN holds
     /// nothing.
     pub(crate) fn holds(&self, [x, y, z]: [f64; 3]) -> bool {
@@ -97,12 +111,26 @@ pub(crate) enum AddZoneError {
     Full,
 }
 
+/// What the build filter guards while the world's zones do not read: every
+/// place, as the platform asks of a value that guards something.
+const EVERYWHERE: Shape = Shape::Box {
+    min: [f64::NEG_INFINITY; 3],
+    max: [f64::INFINITY; 3],
+};
+
+/// Whether `a` and `b` are one name in any case, in any script.
+fn same_name(a: &str, b: &str) -> bool {
+    a.chars()
+        .flat_map(char::to_lowercase)
+        .eq(b.chars().flat_map(char::to_lowercase))
+}
+
 impl Zones {
     /// Where the zone named `name` is, in any case.
     fn find(&self, name: &str) -> Option<usize> {
         self.zones
             .iter()
-            .position(|zone| zone.name.eq_ignore_ascii_case(name))
+            .position(|zone| same_name(&zone.name, name))
     }
 
     /// Adds `zone`, switched on.
@@ -117,28 +145,44 @@ impl Zones {
         Ok(())
     }
 
-    /// Removes the zone named `name`; its name as kept.
+    /// Removes the zone named `name`, and any a hand edit gave the same
+    /// name; its name as kept.
     pub(crate) fn remove(&mut self, name: &str) -> Option<String> {
-        let at = self.find(name)?;
-        Some(self.zones.remove(at).name)
+        let kept = self.zones[self.find(name)?].name.clone();
+        self.zones.retain(|zone| !same_name(&zone.name, name));
+        Some(kept)
     }
 
-    /// Switches the zone named `name` on or off; its name as kept.
+    /// Switches the zone named `name` on or off, and any a hand edit gave
+    /// the same name; its name as kept.
     pub(crate) fn switch(&mut self, name: &str, on: bool) -> Option<String> {
-        let at = self.find(name)?;
-        let zone = &mut self.zones[at];
-        zone.on = on;
-        Some(zone.name.clone())
+        let kept = self.zones[self.find(name)?].name.clone();
+        for zone in &mut self.zones {
+            if same_name(&zone.name, name) {
+                zone.on = on;
+            }
+        }
+        Some(kept)
     }
 
-    /// The shapes of the zones that are on, at most [`MAX_ZONES`] of a file
-    /// edited by hand.
+    /// The shapes of the zones that are on and usable, at most
+    /// [`MAX_ZONES`] of a file edited by hand.
     pub(crate) fn guarded(&self) -> Vec<Shape> {
         self.zones
             .iter()
-            .filter(|zone| zone.on)
+            .filter(|zone| zone.on && zone.shape.usable())
             .take(MAX_ZONES)
             .map(|zone| zone.shape)
+            .collect()
+    }
+
+    /// The names of the zones a hand edit left with a shape the actions
+    /// would not make, which guard nothing.
+    fn unusable(&self) -> Vec<&str> {
+        self.zones
+            .iter()
+            .filter(|zone| !zone.shape.usable())
+            .map(|zone| zone.name.as_str())
             .collect()
     }
 }
@@ -350,6 +394,7 @@ fn list(tools: &Tools, request: &Request<'_>) -> Outcome {
     let head = request.say(texts::REPLY_ZONES, &[(texts::value::COUNT, &count)]);
     let rows: Vec<String> = zones
         .iter()
+        .take(MAX_ZONES)
         .map(|zone| {
             let (key, values) = row(zone);
             request.say(key, &crate::pairs(&values))
@@ -400,8 +445,19 @@ fn no_zone(request: &Request<'_>, name: &str) -> Outcome {
 
 /// The refusal while the world's zones do not read.
 fn shut(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let why = tools.zones.shut_reason().unwrap_or_default();
-    Outcome::refused(request.say(texts::REPLY_ZONES_SHUT, &[(texts::value::WHY, &why)]))
+    crate::shut(request, tools.zones.shut_reason(), texts::REPLY_ZONES_SHUT)
+}
+
+/// What the build filter guards: nothing when the rule lets everyone
+/// build, every place while the zones do not read, else the shapes of the
+/// zones that are on.
+fn guarding(everyone: bool, read: Option<Vec<Shape>>, shut: bool) -> Vec<Shape> {
+    match read {
+        _ if everyone => Vec::new(),
+        Some(shapes) => shapes,
+        None if shut => vec![EVERYWHERE],
+        None => Vec::new(),
+    }
 }
 
 impl Tools {
@@ -412,26 +468,42 @@ impl Tools {
         Self::keep(&self.zones, STORE);
     }
 
-    /// Hands the build filter the zones that are on in the running world,
-    /// none while they do not read, and who may build in them.
+    /// Hands the build filter what it guards in the running world, as
+    /// [`guarding`] says, and who may build there; nothing on a build
+    /// without the filter.
     pub(crate) fn guard_zones(&self) {
-        let guarded = self.zones.with(Zones::guarded).unwrap_or_default();
-        self.guarded.store(Arc::new(guarded));
+        if !self.declared(ids::ZONES) {
+            return;
+        }
+        let read = self.zones.with(|zones| {
+            let unusable = zones.unusable();
+            if !unusable.is_empty() {
+                enshwick::warn!("zones that guard nothing: {}", unusable.join(", "));
+            }
+            zones.guarded()
+        });
+        let shut = self.zones.shut_reason();
+        if let Some(why) = &shut {
+            enshwick::warn!("zones do not read, so only zone builders build: {why}");
+        }
+        let everyone = self.settings.load().zone_rule() == Who::Everyone;
+        self.guarded
+            .store(Arc::new(guarding(everyone, read, shut.is_some())));
         self.find_zone_builders();
     }
 
     /// Hands the build filter the characters of the players online whose
-    /// user group the world's rule lets build in a zone; they change as
-    /// players join, respawn and change groups.
+    /// user group the world's rule lets build in a zone.
+    // shortcut: a respawned character is refused until the next tick (1 s), since the API raises no respawn event; rebuild on one when it does.
     pub(crate) fn find_zone_builders(&self) {
         let builders: Vec<Entity> = if self.guarded.load().is_empty() {
             Vec::new()
         } else {
-            let settings = self.settings.load();
+            let rule = self.settings.load().zone_rule();
             self.world
                 .players()
                 .iter()
-                .filter(|player| settings.builds_in_zones(player))
+                .filter(|player| rule.admits(player))
                 .map(|player| player.entity)
                 .collect()
         };
@@ -505,6 +577,7 @@ mod tests {
     fn only_zones_that_are_on_guard_and_a_switch_or_removal_finds_any_case() {
         let mut zones = Zones::default();
         let hall = Shape::around([0.0; 3], [2.0; 3]);
+        assert!(hall.usable() && MARKET.usable());
         zones.add(zone("Market", MARKET)).unwrap();
         zones.add(zone("Hall", hall)).unwrap();
         assert_eq!(zones.switch("MARKET", false).as_deref(), Some("Market"));
@@ -513,6 +586,54 @@ mod tests {
         assert_eq!(zones.remove("hall").as_deref(), Some("Hall"));
         assert!(zones.guarded().is_empty());
         assert_eq!(zones.remove("hall"), None);
+    }
+
+    #[test]
+    fn a_name_is_one_in_any_case_in_any_script() {
+        let mut zones = Zones::default();
+        zones.add(zone("Ринок", MARKET)).unwrap();
+        assert_eq!(zones.add(zone("ринок", MARKET)), Err(AddZoneError::Taken));
+        assert_eq!(zones.remove("РИНОК").as_deref(), Some("Ринок"));
+    }
+
+    #[test]
+    fn a_hand_edited_shape_the_actions_would_not_make_guards_nothing() {
+        let mut zones = Zones::default();
+        let huge = Shape::Circle {
+            x: 0.0,
+            z: 0.0,
+            radius: f64::INFINITY,
+        };
+        let inside_out = Shape::Box {
+            min: [5.0; 3],
+            max: [-5.0; 3],
+        };
+        zones.add(zone("Market", MARKET)).unwrap();
+        zones.add(zone("Map", huge)).unwrap();
+        zones.add(zone("Odd", inside_out)).unwrap();
+        assert_eq!(zones.guarded(), [MARKET]);
+        assert_eq!(zones.unusable(), ["Map", "Odd"]);
+    }
+
+    #[test]
+    fn a_switch_or_removal_reaches_every_zone_a_hand_edit_named_alike() {
+        let mut zones = Zones {
+            zones: vec![zone("Market", MARKET), zone("market", MARKET)],
+        };
+        assert_eq!(zones.switch("MARKET", false).as_deref(), Some("Market"));
+        assert!(zones.guarded().is_empty());
+        assert_eq!(zones.remove("market").as_deref(), Some("Market"));
+        assert!(zones.zones.is_empty());
+    }
+
+    #[test]
+    fn zones_that_do_not_read_guard_every_place_unless_everyone_builds() {
+        assert_eq!(guarding(false, None, true), [EVERYWHERE]);
+        assert!(EVERYWHERE.holds([1e12, -1e12, 0.0]));
+        assert!(guarding(true, None, true).is_empty());
+        assert!(guarding(true, Some(vec![MARKET]), false).is_empty());
+        assert_eq!(guarding(false, Some(vec![MARKET]), false), [MARKET]);
+        assert!(guarding(false, None, false).is_empty(), "no world runs");
     }
 
     #[test]

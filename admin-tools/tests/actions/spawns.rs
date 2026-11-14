@@ -90,8 +90,8 @@ fn a_name_the_game_s_list_does_not_give_spawns_nothing_and_asks_for_a_guid() {
             "spawnat",
             "n0\tn0\tn0\ttEnemy_Wolv\tn1\tn0\tn0\tb0",
         ),
-        "0Admin Tools: the game's list does not read, so «Enemy_Wolv» names nothing. \
-         Name it by its GUID or number."
+        "0Admin Tools: the game's templates do not read, so «Enemy_Wolv» names nothing. \
+         Name it by its GUID."
     );
     assert!(spawns(&loader).is_empty());
 }
@@ -130,10 +130,10 @@ fn a_prop_goes_up_beside_the_player_and_the_last_one_is_taken_back_once() {
                 .zip([2.0, 20.0, 7.0])
                 .all(|(a, b)| (a - b).abs() < 1e-3)
     )));
-    assert_eq!(
-        run(&loader, &ann(), "unprop", ""),
-        "1Your last prop, Prop_Storage_32_T2_Chest_Wood, is taken back."
-    );
+    // The mod remembers the prop at a look after the game placed it; a
+    // take-back before that finds none and changes nothing.
+    assert!(tick_until(&loader, || run(&loader, &ann(), "unprop", "")
+        == "1Your last prop, Prop_Storage_32_T2_Chest_Wood, will be taken back."));
     assert!(tick_until(&loader, || loader.props().is_empty()));
     assert_eq!(
         run(&loader, &ann(), "unprop", ""),

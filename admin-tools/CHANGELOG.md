@@ -12,12 +12,18 @@ Each entry says what players notice; a release's notes show its section.
   where only zone builders, admins by default, may build. The server refuses
   every other placement there, also from players without Enshwick, and the
   builder reads why. Zones are listed, switched on and off and removed in
-  the window and by command, and kept with the world.
+  the window and by command, and kept with the world. While the zones file
+  does not read, only zone builders build anywhere.
 - Administrators spawn creatures by template name or GUID around a player
   or at a position, with a count, a level and a lifetime. Spawned creatures
   leave with the next world load unless kept.
 - Administrators place a prop, such as a workbench, beside a player or at a
   position, and take back their last one.
+
+### Fixed
+
+- The bans window lists the bans only to players who may read the ban list.
+- A window whose list is longer than it shows says how many rows it left out.
 
 ## [0.1.0] - 2026-11-14
 

@@ -115,6 +115,9 @@ or prop, also from players without Enshwick, and tells the builder why.
 Admins may still build there; `zone_builders` in the settings names who
 else may. A zone does not refuse digging or opening chests. The zones are
 kept in `zones.toml` in `<save>-mod-data/enshwick.admin-tools/`, up to 64.
+While that file does not read, only zone builders build anywhere in the
+world, and `/adm zones` says why; a zone edited by hand to a size the
+actions would not make guards nothing, and the log names it.
 
 ## Who may use each action
 

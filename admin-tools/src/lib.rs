@@ -140,7 +140,7 @@ pub(crate) struct Tools {
     /// build filter.
     zone_builders: ArcSwap<Vec<Entity>>,
     /// The last prop each caller placed, which they may take back.
-    props: Mutex<FxHashMap<PlayerKey, spawn::Placed>>,
+    props: Mutex<FxHashMap<spawn::Caller, spawn::Placed>>,
 }
 
 /// A handler of one of the mod's actions.
@@ -251,7 +251,8 @@ impl Tools {
             leaves.joined.relock().remove(&left.key);
             leaves.forget_window(left.key);
             leaves.set_god(left.key, None);
-            leaves.props.relock().remove(&left.key);
+            leaves.props.relock().retain(|(key, _), _| *key != left.key);
+            leaves.find_zone_builders();
         })?;
         let ticks = Arc::clone(self);
         load.on_tick(TICK, move |tick| {
@@ -414,7 +415,7 @@ impl Tools {
         if !self.running.load(Ordering::Relaxed) {
             return;
         }
-        self.find_zone_builders();
+        self.guard_zones();
         self.listen(settings);
         let changed = server::changed_keys(&old, settings);
         // The change that turns the log off is its last line.
@@ -503,6 +504,13 @@ pub(crate) fn pairs<'a>(values: &'a [(&'static str, String)]) -> Vec<(&'a str, &
         .iter()
         .map(|(name, value)| (*name, value.as_str()))
         .collect()
+}
+
+/// The refusal while a world store does not read: the text `key` with the
+/// store's reason `why`.
+pub(crate) fn shut(request: &Request<'_>, why: Option<String>, key: &str) -> Outcome {
+    let why = why.unwrap_or_default();
+    Outcome::refused(request.say(key, &[(texts::value::WHY, &why)]))
 }
 
 /// `parts` as one reply: a line each in chat, the console and a remote

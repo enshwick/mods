@@ -559,6 +559,35 @@ fn the_zones_section_lists_each_zone_with_its_switch_and_carries_whole_when_full
 }
 
 #[test]
+fn the_zones_section_lists_the_zones_only_to_a_viewer_who_may_read_them() {
+    let dir = scratch("zones-window-rights");
+    let loader = server("[rights]\nzones = \"nobody\"\n", &dir);
+    assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
+    assert_eq!(run(&loader, &ann(), "open", "c4"), "1");
+    let zones = window(&loader, &ann(), "zones");
+    assert_eq!(whole(&zones), ["zone", "zonebox"]);
+    assert_eq!(zones.items.len(), 2, "{:?}", zones.items);
+}
+
+#[test]
+fn a_list_longer_than_a_window_says_how_many_rows_it_left_out() {
+    let dir = scratch("zones-window-more");
+    let loader = server("", &dir);
+    for n in 0..17 {
+        let line = format!("tz{n}\tn10");
+        assert!(run(&loader, &ann(), "zone", &line).starts_with('1'));
+    }
+    assert_eq!(run(&loader, &ann(), "open", "c4"), "1");
+    let zones = window(&loader, &ann(), "zones");
+    assert_eq!(rows(&zones).len(), 16);
+    assert!(
+        matches!(zones.items.last(), Some(ItemView::Text(text)) if text == "And 1 more."),
+        "{:?}",
+        zones.items.last()
+    );
+}
+
+#[test]
 fn a_zone_s_buttons_switch_it_the_other_way_and_remove_it() {
     let dir = scratch("zones-buttons");
     let loader = server("", &dir);

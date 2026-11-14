@@ -168,17 +168,15 @@ impl Settings {
         }
         let rules = ids::ALL
             .iter()
-            .map(|id| {
-                (
-                    format!("rights.{}", id.replace('-', "_")),
-                    self.rights.rule(id),
-                )
-            })
-            .chain([(ZONE_BUILDERS.to_owned(), self.zone_builders.as_str())]);
-        for (field, rule) in rules {
+            .map(|id| (Some(*id), self.rights.rule(id)))
+            .chain([(None, self.zone_builders.as_str())]);
+        for (id, rule) in rules {
             if Who::parse(rule).is_none() {
                 return Err(CheckSettingsError::Rule {
-                    field,
+                    field: id.map_or_else(
+                        || ZONE_BUILDERS.to_owned(),
+                        |id| format!("rights.{}", id.replace('-', "_")),
+                    ),
                     rule: rule.to_owned(),
                     words: Who::words().join(", "),
                 });
@@ -187,10 +185,10 @@ impl Settings {
         Ok(())
     }
 
-    /// Whether `player` may build inside a protected zone; a rule the check
-    /// would refuse lets nobody.
-    pub(crate) fn builds_in_zones(&self, player: &Player) -> bool {
-        Who::parse(&self.zone_builders).is_some_and(|who| who.admits(player))
+    /// Who may build inside a protected zone; a rule the check would refuse
+    /// lets nobody.
+    pub(crate) fn zone_rule(&self) -> Who {
+        Who::parse(&self.zone_builders).unwrap_or(Who::Nobody)
     }
 
     /// Whether the audit log is on, `dedicated` saying whether this is a
@@ -547,7 +545,7 @@ impl Rules {
 
 /// A rule's meaning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Who {
+pub(crate) enum Who {
     Everyone,
     Nobody,
     Permission(PlayerPermissions),
@@ -571,7 +569,7 @@ impl Who {
     }
 
     /// Whether the rule lets `player` in.
-    fn admits(self, player: &Player) -> bool {
+    pub(crate) fn admits(self, player: &Player) -> bool {
         match self {
             Self::Everyone => true,
             Self::Permission(permission) => player.has(permission),
@@ -703,18 +701,18 @@ mod tests {
     fn zone_builders_are_administrators_unless_the_world_names_a_rule_the_check_takes() {
         let admin = player(1, PlayerPermissions::CanKickBan.bit());
         let builder = player(2, PlayerPermissions::CanEditBase.bit());
-        let defaults = Settings::default();
-        assert!(defaults.builds_in_zones(&admin) && !defaults.builds_in_zones(&builder));
+        let defaults = Settings::default().zone_rule();
+        assert!(defaults.admits(&admin) && !defaults.admits(&builder));
         let bases = Settings {
             zone_builders: "CanEditBase".into(),
             ..Settings::default()
         };
-        assert!(bases.builds_in_zones(&builder));
+        assert!(bases.zone_rule().admits(&builder));
         let typo = Settings {
             zone_builders: "builders".into(),
             ..Settings::default()
         };
-        assert!(!typo.builds_in_zones(&admin), "a bad rule lets nobody");
+        assert_eq!(typo.zone_rule(), Who::Nobody, "a bad rule lets nobody");
         let refused = typo.check().unwrap_err().to_string();
         assert!(refused.starts_with("zone_builders: builders"), "{refused}");
     }

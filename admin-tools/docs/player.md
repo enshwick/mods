@@ -346,7 +346,9 @@ build in the zone until you switch it on again, and `/adm unzone market`
 removes it. A name with spaces goes in quotes.
 
 A world keeps up to 64 zones, in `zones.toml` in
-`<save>-mod-data/enshwick.admin-tools/`.
+`<save>-mod-data/enshwick.admin-tools/`. If you edit that file and it no
+longer reads, only zone builders can build anywhere in the world. `/adm zones`
+then says what is wrong.
 
 A zone refuses placing things. It does not refuse digging or opening chests.
 

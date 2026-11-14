@@ -14,7 +14,7 @@ use enshwick::world::Player;
 use enshwick::{Off, PlayerKey, Relock as _};
 
 use crate::builds::Change;
-use crate::players::{ban_values, borrowed};
+use crate::players::ban_values;
 use crate::server::FORECASTS;
 use crate::{Tools, ids, texts};
 
@@ -206,6 +206,18 @@ impl<'a> Build<'a> {
         }
         self
     }
+
+    /// Says how many of `total` rows a list of at most [`MAX_ROWS`] left
+    /// out, when it left any.
+    fn more(self, total: usize) -> Self {
+        match total.checked_sub(MAX_ROWS) {
+            Some(left) if left > 0 => {
+                let left = left.to_string();
+                self.text(texts::WINDOW_MORE, &[(texts::value::COUNT, &left)])
+            }
+            _ => self,
+        }
+    }
 }
 
 /// `player` as a button hands them to an action.
@@ -297,7 +309,11 @@ impl Tools {
         let count = self.world.players().len().to_string();
         let mut build = Build::new(self, viewer, PANEL, texts::WINDOW_PANEL)
             .text(texts::REPLY_ONLINE, &[(texts::value::COUNT, &count)]);
-        for (at, (_, label, _)) in SECTIONS.iter().enumerate() {
+        for (at, (_, label, section)) in SECTIONS.iter().enumerate() {
+            // A build without the build filter has no zones to show.
+            if *section == Section::Zones && !self.declared(ids::ZONES) {
+                continue;
+            }
             let open: &[Value] = &[Value::Choice(at)];
             build = build.row(label, &[], &[(texts::BUTTON_OPEN, ids::OPEN, open)], false);
         }
@@ -335,7 +351,7 @@ impl Tools {
             };
             build = build.row(texts::REPLY_ONLINE_ROW, &values, buttons, true);
         }
-        build.window
+        build.more(players.len()).window
     }
 
     /// One player: moving them, moderating them and caring for them.
@@ -444,12 +460,16 @@ impl Tools {
         } else {
             texts::WINDOW_ALLOWLIST_OFF
         };
-        let mut build = build
+        let build = build
             .action(ids::BAN)
             .text(allowlist, &[])
             .action(ids::ALLOWED)
-            .action(ids::ACCOUNT)
-            .text(texts::REPLY_BANS, &[(texts::value::COUNT, &count)]);
+            .action(ids::ACCOUNT);
+        // The list is the ban list's read right, as the command's is.
+        if !build.may(ids::BANS) {
+            return build.window;
+        }
+        let mut build = build.text(texts::REPLY_BANS, &[(texts::value::COUNT, &count)]);
         for ban in bans.iter().rev().take(MAX_ROWS) {
             let lift: &[Value] = &[
                 Value::Player {
@@ -460,12 +480,12 @@ impl Tools {
             ];
             build = build.row(
                 texts::REPLY_BANS_ROW,
-                &borrowed(&ban_values(ban)),
+                &crate::pairs(&ban_values(ban)),
                 &[(texts::BUTTON_UNBAN, ids::BANNED, lift)],
                 true,
             );
         }
-        build.window
+        build.more(bans.len()).window
     }
 
     /// The message of the day, announcements, the restart warning, the
@@ -544,11 +564,14 @@ impl Tools {
                 .text(texts::REPLY_ZONES_SHUT, &[(texts::value::WHY, &why)])
                 .window;
         };
+        let build = build.action(ids::ZONE).action(ids::ZONE_BOX);
+        // The list is the zones' read right, and absent on a build without
+        // the filter, where no zone guards anything.
+        if !build.may(ids::ZONES) {
+            return build.window;
+        }
         let count = zones.len().to_string();
-        let mut build = build
-            .action(ids::ZONE)
-            .action(ids::ZONE_BOX)
-            .text(texts::REPLY_ZONES, &[(texts::value::COUNT, &count)]);
+        let mut build = build.text(texts::REPLY_ZONES, &[(texts::value::COUNT, &count)]);
         for zone in zones.iter().take(MAX_ROWS) {
             let (key, values) = crate::zones::row(zone);
             let name = Value::Text(zone.name.clone());
@@ -568,7 +591,7 @@ impl Tools {
                 true,
             );
         }
-        build.window
+        build.more(zones.len()).window
     }
 
     /// Spawning creatures and placing props, at a player or a position.
@@ -593,7 +616,7 @@ impl Tools {
             let there: &[Value] = &[value(viewer), x, y, z];
             build = build.row(
                 texts::REPLY_WHO_ROW,
-                &borrowed(&crate::builds::row(change, kind)),
+                &crate::pairs(&crate::builds::row(change, kind)),
                 &[(texts::BUTTON_GO_THERE, ids::PLACE, there)],
                 true,
             );

@@ -365,15 +365,6 @@ pub(crate) fn ban_values(ban: &Ban) -> [(&'static str, String); 5] {
     ]
 }
 
-/// `values` as a text's values borrow them.
-pub(crate) fn borrowed<'a, const N: usize>(
-    values: &'a [(&'static str, String); N],
-) -> [(&'a str, &'a str); N] {
-    values
-        .each_ref()
-        .map(|(name, value)| (*name, value.as_str()))
-}
-
 /// The ban list, newest first: who, why, by whom and when, at most
 /// [`MAX_BANS_READ`] under the count of all.
 fn bans(tools: &Tools, request: &Request<'_>) -> Outcome {
@@ -383,7 +374,7 @@ fn bans(tools: &Tools, request: &Request<'_>) -> Outcome {
             .iter()
             .rev()
             .take(MAX_BANS_READ)
-            .map(|ban| request.say(texts::REPLY_BANS_ROW, &borrowed(&ban_values(ban))))
+            .map(|ban| request.say(texts::REPLY_BANS_ROW, &crate::pairs(&ban_values(ban))))
             .collect::<Vec<_>>();
         (accounts.bans.len(), rows)
     }) else {
@@ -472,8 +463,11 @@ fn set_allowed(
 
 /// The refusal while the world's lists do not read.
 pub(crate) fn store_shut(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let why = tools.accounts.shut_reason().unwrap_or_default();
-    Outcome::refused(request.say(texts::REPLY_STORE_SHUT, &[(texts::value::WHY, &why)]))
+    crate::shut(
+        request,
+        tools.accounts.shut_reason(),
+        texts::REPLY_STORE_SHUT,
+    )
 }
 
 /// Mutes a player in chat or lifts the mute.

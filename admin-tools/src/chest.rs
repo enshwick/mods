@@ -23,10 +23,10 @@ const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
 /// not stand in them.
 const BESIDE: f64 = 2.0;
 
-/// How often a placed chest is looked for while the game places it.
+/// How often a placed prop is looked for while the game places it.
 const LOOK: Duration = Duration::from_millis(250);
 
-/// How many looks a chest gets to be placed before the fill gives up.
+/// How many looks a prop gets to be placed before the wait gives up.
 const LOOKS: u32 = 40;
 
 /// Declares the chest actions.
@@ -178,44 +178,62 @@ fn fill(
     shown: String,
     whereabouts: String,
 ) {
-    let scheduler = late.tools.scheduler;
+    let tools = Arc::clone(&late.tools);
+    once_placed(&tools, placed, move |chest| match chest {
+        Some(chest) => {
+            if let Some(inventories) = &late.tools.inventories {
+                let batch = Batch::new()
+                    .with(Op::Give {
+                        to: chest,
+                        item,
+                        count,
+                        fill: None,
+                    })
+                    .allow_partial();
+                let done = report(Arc::clone(&late), shown, count, whereabouts);
+                let _ticket = inventories.submit(&batch, done);
+            }
+        }
+        None => late.report(
+            false,
+            texts::REPLY_CHEST_NOT_FILLED,
+            &[
+                (texts::value::NAME, &whereabouts),
+                (texts::value::COUNT, &count.to_string()),
+                (texts::value::ITEM, &shown),
+            ],
+        ),
+    });
+}
+
+/// Looks for the prop the transaction `placed` puts in the world and hands
+/// it to `then` once the game has placed it, or `None` once it will not
+/// stand, after undoing the placement so no stray prop follows.
+pub(crate) fn once_placed(
+    tools: &Tools,
+    placed: TransactionId,
+    then: impl FnOnce(Option<Entity>) + Send + 'static,
+) {
+    let world = tools.world;
+    let mut then = Some(then);
     let mut looks = 0;
-    scheduler.every(LOOK, move || {
-        let world = late.tools.world;
+    tools.scheduler.every(LOOK, move || {
         let status = world.transaction_status(placed);
-        let chest = world.transaction_entities(placed).first().copied();
+        let prop = world.transaction_entities(placed).first().copied();
         looks += 1;
-        match look(status.as_ref(), chest, looks) {
+        let stands = match look(status.as_ref(), prop, looks) {
             Look::Wait => return ControlFlow::Continue(()),
-            Look::Placed(chest) => {
-                if let Some(inventories) = &late.tools.inventories {
-                    let batch = Batch::new()
-                        .with(Op::Give {
-                            to: chest,
-                            item,
-                            count,
-                            fill: None,
-                        })
-                        .allow_partial();
-                    let done = report(Arc::clone(&late), shown.clone(), count, whereabouts.clone());
-                    let _ticket = inventories.submit(&batch, done);
-                }
-            }
+            Look::Placed(prop) => Some(prop),
             Look::Lost => {
-                enshwick::warn!("chest of {item:?} not placed: {status:?}");
+                enshwick::warn!("prop not placed: {status:?}");
                 if let Err(why) = world.undo(placed) {
-                    enshwick::debug!("chest placement not undone: {why}");
+                    enshwick::debug!("prop placement not undone: {why}");
                 }
-                late.report(
-                    false,
-                    texts::REPLY_CHEST_NOT_FILLED,
-                    &[
-                        (texts::value::NAME, &whereabouts),
-                        (texts::value::COUNT, &count.to_string()),
-                        (texts::value::ITEM, &shown),
-                    ],
-                );
+                None
             }
+        };
+        if let Some(then) = then.take() {
+            then(stands);
         }
         ControlFlow::Break(())
     });

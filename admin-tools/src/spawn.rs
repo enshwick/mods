@@ -2,17 +2,18 @@
 //! or at a position, as the game's admin spawn does, and props placed by a
 //! world transaction, the caller's last one taken back on request.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::content::{Guid, vanilla};
 use enshwick::effects::Spawn;
 use enshwick::world::{TransactionId, WorldTransform};
-use enshwick::{Off, Relock as _};
+use enshwick::{Off, PlayerKey, Relock as _, WorldError};
+use rustc_hash::FxHashMap;
 
 use crate::items::{self, ResolveKnowledgeError};
 use crate::players::{axis, bad_args, no_player};
-use crate::{Tools, ids, texts};
+use crate::{Late, Tools, ids, texts};
 
 /// The most creatures one spawn makes.
 const MAX_COUNT: f64 = 20.0;
@@ -37,6 +38,15 @@ pub(crate) struct Placed {
     transaction: TransactionId,
     /// What it is, as the caller read it.
     shown: String,
+}
+
+/// Who placed a prop: the account, and the name that tells apart the
+/// callers without one (the server's console, each remote console's label).
+pub(crate) type Caller = (PlayerKey, String);
+
+/// The caller of `request`.
+fn caller(request: &Request<'_>) -> Caller {
+    (request.player.key, request.player.name.clone())
 }
 
 /// Reads the game's template names while the mod starts, as the API asks:
@@ -101,7 +111,7 @@ pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
 }
 
 /// Where a player stands, by their account.
-fn standing(tools: &Tools, key: enshwick::PlayerKey) -> Option<[f64; 3]> {
+fn standing(tools: &Tools, key: PlayerKey) -> Option<[f64; 3]> {
     tools
         .world
         .player_by_key(key)
@@ -182,6 +192,13 @@ fn spawn_from(
     };
     let template = match template(&text) {
         Ok(template) => template,
+        // Templates take no number, as the item text's advice offers.
+        Err(ResolveKnowledgeError::Unreadable) => {
+            return Outcome::refused(request.say(
+                texts::REPLY_TEMPLATES_UNREAD,
+                &[(texts::value::ITEM, &text)],
+            ));
+        }
         Err(why) => return items::refused(request, &text, &why),
     };
     let ring = if count > 1 { RING } else { alone };
@@ -214,28 +231,14 @@ fn spawn_from(
     }
 }
 
-/// The template `text` names: its GUID, or a vanilla template's name, such
-/// as `Enemy_Wildbeast_Wolf`.
+/// The template `text` names: its GUID, or a vanilla template's name in
+/// any case, such as `Enemy_Wildbeast_Wolf`.
 fn template(text: &str) -> Result<Guid, ResolveKnowledgeError> {
-    template_by(text, vanilla::template)
-}
-
-/// [`template`], with the vanilla templates named by `named`.
-fn template_by(
-    text: &str,
-    named: impl FnOnce(&str) -> Result<Guid, vanilla::VanillaError>,
-) -> Result<Guid, ResolveKnowledgeError> {
     let text = text.trim();
     if let Some(guid) = Guid::try_parse(text) {
         return Ok(guid);
     }
-    named(text).map_err(|why| match why {
-        vanilla::VanillaError::UnknownTemplate { near, .. } => ResolveKnowledgeError::Name { near },
-        vanilla::VanillaError::AmbiguousTemplate { templates, .. } => {
-            ResolveKnowledgeError::Several(templates)
-        }
-        _ => ResolveKnowledgeError::Unreadable,
-    })
+    items::by_name(text, vanilla::template).map(|(guid, _)| guid)
 }
 
 /// Where each of `count` creatures stands: evenly on a circle of `radius`
@@ -256,7 +259,7 @@ fn prop(tools: &Tools, request: &Request<'_>) -> Outcome {
     let Some([x, y, z]) = standing(tools, *key) else {
         return no_player(request);
     };
-    place(tools, request, [x + BESIDE, y, z], *item, name)
+    place(tools, request, ids::PROP, [x + BESIDE, y, z], *item, name)
 }
 
 /// Places a prop at a position.
@@ -271,23 +274,36 @@ fn prop_at(tools: &Tools, request: &Request<'_>) -> Outcome {
         return bad_args(request);
     };
     let whereabouts = format!("{x:.0}, {y:.0}, {z:.0}");
-    place(tools, request, [*x, *y, *z], *item, &whereabouts)
+    place(
+        tools,
+        request,
+        ids::PROP_AT,
+        [*x, *y, *z],
+        *item,
+        &whereabouts,
+    )
 }
 
-/// Places `item` at `at` by a world transaction and remembers it as the
-/// caller's last prop; `whereabouts` names the place in the reply.
+/// Places `item` at `at` for the action `id` by a world transaction and,
+/// once the game has placed it, remembers it as the caller's last prop; a
+/// prop that does not stand is told to the caller. `whereabouts` names the
+/// place in the replies.
 fn place(
     tools: &Tools,
     request: &Request<'_>,
+    id: &'static str,
     at: [f64; 3],
     item: Guid,
     whereabouts: &str,
 ) -> Outcome {
-    let (id, shown) = tools.picked(item, request.language);
+    let (prop, shown) = tools.picked(item, request.language);
+    let Some(late) = Late::new(tools, request, id) else {
+        return Tools::failed(request, whereabouts, &WorldError::Missing);
+    };
     let placed = tools
         .world
         .transaction()
-        .place_prop(id, WorldTransform::at(at))
+        .place_prop(prop, WorldTransform::at(at))
         .commit();
     let transaction = match placed {
         Ok(transaction) => transaction,
@@ -300,25 +316,56 @@ fn place(
             (texts::value::ITEM, &shown),
         ],
     );
-    tools
-        .props
-        .relock()
-        .insert(request.player.key, Placed { transaction, shown });
+    let (by, whereabouts) = (caller(request), whereabouts.to_owned());
+    crate::chest::once_placed(tools, transaction, move |stands| {
+        if stands.is_some() {
+            late.tools
+                .props
+                .relock()
+                .insert(by, Placed { transaction, shown });
+        } else {
+            late.report(
+                false,
+                texts::REPLY_PROP_LOST,
+                &[
+                    (texts::value::NAME, &whereabouts),
+                    (texts::value::ITEM, &shown),
+                ],
+            );
+        }
+    });
     Outcome::done(reply)
 }
 
 /// Takes back the last prop the caller placed, as the game undoes a world
 /// transaction.
 fn unprop(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let Some(placed) = tools.props.relock().remove(&request.player.key) else {
-        return Outcome::refused(request.say(texts::REPLY_NO_PROP, &[]));
-    };
-    match tools.world.undo(placed.transaction) {
-        Ok(()) => {
+    let undone = take_back(&tools.props, &caller(request), |placed| {
+        tools.world.undo(placed.transaction)
+    });
+    match undone {
+        Ok(Some(placed)) => {
             Outcome::done(request.say(texts::REPLY_UNPROP, &[(texts::value::ITEM, &placed.shown)]))
         }
-        Err(why) => Tools::failed(request, &placed.shown, &why),
+        Ok(None) => Outcome::refused(request.say(texts::REPLY_NO_PROP, &[])),
+        Err((placed, why)) => Tools::failed(request, &placed.shown, &why),
     }
+}
+
+/// Undoes `caller`'s last prop among `props` by `undo` and forgets it once
+/// the undo is under way, so a refused undo may be asked again: the prop,
+/// `None` for a caller with none, or the prop kept and why it stays.
+fn take_back<P: Clone>(
+    props: &Mutex<FxHashMap<Caller, P>>,
+    caller: &Caller,
+    undo: impl FnOnce(&P) -> Result<(), WorldError>,
+) -> Result<Option<P>, (P, WorldError)> {
+    let mut props = props.relock();
+    let Some(placed) = props.get(caller) else {
+        return Ok(None);
+    };
+    undo(placed).map_err(|why| (placed.clone(), why))?;
+    Ok(props.remove(caller))
 }
 
 #[cfg(test)]
@@ -356,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn a_template_name_resolves_or_tells_the_names_near_it_or_the_guids_to_pick() {
+    fn a_template_name_resolves_in_any_case_or_tells_the_names_near_it_or_the_guids_to_pick() {
         use vanilla::VanillaError;
         const WOLF: Guid = Guid([0x40; 16]);
         let game = |name: &str| match name {
@@ -371,20 +418,39 @@ mod tests {
                 near: vec!["Enemy_Wildbeast_Wolf".to_owned()],
             }),
         };
-        assert_eq!(template_by(" Enemy_Wildbeast_Wolf ", game), Ok(WOLF));
+        let by = |name| items::by_name(name, game).map(|(guid, _)| guid);
+        assert_eq!(by("Enemy_Wildbeast_Wolf"), Ok(WOLF));
+        assert_eq!(by("enemy_wildbeast_wolf"), Ok(WOLF), "any case");
         assert_eq!(
-            template_by("Enemy_Wolv", game),
+            by("Enemy_Wolv"),
             Err(ResolveKnowledgeError::Name {
                 near: vec!["Enemy_Wildbeast_Wolf".to_owned()]
             })
         );
         assert_eq!(
-            template_by("Twin", game),
+            by("Twin"),
             Err(ResolveKnowledgeError::Several(vec![WOLF, Guid([0x41; 16])]))
         );
+        assert_eq!(by("Lost"), Err(ResolveKnowledgeError::Unreadable));
+    }
+
+    #[test]
+    fn a_refused_undo_keeps_the_prop_to_ask_again_and_a_taken_one_is_forgotten() {
+        let ann: Caller = (PlayerKey(0), "rcon a".to_owned());
+        let other: Caller = (PlayerKey(0), "rcon b".to_owned());
+        let props = Mutex::new(FxHashMap::default());
+        props.relock().insert(ann.clone(), "workbench");
+        props.relock().insert(other.clone(), "chest");
         assert_eq!(
-            template_by("Lost", game),
-            Err(ResolveKnowledgeError::Unreadable)
+            take_back(&props, &ann, |_| Err(WorldError::Refused)),
+            Err(("workbench", WorldError::Refused))
+        );
+        assert_eq!(take_back(&props, &ann, |_| Ok(())), Ok(Some("workbench")));
+        assert_eq!(take_back(&props, &ann, |_| Ok(())), Ok(None));
+        assert_eq!(
+            props.relock().get(&other),
+            Some(&"chest"),
+            "another caller without an account keeps theirs"
         );
     }
 }

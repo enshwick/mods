@@ -122,6 +122,19 @@ fn zones_are_written_at_once_and_guard_the_world_after_a_restart() {
 }
 
 #[test]
+fn zones_that_do_not_read_hold_building_everywhere_for_all_but_zone_builders() {
+    let dir = scratch("zone-unread");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("zones.toml"), "zones = 7\n").unwrap();
+    let loader = server("", &dir);
+    assert_eq!(
+        build(&loader, BOB, [900.0, 0.0, -900.0]),
+        Err(Some(REFUSED.to_owned()))
+    );
+    assert_eq!(build(&loader, ANN, [900.0, 0.0, -900.0]), Ok(()));
+}
+
+#[test]
 fn the_zone_builders_rule_lets_others_build_and_bob_may_not_make_a_zone() {
     let dir = scratch("zone-builders");
     let loader = server("", &dir);

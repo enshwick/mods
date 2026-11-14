@@ -14,14 +14,17 @@ Ten seconds after the world has loaded, and again on the `check` action:
   id and template across the save and load in between;
 - entity queries: every placed entity, its position against its transform,
   and the entities near it;
-- the vitals of actors with replicated health, against that health, and the
-  progress of a character;
+- the vitals of actors with replicated health, against that health (an
+  actor with no vitals and a replicated health of 0 of 0 is skipped), and
+  the progress of a character;
 - component writes: a write to the replicated health is refused; an
   actor's health is set one lower, healed by the most negative amount (it
   stays at 1), its replicated copy checked a second later, and put back;
 - spawns: a copy of an entity in the world, one with health if there is one,
-  three metres above it; that it arrives where asked, its health writes when
-  it has health, a teleport five metres away, and its destruction;
+  three metres above it; that it lands where asked (where a player is near,
+  the game drops it up to three metres and it may step two aside), its
+  health writes when it has health, a teleport five metres away that lands
+  the same way, and its destruction;
 - mod messages: that a channel is refused to the probe, which is no join
   mod; messages themselves need a client;
 - actions: a ping far from anything, which the game must hand back as a game

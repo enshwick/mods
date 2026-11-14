@@ -21,7 +21,7 @@ use enshwick::voxels::{VoxelPos, Voxels};
 use enshwick::world::World;
 use enshwick::{Load, WorldError};
 
-use crate::checks::{fail, pass};
+use crate::checks::{SPAWN_LIFT, fail, pass};
 
 /// The field of the reflected type the probe looks up.
 const SHAPE_FIELD: &str = "rangeX";
@@ -97,19 +97,33 @@ fn report<T: core::fmt::Debug, E: core::fmt::Display>(what: &str, result: Result
 /// Logs `PASS` for `Ok(true)`; `Ok(false)`, the loader not finding or
 /// arming what the call needs on this build, is a `FAIL`.
 fn report_found<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
-    match result {
-        Ok(true) => pass(what),
-        Ok(false) => fail(&format!("{what}: not found on this build")),
-        Err(why) => fail(&format!("{what}: {why}")),
-    }
+    report_linked(what, result, true);
 }
 
-/// Logs `PASS` for `Ok(false)`, where the API promises the loader links
-/// nothing on this side; `Ok(true)` or an error is a `FAIL`.
-fn report_absent<E: core::fmt::Display>(what: &str, result: Result<bool, E>) {
+/// Checks the task worker caps link on a dedicated server and stay unlinked on
+/// a client, whose task system starts before the hooks arm, as the API
+/// promises.
+fn report_task_worker_caps(load: &mut Load<'_>) {
+    let dedicated = load.host().build().side == Side::SERVER;
+    let what = if dedicated {
+        "task worker caps found"
+    } else {
+        "task worker caps unlinked on a client, as promised"
+    };
+    report_linked(
+        what,
+        load.cap_task_workers(TaskWorkers::at_most(u8::MAX)),
+        dedicated,
+    );
+}
+
+/// Logs `PASS` when the loader linked what the call needs exactly as
+/// `promised` says the API does on this side; anything else is a `FAIL`.
+fn report_linked<E: core::fmt::Display>(what: &str, result: Result<bool, E>, promised: bool) {
     match result {
-        Ok(false) => pass(&format!("{what}: none on this side, as promised")),
+        Ok(linked) if linked == promised => pass(what),
         Ok(true) => fail(&format!("{what}: linked on this side")),
+        Ok(false) => fail(&format!("{what}: not found on this build")),
         Err(why) => fail(&format!("{what}: {why}")),
     }
 }
@@ -212,16 +226,7 @@ impl PlatformChecks {
         report("reflection: type size", load.type_size(shape));
         report("symbol", load.symbol(SYMBOL).map(|_| ()));
         report("code section bytes", load.code().map(<[u8]>::len));
-        let dedicated = enshwick::host().is_some_and(|host| host.build().side == Side::SERVER);
-        let caps = load.cap_task_workers(TaskWorkers::at_most(u8::MAX));
-        if dedicated {
-            report_found("task worker caps found", caps);
-        } else {
-            report_absent(
-                "task worker caps, which a client's task system takes before the hooks arm",
-                caps,
-            );
-        }
+        report_task_worker_caps(load);
         report_found("base limit raised", load.raise_base_limit());
         report_found(
             "base limits requested",
@@ -414,7 +419,7 @@ impl PlatformChecks {
             return;
         };
         let [x, y, z] = at;
-        self.label_own_copy(world, entity, [x, y + 3.0, z]);
+        self.label_own_copy(world, entity, [x, y + SPAWN_LIFT, z]);
         report(
             "a save keeps the box at the first entity",
             world.persists([x - 1.0, y - 1.0, z - 1.0], [x + 1.0, y + 1.0, z + 1.0]),
@@ -571,6 +576,42 @@ mod tests {
             "FAIL absent: not found on this build"
         ));
         assert!(logged_exactly(&loader, "FAIL broken: refused"));
+    }
+
+    #[test]
+    fn a_capability_promised_unlinked_passes_only_while_unlinked() {
+        let (loader, _) = started(FakeHost::new().world());
+        report_linked::<&str>("unlinked", Ok(false), false);
+        report_linked::<&str>("linked", Ok(true), false);
+        assert!(
+            logged_exactly(&loader, "PASS unlinked"),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(logged_exactly(&loader, "FAIL linked: linked on this side"));
+    }
+
+    #[test]
+    fn a_dedicated_server_expects_the_task_worker_caps_linked() {
+        let (loader, _) = started(FakeHost::new().world());
+        assert!(
+            logged_exactly(&loader, "PASS task worker caps found"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_client_expects_the_task_worker_caps_unlinked() {
+        let (loader, _) = started(FakeHost::new().side(Side::CLIENT).world());
+        assert!(
+            logged_exactly(
+                &loader,
+                "PASS task worker caps unlinked on a client, as promised"
+            ),
+            "{:?}",
+            loader.logs()
+        );
     }
 
     #[test]

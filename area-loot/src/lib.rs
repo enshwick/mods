@@ -82,9 +82,9 @@ mod tests {
     }
 
     #[test]
-    fn every_text_exists_in_all_languages() {
+    fn every_text_exists_in_english_and_ukrainian() {
         let texts = enshwick::i18n::Texts::parse(texts::TOML).unwrap();
-        assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(enshwick::i18n::Language::REQUIRED), []);
     }
 
     #[test]

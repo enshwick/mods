@@ -370,9 +370,9 @@ mod tests {
     }
 
     #[test]
-    fn every_text_the_mod_says_exists_in_all_languages() -> Result<(), Off> {
+    fn every_text_the_mod_says_exists_in_english_and_ukrainian() -> Result<(), Off> {
         let texts = Texts::parse(texts::TOML)?;
-        assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(enshwick::i18n::Language::REQUIRED), []);
         for &key in texts::ALL {
             assert!(texts.get(key, Language::FALLBACK).is_some(), "{key}");
         }

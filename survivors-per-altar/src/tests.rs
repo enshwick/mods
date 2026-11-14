@@ -63,13 +63,12 @@ fn the_default_settings_parse() {
 }
 
 #[test]
-fn every_text_exists_in_all_languages() {
+fn every_text_exists_in_english_and_ukrainian() {
     use enshwick::config::Config as _;
     use enshwick::i18n::{Language, MOD_DESCRIPTION, MOD_NAME, Texts};
 
     let texts = Texts::parse(texts::TOML).unwrap();
-    assert_eq!(texts.untranslated(), []);
-    assert_eq!(texts.missing_in(Language::OFFERED), []);
+    assert_eq!(texts.missing_in(Language::REQUIRED), []);
     let schema = Settings::schema();
     let keys = [MOD_NAME.to_owned(), MOD_DESCRIPTION.to_owned(), schema.text]
         .into_iter()

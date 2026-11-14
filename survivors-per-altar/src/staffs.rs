@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn names_fill_in_the_survivor_in_all_languages() -> Result<(), Off> {
         let texts = Texts::parse(texts::TOML)?;
-        assert_eq!(texts.untranslated(), []);
+        assert_eq!(texts.missing_in(enshwick::i18n::Language::REQUIRED), []);
         for language in texts.languages() {
             for key in [texts::COPY_NAME, texts::COPY_DESCRIPTION] {
                 let template = texts

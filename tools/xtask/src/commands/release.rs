@@ -1,11 +1,15 @@
 //! The two steps of a release that release-plz cannot take.
 //!
+//! `cargo xtask built-for <loader tag>` says in the changelog of each mod in
+//! the release set (`release-plz.toml`) whose released version was built
+//! for another loader, and that has nothing else under Unreleased, which
+//! loader it is built for now, so its folder changes and release-plz bumps
+//! it: a mod built for one loader alpha needs a rebuild for the next. A mod
+//! outside the set keeps its version and changelog.
+//!
 //! `cargo xtask pin <loader tag>` pins the platform to a loader release for
-//! every crate, so every mod builds on it, and says so in the changelog of
-//! each mod in the release set (`release-plz.toml`) that has nothing else
-//! under Unreleased, so its folder changes and release-plz bumps it: a mod
-//! built for one loader alpha needs a rebuild for the next. A mod outside
-//! the set keeps its version and changelog.
+//! every crate, so every mod builds on it. The `release` workflow pins in
+//! its own job, for the commit it tags; `main` follows the platform's `main`.
 //!
 //! `cargo xtask close --date <YYYY-MM-DD>` runs on the release pull request's
 //! branch: it closes each bumped mod's Unreleased section as its new version,
@@ -15,7 +19,7 @@
 
 use std::path::PathBuf;
 
-mod built_for;
+pub(crate) mod built_for;
 
 use cargo_enshwick::changelog::{self, CHANGELOG, is_date};
 
@@ -46,42 +50,78 @@ fn date(text: &str) -> Result<String, String> {
     }
 }
 
-/// Pins every platform crate to the commit of `<loader tag>` and adds or
-/// updates the line naming the loader in the changelog of each shipped mod
-/// whose released version was built for another commit.
+/// A loader release: its tag and the platform commit the tag names.
+struct Loader {
+    tag: String,
+    commit: String,
+}
+
+impl Loader {
+    /// The loader release tagged `tag`, with or without its `v`, read from
+    /// the platform's remote.
+    fn read(tag: &str) -> Result<Self, String> {
+        let tag = Self::tag(tag)?;
+        let reference = format!("refs/tags/{tag}");
+        let listing = notes::git(&[
+            "ls-remote",
+            PLATFORM,
+            &reference,
+            &format!("{reference}^{{}}"),
+        ])?;
+        let commit = commit_of(&listing, &tag)
+            .ok_or_else(|| format!("{PLATFORM} has no tag {tag}"))?
+            .to_owned();
+        Ok(Self { tag, commit })
+    }
+
+    /// `text` as a loader tag `v<version>`; refused unless it is a version,
+    /// since a workflow input reaches it.
+    fn tag(text: &str) -> Result<String, String> {
+        let tag = if text.starts_with('v') {
+            text.to_owned()
+        } else {
+            format!("v{text}")
+        };
+        notes::version_of(&tag)
+            .map(|_| tag.clone())
+            .ok_or_else(|| format!("{text:?} is no loader tag such as v1.0.0-alpha.15"))
+    }
+
+    /// The loader's version, its tag without the `v`.
+    fn version(&self) -> &str {
+        &self.tag[1..]
+    }
+}
+
+/// Pins every platform crate to the commit of `<loader tag>`, in the root
+/// manifest and the lock.
 pub(crate) fn pin(tag: &str) -> Result<bool, String> {
-    let tag = if tag.starts_with('v') {
-        tag.to_owned()
-    } else {
-        format!("v{tag}")
-    };
-    let version = &tag[1..];
-    let reference = format!("refs/tags/{tag}");
-    let listing = notes::git(&[
-        "ls-remote",
-        PLATFORM,
-        &reference,
-        &format!("{reference}^{{}}"),
-    ])?;
-    let commit = commit_of(&listing, &tag)
-        .ok_or_else(|| format!("{PLATFORM} has no tag {tag}"))?
-        .to_owned();
-    let root = notes::root();
-    let path = root.join(MANIFEST);
+    let loader = Loader::read(tag)?;
+    let path = notes::root().join(MANIFEST);
     let manifest =
         std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let pinned = repin(&manifest, &commit).map_err(|e| format!("{}: {e}", path.display()))?;
+    let pinned =
+        repin(&manifest, &loader.commit).map_err(|e| format!("{}: {e}", path.display()))?;
     if pinned != manifest {
         std::fs::write(&path, pinned).map_err(|e| format!("{}: {e}", path.display()))?;
-        say(&format!("pinned the platform to {commit} ({tag})"));
+        say(&format!(
+            "pinned the platform to {} ({})",
+            loader.commit, loader.tag
+        ));
     }
     // Also when the manifest is pinned already: a run whose update failed
     // left the lock on the old commit.
-    if !Step::new(&["update", "--workspace"]).run(false) {
-        return Ok(false);
-    }
+    Ok(Step::new(&["update", "--workspace"]).run(false))
+}
+
+/// Adds or updates the line naming `<loader tag>` in the changelog of each
+/// shipped mod whose released version was built for another commit, and
+/// drops it where the release was built on that loader.
+pub(crate) fn built_for_loader(tag: &str) -> Result<bool, String> {
+    let loader = Loader::read(tag)?;
+    let (commit, version) = (loader.commit.as_str(), loader.version());
     let remote = notes::GitHub::read()?;
-    for package in notes::shipped(&notes::release_config(&root)?)? {
+    for package in notes::shipped(&notes::release_config(&notes::root())?)? {
         let tag = notes::tag_of(&package);
         let released = remote.released(&tag);
         let built = if released {
@@ -89,7 +129,7 @@ pub(crate) fn pin(tag: &str) -> Result<bool, String> {
         } else {
             None
         };
-        let line = match loader_line(released, built.as_deref(), &commit, version) {
+        let line = match loader_line(released, built.as_deref(), commit, version) {
             LoaderLine::Keep => continue,
             LoaderLine::Drop => None,
             LoaderLine::Name(version) => Some(version),
@@ -421,6 +461,15 @@ mod tests {
         let light = format!("{OLD}\trefs/tags/v1.0.0-alpha.14\n");
         assert_eq!(commit_of(&light, "v1.0.0-alpha.14"), Some(OLD));
         assert_eq!(commit_of(&light, "v1.0.0-alpha.1"), None);
+    }
+
+    #[test]
+    fn a_loader_tag_is_a_version_with_or_without_its_v() {
+        assert_eq!(Loader::tag("1.0.0-alpha.15").unwrap(), "v1.0.0-alpha.15");
+        assert_eq!(Loader::tag("v1.0.0").unwrap(), "v1.0.0");
+        for text in ["", "main", "v1.0", "--upload-pack=x", "v1.0.0-"] {
+            assert!(Loader::tag(text).is_err(), "{text}");
+        }
     }
 
     #[test]

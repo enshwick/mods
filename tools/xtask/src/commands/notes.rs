@@ -11,6 +11,7 @@ use std::process::Command;
 
 use cargo_enshwick::changelog::{self, ALPHA_WARNING, CHANGELOG};
 
+use crate::commands::release::built_for;
 use crate::{Package, packages, say};
 
 /// The command line `notes` takes: one way to choose the mods and where to
@@ -112,7 +113,7 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let mut written = Vec::new();
     for package in &mods {
         match mod_notes(package, &rev, &remote) {
-            Ok(text) => written.push((package, text)),
+            Ok((text, loader)) => written.push((package, text, loader)),
             Err(error) => {
                 say(&error);
                 ok = false;
@@ -124,11 +125,12 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     }
     let releases = written
         .iter()
-        .map(|(package, _)| {
+        .map(|(package, _, loader)| {
             Ok(serde_json::json!({
                 "tag": tag_of(package),
                 "package_name": package.name,
                 "version": package.version,
+                "loader": loader,
                 "title": title(&config, package)?,
                 "files": built_files(&package.name),
                 "sums": SUMS,
@@ -136,7 +138,7 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
         })
         .collect::<Result<Vec<serde_json::Value>, String>>()?;
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
-    for (package, text) in &written {
+    for (package, text, _) in &written {
         let file = out.join(format!("{}.md", package.name));
         std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
         say(&format!("wrote {}", file.display()));
@@ -180,10 +182,14 @@ fn releasable(package: &Package) -> Result<(), String> {
     Ok(())
 }
 
-/// The notes of the package's version, built on the pinned `rev`; a version
-/// a stopped run tagged is released as tagged, so its changelog and loader
-/// come from the tag, which `assets` builds.
-fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<String, String> {
+/// The notes of the package's version and the loader tag it is built on,
+/// the pinned `rev`; a version a stopped run tagged is released as tagged,
+/// so its changelog and loader come from the tag, which `assets` builds.
+fn mod_notes(
+    package: &Package,
+    rev: &str,
+    remote: &impl Remote,
+) -> Result<(String, String), String> {
     releasable(package)?;
     let path = package.dir.join(CHANGELOG);
     let tag = tag_of(package);
@@ -210,7 +216,7 @@ fn mod_notes(package: &Package, rev: &str, remote: &impl Remote) -> Result<Strin
                 package.version
             )
         })?;
-    notes(&package.name, &loader, section)
+    Ok((notes(&package.name, &loader, section)?, loader))
 }
 
 /// How a run chooses the mods it takes.
@@ -245,7 +251,7 @@ fn choose(
             mods.push(package);
         } else if !matches!(way, Way::Chosen(_)) && built_on(&tag)?.as_deref() != Some(rev) {
             say(&format!(
-                "{tag} was built for another loader than the pinned one; run `cargo xtask pin <loader tag>` so release-pr bumps it"
+                "{tag} was built for another loader than the pinned one; run release-pr for this loader so it bumps the mod"
             ));
             ok = false;
         }
@@ -537,7 +543,7 @@ fn loader_tag(rev: &str) -> Result<String, String> {
     let listing = git(&["ls-remote", "--tags", PLATFORM, "refs/tags/v*"])?;
     release_at(&listing, rev).map(str::to_owned).ok_or_else(|| {
         format!(
-            "{API} is pinned to {rev}, which no loader release tags; run `cargo xtask pin <loader tag>` with the loader alpha the mods are built for"
+            "{API} is pinned to {rev}, which no loader release tags; pin the loader alpha the mods are built for with `cargo xtask pin <loader tag>`"
         )
     })
 }
@@ -570,12 +576,12 @@ fn release_at<'a>(listing: &'a str, rev: &str) -> Option<&'a str> {
 
 /// Major, minor, patch, whether it is a release, and each prerelease
 /// identifier as (alphanumeric, number, text).
-type VersionKey<'a> = (u64, u64, u64, bool, Vec<(bool, u64, &'a str)>);
+pub(crate) type VersionKey<'a> = (u64, u64, u64, bool, Vec<(bool, u64, &'a str)>);
 
 /// A tag `v<major>.<minor>.<patch>[-<pre>]` as a key that orders as SemVer
 /// does: a release after its prereleases, numeric identifiers by number and
 /// before alphanumeric ones; `None` for any other tag.
-fn version_of(tag: &str) -> Option<VersionKey<'_>> {
+pub(crate) fn version_of(tag: &str) -> Option<VersionKey<'_>> {
     let version = tag.strip_prefix('v')?;
     let (core, pre) = version
         .split_once('-')
@@ -597,8 +603,16 @@ fn version_of(tag: &str) -> Option<VersionKey<'_>> {
     Some((major, minor, patch, pre.is_none(), identifiers))
 }
 
+/// The release notes of `package` built for the `loader` tag; refused when
+/// its `changes` name another loader, which `release-pr` wrote for a loader
+/// other than the one `release` built on.
 fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
     let version = loader.strip_prefix('v').unwrap_or(loader);
+    if let Some(named) = built_for::named(changes).filter(|named| *named != version) {
+        return Err(format!(
+            "{package}: its changes say built for Enshwick {named}, but it builds on {loader}; release it on v{named} or run release-pr for {loader}"
+        ));
+    }
     let text = format!(
         "{ALPHA_WARNING}\nBuilt for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
     );
@@ -903,6 +917,13 @@ mod tests {
         ));
         assert!(text.contains("`enshwick-game-rates.zip`"));
         assert!(text.ends_with("## What's new\n\n- More loot.\n"));
+    }
+
+    #[test]
+    fn notes_naming_another_loader_than_the_build_are_refused() {
+        let changes = "### Changed\n\n- Built for Enshwick 1.0.0-alpha.15.\n";
+        assert!(notes("m", "v1.0.0-alpha.15", changes).is_ok());
+        assert!(notes("m", "v1.0.0-alpha.16", changes).is_err());
     }
 
     #[test]

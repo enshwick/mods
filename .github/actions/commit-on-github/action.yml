@@ -1,0 +1,57 @@
+name: Commit on GitHub
+description: >-
+  Commits the changed tracked files on top of HEAD through GitHub's Git Data
+  API, on no branch, and moves the checked-out branch to that commit:
+  release-plz tags and opens branches through the API, so the commit it
+  names must be on GitHub, while main stays as it is. Only changed files
+  are taken; an added, removed or renamed file is refused. Without changes
+  HEAD stays.
+
+inputs:
+  message:
+    description: The commit message.
+    required: true
+  token:
+    description: A token that may write the repository's contents.
+    required: true
+
+outputs:
+  commit:
+    description: The commit HEAD is at.
+    value: ${{ steps.commit.outputs.commit }}
+
+runs:
+  using: composite
+  steps:
+    - id: commit
+      shell: bash
+      env:
+        MESSAGE: ${{ inputs.message }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        changes=$(git status --porcelain --untracked-files=no)
+        if [ -n "$changes" ]; then
+          if grep -v '^ M ' <<< "$changes"; then
+            echo "::error title=commit-on-github::only changed files are committed"
+            exit 1
+          fi
+          base=$(git rev-parse HEAD)
+          entries=$(git diff --name-only -z | while IFS= read -r -d '' path; do
+            mode=$(git ls-files --stage -- "$path" | cut -d' ' -f1)
+            jq -n --arg path "$path" --arg mode "$mode" --rawfile content "$path" \
+              '{path: $path, mode: $mode, type: "blob", content: $content}'
+          done | jq -s .)
+          tree=$(jq -n --arg base "$(git rev-parse 'HEAD^{tree}')" --argjson entries "$entries" \
+            '{base_tree: $base, tree: $entries}' |
+            gh api "repos/$GITHUB_REPOSITORY/git/trees" --input - --jq .sha)
+          # GitHub's tree holds exactly the files here, byte for byte.
+          git add --update
+          test "$(git write-tree)" = "$tree"
+          commit=$(jq -n --arg message "$MESSAGE" --arg tree "$tree" --arg parent "$base" \
+            '{message: $message, tree: $tree, parents: [$parent]}' |
+            gh api "repos/$GITHUB_REPOSITORY/git/commits" --input - --jq .sha)
+          # GitHub serves a commit no ref names yet by its id.
+          git fetch --no-tags origin "$commit"
+          git reset --hard "$commit"
+        fi
+        echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

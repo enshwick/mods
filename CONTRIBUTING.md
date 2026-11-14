@@ -65,21 +65,26 @@ and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.
 Until 1.0 each release is an alpha: a GitHub prerelease built on a loader
 alpha.
 
+`main` builds on the platform's `main`, pinned to a full commit that
+Renovate moves. Only a release builds on a loader alpha: `release` pins the
+platform to it in its own job and tags that commit, which no branch holds,
+so no pin ever waits on `main` for a release and Renovate never undoes one.
+
 Each mod's `CHANGELOG.md` is written by hand for players; release-plz never
 writes it. A change players notice adds a line under `## [Unreleased]`.
 
-A release goes in three steps:
+A release goes in two steps, both run with `loader` set to the loader alpha
+the mods are built for, such as `v1.0.0-alpha.14`:
 
-1. Pin the platform to the loader alpha the mods are built for:
-   `cargo xtask pin v1.0.0-alpha.14` sets the commit of that release in the
-   root `Cargo.toml` and `Cargo.lock`, for every mod. A mod of the release
-   set whose released version was built for another loader and that has
-   nothing under `## [Unreleased]` gets the line `- Built for Enshwick 1.0.0-alpha.14.` there, so its folder changes
-   and release-plz bumps it as well: release-plz does not count a changed
-   git commit of a dependency as a change. A mod whose version has no tag
-   yet is left alone, and pinning back to the loader a mod was released on
-   drops its line. Merge this in an ordinary pull request.
-2. Run `release-pr`. It opens or updates the release pull request, which
+1. Run `release-pr`. A mod of the release set whose released version was
+   built for another loader and that has nothing under `## [Unreleased]`
+   first gets the line `- Built for Enshwick 1.0.0-alpha.14.` there
+   (`cargo xtask built-for v1.0.0-alpha.14`), so its folder changes and
+   release-plz bumps it as well: release-plz does not count a changed git
+   commit of a dependency as a change. A mod whose version has no tag yet
+   is left alone, and naming the loader a mod was released on drops its
+   line. The run commits those lines on top of `main` and opens or updates
+   the release pull request from there, which
    bumps the mods of the release set whose folders changed, and then closes each bumped mod's
    changelog on its branch: the `## [Unreleased]` section becomes
    `## [0.2.0] - 2026-11-05`, with an empty `## [Unreleased]` above it. A
@@ -94,12 +99,15 @@ A release goes in three steps:
    Review and merge it. A mod never released has no tag to bump from, so
    release-plz opens no pull request for it: set its version and close its
    section in an ordinary pull request.
-3. Run `release` on `main`.
+2. Run `release` on `main` with the same `loader`. It pins the platform to
+   that loader (`cargo xtask pin v1.0.0-alpha.14`, the commit of that
+   release in the root `Cargo.toml` and `Cargo.lock`), commits the pin on
+   top of `main` on no branch, and tags that commit.
 
-`release-plz.yml` runs by hand:
+`release-plz.yml` runs by hand, each time for the loader alpha in `loader`:
 
-- `build`, from any branch, does what a release would and publishes
-  nothing: it writes the notes of every mod of the release set whose
+- `build`, from any branch, pins that loader, does what a release would and
+  publishes nothing: it writes the notes of every mod of the release set whose
   version has no tag yet and builds those mods, every mod when a mod's notes
   are refused, and shows both in the run's summary.
 - `release-pr` opens the release pull request for the mods of the release
@@ -107,7 +115,9 @@ A release goes in three steps:
 - `release` makes one prerelease for each mod of the release set whose
   version has no finished release yet, with the notes of `cargo xtask notes`. A job per released mod
   then builds only that mod from its tag and attaches its zip, PDB, SBOM,
-  `SHA256SUMS` and build provenance. Then the docs site builds again. A run
+  `SHA256SUMS` and build provenance, and the loader release's own
+  `cargo-enshwick`, checked against its build provenance, reads each
+  attached DLL's version on Windows. Then the docs site builds again. A run
   that stops partway, after some tags or before the files, is finished by
   running `release` again: a tagged version without its release or its
   files counts as not released yet, and its notes come from its tag.
@@ -116,18 +126,19 @@ A release goes in three steps:
 English, names the loader alpha and gives the mod's section of its version.
 It refuses a mod still at its placeholder version (`0.0.0-dev`), a mod with
 changes under Unreleased or without its version's section, a released mod built for another loader than the pinned
-one, and a workspace whose `enshwick` commit no loader release tags.
+one, a section whose `Built for Enshwick` line names another loader than
+the pinned one, and a workspace whose `enshwick` commit no loader release
+tags.
 `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. The entries
 without `release = false` are the release set. A mod outside it, a developer
 mod and a tool have `release = false` in their entry: release-plz never
-bumps or tags them, `cargo xtask pin` and `cargo xtask close` leave their
+bumps or tags them, `cargo xtask built-for` and `cargo xtask close` leave their
 versions and changelogs alone, and `cargo xtask notes` leaves them out. A
-mod outside the set still builds on the pinned loader and passes
-`cargo xtask check`. To release it again, delete its `release = false` and
-run `cargo xtask pin` again, so its changelog names the loader it is now
-built for. `cargo xtask check` refuses a member without an entry, an entry
+mod outside the set still builds on the platform `main` builds on and
+passes `cargo xtask check`. To release it again, delete its
+`release = false`; the next `release-pr` names the loader in its changelog. `cargo xtask check` refuses a member without an entry, an entry
 without a member, and a released entry that is not a mod with a player
 page.

@@ -16,6 +16,7 @@ mod buffs;
 mod census;
 mod chat;
 mod checks;
+mod client;
 mod clock;
 mod damage;
 mod knowledge;
@@ -128,6 +129,11 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
         Ok(saves) => extras.push(Box::new(move || saves.run())),
         Err(off) => enshwick::warn!("FAIL saves: {off}"),
     }
+    match client::ClientChecks::new(load) {
+        Ok(client) => extras.push(Box::new(move || client.run())),
+        Err(off) => enshwick::warn!("FAIL client: {off}"),
+    }
+    extras.push(Box::new(client::loader_off));
     // Its hooks size altar zones and raise the base limits, so a run that
     // leaves the world be goes without it.
     if settings.scenario_only {

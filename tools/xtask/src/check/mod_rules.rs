@@ -111,7 +111,7 @@ fn builds_a_dll(package: &serde_json::Value) -> bool {
 }
 
 /// The major and minor of the toolchain `rust-toolchain.toml` pins, such as
-/// `1.99`.
+/// `1.100`.
 fn toolchain(file: &toml::Table) -> Option<String> {
     let channel = file.get("toolchain")?.get("channel")?.as_str()?;
     let mut parts = channel.split('.');
@@ -435,6 +435,18 @@ mod tests {
         assert!(rust_version("a", &at("1.98"), "1.99").is_some());
         assert!(rust_version("a", &at("1.990"), "1.99").is_some());
         assert!(rust_version("a", &serde_json::json!({}), "1.99").is_some());
+    }
+
+    #[test]
+    fn a_three_digit_minor_matches_only_itself() {
+        let toolchain = toolchain(&"[toolchain]\nchannel = \"1.100.0\"\n".parse().unwrap());
+        assert_eq!(toolchain.as_deref(), Some("1.100"));
+        let at = |version: &str| serde_json::json!({ "rust_version": version });
+        assert!(rust_version("a", &at("1.100"), "1.100").is_none());
+        assert!(rust_version("a", &at("1.100.0"), "1.100").is_none());
+        assert!(rust_version("a", &at("1.99"), "1.100").is_some());
+        assert!(rust_version("a", &at("1.10"), "1.100").is_some());
+        assert!(rust_version("a", &at("1.1000"), "1.100").is_some());
     }
 
     #[test]

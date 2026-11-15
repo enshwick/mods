@@ -3,7 +3,7 @@ name = "xtask"
 version = "0.0.0"
 description = "Repository tasks: the checks a change needs, run as cargo xtask"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 license = "MIT"
 publish = false
 

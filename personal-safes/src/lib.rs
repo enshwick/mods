@@ -404,7 +404,7 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
         enshwick::warn!("a Safe was placed by no known player and stays open to all");
         return;
     };
-    let name = player.map(|p| p.name).unwrap_or_default();
+    let name = player.map_or_default(|p| p.name);
     let position = placed.position.map(f64::from);
     snapshots().placed(placed.entity, access::cell(position), key, &name);
     if !name.is_empty() {
@@ -494,8 +494,7 @@ fn label_seen(
                 .owners
                 .load()
                 .get(&at)
-                .map(|safe| safe.owner_name.clone())
-                .unwrap_or_default();
+                .map_or_default(|safe| safe.owner_name.clone());
             if name.is_empty()
                 && let Some(online) = world.player_by_key(owner)
             {

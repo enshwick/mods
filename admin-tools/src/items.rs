@@ -42,8 +42,7 @@ impl Tools {
         }
         let names: FxHashMap<Guid, String> = Vanilla::game()
             .and_then(|game| game.items().ok())
-            .map(|items| items.iter().map(|i| (i.guid, i.name.clone())).collect())
-            .unwrap_or_default();
+            .map_or_default(|items| items.iter().map(|i| (i.guid, i.name.clone())).collect());
         if !names.is_empty() {
             self.item_names.get_or_init(|| names);
         }

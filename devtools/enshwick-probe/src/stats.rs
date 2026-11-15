@@ -23,10 +23,15 @@ const KEY: &str = "probe";
 /// The buff the probe gives luck to: the Food slot's hunger debuff, whose
 /// id the game's code returns at 0x140059190 (server 26430253).
 const HUNGER: BuffTypeId = BuffTypeId(0x89cb_0b34);
+/// The luck the probe's modifier adds.
+const LUCK_ADDED: f32 = 0.25;
 /// The luck the hunger debuff gives while it holds.
 const BUFF_LUCK: f32 = 0.5;
 /// When the buff checks start: after the modifier checks put luck back.
 const BUFFS_AFTER: Duration = Duration::from_secs(3);
+/// How long the probe's hunger debuff lasts, should its removal fail: past
+/// the reads it takes.
+const BUFF_LASTS: Duration = Duration::from_secs(3);
 
 /// Whether luck read `under` the buff is the buff's [`BUFF_LUCK`] above the
 /// luck read `before` it.
@@ -96,8 +101,9 @@ impl StatChecks {
             return;
         };
         let before = self.world.vitals(target).map(|v| v.health.max);
+        let luck = self.stats.value(target, self.luck);
         let set = [
-            Modifier::new(self.luck, Op::Add, 0.25),
+            Modifier::new(self.luck, Op::Add, LUCK_ADDED),
             Modifier::new(self.health_max, Op::Add, f32::from(EXTRA)),
         ]
         .into_iter()
@@ -107,15 +113,17 @@ impl StatChecks {
             return;
         }
         self.scheduler
-            .after(SETTLE, move || self.raised(target, before));
+            .after(SETTLE, move || self.raised(target, before, luck));
     }
 
-    fn raised(self, target: Entity, before: Option<i32>) {
+    /// Reads `target`'s values under the modifiers, against its maximum
+    /// health and luck `before` them, which a buff such as hunger may hold.
+    fn raised(self, target: Entity, before: Option<i32>, luck_before: f32) {
         let luck = self.stats.value(target, self.luck);
-        if (luck - 0.25).abs() < 1e-5 {
-            enshwick::info!("PASS stats: luck of {target:?} reads {luck}");
+        if (luck - luck_before - LUCK_ADDED).abs() < 1e-5 {
+            enshwick::info!("PASS stats: luck of {target:?} {luck_before} -> {luck}");
         } else {
-            enshwick::warn!("FAIL stats: luck of {target:?} reads {luck}");
+            enshwick::warn!("FAIL stats: luck of {target:?} {luck_before} -> {luck}");
         }
         let sources = self.stats.sources(target, None);
         enshwick::info!("stats: sources of {target:?}: {sources:?}");
@@ -167,41 +175,62 @@ impl StatChecks {
     }
 
     /// Gives `target` the hunger debuff for a moment and reads the luck its
-    /// modifier adds; `watch` watches `target` while it holds.
+    /// modifier adds; with `watch`, it first reads that the buff does not
+    /// count while `target` is unwatched, then watches it.
     fn under_buff(self, what: &'static str, target: Entity, watch: bool) {
         if self.buffs.has(target, HUNGER) {
             enshwick::info!("SKIP {what}: {target:?} has {HUNGER:?} already");
             return;
         }
-        if watch {
-            self.stats.watch(target, true);
-        }
         let before = self.stats.value(target, self.luck);
         if let Err(why) = self
             .buffs
-            .apply(target, HUNGER, Apply::new().lasting(BUFFS_AFTER))
+            .apply(target, HUNGER, Apply::new().lasting(BUFF_LASTS))
         {
             enshwick::warn!("FAIL {what}: {HUNGER:?} on {target:?}: {why}");
-            if watch {
-                self.stats.watch(target, false);
-            }
+            return;
+        }
+        if !watch {
+            self.scheduler
+                .after(SETTLE, move || self.read_buff(what, target, before, false));
             return;
         }
         self.scheduler.after(SETTLE, move || {
-            let under = self.stats.value(target, self.luck);
-            if let Err(why) = self.buffs.remove(target, HUNGER) {
-                enshwick::warn!("FAIL {what}: removal of {HUNGER:?} from {target:?}: {why}");
+            let unwatched = self.stats.value(target, self.luck);
+            if buff_shows(before, unwatched) {
+                enshwick::info!(
+                    "SKIP {what}: {target:?} counts {HUNGER:?} unwatched, so something else watches it"
+                );
+                self.lift_buff(what, target);
+                return;
             }
-            if watch {
-                self.stats.watch(target, false);
-            }
-            let line = format!("{what}: luck of {target:?} {before} -> {under} under {HUNGER:?}");
-            if buff_shows(before, under) {
-                enshwick::info!("PASS {line}");
-            } else {
-                enshwick::warn!("FAIL {line}");
-            }
+            self.stats.watch(target, true);
+            self.scheduler
+                .after(SETTLE, move || self.read_buff(what, target, before, true));
         });
+    }
+
+    /// Reads `target`'s luck under the buff against the luck `before` it,
+    /// then lifts the buff and the watch the probe set.
+    fn read_buff(self, what: &'static str, target: Entity, before: f32, watched: bool) {
+        let under = self.stats.value(target, self.luck);
+        self.lift_buff(what, target);
+        if watched {
+            self.stats.watch(target, false);
+        }
+        let line = format!("{what}: luck of {target:?} {before} -> {under} under {HUNGER:?}");
+        if buff_shows(before, under) {
+            enshwick::info!("PASS {line}");
+        } else {
+            enshwick::warn!("FAIL {line}");
+        }
+    }
+
+    /// Takes the probe's hunger debuff off `target`.
+    fn lift_buff(self, what: &'static str, target: Entity) {
+        if let Err(why) = self.buffs.remove(target, HUNGER) {
+            enshwick::warn!("FAIL {what}: removal of {HUNGER:?} from {target:?}: {why}");
+        }
     }
 }
 

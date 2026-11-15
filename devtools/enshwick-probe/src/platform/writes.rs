@@ -1,5 +1,5 @@
-//! The platform's writes into the running game: a code patch, a hook inside
-//! a function, a transaction of the world and an inventory batch, and the
+//! The platform's writes into the running game: a code patch, a hook at an
+//! instruction, a transaction of the world and an inventory batch, and the
 //! server world they act in.
 
 use core::ops::ControlFlow;
@@ -17,12 +17,15 @@ use enshwick::{Entity, ItemId, Load, Off};
 use super::{COUNT_FOR, off, part};
 use crate::checks::{fail, pass};
 
-/// The system whose first bytes the probe patches with the bytes already
-/// there.
-pub(super) const PATCHED: &str = "lifetime";
-/// How many bytes of its entry the patch covers.
+/// How many bytes the patch covers.
 pub(super) const PATCH_LEN: usize = 8;
-/// The system at whose entry the probe's hook inside a function counts hits.
+/// The `int3` bytes the compiler fills the gaps between the game's
+/// functions with, which no code runs; the patch goes over a run of them.
+pub(super) const PADDING: u8 = 0xcc;
+/// What the patch writes: `nop`s, which differ from the padding, so reading
+/// them back shows the loader wrote the patch.
+pub(super) const WRITTEN: [u8; PATCH_LEN] = [0x90; PATCH_LEN];
+/// The system at whose entry the probe's hook at an instruction counts hits.
 pub(super) const COUNTED: &str = "last_transform";
 /// The prop the transaction places: a wooden chest, a container.
 pub(super) const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
@@ -33,55 +36,50 @@ const LOOK: Duration = Duration::from_millis(250);
 /// How many looks a transaction or its undo may take to settle.
 const LOOKS: u32 = 40;
 
-/// The probe's code patch: where, and the bytes it wrote back.
-#[derive(Debug, Clone, Copy)]
-struct Patch {
-    at: usize,
-    bytes: [u8; PATCH_LEN],
+/// Where in the code section the first run of [`PATCH_LEN`] padding bytes
+/// starts.
+fn padding(code: &[u8]) -> Option<usize> {
+    code.windows(PATCH_LEN)
+        .position(|run| run.iter().all(|&byte| byte == PADDING))
 }
 
-/// Asks for a patch of [`PATCHED`]'s first bytes with the same bytes, so
-/// the game runs as before while the loader writes them.
-fn patch(load: &mut Load<'_>) -> Result<Patch, Off> {
-    let target = load.system(PATCHED)?;
+/// Asks for a patch that writes [`WRITTEN`] over the code section's first
+/// run of padding, so the game runs as before while the bytes change.
+fn patch(load: &mut Load<'_>) -> Result<usize, Off> {
     let code = load.code()?;
-    let outside = || {
+    let from = padding(code).ok_or_else(|| {
         Off::new(format!(
-            "{PATCHED} at {target:#x} is not in the code section"
+            "no {PATCH_LEN} bytes of padding in the code section"
         ))
-    };
-    let at = usize::try_from(target).map_err(|_| outside())?;
-    let bytes = at
-        .checked_sub(code.as_ptr().addr())
-        .and_then(|from| code.get(from..from.checked_add(PATCH_LEN)?))
-        .and_then(|bytes| <[u8; PATCH_LEN]>::try_from(bytes).ok())
-        .ok_or_else(outside)?;
-    // SAFETY: the replacement is the bytes already at `target`, so every
-    // path through them runs as before.
-    unsafe { load.patch_code(target, &bytes, &bytes) }?;
-    Ok(Patch { at, bytes })
+    })?;
+    let at = code.as_ptr().addr() + from;
+    let target = u64::try_from(at).map_err(|_| Off::new(format!("padding at {at:#x}")))?;
+    // SAFETY: the bytes at `target` are padding between functions, which
+    // no path through the game's code runs or jumps into.
+    unsafe { load.patch_code(target, &[PADDING; PATCH_LEN], &WRITTEN) }?;
+    Ok(at)
 }
 
-/// Reads the patched bytes back from the running game's code.
-fn read_back(patch: Patch) {
-    // SAFETY: `patch.at` starts `PATCH_LEN` bytes inside the game's code
-    // section, as `patch` checked against the loader's code range, which
-    // stays mapped and readable for the process.
-    let now: [u8; PATCH_LEN] = unsafe { read_at(core::ptr::with_exposed_provenance(patch.at), 0) };
-    if now == patch.bytes {
+/// Reads the patched bytes at `at` back from the running game's code.
+fn read_back(at: usize) {
+    // SAFETY: `at` starts `PATCH_LEN` bytes inside the game's code section,
+    // which stays mapped and readable for the process. The loader writes the
+    // patch while it arms, before this check runs, since no thread runs
+    // padding to make it wait, and nothing writes those bytes afterwards.
+    let now: [u8; PATCH_LEN] = unsafe { read_at(core::ptr::with_exposed_provenance(at), 0) };
+    if now == WRITTEN {
         pass(&format!(
-            "code patch: {PATCHED} reads its {PATCH_LEN} bytes back"
+            "code patch: padding at {at:#x} reads the {PATCH_LEN} bytes written"
         ));
     } else {
         fail(&format!(
-            "code patch: {PATCHED} reads {now:02x?}, wrote {:02x?}",
-            patch.bytes
+            "code patch: padding at {at:#x} reads {now:02x?}, not {WRITTEN:02x?}"
         ));
     }
 }
 
-/// Hooks [`COUNTED`]'s entry from inside the function, counting each hit.
-fn hook_inside(load: &mut Load<'_>) -> Result<Arc<AtomicUsize>, Off> {
+/// Hooks the instruction at [`COUNTED`]'s entry, counting each hit.
+fn hook_at(load: &mut Load<'_>) -> Result<Arc<AtomicUsize>, Off> {
     let at = load.system(COUNTED)?;
     let hits = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&hits);
@@ -97,14 +95,12 @@ fn hook_inside(load: &mut Load<'_>) -> Result<Arc<AtomicUsize>, Off> {
     Ok(hits)
 }
 
-/// Logs how often the hook inside [`COUNTED`] ran in [`COUNT_FOR`].
+/// Logs how often the hook at [`COUNTED`]'s entry ran in [`COUNT_FOR`].
 fn report_hits(hits: usize) {
     if hits > 0 {
-        pass(&format!(
-            "hook inside {COUNTED}: {hits} hits in {COUNT_FOR:?}"
-        ));
+        pass(&format!("hook at {COUNTED}: {hits} hits in {COUNT_FOR:?}"));
     } else {
-        fail(&format!("hook inside {COUNTED}: no hit in {COUNT_FOR:?}"));
+        fail(&format!("hook at {COUNTED}: no hit in {COUNT_FOR:?}"));
     }
 }
 
@@ -157,11 +153,33 @@ fn undone(status: Option<&TransactionStatus>, looks: u32) -> Option<bool> {
     }
 }
 
-/// The parts the world writes need.
+/// Whether a transaction at `status` may have left something in the world
+/// that its undo takes back.
+fn may_stand(status: Option<&TransactionStatus>) -> bool {
+    matches!(
+        status,
+        Some(TransactionStatus::Pending | TransactionStatus::Applied)
+    )
+}
+
+/// Whether `found` is within a metre of `spot`, where the chest was placed.
+fn stands_at(found: Option<[f64; 3]>, spot: [f64; 3]) -> bool {
+    found.is_some_and(|found| {
+        found
+            .iter()
+            .zip(spot)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            < 1.0
+    })
+}
+
+/// The parts the world writes need; without inventories the transaction
+/// still runs, and only the inventory batch is off.
 #[derive(Debug, Clone, Copy)]
 struct Writer {
     world: World,
-    inventories: Inventories,
+    inventories: Option<Inventories>,
     scheduler: Scheduler,
     chest_item: ItemId,
 }
@@ -179,10 +197,11 @@ impl Writer {
             enshwick::info!("SKIP transaction: no placed entity");
             return;
         };
+        let spot = [x, y + CHEST_LIFT, z];
         let commit = self
             .world
             .transaction()
-            .place_prop(self.chest_item, WorldTransform::at([x, y + CHEST_LIFT, z]))
+            .place_prop(self.chest_item, WorldTransform::at(spot))
             .commit();
         let id = match commit {
             Ok(id) => id,
@@ -200,17 +219,32 @@ impl Writer {
             match placement(status.as_ref(), chest, looks) {
                 Placement::Wait => return ControlFlow::Continue(()),
                 Placement::Stands(chest) => {
-                    pass(&format!(
-                        "transaction status Applied, its entities name chest {}",
-                        chest.0
-                    ));
-                    self.give_and_take(id, chest);
+                    let found = self.world.position(chest);
+                    if stands_at(found, spot) {
+                        pass(&format!(
+                            "transaction status Applied, its entities name chest {} where it was placed",
+                            chest.0
+                        ));
+                    } else {
+                        fail(&format!(
+                            "transaction entities name {} at {found:?}, not the chest placed at {spot:?}",
+                            chest.0
+                        ));
+                    }
+                    if let Some(inventories) = self.inventories {
+                        self.give_and_take(inventories, id, chest);
+                    } else {
+                        off("inventories");
+                        self.undo(id, chest);
+                    }
                 }
                 Placement::Lost => {
                     fail(&format!(
                         "transaction status {status:?}, its entities {chest:?}, after {looks} looks"
                     ));
-                    self.undo(id);
+                    if let Some(chest) = chest.filter(|_| may_stand(status.as_ref())) {
+                        self.undo(id, chest);
+                    }
                 }
             }
             ControlFlow::Break(())
@@ -219,29 +253,29 @@ impl Writer {
 
     /// Gives one item to `chest` and takes it back, each as an inventory
     /// batch, then undoes the transaction `id` that placed it.
-    fn give_and_take(self, id: TransactionId, chest: Entity) {
+    fn give_and_take(self, inventories: Inventories, id: TransactionId, chest: Entity) {
         let give_one = Batch::new().with(Op::Give {
             to: chest,
             item: self.chest_item,
             count: 1,
             fill: None,
         });
-        let _ticket = self.inventories.submit(&give_one, move |gave| {
+        let _ticket = inventories.submit(&give_one, move |gave| {
             if gave.done == Done::TimedOut {
                 enshwick::info!(
                     "SKIP inventory submit: the game ran no inventory step in time, as with nobody online"
                 );
-                self.undo(id);
+                self.undo(id, chest);
                 return;
             }
-            let (gave, held) = (gave.is_committed(), self.inventories.count(chest, self.chest_item));
+            let (gave, held) = (gave.is_committed(), inventories.count(chest, self.chest_item));
             let take_one = Batch::new().with(Op::Take {
                 from: chest,
                 item: self.chest_item,
                 count: 1,
             });
-            let _ticket = self.inventories.submit(&take_one, move |took| {
-                let (took, left) = (took.is_committed(), self.inventories.count(chest, self.chest_item));
+            let _ticket = inventories.submit(&take_one, move |took| {
+                let (took, left) = (took.is_committed(), inventories.count(chest, self.chest_item));
                 let line = format!(
                     "inventory submit: give committed {gave}, chest held {held}; take committed {took}, chest holds {left}"
                 );
@@ -250,13 +284,14 @@ impl Writer {
                 } else {
                     fail(&line);
                 }
-                self.undo(id);
+                self.undo(id, chest);
             });
         });
     }
 
-    /// Undoes the transaction `id` and follows its status until it settles.
-    fn undo(self, id: TransactionId) {
+    /// Undoes the transaction `id`, follows its status until it settles and
+    /// looks that `chest` left the world.
+    fn undo(self, id: TransactionId, chest: Entity) {
         if let Err(why) = self.world.undo(id) {
             fail(&format!("transaction undo: {why}"));
             return;
@@ -267,7 +302,13 @@ impl Writer {
             let status = self.world.transaction_status(id);
             match undone(status.as_ref(), looks) {
                 None => return ControlFlow::Continue(()),
-                Some(true) => pass("transaction undo: status Undone"),
+                Some(true) => match self.world.position(chest) {
+                    None => pass("transaction undo: status Undone, the chest gone"),
+                    Some(at) => fail(&format!(
+                        "transaction undo: status Undone, but chest {} still stands at {at:?}",
+                        chest.0
+                    )),
+                },
                 Some(false) => fail(&format!(
                     "transaction undo: status {status:?} after {looks} looks"
                 )),
@@ -281,7 +322,7 @@ impl Writer {
 /// needs; a part the loader does not give turns off only its check.
 #[derive(Debug)]
 pub(super) struct WriteChecks {
-    patch: Option<Patch>,
+    patch: Option<usize>,
     hits: Option<Arc<AtomicUsize>>,
     writer: Option<Writer>,
     scheduler: Scheduler,
@@ -292,18 +333,15 @@ impl WriteChecks {
     /// the world writes.
     pub(super) fn new(load: &mut Load<'_>, scheduler: Scheduler, world: Option<World>) -> Self {
         let patch = part("code patch", patch(load));
-        let hits = part("hook inside a function", hook_inside(load));
+        let hits = part("hook at an instruction", hook_at(load));
         let inventories = part("inventories", load.inventories());
         let chest = part("chest item", vanilla::item(CHEST)).map(ItemId::from_guid);
-        let writer = world
-            .zip(inventories)
-            .zip(chest)
-            .map(|((world, inventories), chest_item)| Writer {
-                world,
-                inventories,
-                scheduler,
-                chest_item,
-            });
+        let writer = world.zip(chest).map(|(world, chest_item)| Writer {
+            world,
+            inventories,
+            scheduler,
+            chest_item,
+        });
         Self {
             patch,
             hits,
@@ -326,12 +364,18 @@ impl WriteChecks {
                     report_hits(hits.load(Ordering::Relaxed) - before);
                 });
             }
-            None => off("hook inside a function"),
+            None => off("hook at an instruction"),
         }
         match self.writer {
             Some(writer) => writer.place(),
             None => off("world writes"),
         }
+    }
+
+    /// How many hits the hook at [`COUNTED`]'s entry counted so far.
+    #[cfg(test)]
+    pub(super) fn hits(&self) -> Option<usize> {
+        self.hits.as_ref().map(|hits| hits.load(Ordering::Relaxed))
     }
 }
 
@@ -382,5 +426,32 @@ mod tests {
         let refused = TransactionStatus::UndoRefused(enshwick::WorldError::Refused);
         assert_eq!(undone(Some(&refused), 1), Some(false));
         assert_eq!(undone(None, 1), Some(false));
+    }
+
+    #[test]
+    fn only_a_pending_or_applied_transaction_is_undone_after_a_loss() {
+        assert!(may_stand(Some(&TransactionStatus::Pending)));
+        assert!(may_stand(Some(&TransactionStatus::Applied)));
+        let failed = TransactionStatus::Failed(enshwick::WorldError::NotLoaded);
+        assert!(!may_stand(Some(&failed)));
+        assert!(!may_stand(Some(&TransactionStatus::Expired)));
+        assert!(!may_stand(None));
+    }
+
+    #[test]
+    fn the_chest_stands_only_within_a_metre_of_its_spot() {
+        let spot = [10.0, 20.0, 30.0];
+        assert!(stands_at(Some([10.5, 20.0, 30.5]), spot));
+        assert!(!stands_at(Some([11.0, 20.0, 30.0]), spot));
+        assert!(!stands_at(None, spot));
+    }
+
+    #[test]
+    fn the_patch_takes_the_first_run_of_padding_long_enough() {
+        let mut code = [0x90; 32];
+        code[2..2 + PATCH_LEN - 1].fill(PADDING);
+        code[20..20 + PATCH_LEN].fill(PADDING);
+        assert_eq!(padding(&code), Some(20));
+        assert_eq!(padding(&[PADDING; PATCH_LEN - 1]), None);
     }
 }

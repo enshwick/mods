@@ -620,10 +620,14 @@ mod tests {
         );
     }
 
-    /// Bytes standing in for the game's code section.
-    static CODE: [u8; 64] = *b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
-    /// Where the patched system starts in [`CODE`].
-    const PATCHED_AT: usize = 8;
+    /// Bytes standing in for the game's code section, with a run of padding.
+    static CODE: [u8; 64] =
+        *b"0123456789abcdef\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xccopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
+    /// The same section with no run of padding long enough for the patch.
+    static NO_PADDING: [u8; 64] =
+        *b"0123456789abcdef\xcc\xcc\xcc\xcc\xcc\xcc\xccnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
+    /// Where the padding starts in [`CODE`].
+    const PADDING_AT: usize = 16;
     /// Where the counted system starts in [`CODE`].
     const COUNTED_AT: usize = 32;
 
@@ -633,9 +637,13 @@ mod tests {
 
     /// A host with every part the checks need.
     fn every_part() -> FakeHost {
+        every_part_but_inventories().inventory_requests()
+    }
+
+    /// A host with every part the checks need but inventory batches.
+    fn every_part_but_inventories() -> FakeHost {
         FakeHost::new()
             .world()
-            .inventory_requests()
             .items()
             .workshops()
             .vanilla_items(&[(
@@ -643,42 +651,68 @@ mod tests {
                 writes::CHEST,
             )])
             .code(&CODE)
-            .system(writes::PATCHED, code_at(PATCHED_AT))
             .system(writes::COUNTED, code_at(COUNTED_AT))
             .server_world(0x7ff0_0000)
     }
 
     #[test]
-    fn the_patch_writes_back_the_bytes_there_and_the_hook_inside_counts() {
+    fn the_patch_asks_to_write_over_padding_and_the_hook_counts_its_hits() {
         let (loader, checks) = started(every_part());
-        let bytes = CODE[PATCHED_AT..PATCHED_AT + writes::PATCH_LEN].to_vec();
         assert_eq!(
             loader.code_patches(),
-            vec![(code_at(PATCHED_AT), bytes.clone(), bytes)]
+            vec![(
+                code_at(PADDING_AT),
+                vec![writes::PADDING; writes::PATCH_LEN],
+                writes::WRITTEN.to_vec()
+            )]
         );
+        assert_eq!(checks.writes.hits(), Some(0));
         let mut registers = enshwick::abi::Registers::default();
         assert_eq!(loader.run_at(code_at(COUNTED_AT), &mut registers), 1);
+        assert_eq!(checks.writes.hits(), Some(1));
         checks.run();
-        let logs = loader.logs();
-        assert!(
-            logged_exactly(&loader, "PASS code patch: lifetime reads its 8 bytes back"),
-            "{logs:?}"
-        );
         assert!(
             logged_exactly(&loader, "PASS server world: set while the world runs"),
-            "{logs:?}"
+            "{:?}",
+            loader.logs()
         );
     }
 
     #[test]
-    fn a_system_outside_the_code_turns_off_only_the_patch() {
-        let (loader, _) = started(every_part().system(writes::PATCHED, 0x10));
-        assert!(loader.code_patches().is_empty());
+    fn a_patch_the_loader_never_wrote_fails_its_check() {
+        let (loader, checks) = started(every_part());
+        checks.run();
         assert!(
             logged_starting(
                 &loader,
-                "FAIL platform: code patch: lifetime at 0x10 is not in"
+                &format!(
+                    "FAIL code patch: padding at {:#x} reads [cc",
+                    code_at(PADDING_AT)
+                )
             ),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_host_without_inventory_batches_still_runs_the_transaction_check() {
+        let (loader, checks) = started(every_part_but_inventories());
+        checks.run();
+        assert!(
+            !logged_exactly(&loader, "SKIP platform: world writes is off")
+                && logged_exactly(&loader, "SKIP transaction: no placed entity"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_code_section_without_padding_turns_off_only_the_patch() {
+        let (loader, _) = started(every_part().code(&NO_PADDING));
+        assert!(loader.code_patches().is_empty());
+        assert!(
+            logged_starting(&loader, "FAIL platform: code patch: no 8 bytes of padding"),
             "{:?}",
             loader.logs()
         );

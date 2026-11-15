@@ -23,6 +23,8 @@ use enshwick::{Load, WorldError};
 
 use crate::checks::{SPAWN_LIFT, fail, pass};
 
+mod writes;
+
 /// The field of the reflected type the probe looks up.
 const SHAPE_FIELD: &str = "rangeX";
 /// An ECS system every server build has.
@@ -200,6 +202,7 @@ pub(crate) struct PlatformChecks {
     zone_calls: Arc<AtomicUsize>,
     loop_waits: Arc<AtomicUsize>,
     server_waits: Arc<AtomicUsize>,
+    writes: writes::WriteChecks,
 }
 
 impl PlatformChecks {
@@ -257,8 +260,10 @@ impl PlatformChecks {
                 counted.fetch_add(1, Ordering::Relaxed);
             }),
         );
+        let world = part("world", load.world());
         Self {
-            world: part("world", load.world()),
+            writes: writes::WriteChecks::new(load, scheduler, world),
+            world,
             effects: load.effects(),
             voxels: load.voxels(),
             altars: part("altars", load.altars()),
@@ -289,6 +294,7 @@ impl PlatformChecks {
             None => off("map"),
         }
         report("console line", enshwick::console::run(CONSOLE_LINE));
+        self.writes.run();
         let (loops, servers) = (Arc::clone(&self.loop_waits), Arc::clone(&self.server_waits));
         let (loops_before, servers_before) = (
             loops.load(Ordering::Relaxed),
@@ -614,9 +620,85 @@ mod tests {
         );
     }
 
+    /// Bytes standing in for the game's code section.
+    static CODE: [u8; 64] = *b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
+    /// Where the patched system starts in [`CODE`].
+    const PATCHED_AT: usize = 8;
+    /// Where the counted system starts in [`CODE`].
+    const COUNTED_AT: usize = 32;
+
+    fn code_at(offset: usize) -> u64 {
+        u64::try_from(CODE.as_ptr().addr() + offset).unwrap()
+    }
+
+    /// A host with every part the checks need.
+    fn every_part() -> FakeHost {
+        FakeHost::new()
+            .world()
+            .inventory_requests()
+            .items()
+            .workshops()
+            .vanilla_items(&[(
+                enshwick::content::Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d"),
+                writes::CHEST,
+            )])
+            .code(&CODE)
+            .system(writes::PATCHED, code_at(PATCHED_AT))
+            .system(writes::COUNTED, code_at(COUNTED_AT))
+            .server_world(0x7ff0_0000)
+    }
+
+    #[test]
+    fn the_patch_writes_back_the_bytes_there_and_the_hook_inside_counts() {
+        let (loader, checks) = started(every_part());
+        let bytes = CODE[PATCHED_AT..PATCHED_AT + writes::PATCH_LEN].to_vec();
+        assert_eq!(
+            loader.code_patches(),
+            vec![(code_at(PATCHED_AT), bytes.clone(), bytes)]
+        );
+        let mut registers = enshwick::abi::Registers::default();
+        assert_eq!(loader.run_at(code_at(COUNTED_AT), &mut registers), 1);
+        checks.run();
+        let logs = loader.logs();
+        assert!(
+            logged_exactly(&loader, "PASS code patch: lifetime reads its 8 bytes back"),
+            "{logs:?}"
+        );
+        assert!(
+            logged_exactly(&loader, "PASS server world: set while the world runs"),
+            "{logs:?}"
+        );
+    }
+
+    #[test]
+    fn a_system_outside_the_code_turns_off_only_the_patch() {
+        let (loader, _) = started(every_part().system(writes::PATCHED, 0x10));
+        assert!(loader.code_patches().is_empty());
+        assert!(
+            logged_starting(
+                &loader,
+                "FAIL platform: code patch: lifetime at 0x10 is not in"
+            ),
+            "{:?}",
+            loader.logs()
+        );
+        assert_eq!(loader.mid_hooks(), vec![code_at(COUNTED_AT)]);
+    }
+
+    #[test]
+    fn no_server_world_fails_its_check() {
+        let (loader, checks) = started(every_part().server_world(0));
+        checks.run();
+        assert!(
+            logged_starting(&loader, "FAIL server world: 0x0"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
     #[test]
     fn a_run_with_every_part_runs_the_checks_of_each() {
-        let (loader, checks) = started(FakeHost::new().world());
+        let (loader, checks) = started(every_part());
         assert!(checks.world.is_some() && checks.map.is_some());
         assert!(checks.altars.is_some() && checks.zones.is_some());
         checks.run();

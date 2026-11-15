@@ -22,9 +22,9 @@ mod game;
 fn check(at: [f64; 3]) -> BuildCheck {
     BuildCheck {
         header: Header::of::<BuildCheck>(),
-        player: Entity(11),
+        character: Entity(11),
         item: ItemId::new(7),
-        position: enshwick::ecs::fixed(at),
+        position: at,
         reason: core::ptr::null_mut(),
     }
 }

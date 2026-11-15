@@ -338,7 +338,7 @@ fn server_around(
                 let target = u32_at(data.addr() + offset)?;
                 let names = world
                     .template(Entity(target))
-                    .map_or_else(|| "not here".to_owned(), |t| guid(&t));
+                    .map_or_else(|| "not here".to_owned(), |t| guid(&t.0));
                 Some(format!("{name}={} ({names})", id(target)))
             })
             .collect();
@@ -347,7 +347,7 @@ fn server_around(
             id(entity.0),
             world
                 .template(entity)
-                .map_or_else(|| "?".to_owned(), |t| guid(&t)),
+                .map_or_else(|| "?".to_owned(), |t| guid(&t.0)),
             position(placed.position),
             listed(&refs)
         );

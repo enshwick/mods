@@ -267,15 +267,15 @@ fn a_player_goes_to_the_waypoint_the_caller_set_on_the_map() {
 }
 
 /// A building event by Bob, who stands at 0, 20, 7.
-fn building(kind: u8, position: [f32; 3]) -> BuildingData {
+fn building(kind: u8, position: [f64; 3]) -> BuildingData {
     BuildingData {
         header: Header::of::<BuildingData>(),
         entity: Entity(900),
-        player: bob().entity,
+        character: bob().entity,
         item: ItemId::new(0),
         kind,
         replay: 0,
-        template: [0; 16],
+        template: enshwick::content::Guid([0; 16]),
         position,
     }
 }

@@ -9,7 +9,7 @@ use std::time::Duration;
 use enshwick::abi::{HookFlags, Side};
 use enshwick::{Next, hook};
 
-use enshwick::altars::{Altars, ZoneSizes, base_limit, grouping, set_base_cap};
+use enshwick::altars::{Altars, ZoneSizes, base_limit, grouping, set_base_limit};
 use enshwick::content::recipes::{WORKSHOP_RECIPES, workshop_limit};
 use enshwick::effects::{Effects, Spawn};
 use enshwick::map::Map;
@@ -162,8 +162,8 @@ fn bases() {
     enshwick::info!("grouping: {:?}", grouping());
     // The lowest cap of every mod holds, so the probe lets go of its own at
     // once: other mods keep the bases they asked for.
-    let capped = set_base_cap(CAP).map(|()| base_limit());
-    let released = set_base_cap(u32::MAX).map(|()| base_limit());
+    let capped = set_base_limit(CAP).map(|()| base_limit());
+    let released = set_base_limit(u32::MAX).map(|()| base_limit());
     match (before, capped, released) {
         (Some(before), Ok(Some(low)), Ok(Some(back))) => {
             match cap_reads_back(before.bases, low.bases, back.bases) {

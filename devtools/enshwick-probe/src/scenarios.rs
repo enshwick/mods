@@ -127,7 +127,7 @@ mod tests {
     const ANN_ENTITY: Entity = Entity(10);
 
     fn ann() -> PlayerInfo {
-        let mut name = [0u8; 64];
+        let mut name = [0u8; PlayerInfo::NAME_MAX];
         name[..3].copy_from_slice(b"Ann");
         PlayerInfo {
             header: Header::of::<PlayerInfo>(),
@@ -372,7 +372,7 @@ mod tests {
         run_for(&loader, Duration::from_millis(200));
         loader.set_save_info(Some(enshwick::abi::SaveInfo {
             header: Header::of::<enshwick::abi::SaveInfo>(),
-            world: [1; 16],
+            world: enshwick::content::Guid([1; 16]),
             saved_at: 60,
             size: 10,
             backups: 0,
@@ -414,7 +414,7 @@ mod tests {
         let call = ItemAction {
             header: Header::of::<ItemAction>(),
             kind: ItemAction::CONSUME,
-            player: ANN_ENTITY,
+            character: ANN_ENTITY,
             item: enshwick::ItemId::new(0x5e01),
             count: 1,
             inventory: Entity(2),

@@ -297,7 +297,7 @@ mod tests {
             key: enshwick::PlayerKey::new(1),
             permissions: PlayerInfo::CAN_KICK_BAN,
             name_len: 0,
-            name: [0; 64],
+            name: [0; PlayerInfo::NAME_MAX],
         };
         let marked = |values: &str| {
             let reply = loader.ask_actions(ActionCall::RUN, &admin, 0, "mark", "");

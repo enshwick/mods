@@ -394,7 +394,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
 
 /// Records a Safe just placed, with its owner, and names the owner on it.
 fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
-    let entity = placed.player;
+    let entity = placed.character;
     let player = world.player(entity);
     let key = player
         .as_ref()

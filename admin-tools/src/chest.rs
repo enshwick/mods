@@ -123,7 +123,11 @@ fn place(
         return Err(Outcome::refused(request.say(texts::REPLY_NO_CHEST, &[])));
     };
     let Some(late) = Late::new(tools, request, id) else {
-        return Err(Tools::failed(request, whereabouts, &WorldError::Missing));
+        return Err(Tools::failed(
+            request,
+            whereabouts,
+            &WorldError::Unavailable,
+        ));
     };
     let placed = tools
         .world

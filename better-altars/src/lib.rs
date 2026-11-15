@@ -65,7 +65,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use enshwick::Entity;
-    use enshwick::abi::{AltarInfo, Bounds, Side, Status};
+    use enshwick::abi::{AltarInfo, Bounds, Extent, Side, Status};
     use enshwick::config::Config as _;
     use enshwick::events::{AltarsChanged, SettingsReplaced};
 
@@ -181,7 +181,7 @@ mod tests {
         );
         assert_eq!(loader.altar_limit(0, 1), 1);
         assert_eq!(loader.altar_limit(1, 2), 40);
-        assert_eq!(loader.altar_limit(2, 4), CAP);
+        assert_eq!(loader.altar_limit(2, 4), u32::from(CAP));
         assert_eq!(loader.altar_limit(3, 6), 5);
         assert!(loader.faults().is_empty());
     }
@@ -352,24 +352,24 @@ mod tests {
         );
 
         let zones = [
-            Bounds {
-                min: [0, 0, 0],
-                max: [10, 10, 10],
+            Extent {
+                min: [0.0, 0.0, 0.0],
+                max: [10.0, 10.0, 10.0],
             },
-            Bounds {
-                min: [10, 0, 0],
-                max: [20, 10, 10],
+            Extent {
+                min: [10.0, 0.0, 0.0],
+                max: [20.0, 10.0, 10.0],
             },
         ];
-        let across = Bounds {
-            min: [5, 1, 1],
-            max: [15, 9, 9],
+        let across = Extent {
+            min: [5.0, 1.0, 1.0],
+            max: [15.0, 9.0, 9.0],
         };
-        assert!(loader.building_zone_check(&zones, across, 0));
-        assert!(!loader.building_zone_check(&zones[..1], across, 0));
+        assert!(loader.building_zone_check(&zones, across, 0.0));
+        assert!(!loader.building_zone_check(&zones[..1], across, 0.0));
         AltarZones::set_seams(false);
         assert!(
-            !loader.building_zone_check(&zones, across, 0),
+            !loader.building_zone_check(&zones, across, 0.0),
             "seams off: vanilla"
         );
         AltarZones::set_seams(true);

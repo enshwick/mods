@@ -20,9 +20,9 @@ fn build(
 ) -> Result<(), Option<String>> {
     loader.build(&BuildCheck {
         header: Header::of::<BuildCheck>(),
-        player: Entity(player),
+        character: Entity(player),
         item: ItemId::new(7),
-        position: enshwick::ecs::fixed(at),
+        position: at,
         reason: core::ptr::null_mut(),
     })
 }

@@ -255,11 +255,11 @@ impl Tools {
             BuildingData::PICKED_UP => PICKED_UP,
             _ => TORN_DOWN,
         };
-        let player = self.world.player(data.player);
+        let player = self.world.player(data.character);
         let at = if data.kind == BuildingData::PLACED {
-            Some(data.position.map(f64::from))
+            Some(data.position)
         } else {
-            self.world.position(data.player)
+            self.world.position(data.character)
         };
         let Some(at) = at else {
             return;

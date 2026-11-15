@@ -123,7 +123,7 @@ fn reported(side: Side, build: Fingerprint) -> bool {
 #[test]
 fn every_build_found_on_is_reported_and_lists_every_target_of_its_side() {
     for (side, hex, age, found) in FOUND {
-        let build = Fingerprint::new(guid(hex), age);
+        let build = Fingerprint::new(guid(hex).0, age);
         assert!(reported(side, build), "{} has no report", build_name(build));
         assert_eq!(found.len(), on(side).len(), "{}", build_name(build));
     }
@@ -178,7 +178,7 @@ fn every_target_is_found_once_in_the_executables_where_it_was_found_before() {
         };
         let before = FOUND
             .iter()
-            .find(|&&(s, hex, age, _)| s == side && Fingerprint::new(guid(hex), age) == build)
+            .find(|&&(s, hex, age, _)| s == side && Fingerprint::new(guid(hex).0, age) == build)
             .map(|&(_, _, _, found)| found);
         assert!(
             before.is_some() || !reported(side, build),

@@ -107,13 +107,12 @@ impl AltarTable {
     }
 
     /// Altars allowed at `flame_level`, where the game allows `vanilla`.
-    pub(crate) fn altars(&self, flame_level: u32, vanilla: u8) -> u8 {
+    pub(crate) fn altars(&self, flame_level: u32, vanilla: u32) -> u32 {
         let index = usize::try_from(flame_level).unwrap_or(usize::MAX);
         self.table
             .get(index)
             .or(self.table.last())
-            .copied()
-            .unwrap_or(vanilla)
+            .map_or(vanilla, |&n| u32::from(n))
     }
 }
 
@@ -160,18 +159,15 @@ impl AltarCount {
     /// The altars `flame_level` allows, where the game allows `vanilla`:
     /// the table's answer, between 1 and the cap. Other mods' filters in the
     /// loader's chain change it after.
-    pub(crate) fn limit(&self, flame_level: u32, vanilla: u8) -> u8 {
-        self.table
-            .load()
-            .altars(flame_level, vanilla)
-            .clamp(1, self.cap)
+    pub(crate) fn limit(&self, flame_level: u32, vanilla: u32) -> u32 {
+        within_cap(self.table.load().altars(flame_level, vanilla), self.cap)
     }
 
     /// Takes the table and the bases of `count`, the settings now in force.
     pub(crate) fn apply(&self, count: &Count) {
         self.table
             .store(Arc::new(AltarTable::from_settings(count, self.cap)));
-        match enshwick::altars::set_base_cap(u32::from(count.bases)) {
+        match enshwick::altars::set_base_limit(u32::from(count.bases)) {
             Ok(()) => enshwick::info!("bases: {}", count.bases),
             Err(off) => enshwick::warn!("bases stay as asked at start: {off}"),
         }
@@ -187,9 +183,27 @@ impl AltarCount {
     }
 }
 
+/// `altars` between 1 and `cap`, and 1 under a cap of 0, which a loader
+/// reporting no zones gives.
+fn within_cap(altars: u32, cap: u8) -> u32 {
+    altars.clamp(1, u32::from(cap.max(1)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_limit_stays_between_1_and_the_cap_even_under_a_cap_of_0() {
+        assert_eq!(within_cap(0, 32), 1);
+        assert_eq!(within_cap(40, 32), 32);
+        assert_eq!(within_cap(7, 32), 7);
+        assert_eq!(
+            within_cap(7, 0),
+            1,
+            "no panic when the loader reports no zones"
+        );
+    }
 
     #[test]
     fn the_default_settings_double_vanilla() {

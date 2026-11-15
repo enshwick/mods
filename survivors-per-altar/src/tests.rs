@@ -378,7 +378,7 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
         .iter()
         .flat_map(|request| request.ops.iter())
         .filter(|op| op.kind == InventoryOp::RENEW)
-        .map(|op| op.target)
+        .map(|op| u64::from(op.target.0))
         .collect();
     renewed.sort_unstable();
     let inventories = [BUILT + 100, LOOT + 100].map(u64::from);
@@ -467,7 +467,7 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
         header: Header::of::<Summon>(),
         item: ItemId::from_guid(smith.staff()),
         ammo: ItemId::new(0),
-        template: smith.template().0,
+        template: smith.template(),
         target: [130, 0, 10],
         slot: 0,
         pide: Entity(0),
@@ -543,7 +543,7 @@ vanilla_staff_places_copies = true
         header: Header::of::<Summon>(),
         item: ItemId::from_guid(smith.staff()),
         ammo: ItemId::new(0),
-        template: smith.template().0,
+        template: smith.template(),
         target: [x, 0, 10],
         slot: 0,
         pide: Entity(0),
@@ -623,7 +623,7 @@ copy_staff_locked_chest_chance = 0.0
         header: Header::of::<Summon>(),
         item: staff.item(),
         ammo: ItemId::new(0),
-        template: smith.template().0,
+        template: smith.template(),
         target: [130, 0, 10],
         slot: 0,
         pide: Entity(0),

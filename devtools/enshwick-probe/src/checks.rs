@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use enshwick::Entity;
+use enshwick::content::Guid;
 use enshwick::ecs::ComponentType;
 use enshwick::effects::{Effects, Spawn, Teleport};
 use enshwick::entity_data::{EntityData, Replication};
@@ -144,7 +145,7 @@ impl Checks {
             .take(ID_SAMPLE)
             .filter_map(|placed| {
                 let template = self.world.template(placed.entity)?;
-                let head = u64::from_le_bytes(template[..8].try_into().ok()?);
+                let head = u64::from_le_bytes(template.0[..8].try_into().ok()?);
                 Some((placed.entity.0, head))
             })
             .collect();
@@ -359,18 +360,18 @@ impl Checks {
 
     /// Spawns one entity of `template` at `at` and follows it through
     /// writes, a teleport and its destruction.
-    pub(crate) fn spawn(&self, template: [u8; 16], at: [f64; 3]) -> String {
+    pub(crate) fn spawn(&self, template: Guid, at: [f64; 3]) -> String {
         // The probe's copies stay out of the save, so a killed server leaves
         // none behind in the world.
         let entity = match self.effects.spawn(template, at, Spawn::new().do_not_save()) {
             Ok(entity) => entity,
             Err(why) => {
-                fail(&format!("spawn of {template:02x?}, not saved: {why}"));
+                fail(&format!("spawn of {template}, not saved: {why}"));
                 return format!("{why}");
             }
         };
         pass(&format!(
-            "spawn of {template:02x?} at {at:?}, not saved, handed out entity {entity}"
+            "spawn of {template} at {at:?}, not saved, handed out entity {entity}"
         ));
         let world = self.world;
         let effects = self.effects;
@@ -551,10 +552,13 @@ impl Checks {
 
     /// The `destroy` action.
     pub(crate) fn destroy(&self, entity: Entity) -> String {
-        let template = self.world.template(entity);
+        let template = self
+            .world
+            .template(entity)
+            .map_or_else(|| "none".to_owned(), |template| template.to_string());
         let outcome = self.world.destroy(entity);
         enshwick::info!(
-            "destroy of entity {} (template {template:02x?}): {outcome:?}",
+            "destroy of entity {} (template {template}): {outcome:?}",
             entity
         );
         if outcome.is_ok() {
@@ -767,7 +771,7 @@ mod tests {
         use enshwick::net::Peer;
 
         let key = PlayerKey::new(7);
-        let mut name = [0u8; 64];
+        let mut name = [0u8; PlayerInfo::NAME_MAX];
         name[..3].copy_from_slice(b"Ann");
         let loader = enshwick::test::FakeHost::new()
             .developer_tools(true)

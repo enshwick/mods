@@ -100,6 +100,8 @@ pub(crate) struct Tools {
     map: Option<Map>,
     /// The debug names of the game's items by GUID, read once a world loads.
     item_names: OnceLock<FxHashMap<Guid, String>>,
+    /// The names of the game's templates by GUID, read once a world loads.
+    template_names: OnceLock<FxHashMap<Guid, String>>,
     /// The ids of the actions declared, which a window may name.
     declared: Mutex<Vec<String>>,
     /// The windows each player opened, one of each id.
@@ -191,6 +193,7 @@ impl Mod for AdminTools {
             spots: Mutex::default(),
             map,
             item_names: OnceLock::new(),
+            template_names: OnceLock::new(),
             declared: Mutex::default(),
             shown: Mutex::default(),
             ticker: Mutex::new(Ticker::default()),
@@ -256,7 +259,7 @@ impl Tools {
         })?;
         let ticks = Arc::clone(self);
         load.on_tick(TICK, move |tick| {
-            ticks.tick(core::time::Duration::from_nanos(tick.elapsed_nanos));
+            ticks.tick(tick.elapsed());
             ticks.drop_stale_gods();
             ticks.find_zone_builders();
         })?;
@@ -317,6 +320,7 @@ impl Tools {
     /// console listens when the world's settings turn it on.
     fn start(&self) {
         self.read_item_names();
+        self.read_template_names();
         // The first ask starts the loader's read of the map, which uncover needs.
         if let Some(map) = self.map {
             let _reading = map.frame();
@@ -489,7 +493,7 @@ fn run_of(tools: &Tools, request: &Request<'_>) -> (String, &'static str, String
     let args: Vec<String> = request
         .args
         .iter()
-        .map(|value| word(value, tools.item_names.get()))
+        .map(|value| word(value, tools.item_names.get(), tools.template_names.get()))
         .collect();
     let who = account(&request.player.name, request.player.key);
     (who, via, args.join(" "))
@@ -560,8 +564,13 @@ pub(crate) fn account_id(key: PlayerKey) -> String {
 }
 
 /// A value as a console line writes it, for the audit log; an item by its
-/// debug name, which reads the same in every language.
-fn word(value: &Value, item_names: Option<&FxHashMap<Guid, String>>) -> String {
+/// debug name and a template by its name, which read the same in every
+/// language.
+fn word(
+    value: &Value,
+    item_names: Option<&FxHashMap<Guid, String>>,
+    template_names: Option<&FxHashMap<Guid, String>>,
+) -> String {
     match value {
         Value::Player { name, .. } => name.clone(),
         Value::Choice(index) => index.to_string(),
@@ -569,6 +578,7 @@ fn word(value: &Value, item_names: Option<&FxHashMap<Guid, String>>) -> String {
         Value::Toggle(on) => if *on { "on" } else { "off" }.to_owned(),
         Value::Text(text) => text.clone(),
         Value::Item(item) => items::told(*item, None, item_names),
+        Value::Template(template) => spawn::told(*template, template_names),
         _ => String::new(),
     }
 }
@@ -583,8 +593,23 @@ mod tests {
     #[test]
     fn the_audit_log_writes_a_text_argument_as_typed() {
         assert_eq!(
-            word(&Value::Text("Stone Axe".to_owned()), None),
+            word(&Value::Text("Stone Axe".to_owned()), None, None),
             "Stone Axe"
+        );
+    }
+
+    #[test]
+    fn the_audit_log_writes_a_template_by_its_name_else_its_guid() {
+        let wolf = Guid::parse("3c9d6c1e-4f2a-4b8e-9a51-1d2e3f405162");
+        let names = FxHashMap::from_iter([(wolf, "Enemy_Wildbeast_Wolf".to_owned())]);
+        assert_eq!(
+            word(&Value::Template(wolf), None, Some(&names)),
+            "Enemy_Wildbeast_Wolf"
+        );
+        assert_eq!(
+            word(&Value::Template(wolf), None, None),
+            wolf.to_string(),
+            "before the names are read"
         );
     }
 

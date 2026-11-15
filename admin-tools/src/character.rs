@@ -172,7 +172,7 @@ fn revive(tools: &Tools, request: &Request<'_>) -> Outcome {
         return no_player(request);
     };
     let Some(full) = tools.world.vitals(player.entity).map(|v| v.health.max) else {
-        return Tools::failed(request, name, &WorldError::Missing);
+        return Tools::failed(request, name, &WorldError::Gone);
     };
     match tools.world.revive(player.entity, full) {
         Ok(now) => Outcome::done(request.say(
@@ -249,10 +249,10 @@ fn uncover(tools: &Tools, request: &Request<'_>) -> Outcome {
     // The action exists only with the map, so `None` is never seen here.
     match tools
         .map
-        .map_or(Err(WorldError::Missing), |map| map.uncover_all(*key))
+        .map_or(Err(WorldError::Unavailable), |map| map.uncover_all(*key))
     {
         Ok(()) => Outcome::done(request.say(texts::REPLY_UNCOVERED, &[(texts::value::NAME, name)])),
-        Err(WorldError::Missing) => {
+        Err(WorldError::Unavailable) => {
             Outcome::refused(request.say(texts::REPLY_NOT_REACHED, &[(texts::value::NAME, name)]))
         }
         Err(WorldError::NotLoaded) => Outcome::refused(request.say(texts::REPLY_MAP_LOADING, &[])),

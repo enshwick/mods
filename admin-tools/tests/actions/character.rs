@@ -3,7 +3,7 @@
 //! the player leaves.
 
 use enshwick::Entity;
-use enshwick::abi::{DAMAGE_TYPES, DamageCheck, Header, KnowledgeInfo, PlayerData};
+use enshwick::abi::{DamageCheck, Header, KnowledgeInfo, PlayerData};
 use enshwick::events::PlayerLeft;
 use enshwick::knowledge::KnowledgeId;
 
@@ -17,8 +17,9 @@ fn fall(target: Entity, total: f32) -> DamageCheck {
         target,
         source: Entity(0),
         attacker: Entity(0),
-        amounts: [0.0; DAMAGE_TYPES],
         total,
+        amount_count: 0,
+        amounts: core::ptr::null_mut(),
     }
 }
 
@@ -140,8 +141,8 @@ fn god_mode_cancels_damage_to_its_player_only_until_they_leave() {
         run(&loader, &ann, "god", "p0000000000000002\tb1"),
         "1Bob is in god mode: nothing damages them."
     );
-    assert_eq!(loader.damage(fall(bob.entity, 40.0)).total, 0.0);
-    assert_eq!(loader.damage(fall(ann.entity, 40.0)).total, 40.0);
+    assert_eq!(loader.damage(fall(bob.entity, 40.0), &mut []).total, 0.0);
+    assert_eq!(loader.damage(fall(ann.entity, 40.0), &mut []).total, 40.0);
     let left = PlayerData {
         header: Header::of::<PlayerData>(),
         slot: bob.slot,
@@ -149,7 +150,7 @@ fn god_mode_cancels_damage_to_its_player_only_until_they_leave() {
         key: bob.key,
     };
     assert!(loader.raise::<PlayerLeft>(&left) >= 1);
-    assert_eq!(loader.damage(fall(bob.entity, 40.0)).total, 40.0);
+    assert_eq!(loader.damage(fall(bob.entity, 40.0), &mut []).total, 40.0);
 }
 
 #[test]
@@ -161,7 +162,7 @@ fn god_mode_turns_off_on_request() {
         run(&loader, &ann(), "god", "p0000000000000002\tb0"),
         "1Bob takes damage again."
     );
-    assert_eq!(loader.damage(fall(bob().entity, 40.0)).total, 40.0);
+    assert_eq!(loader.damage(fall(bob().entity, 40.0), &mut []).total, 40.0);
 }
 
 /// A player's knowledge `id` of `kind` at `value`, as Bob holds it.

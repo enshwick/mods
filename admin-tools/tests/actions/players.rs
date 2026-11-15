@@ -319,6 +319,17 @@ fn heal_restores_a_player_to_their_full_health_and_no_more() {
 }
 
 #[test]
+fn heal_of_a_player_whose_character_has_no_health_says_it_is_not_in_the_world() {
+    let dir = scratch("heal-gone");
+    let loader = server_with("", &dir, &[player(13, 4, "Eve", 0)]);
+    let reply = run(&loader, &ann(), "heal", "p0000000000000004");
+    assert!(
+        reply.starts_with('0') && reply.contains(&enshwick::WorldError::Gone.to_string()),
+        "{reply}"
+    );
+}
+
+#[test]
 fn the_time_of_day_and_the_weather_change_from_their_actions() {
     let dir = scratch("world");
     let loader = server("", &dir);

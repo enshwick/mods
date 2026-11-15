@@ -172,7 +172,7 @@ fn revive(tools: &Tools, request: &Request<'_>) -> Outcome {
         return no_player(request);
     };
     let Some(full) = tools.world.vitals(player.entity).map(|v| v.health.max) else {
-        return Tools::failed(request, name, &WorldError::Unavailable);
+        return Tools::failed(request, name, &WorldError::Gone);
     };
     match tools.world.revive(player.entity, full) {
         Ok(now) => Outcome::done(request.say(

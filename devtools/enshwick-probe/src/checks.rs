@@ -552,10 +552,13 @@ impl Checks {
 
     /// The `destroy` action.
     pub(crate) fn destroy(&self, entity: Entity) -> String {
-        let template = self.world.template(entity);
+        let template = self
+            .world
+            .template(entity)
+            .map_or_else(|| "none".to_owned(), |template| template.to_string());
         let outcome = self.world.destroy(entity);
         enshwick::info!(
-            "destroy of entity {} (template {template:?}): {outcome:?}",
+            "destroy of entity {} (template {template}): {outcome:?}",
             entity
         );
         if outcome.is_ok() {

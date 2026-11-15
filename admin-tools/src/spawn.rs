@@ -204,7 +204,10 @@ fn spawn_from(
     }
     let values = [
         (texts::value::NAME, whereabouts.to_owned()),
-        (texts::value::ITEM, shown(template)),
+        (
+            texts::value::ITEM,
+            told(template, tools.template_names.get()),
+        ),
         (texts::value::COUNT, count.to_string()),
         (texts::value::GIVEN, made.to_string()),
     ];
@@ -220,13 +223,33 @@ fn spawn_from(
     }
 }
 
-/// How a reply names `template`: a vanilla template's name, such as
+/// How a reply or the audit log names `template`: a mod's template by its
+/// content id, a vanilla one by its name in `names`, such as
 /// `Enemy_Wildbeast_Wolf`, else its GUID.
-fn shown(template: Guid) -> String {
-    vanilla::templates()
-        .ok()
-        .and_then(|all| all.into_iter().find(|known| known.guid == template))
-        .map_or_else(|| template.to_string(), |known| known.name)
+pub(crate) fn told(template: Guid, names: Option<&FxHashMap<Guid, String>>) -> String {
+    let content_id = enshwick::content::content_id(template);
+    items::told(template, content_id.as_deref(), names)
+}
+
+impl Tools {
+    /// Keeps the game's template names by GUID once a world loads, from the
+    /// names [`name_templates`] read while the mod started; a read that
+    /// fails is tried again at the next load.
+    pub(crate) fn read_template_names(&self) {
+        if self.template_names.get().is_some() {
+            return;
+        }
+        let names: FxHashMap<Guid, String> = vanilla::templates()
+            .map(|all| {
+                all.into_iter()
+                    .map(|known| (known.guid, known.name))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !names.is_empty() {
+            self.template_names.get_or_init(|| names);
+        }
+    }
 }
 
 /// Where each of `count` creatures stands: evenly on a circle of `radius`

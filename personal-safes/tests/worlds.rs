@@ -584,7 +584,10 @@ label_language = \"en\"
         let bobs = loader
             .ask_actions(ActionCall::RUN, &bob, 0, "access", "p0000000000000003	b1")
             .unwrap();
-        assert!(bobs.starts_with('0'), "Bob stands at no Safe: {bobs}");
+        assert_eq!(
+            bobs, "0No Safe you manage within 4 m.",
+            "Bob stands at no Safe"
+        );
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }

@@ -495,7 +495,7 @@ fn heal(tools: &Tools, request: &Request<'_>) -> Outcome {
         return no_player(request);
     };
     let Some(vitals) = tools.world.vitals(player.entity) else {
-        return Tools::failed(request, name, &WorldError::Unavailable);
+        return Tools::failed(request, name, &WorldError::Gone);
     };
     match tools.world.set_health(player.entity, vitals.health.max) {
         Ok(_) => Outcome::done(request.say(texts::REPLY_HEALED, &[(texts::value::NAME, name)])),

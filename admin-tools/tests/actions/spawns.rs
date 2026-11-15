@@ -75,8 +75,32 @@ fn a_template_the_game_does_not_know_spawns_nothing() {
     let unknown = enshwick::content::Guid([0x77; 16]);
     let line = format!("n0\tn0\tn0\te{unknown}\tn1\tn0\tn0\tb0");
     let reply = run(&loader, &ann(), "spawnat", &line);
-    assert!(reply.starts_with('0'), "{reply}");
+    assert_eq!(reply, format!("0No template {unknown}."));
     assert!(spawns(&loader).is_empty());
+}
+
+#[test]
+fn the_spawns_window_offers_the_template_picker_for_spawns_and_the_item_picker_for_props() {
+    use enshwick::actions::sheet::ArgView;
+
+    let dir = scratch("spawn-picker");
+    let loader = server("", &dir);
+    assert_eq!(run(&loader, &ann(), "open", "c5"), "1");
+    let drawn = super::windows::window(&loader, &ann(), "spawns").entries;
+    let pickers = [
+        ("spawn", ArgView::TEMPLATE),
+        ("spawnat", ArgView::TEMPLATE),
+        ("prop", ArgView::ITEM),
+        ("propat", ArgView::ITEM),
+    ];
+    for (id, kind) in pickers {
+        let entry = drawn
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap_or_else(|| panic!("no {id} in the spawns window"));
+        let picked = entry.args.iter().filter(|arg| arg.kind == kind);
+        assert_eq!(picked.count(), 1, "{id}");
+    }
 }
 
 #[test]

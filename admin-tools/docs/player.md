@@ -355,7 +355,10 @@ A zone refuses placing things. It does not refuse digging or opening chests.
 ## How do I spawn a creature or place a prop?
 
 Type `/adm spawn <player> Enemy_Wildbeast_Wolf 3` to spawn three wolves
-around a player. Name the creature by the game's template name or its GUID.
+around a player. Name the creature by its GUID, a mod's template id or the
+game's template name, in the game's own case. An unknown name lists the names
+near it.
+
 The window lists the game's templates to search, as it lists items.
 
 The values after the name may be left out:

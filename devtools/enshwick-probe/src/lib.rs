@@ -194,6 +194,30 @@ fn vetoes(load: &mut Load<'_>, settings: &Settings) {
         Ok(()) => enshwick::info!("PASS build filter registered"),
         Err(off) => enshwick::warn!("FAIL build filter: {off}"),
     }
+    let renames = load.on_rename(|rename| {
+        let allowed = rename_allowed(&rename.text);
+        enshwick::info!(
+            "PASS rename filter: entity {} to {:?} by {:?}, refused: {}",
+            rename.entity.0,
+            rename.text,
+            rename.player.as_ref().map(|player| player.entity),
+            !allowed
+        );
+        allowed
+    });
+    match renames {
+        Ok(()) => enshwick::info!("PASS rename filter registered"),
+        Err(off) => enshwick::warn!("FAIL rename filter: {off}"),
+    }
+}
+
+/// The one name the probe's rename filter refuses, so a player sees a
+/// refusal the game's own way.
+const REFUSED_NAME: &str = "probe refuses";
+
+/// Whether the rename filter lets a player give an entity `text`.
+fn rename_allowed(text: &str) -> bool {
+    text != REFUSED_NAME
 }
 
 /// An id from a number argument, which the platform kept within its range.
@@ -456,6 +480,13 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         (status, loader)
+    }
+
+    #[test]
+    fn the_rename_filter_refuses_only_its_one_name() {
+        assert!(!rename_allowed(REFUSED_NAME));
+        assert!(rename_allowed("Chest"));
+        assert!(rename_allowed(""));
     }
 
     #[test]

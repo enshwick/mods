@@ -23,6 +23,8 @@ use enshwick::{Load, WorldError};
 
 use crate::checks::{SPAWN_LIFT, fail, pass};
 
+mod writes;
+
 /// The field of the reflected type the probe looks up.
 const SHAPE_FIELD: &str = "rangeX";
 /// An ECS system every server build has.
@@ -200,6 +202,7 @@ pub(crate) struct PlatformChecks {
     zone_calls: Arc<AtomicUsize>,
     loop_waits: Arc<AtomicUsize>,
     server_waits: Arc<AtomicUsize>,
+    writes: writes::WriteChecks,
 }
 
 impl PlatformChecks {
@@ -257,8 +260,10 @@ impl PlatformChecks {
                 counted.fetch_add(1, Ordering::Relaxed);
             }),
         );
+        let world = part("world", load.world());
         Self {
-            world: part("world", load.world()),
+            writes: writes::WriteChecks::new(load, scheduler, world),
+            world,
             effects: load.effects(),
             voxels: load.voxels(),
             altars: part("altars", load.altars()),
@@ -289,6 +294,7 @@ impl PlatformChecks {
             None => off("map"),
         }
         report("console line", enshwick::console::run(CONSOLE_LINE));
+        self.writes.run();
         let (loops, servers) = (Arc::clone(&self.loop_waits), Arc::clone(&self.server_waits));
         let (loops_before, servers_before) = (
             loops.load(Ordering::Relaxed),
@@ -614,9 +620,119 @@ mod tests {
         );
     }
 
+    /// Bytes standing in for the game's code section, with a run of padding.
+    static CODE: [u8; 64] =
+        *b"0123456789abcdef\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xccopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
+    /// The same section with no run of padding long enough for the patch.
+    static NO_PADDING: [u8; 64] =
+        *b"0123456789abcdef\xcc\xcc\xcc\xcc\xcc\xcc\xccnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
+    /// Where the padding starts in [`CODE`].
+    const PADDING_AT: usize = 16;
+    /// Where the counted system starts in [`CODE`].
+    const COUNTED_AT: usize = 32;
+
+    fn code_at(offset: usize) -> u64 {
+        u64::try_from(CODE.as_ptr().addr() + offset).unwrap()
+    }
+
+    /// A host with every part the checks need.
+    fn every_part() -> FakeHost {
+        every_part_but_inventories().inventory_requests()
+    }
+
+    /// A host with every part the checks need but inventory batches.
+    fn every_part_but_inventories() -> FakeHost {
+        FakeHost::new()
+            .world()
+            .items()
+            .workshops()
+            .vanilla_items(&[(
+                enshwick::content::Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d"),
+                writes::CHEST,
+            )])
+            .code(&CODE)
+            .system(writes::COUNTED, code_at(COUNTED_AT))
+            .server_world(0x7ff0_0000)
+    }
+
+    #[test]
+    fn the_patch_asks_to_write_over_padding_and_the_hook_counts_its_hits() {
+        let (loader, checks) = started(every_part());
+        assert_eq!(
+            loader.code_patches(),
+            vec![(
+                code_at(PADDING_AT),
+                vec![writes::PADDING; writes::PATCH_LEN],
+                writes::WRITTEN.to_vec()
+            )]
+        );
+        assert_eq!(checks.writes.hits(), Some(0));
+        let mut registers = enshwick::abi::Registers::default();
+        assert_eq!(loader.run_at(code_at(COUNTED_AT), &mut registers), 1);
+        assert_eq!(checks.writes.hits(), Some(1));
+        checks.run();
+        assert!(
+            logged_exactly(&loader, "PASS server world: set while the world runs"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_patch_the_loader_never_wrote_fails_its_check() {
+        let (loader, checks) = started(every_part());
+        checks.run();
+        assert!(
+            logged_starting(
+                &loader,
+                &format!(
+                    "FAIL code patch: padding at {:#x} reads [cc",
+                    code_at(PADDING_AT)
+                )
+            ),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_host_without_inventory_batches_still_runs_the_transaction_check() {
+        let (loader, checks) = started(every_part_but_inventories());
+        checks.run();
+        assert!(
+            !logged_exactly(&loader, "SKIP platform: world writes is off")
+                && logged_exactly(&loader, "SKIP transaction: no placed entity"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_code_section_without_padding_turns_off_only_the_patch() {
+        let (loader, _) = started(every_part().code(&NO_PADDING));
+        assert!(loader.code_patches().is_empty());
+        assert!(
+            logged_starting(&loader, "FAIL platform: code patch: no 8 bytes of padding"),
+            "{:?}",
+            loader.logs()
+        );
+        assert_eq!(loader.mid_hooks(), vec![code_at(COUNTED_AT)]);
+    }
+
+    #[test]
+    fn no_server_world_fails_its_check() {
+        let (loader, checks) = started(every_part().server_world(0));
+        checks.run();
+        assert!(
+            logged_starting(&loader, "FAIL server world: 0x0"),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
     #[test]
     fn a_run_with_every_part_runs_the_checks_of_each() {
-        let (loader, checks) = started(FakeHost::new().world());
+        let (loader, checks) = started(every_part());
         assert!(checks.world.is_some() && checks.map.is_some());
         assert!(checks.altars.is_some() && checks.zones.is_some());
         checks.run();

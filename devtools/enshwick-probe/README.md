@@ -62,7 +62,13 @@ Ten seconds after the world has loaded, and again on the `check` action:
   animal with health, the probe's own kind and 100 extra maximum health set as
   modifiers, both read back a second later (the maximum through the
   entity's vitals), then removed, the maximum back where it was; stat
-  changes are logged as they come;
+  changes are logged as they come. From start the hunger debuff carries
+  half a point of the probe's luck kind for every entity it holds on. Three
+  seconds into the run the probe gives the first character the debuff for a
+  second and reads that luck. It does the same on the first survivor or
+  animal that holds buffs: the luck must not count while that entity is
+  unwatched, and must count once the probe watches it (each skipped without
+  such an entity);
 - affixes: the first weapon or armour in any container rolled two affixes
   from a seed and again the same, its lines named, and its old stats put
   back (skipped when no such item is found, or no player was online yet);
@@ -94,13 +100,24 @@ Ten seconds after the world has loaded, and again on the `check` action:
   a cap of 18 read back and let go (skipped when the bases are at 18 or
   fewer already), and the altar zone filter's calls once the zones are
   sized again; the map's frame and markers; and its own `census` run as a
-  console line. A run with `scenario_only` skips these.
+  console line. A run with `scenario_only` skips these;
+- the platform's writes: the server's entity world; a code patch that
+  writes `nop`s over the first 8 bytes of `int3` padding between the game's
+  functions, which no code runs, read back; a hook at the entry of the
+  `last_transform` system, its hits counted over five seconds; a wooden
+  chest placed 6 metres above the first placed entity in one transaction,
+  its status and entity read, one chest item given to it and taken back
+  (skipped while nobody is online, since the game then runs no inventory
+  step), then the transaction undone and the chest gone. A run with
+  `scenario_only` skips these.
 
 At start it also checks a system, a field offset, a type's size and a
 symbol by name, the code section, and the base limit and task worker
 requests.
 
-Its spawns stay out of the world's save. From start, its chat filter drops a
+Its spawns stay out of the world's save; the chest stays in it only if its
+undo fails inside a base. From start, its rename filter refuses the one name
+`probe refuses` and logs every rename. Its chat filter drops a
 line of exactly `drop me`, logging its sender, and keeps every other line, and it logs each line
 that reaches the chat with its sender's account, its kind and its length,
 never its text.

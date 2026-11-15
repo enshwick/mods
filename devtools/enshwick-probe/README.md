@@ -75,6 +75,12 @@ Ten seconds after the world has loaded, and again on the `check` action:
   as each save starts and a `WorldSaved` line with the world, the time the
   save on disk was written and its size as each one ends, a player's saves
   in a hosted game included;
+- the client's own calls: on a dedicated server the client snapshot, the
+  input sampler's status and a client command each unavailable; on a client
+  that hosts, the snapshot and the status read, and a still look queued and
+  cancelled before a frame runs it, so nothing moves;
+- the loader's list of what it turned off, each part or feature with its
+  name, reason and time;
 - the platform's other reads: the system its start hooked, run over five
   seconds with its caller's frame read; the task worker caps, linked on a
   dedicated server and on a client none, as the API promises; the event

@@ -20,7 +20,7 @@ resolver = "3"
 # The loader release the next release of the mods builds on and `release`
 # pins: `cargo xtask built-for` names it in the release pull request.
 [workspace.metadata.release]
-loader = "v1.0.0-alpha.16"
+loader = "v1.0.0-alpha.17"
 
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.

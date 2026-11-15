@@ -1,6 +1,6 @@
 [package]
 name = "enshwick-admin-tools"
-version = "0.1.1"
+version = "0.2.0"
 description = "Gives a server's administrators a player list, bans, an allow-list, announcements, time and weather, teleports, items, chests, inventories, vitals, recipes, god mode, protected zones, spawns and props, backups, a remote console and audit and chat logs"
 keywords = ["enshrouded", "mod", "admin", "server", "moderation"]
 categories = ["game-development"]

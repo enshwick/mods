@@ -3,6 +3,7 @@
 
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use enshwick::abi::{
@@ -10,7 +11,7 @@ use enshwick::abi::{
 };
 use enshwick::content::EngineFacts as _;
 use enshwick::content::Guid;
-use enshwick::events::{PlayerJoined, SettingsReplaced, WorldLoaded};
+use enshwick::events::{PlayerJoined, SettingsReplaced, ShutdownStarted, WorldLoaded};
 use enshwick::net::Peer;
 use enshwick::test::{FakeHost, Installed, facts};
 use enshwick::{Entity, ItemId, PlayerKey};
@@ -152,10 +153,23 @@ impl Drop for Scratch {
     }
 }
 
+/// A folder of its own for each call, even two of one `name` in one
+/// process, so a late write of one test's world never lands in another's.
 pub(crate) fn scratch(name: &str) -> Scratch {
-    let dir = std::env::temp_dir().join(format!("admin-tools-{name}-{}", std::process::id()));
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    let call = CALLS.fetch_add(1, Ordering::Relaxed);
+    let dir =
+        std::env::temp_dir().join(format!("admin-tools-{name}-{}-{call}", std::process::id()));
     let _gone = std::fs::remove_dir_all(&dir);
     Scratch(dir)
+}
+
+#[test]
+fn two_scratch_folders_of_one_name_are_apart() {
+    assert_ne!(
+        scratch("twice").to_path_buf(),
+        scratch("twice").to_path_buf()
+    );
 }
 
 /// Waits up to five seconds for the file `name` in `dir` to satisfy
@@ -318,8 +332,16 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
 }
 
 /// A test's game: the fake loader, whose settings changes keep the remote
-/// console on this computer as [`server`] does.
+/// console on this computer as [`server`] does. Dropped, it ends its world,
+/// so the mod's stores close under their lock before the test's
+/// [`Scratch`] goes and no background write outlives the test.
 pub(crate) struct Game(Installed);
+
+impl Drop for Game {
+    fn drop(&mut self) {
+        let _handlers = self.0.raise::<ShutdownStarted>(&());
+    }
+}
 
 impl Game {
     /// Replaces the world's settings file `file` with `text`, as
@@ -401,6 +423,11 @@ pub(crate) fn joins(loader: &Installed, who: &PlayerInfo) {
         key: who.key,
     };
     assert!(loader.raise::<PlayerJoined>(&data) >= 1);
+}
+
+/// Ends `loader`'s world, as a server stopping does.
+pub(crate) fn ends(loader: &Installed) {
+    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
 }
 
 /// Ticks the fake server a second at a time until `done` holds or ten

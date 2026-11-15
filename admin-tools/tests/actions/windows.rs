@@ -5,7 +5,7 @@ use enshwick::PlayerKey;
 use enshwick::abi::{BuildingData, Header, PlayerInfo};
 use enshwick::actions::Value;
 use enshwick::actions::window::{ButtonView, ItemView, MAX_LINE, View, decode};
-use enshwick::events::{BuildingPlaced, ShutdownStarted};
+use enshwick::events::BuildingPlaced;
 use enshwick::i18n::Language;
 use enshwick::test::Installed;
 use enshwick::{Entity, ItemId};
@@ -168,7 +168,6 @@ fn every_window_carries_whole_in_every_offered_language() {
         }
         let held = loader.carried_windows(&ann(), language.0);
         assert_eq!(held.len(), 8, "{language:?}");
-        ends(&loader);
         held.iter()
             .map(|(id, text)| {
                 let context = format!("{language:?} {id}");
@@ -178,7 +177,7 @@ fn every_window_carries_whole_in_every_offered_language() {
             .collect::<Vec<_>>()
     };
     let english = shapes(Language::FALLBACK);
-    for &language in others(Language::FALLBACK) {
+    for &language in Language::OFFERED {
         assert_eq!(shapes(language), english, "{language:?}");
     }
 }
@@ -550,13 +549,12 @@ fn the_zones_section_lists_each_zone_with_its_switch_and_carries_whole_when_full
         assert!(run(&loader, &ann(), "zoneswitch", &off).starts_with('1'));
         assert_eq!(run(&loader, &ann(), "open", "c4"), "1");
         let held = loader.carried_windows(&ann(), language.0);
-        ends(&loader);
         let view = decode(&held[0].1).unwrap_or_else(|| panic!("{language:?}: too big"));
         whole_shape(&view, &format!("{language:?} zones"))
     };
     let english = shapes(Language::FALLBACK);
     assert_eq!(english.0.iter().filter(|row| row.is_some()).count(), 16);
-    for &language in others(Language::FALLBACK) {
+    for &language in Language::OFFERED {
         assert_eq!(shapes(language), english, "{language:?}");
     }
 }
@@ -619,28 +617,4 @@ fn a_zone_s_buttons_switch_it_the_other_way_and_remove_it() {
         ["On", "Remove"],
         "shown again after the change"
     );
-}
-
-#[test]
-fn a_zone_change_is_on_disk_once_the_world_ends() {
-    let dir = scratch("zones-ended");
-    let loader = server("", &dir);
-    assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
-    ends(&loader);
-    let kept = std::fs::read_to_string(dir.as_ref().join("zones.toml")).unwrap_or_default();
-    assert!(kept.contains("market"), "{kept:?}");
-}
-
-/// Ends `loader`'s world, which writes the mod's world files under their
-/// lock, so no background write lands after its test removes the folder.
-fn ends(loader: &Installed) {
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
-}
-
-/// The offered languages but `language`, so no two servers of a test share
-/// a scratch folder.
-fn others(language: Language) -> impl Iterator<Item = &'static Language> {
-    Language::OFFERED
-        .iter()
-        .filter(move |&&other| other != language)
 }

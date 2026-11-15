@@ -6,12 +6,12 @@ use std::fmt::Write as _;
 
 use enshwick::abi::{BuildingData, Header};
 use enshwick::console;
-use enshwick::events::{BuildingPlaced, BuildingRemoved, ShutdownStarted, WorldLoaded};
+use enshwick::events::{BuildingPlaced, BuildingRemoved, WorldLoaded};
 use enshwick::voxels::{EditSource, Voxel, VoxelChange, VoxelMaterial, VoxelPos};
 use enshwick::{Entity, ItemId, PlayerKey};
 
 use super::game::{
-    ADMIN, ann, bob, file_until, joins, player, run, said, scratch, server, server_with,
+    ADMIN, ann, bob, ends, file_until, joins, player, run, said, scratch, server, server_with,
 };
 
 #[test]
@@ -213,7 +213,7 @@ fn a_message_of_the_day_set_in_game_holds_over_the_setting_until_it_is_taken_awa
     assert!(run(&loader, &bob(), "setmotd", "tMine").starts_with('0'));
     // It holds over a restart: the world's data keeps it.
     let _kept = file_until(&dir, "accounts.toml", |text| text.contains("Welcome back"));
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    ends(&loader);
     assert!(loader.raise::<WorldLoaded>(&()) >= 1);
     assert_eq!(run(&loader, &bob(), "motd", ""), "1Welcome back, all");
     assert_eq!(
@@ -298,7 +298,7 @@ fn the_build_log_stays_empty_and_the_lookup_says_so_unless_the_world_turns_it_on
         run(&loader, &ann(), "who", "n50"),
         "0The build log is off in this world's settings."
     );
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    ends(&loader);
     assert!(!dir.join("builds.log").exists());
 }
 

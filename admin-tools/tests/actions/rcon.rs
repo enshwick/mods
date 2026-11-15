@@ -3,9 +3,9 @@
 
 use std::time::Duration;
 
-use enshwick::events::{SettingsReplaced, ShutdownStarted};
+use enshwick::events::SettingsReplaced;
 
-use super::game::{file_until, hosted, scratch, server, tick_until};
+use super::game::{ends, file_until, hosted, scratch, server, tick_until};
 
 /// A port no program listens on now.
 fn free_port() -> u16 {
@@ -231,7 +231,7 @@ fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
     let _moved = connect(second);
     assert!(closes(first));
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    ends(&loader);
     assert!(closes(second));
 }
 

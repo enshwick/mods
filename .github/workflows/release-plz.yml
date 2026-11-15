@@ -187,14 +187,16 @@ jobs:
       # branch, as its CI and `release` need them, by the app through the
       # API, so the commit is signed as main's ruleset requires and
       # release-plz still updates that pull request on its next run; its
-      # body then lists what the pull request releases.
+      # body then lists what the pull request releases. A step's env is read
+      # before its `if`, so `pr` is empty in a `release` run and falls back
+      # to `{}` in the steps below.
       - name: Close the changelogs
         id: close
         if: inputs.command == 'release-pr' && steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}'
         env:
           # `close` reads the releases of the mods' last versions.
           GH_TOKEN: ${{ steps.token.outputs.token }}
-          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
+          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr || '{}').head_branch }}
         run: |
           git fetch --no-tags origin "refs/heads/$BRANCH"
           git checkout -B "$BRANCH" FETCH_HEAD
@@ -214,8 +216,8 @@ jobs:
         if: steps.close.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
-          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
-          NUMBER: ${{ fromJSON(steps.release-plz.outputs.pr).number }}
+          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr || '{}').head_branch }}
+          NUMBER: ${{ fromJSON(steps.release-plz.outputs.pr || '{}').number }}
         run: |
           head=$(git rev-parse HEAD)
           if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --jq .object.sha)" != "$head" ]; then

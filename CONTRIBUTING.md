@@ -138,7 +138,9 @@ loader no release of the platform tags. With `--pinned`, as `release` and
 `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
-`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. The entries
+`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. A mod made
+with `cargo enshwick new` writes its own `rust-version`; replace it with
+`rust-version.workspace = true`, as `cargo xtask check` asks. The entries
 without `release = false` are the release set. A mod outside it, a developer
 mod and a tool have `release = false` in their entry: release-plz never
 bumps or tags them, `cargo xtask built-for` and `cargo xtask close` leave their

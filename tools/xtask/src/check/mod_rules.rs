@@ -28,6 +28,7 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         .cloned()
         .unwrap_or_default();
     let mut problems = platform_pins(&workspace);
+    problems.extend(rust_version(&workspace, &toolchain));
     let packages: Vec<&serde_json::Value> = metadata["packages"]
         .as_array()
         .into_iter()
@@ -61,7 +62,6 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         let path = Path::new(package["manifest_path"].as_str().unwrap_or_default());
         let dir = path.parent().unwrap_or(Path::new("."));
         problems.extend(feature_names(name, package));
-        problems.extend(rust_version(name, package, &toolchain));
         let own = manifest(path)?;
         problems.extend(own_rust_version(name, &own));
         problems.extend(platform_outside_workspace(name, &own));
@@ -137,15 +137,21 @@ fn feature_names(name: &str, package: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
-/// A `rust-version` other than the pinned toolchain's.
-fn rust_version(name: &str, package: &serde_json::Value, toolchain: &str) -> Option<String> {
-    let version = package["rust_version"].as_str().unwrap_or_default();
+/// A `[workspace.package]` `rust-version` in the root `manifest` other than
+/// the pinned toolchain's.
+fn rust_version(manifest: &toml::Table, toolchain: &str) -> Option<String> {
+    let version = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("rust-version"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or_default();
     let same = version == toolchain
         || version
             .strip_prefix(toolchain)
             .is_some_and(|rest| rest.starts_with('.'));
     (!same).then(|| {
-        format!("{name}: rust-version {version:?} is not the pinned toolchain's {toolchain}")
+        format!("Cargo.toml: rust-version {version:?} is not the pinned toolchain's {toolchain}")
     })
 }
 
@@ -442,18 +448,18 @@ mod tests {
     fn a_rust_version_off_the_toolchain_is_a_problem() {
         let toolchain = toolchain(&"[toolchain]\nchannel = \"1.99.1\"\n".parse().unwrap());
         assert_eq!(toolchain.as_deref(), Some("1.99"));
-        let at = |version: &str| serde_json::json!({ "rust_version": version });
-        assert!(rust_version("a", &at("1.99"), "1.99").is_none());
-        assert!(rust_version("a", &at("1.99.1"), "1.99").is_none());
-        assert!(rust_version("a", &at("1.98"), "1.99").is_some());
-        assert!(rust_version("a", &at("1.990"), "1.99").is_some());
-        assert!(rust_version("a", &serde_json::json!({}), "1.99").is_some());
+        assert!(rust_version(&root("1.99"), "1.99").is_none());
+        assert!(rust_version(&root("1.99.1"), "1.99").is_none());
+        assert!(rust_version(&root("1.98"), "1.99").is_some());
+        assert!(rust_version(&root("1.990"), "1.99").is_some());
+        assert!(rust_version(&toml::Table::new(), "1.99").is_some());
     }
 
     #[test]
     fn a_member_s_own_rust_version_is_a_problem_until_it_inherits() {
         let at = |text: &str| own_rust_version("a", &text.parse().unwrap());
         assert!(at("[package]\nrust-version.workspace = true\n").is_none());
+        assert!(at("[package]\nrust-version = { workspace = true }\n").is_none());
         assert!(at("[package]\nrust-version = \"1.100\"\n").is_some());
         assert!(at("[package]\nrust-version.workspace = false\n").is_some());
         assert!(at("[package]\n").is_some());
@@ -463,12 +469,18 @@ mod tests {
     fn a_three_digit_minor_matches_only_itself() {
         let toolchain = toolchain(&"[toolchain]\nchannel = \"1.100.0\"\n".parse().unwrap());
         assert_eq!(toolchain.as_deref(), Some("1.100"));
-        let at = |version: &str| serde_json::json!({ "rust_version": version });
-        assert!(rust_version("a", &at("1.100"), "1.100").is_none());
-        assert!(rust_version("a", &at("1.100.0"), "1.100").is_none());
-        assert!(rust_version("a", &at("1.99"), "1.100").is_some());
-        assert!(rust_version("a", &at("1.10"), "1.100").is_some());
-        assert!(rust_version("a", &at("1.1000"), "1.100").is_some());
+        assert!(rust_version(&root("1.100"), "1.100").is_none());
+        assert!(rust_version(&root("1.100.0"), "1.100").is_none());
+        assert!(rust_version(&root("1.99"), "1.100").is_some());
+        assert!(rust_version(&root("1.10"), "1.100").is_some());
+        assert!(rust_version(&root("1.1000"), "1.100").is_some());
+    }
+
+    /// A root manifest whose `[workspace.package]` names `version`.
+    fn root(version: &str) -> toml::Table {
+        format!("[workspace.package]\nrust-version = \"{version}\"\n")
+            .parse()
+            .unwrap()
     }
 
     #[test]

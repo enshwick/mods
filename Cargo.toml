@@ -17,7 +17,7 @@ members = [
 ]
 resolver = "3"
 
-# The pinned toolchain's major and minor; every member inherits it.
+# The pinned toolchain's major and minor.
 [workspace.package]
 rust-version = "1.100"
 

@@ -191,10 +191,13 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settin
             },
         )
     });
+    let input = load.feature("input read", Load::input);
+    // The loader's first ask only starts its reads and answers `None`.
+    let _starts_reads = input.and_then(enshwick::input::Input::local_held);
     let mut window = Window {
         open,
         actions: actions.clone(),
-        input: load.feature("input read", Load::input),
+        input,
         tone,
         creature: container(&settings.creature_sound, "creature_sound"),
         hints: "not drawn yet".to_owned(),

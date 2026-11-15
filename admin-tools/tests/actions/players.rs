@@ -8,12 +8,13 @@ use enshwick::PlayerKey;
 use enshwick::abi::PlayerInfo;
 use enshwick::commands::{self, Caller};
 use enshwick::console;
-use enshwick::events::{SettingsReplaced, ShutdownStarted, WorldLoaded};
+use enshwick::events::{SettingsReplaced, WorldLoaded};
 use enshwick::test::Installed;
 use enshwick::world::PlayerPermissions;
 
 use super::game::{
-    ADMIN, HEALTH, allowed, ann, bob, file_until, joins, player, run, scratch, server, server_with,
+    ADMIN, HEALTH, allowed, ann, bob, ends, file_until, joins, player, run, scratch, server,
+    server_with,
 };
 
 /// The players the `banned` action lists in Ann's accounts window, each
@@ -533,7 +534,7 @@ fn a_restart_warning_and_the_schedule_end_with_the_game_that_started_them() {
     let dir = scratch("restart-ends");
     let loader = server("", &dir);
     assert!(run(&loader, &ann(), "restart", "n2").starts_with('1'));
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    ends(&loader);
     assert!(loader.raise::<WorldLoaded>(&()) >= 1);
     let before = loader.notices().len() + loader.chat().len();
     for _ in 0..130 {

@@ -36,8 +36,9 @@ holds every crate to three rules: a crate whose package has no unsafe code
 declares `#![forbid(unsafe_code)]` at its root, only a dev-dependency turns
 on a crate's `test` feature, and a mod names its version in `[package]`.
 It also holds every mod, the developer mods included, to the repository's
-own rules: no feature named `use-…` or `with-…`, `rust-version` equal to the
-toolchain of `rust-toolchain.toml`, the platform only from
+own rules: no feature named `use-…` or `with-…`, `rust-version` taken from
+`[workspace.package]` and equal to the toolchain of `rust-toolchain.toml`,
+the platform only from
 `[workspace.dependencies]` at a full commit hash, no `anyhow` and no other
 mod as a dependency, a test that installs the fake host, and nothing in
 `docs/` but `player.md`, its translations and `images/`.
@@ -137,7 +138,9 @@ loader no release of the platform tags. With `--pinned`, as `release` and
 `release` stops on a refusal before it tags anything.
 
 A new mod is added in two places: the `members` list of the root
-`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. The entries
+`Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. A mod made
+with `cargo enshwick new` writes its own `rust-version`; replace it with
+`rust-version.workspace = true`, as `cargo xtask check` asks. The entries
 without `release = false` are the release set. A mod outside it, a developer
 mod and a tool have `release = false` in their entry: release-plz never
 bumps or tags them, `cargo xtask built-for` and `cargo xtask close` leave their

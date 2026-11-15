@@ -542,7 +542,8 @@ fn the_zones_section_lists_each_zone_with_its_switch_and_carries_whole_when_full
         // A window lists 16 rows; each name as long as the action takes.
         for n in 0..16 {
             let line = format!("t{}\tn1000\tn2000\tn2000", longest(n));
-            assert!(run(&loader, &ann(), "zonebox", &line).starts_with('1'));
+            let reply = run(&loader, &ann(), "zonebox", &line);
+            assert!(reply.starts_with('1'), "{language:?} zone {n}: {reply}");
         }
         let off = format!("t{}\tb0", longest(0));
         assert!(run(&loader, &ann(), "zoneswitch", &off).starts_with('1'));

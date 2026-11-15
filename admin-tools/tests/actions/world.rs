@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use enshwick::PlayerKey;
 use enshwick::console;
-use enshwick::events::{ShutdownStarted, WorldLoaded, WorldSaved, WorldSaving};
+use enshwick::events::{WorldLoaded, WorldSaved, WorldSaving};
 
 use super::game::{
-    Scratch, allowed, ann, bob, file_until, hosted, run, said, scratch, server, tick_until,
+    Scratch, allowed, ann, bob, ends, file_until, hosted, run, said, scratch, server, tick_until,
 };
 
 #[test]
@@ -165,7 +165,7 @@ fn a_game_that_ends_before_its_backup_copies_leaves_the_next_world_free_to_back_
     let (_saves, data) = saves("backup-ended");
     let loader = server("", &data);
     assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    ends(&loader);
     assert!(loader.raise::<WorldLoaded>(&()) >= 1);
     let again = run(&loader, &ann(), "backup", "");
     assert!(again.starts_with('1'), "{again}");
@@ -242,7 +242,7 @@ fn a_backup_waiting_for_a_save_copies_nothing_once_the_world_stops() {
     std::thread::sleep(Duration::from_millis(1100));
     let _ran = loader.tick(Duration::from_secs(1));
     std::thread::sleep(Duration::from_millis(200));
-    assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
+    ends(&loader);
     std::thread::sleep(Duration::from_millis(500));
     assert!(
         !data.join("backups").exists(),

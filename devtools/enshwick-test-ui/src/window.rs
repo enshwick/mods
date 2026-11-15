@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use enshwick::actions::Actions;
 use enshwick::content::id;
 use enshwick::controls::{Control, Key};
+use enshwick::input::Input;
 use enshwick::sound::{NewSound, SoundChange, SoundContainerId, SoundContainerScene};
 use enshwick::typed::input_mapping::runtime::GameplayAction;
 use enshwick::ui::{Frame, Screen, Sound};
@@ -77,7 +78,7 @@ fn hints(frame: &mut Frame<'_>) -> String {
 struct Window {
     open: Arc<AtomicBool>,
     actions: Actions,
-    input: Option<enshwick::input::Input>,
+    input: Option<Input>,
     tone: Option<SoundContainerId>,
     creature: Option<SoundContainerId>,
     hints: String,
@@ -95,7 +96,7 @@ impl Window {
         self.read_at = Some(Instant::now());
         let held = self
             .input
-            .and_then(enshwick::input::Input::local_held)
+            .and_then(Input::local_held)
             .map(|held| held.iter().collect::<Vec<_>>());
         let line = format!(
             "held {:?}, screen {:?}, host {:?} template {:?}, prompt {:?}, hints {}",
@@ -191,19 +192,24 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settin
             },
         )
     });
+    let input = load.feature("input read", Load::input);
     let mut window = Window {
         open,
         actions: actions.clone(),
-        input: load.feature("input read", Load::input),
+        input,
         tone,
         creature: container(&settings.creature_sound, "creature_sound"),
         hints: "not drawn yet".to_owned(),
         read_at: None,
         last: String::new(),
     };
-    let _window = load.feature("window", |load| {
+    let drawn = load.feature("window", |load| {
         load.on_frame(move |frame| window.draw(frame))
     });
+    if drawn.is_some() {
+        // The loader's first ask only starts its reads and answers `None`.
+        let _starts_reads = input.and_then(Input::local_held);
+    }
 }
 
 #[cfg(test)]

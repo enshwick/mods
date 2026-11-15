@@ -108,9 +108,18 @@ jobs:
 
       # main's checks build on the platform's main, never on the loader:
       # the tree the tags name must build on it before anything is tagged.
+      # A Windows-only package does not build on this Linux machine; ci
+      # checks it on Windows.
       - name: Build on the loader
         if: inputs.command == 'release'
-        run: cargo check --workspace --locked
+        run: |
+          windows_only=$(cargo metadata --no-deps --format-version 1 | jq -r \
+            '.packages[] | select(.metadata.xtask["windows-only"] == true) | .name')
+          args=(--workspace --locked)
+          for package in $windows_only; do
+            args+=(--exclude "$package")
+          done
+          cargo check "${args[@]}"
 
       # The app pushes the release branch and tags, makes the releases and
       # opens the release pull request, which then runs CI as any other; the

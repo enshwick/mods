@@ -184,28 +184,39 @@ jobs:
           echo "releases=$(jq -c . "$list")" >> "$GITHUB_OUTPUT"
 
       # The bumped mods' changelogs closed on the release pull request's
-      # branch, as its CI and `release` need them, by the app, so release-plz
-      # still updates that pull request on its next run; its body then lists
-      # what the pull request releases.
+      # branch, as its CI and `release` need them, by the app through the
+      # API, so the commit is signed as main's ruleset requires and
+      # release-plz still updates that pull request on its next run; its
+      # body then lists what the pull request releases.
       - name: Close the changelogs
+        id: close
         if: inputs.command == 'release-pr' && steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}'
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
           PR: ${{ steps.release-plz.outputs.pr }}
-          APP: ${{ steps.token.outputs.app-slug }}
         run: |
           branch=$(jq -r .head_branch <<< "$PR")
-          number=$(jq -r .number <<< "$PR")
           git fetch --no-tags origin "refs/heads/$branch"
           git checkout -B "$branch" FETCH_HEAD
           cargo xtask close --date "$(date -u +%F)" --base origin/main --body "$RUNNER_TEMP/body.md"
-          if ! git diff --quiet; then
-            id=$(gh api "/users/$APP%5Bbot%5D" --jq .id)
-            git -c user.name="${APP}[bot]" -c user.email="$id+${APP}[bot]@users.noreply.github.com" \
-              commit -a -m "chore(release): close the changelogs of the released mods"
-            git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
-          fi
-          gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+          {
+            echo "branch=$branch"
+            echo "number=$(jq -r .number <<< "$PR")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit the closed changelogs on GitHub
+        if: steps.close.outcome == 'success'
+        uses: ./.github/actions/commit-on-github
+        with:
+          token: ${{ steps.token.outputs.token }}
+          message: "chore(release): close the changelogs of the released mods"
+          branch: ${{ steps.close.outputs.branch }}
+
+      - name: Describe the release pull request
+        if: steps.close.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          NUMBER: ${{ steps.close.outputs.number }}
+        run: gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
 
   assets:
     needs: release-plz

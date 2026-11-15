@@ -3,9 +3,11 @@ description: >-
   Commits the changed tracked files on top of HEAD through GitHub's Git Data
   API, on no branch, and moves the checked-out branch to that commit:
   release-plz tags and opens branches through the API, so the commit it
-  names must be on GitHub, while main stays as it is. Only changed files
-  are taken; an added, removed or renamed file is refused. Without changes
-  HEAD stays.
+  names must be on GitHub, while main stays as it is. With `branch`, that
+  branch on GitHub moves to the commit too, fast-forward only. A commit
+  made through the API with an app token is signed by GitHub, so the
+  signed-commits rule of main takes it. Only changed files are taken; an
+  added, removed or renamed file is refused. Without changes HEAD stays.
 
 inputs:
   message:
@@ -14,6 +16,10 @@ inputs:
   token:
     description: A token that may write the repository's contents.
     required: true
+  branch:
+    description: A branch on GitHub at HEAD to move to the commit; none by default.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -22,6 +28,7 @@ runs:
       env:
         MESSAGE: ${{ inputs.message }}
         GH_TOKEN: ${{ inputs.token }}
+        BRANCH: ${{ inputs.branch }}
       run: |
         changes=$(git status --porcelain --untracked-files=no)
         [ -n "$changes" ] || exit 0
@@ -55,3 +62,6 @@ runs:
           sleep "$wait"
         done
         git reset --hard "$commit"
+        if [ -n "$BRANCH" ]; then
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" -f sha="$commit" -F force=false > /dev/null
+        fi

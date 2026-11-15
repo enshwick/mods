@@ -192,31 +192,36 @@ jobs:
         id: close
         if: inputs.command == 'release-pr' && steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}'
         env:
-          PR: ${{ steps.release-plz.outputs.pr }}
+          # `close` reads the releases of the mods' last versions.
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
         run: |
-          branch=$(jq -r .head_branch <<< "$PR")
-          git fetch --no-tags origin "refs/heads/$branch"
-          git checkout -B "$branch" FETCH_HEAD
+          git fetch --no-tags origin "refs/heads/$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
           cargo xtask close --date "$(date -u +%F)" --base origin/main --body "$RUNNER_TEMP/body.md"
-          {
-            echo "branch=$branch"
-            echo "number=$(jq -r .number <<< "$PR")"
-          } >> "$GITHUB_OUTPUT"
 
+      # Runs from the release branch's tree, checked out above.
       - name: Commit the closed changelogs on GitHub
         if: steps.close.outcome == 'success'
         uses: ./.github/actions/commit-on-github
         with:
           token: ${{ steps.token.outputs.token }}
           message: "chore(release): close the changelogs of the released mods"
-          branch: ${{ steps.close.outputs.branch }}
 
-      - name: Describe the release pull request
+      # The branch moves fast-forward only: one that moved on GitHub in the
+      # meantime fails here.
+      - name: Move the release branch and describe the pull request
         if: steps.close.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
-          NUMBER: ${{ steps.close.outputs.number }}
-        run: gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
+          NUMBER: ${{ fromJSON(steps.release-plz.outputs.pr).number }}
+        run: |
+          head=$(git rev-parse HEAD)
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --jq .object.sha)" != "$head" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" -f sha="$head" -F force=false > /dev/null
+          fi
+          gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
 
   assets:
     needs: release-plz

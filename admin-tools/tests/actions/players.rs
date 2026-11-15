@@ -24,8 +24,7 @@ fn banned_list(loader: &Installed) -> Vec<(PlayerKey, String, bool)> {
         .entries
         .into_iter()
         .find(|entry| entry.id == "banned")
-        .map(|entry| entry.players)
-        .unwrap_or_default()
+        .map_or_default(|entry| entry.players)
 }
 
 #[test]

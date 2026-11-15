@@ -135,8 +135,7 @@ fn packages() -> Result<Vec<Package>, String> {
                 version: package["version"].as_str().unwrap_or_default().to_owned(),
                 dir: Path::new(package["manifest_path"].as_str().unwrap_or_default())
                     .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_default(),
+                    .map_or_default(Path::to_path_buf),
                 windows_only: package["metadata"]["xtask"]["windows-only"].as_bool() == Some(true),
                 cdylib: types(&["cdylib"]),
                 lib: types(&["lib", "rlib"]),

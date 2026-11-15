@@ -239,13 +239,11 @@ impl Tools {
         if self.template_names.get().is_some() {
             return;
         }
-        let names: FxHashMap<Guid, String> = vanilla::templates()
-            .map(|all| {
-                all.into_iter()
-                    .map(|known| (known.guid, known.name))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let names: FxHashMap<Guid, String> = vanilla::templates().map_or_default(|all| {
+            all.into_iter()
+                .map(|known| (known.guid, known.name))
+                .collect()
+        });
         if !names.is_empty() {
             self.template_names.get_or_init(|| names);
         }

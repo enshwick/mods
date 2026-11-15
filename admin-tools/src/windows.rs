@@ -281,17 +281,12 @@ impl Tools {
     /// Shows each window the caller holds again whose content their run of
     /// the action `id` changed.
     pub(crate) fn refresh(&self, viewer: &Player, id: &str) {
-        let stale: Vec<Shown> = self
-            .shown
-            .relock()
-            .get(&viewer.key)
-            .map(|open| {
-                open.iter()
-                    .copied()
-                    .filter(|shown| shown.stale_after(id))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let stale: Vec<Shown> = self.shown.relock().get(&viewer.key).map_or_default(|open| {
+            open.iter()
+                .copied()
+                .filter(|shown| shown.stale_after(id))
+                .collect()
+        });
         for shown in stale {
             if let Err(why) = self.show(viewer, Some(shown)) {
                 enshwick::warn!("a window not shown again: {why}");

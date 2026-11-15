@@ -194,7 +194,7 @@ fn try_give(tools: &Tools, request: &Request<'_>) -> Result<Outcome, Outcome> {
         return Err(no_player(request));
     };
     let Some(inventories) = &tools.inventories else {
-        return Err(Tools::failed(request, name, &WorldError::Missing));
+        return Err(Tools::failed(request, name, &WorldError::Unavailable));
     };
     let count = crate::whole(request, *count)?;
     let (item, shown) = tools.picked(*picked, request.language);

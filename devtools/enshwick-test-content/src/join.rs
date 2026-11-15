@@ -130,7 +130,7 @@ impl Sender {
             .do_not_save();
         let spawned = self
             .effects
-            .spawn(self.enemy.guid().0, at, how)
+            .spawn(self.enemy.guid(), at, how)
             .map_err(|why| Off::new(format!("the spawn failed: {why:?}")))?;
         enshwick::info!(
             "enemy {spawned:?} sent to {} at {at:?}, {ENEMY_AHEAD} m along {:?}",
@@ -329,7 +329,7 @@ mod tests {
                 key,
                 permissions: 0,
                 name_len: 0,
-                name: [0; 64],
+                name: [0; PlayerInfo::NAME_MAX],
             })
             .component(ann, current, &standing([40, 12, -3], FRAC_PI_2))
             .component(ann, typed, &standing([40, 12, -3], FRAC_PI_2))
@@ -383,12 +383,12 @@ mod tests {
             "to the next player, once however often they join"
         );
         let wolf = spawns[0].1;
-        let want: [i64; 3] = [50 << 32, 14 << 32, -3 << 32];
+        let want = [50.0, 14.0, -3.0];
         assert!(
             wolf.position
                 .iter()
                 .zip(want)
-                .all(|(got, want)| (got - want).abs() < 1 << 22),
+                .all(|(got, want)| (got - want).abs() < 1e-3),
             "within a millimetre: {:?}",
             wolf.position
         );

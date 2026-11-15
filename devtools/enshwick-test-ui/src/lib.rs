@@ -331,9 +331,9 @@ mod tests {
         loader.set_altars(&[altar]);
         let at = |x: f64| BuildCheck {
             header: Header::of::<BuildCheck>(),
-            player: enshwick::Entity(2),
+            character: enshwick::Entity(2),
             item: enshwick::ItemId::new(7),
-            position: enshwick::ecs::fixed([x, 0.0, 0.0]),
+            position: [x, 0.0, 0.0],
             reason: core::ptr::null_mut(),
         };
         assert_eq!(

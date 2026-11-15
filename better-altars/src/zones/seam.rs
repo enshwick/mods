@@ -15,7 +15,7 @@
 use arrayvec::ArrayVec;
 use enshwick::altars::{BuildingZoneCheck, MAX_ZONES};
 
-type Zone = ([i64; 3], [i64; 3]);
+type Zone = ([f64; 3], [f64; 3]);
 
 /// Whether the union of the check's zones covers the object.
 #[must_use]
@@ -30,16 +30,13 @@ pub(crate) fn accepts(check: &BuildingZoneCheck<'_>) -> bool {
 /// Whether the closed box `[low, high]` lies within the union of the half-open
 /// `zones`, each widened by `margin` on every side.
 #[must_use]
-pub(crate) fn covered(low: [i64; 3], high: [i64; 3], zones: &[Zone], margin: i64) -> bool {
+pub(crate) fn covered(low: [f64; 3], high: [f64; 3], zones: &[Zone], margin: f64) -> bool {
     if (0..3).any(|a| low[a] > high[a]) {
         return false;
     }
     let mut near: ArrayVec<Zone, MAX_ZONES> = ArrayVec::new();
     for (min, max) in zones.iter().take(MAX_ZONES) {
-        let zone = (
-            min.map(|v| v.saturating_sub(margin)),
-            max.map(|v| v.saturating_add(margin)),
-        );
+        let zone = (min.map(|v| v - margin), max.map(|v| v + margin));
         if (0..3).all(|a| zone.0[a] <= high[a] && low[a] < zone.1[a]) {
             near.push(zone);
         }
@@ -52,7 +49,7 @@ pub(crate) fn covered(low: [i64; 3], high: [i64; 3], zones: &[Zone], margin: i64
     // zone or not. A piece is tested at its lowest point, and the box's own high
     // faces close the last piece on each axis.
     let cuts = |axis: usize| {
-        let mut cuts: ArrayVec<i64, { 2 * MAX_ZONES + 1 }> = ArrayVec::new();
+        let mut cuts: ArrayVec<f64, { 2 * MAX_ZONES + 1 }> = ArrayVec::new();
         cuts.push(low[axis]);
         for (min, max) in &near {
             for v in [min[axis], max[axis]] {
@@ -61,10 +58,10 @@ pub(crate) fn covered(low: [i64; 3], high: [i64; 3], zones: &[Zone], margin: i64
                 }
             }
         }
-        cuts.sort_unstable();
-        let mut unique: ArrayVec<i64, { 2 * MAX_ZONES + 1 }> = ArrayVec::new();
+        cuts.sort_unstable_by(f64::total_cmp);
+        let mut unique: ArrayVec<f64, { 2 * MAX_ZONES + 1 }> = ArrayVec::new();
         for v in cuts {
-            if unique.last() != Some(&v) {
+            if unique.last().is_none_or(|last| last.total_cmp(&v).is_ne()) {
                 unique.push(v);
             }
         }
@@ -89,41 +86,56 @@ mod tests {
     #[test]
     fn a_box_inside_one_zone_is_covered() {
         assert!(covered(
-            [1, 1, 1],
-            [9, 9, 9],
-            &[([0, 0, 0], [10, 10, 10])],
-            0
+            [1.0, 1.0, 1.0],
+            [9.0, 9.0, 9.0],
+            &[([0.0, 0.0, 0.0], [10.0, 10.0, 10.0])],
+            0.0
         ));
     }
 
     #[test]
     fn a_box_across_two_touching_zones_is_covered() {
-        let zones = [([0, 0, 0], [10, 10, 10]), ([10, 0, 0], [20, 10, 10])];
-        assert!(covered([5, 1, 1], [15, 9, 9], &zones, 0));
+        let zones = [
+            ([0.0, 0.0, 0.0], [10.0, 10.0, 10.0]),
+            ([10.0, 0.0, 0.0], [20.0, 10.0, 10.0]),
+        ];
+        assert!(covered([5.0, 1.0, 1.0], [15.0, 9.0, 9.0], &zones, 0.0));
     }
 
     #[test]
     fn the_far_face_is_outside_a_half_open_zone() {
-        let zones = [([0, 0, 0], [10, 10, 10])];
-        assert!(!covered([1, 1, 1], [10, 9, 9], &zones, 0));
-        assert!(covered([1, 1, 1], [10, 9, 9], &zones, 1));
+        let zones = [([0.0, 0.0, 0.0], [10.0, 10.0, 10.0])];
+        assert!(!covered([1.0, 1.0, 1.0], [10.0, 9.0, 9.0], &zones, 0.0));
+        assert!(covered([1.0, 1.0, 1.0], [10.0, 9.0, 9.0], &zones, 1.0));
     }
 
     #[test]
     fn corners_in_two_zones_do_not_cover_the_gap_of_an_l() {
-        let zones = [([0, 0, 0], [20, 10, 10]), ([0, 0, 0], [10, 20, 10])];
-        assert!(covered([1, 1, 1], [9, 19, 9], &zones, 0));
-        assert!(!covered([1, 1, 1], [15, 15, 9], &zones, 0));
+        let zones = [
+            ([0.0, 0.0, 0.0], [20.0, 10.0, 10.0]),
+            ([0.0, 0.0, 0.0], [10.0, 20.0, 10.0]),
+        ];
+        assert!(covered([1.0, 1.0, 1.0], [9.0, 19.0, 9.0], &zones, 0.0));
+        assert!(!covered([1.0, 1.0, 1.0], [15.0, 15.0, 9.0], &zones, 0.0));
     }
 
     #[test]
     fn a_gap_between_zones_is_not_covered() {
-        let zones = [([0, 0, 0], [10, 10, 10]), ([11, 0, 0], [20, 10, 10])];
-        assert!(!covered([5, 1, 1], [15, 9, 9], &zones, 0));
+        let zones = [
+            ([0.0, 0.0, 0.0], [10.0, 10.0, 10.0]),
+            ([11.0, 0.0, 0.0], [20.0, 10.0, 10.0]),
+        ];
+        assert!(!covered([5.0, 1.0, 1.0], [15.0, 9.0, 9.0], &zones, 0.0));
+    }
+
+    #[test]
+    fn a_box_with_a_corner_that_is_no_number_is_not_covered() {
+        let zones = [([0.0, 0.0, 0.0], [10.0, 10.0, 10.0])];
+        assert!(!covered([f64::NAN, 1.0, 1.0], [9.0, 9.0, 9.0], &zones, 0.0));
     }
 
     #[test]
     fn no_zone_covers_nothing() {
-        assert!(!covered([0, 0, 0], [1, 1, 1], &[], 0));
+        assert!(!covered([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], &[], 0.0));
     }
 }

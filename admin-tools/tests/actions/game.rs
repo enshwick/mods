@@ -16,7 +16,7 @@ use enshwick::test::{FakeHost, Installed, facts};
 use enshwick::{Entity, ItemId, PlayerKey};
 use enshwick_admin_tools::{enshwick_mod_init, enshwick_mod_query, enshwick_mod_ready};
 
-pub(crate) const ADMIN: u8 = PlayerInfo::CAN_KICK_BAN;
+pub(crate) const ADMIN: u32 = PlayerInfo::CAN_KICK_BAN;
 
 /// The game's skipped inventory entity, which the inventory reads compare to.
 static SKIPPED: [u32; 1] = [0];
@@ -107,15 +107,15 @@ pub(crate) fn health(current: i32, max: i32) -> Vec<u8> {
     bytes
 }
 
-pub(crate) fn player(entity: u32, key: u64, name: &str, permissions: u8) -> PlayerInfo {
+pub(crate) fn player(entity: u32, key: u64, name: &str, permissions: u32) -> PlayerInfo {
     let mut info = PlayerInfo {
         header: Header::of::<PlayerInfo>(),
         slot: entity,
         entity: Entity(entity),
         key: PlayerKey::new(key),
         permissions,
-        name_len: u8::try_from(name.len()).unwrap(),
-        name: [0; 64],
+        name_len: u32::try_from(name.len()).unwrap(),
+        name: [0; PlayerInfo::NAME_MAX],
     };
     info.name[..name.len()].copy_from_slice(name.as_bytes());
     info
@@ -249,7 +249,7 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
         .item(ItemId::from_guid(GLIDER), 1, 0)
         .item(ItemId::from_guid(WOOD), 100, 0)
         .item(ItemId::from_guid(CHEST), 1, 0)
-        .item_places(ItemId::from_guid(CHEST), [5; 16])
+        .item_places(ItemId::from_guid(CHEST), Guid([5; 16]))
         .type_hash("attribute_set.health", HEALTH)
         .type_hash("attribute_set.stamina", HEALTH + 1)
         .type_hash("attribute_set.mana", HEALTH + 2)
@@ -288,7 +288,7 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     for (who, place) in [(ann(), [40, 12, -3]), (bob(), [0, 20, 7])] {
         host = host
             .player(who)
-            .template(who.entity, [7; 16])
+            .template(who.entity, Guid([7; 16]))
             .component(who.entity, transform, &standing(place))
             .component(who.entity, HEALTH, &health(150, 200));
     }
@@ -303,11 +303,11 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
     loader.set_daytime(DaytimeInfo {
         header: Header::of::<DaytimeInfo>(),
-        time: 0,
-        day_start: 6 * 3_600_000_000_000,
-        day_end: 18 * 3_600_000_000_000,
-        day_length: 1_800_000_000_000,
-        night_length: 720_000_000_000,
+        time_ns: 0,
+        day_start_ns: 6 * 3_600_000_000_000,
+        day_end_ns: 18 * 3_600_000_000_000,
+        day_length_ns: 1_800_000_000_000,
+        night_length_ns: 720_000_000_000,
         speed: 1.0,
         flags: 0,
     });
@@ -380,6 +380,17 @@ pub(crate) fn run(loader: &Installed, who: &PlayerInfo, action: &str, args: &str
     loader
         .ask_actions(ActionCall::RUN, who, 0, action, args)
         .unwrap()
+}
+
+/// The ids of the actions `who` may run, as the platform asks for to choose
+/// their carried controls.
+pub(crate) fn allowed(loader: &Installed, who: &PlayerInfo) -> Vec<String> {
+    loader
+        .ask_actions(ActionCall::ALLOWED, who, 0, "", "")
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect()
 }
 
 pub(crate) fn joins(loader: &Installed, who: &PlayerInfo) {

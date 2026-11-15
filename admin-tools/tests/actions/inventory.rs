@@ -19,7 +19,7 @@ fn gives(loader: &enshwick::test::Installed) -> Vec<(u64, ItemId, u32)> {
         .iter()
         .flat_map(|request| request.ops.iter())
         .filter(|op| op.kind == InventoryOp::GIVE)
-        .map(|op| (op.target, op.item, op.count))
+        .map(|op| (u64::from(op.target.0), op.item, op.count))
         .collect()
 }
 
@@ -79,19 +79,15 @@ fn a_typed_give_without_a_count_hands_over_one_item() {
 }
 
 #[test]
-fn every_action_that_takes_an_item_offers_the_client_s_item_picker() {
-    use enshwick::abi::ActionCall;
-    use enshwick::actions::sheet::{ArgView, decode};
+fn every_item_action_a_window_draws_offers_the_client_s_item_picker() {
+    use enshwick::actions::sheet::ArgView;
 
     let dir = scratch("give-picker");
     let loader = server("", &dir);
-    let sheet = decode(
-        &loader
-            .ask_actions(ActionCall::SHEET, &ann(), 0, "", "")
-            .unwrap(),
-    );
-    for id in ["give", "chest", "chestat"] {
-        let entry = sheet.iter().find(|entry| entry.id == id).unwrap();
+    assert_eq!(run(&loader, &ann(), "player", "p0000000000000002"), "1");
+    let drawn = super::windows::window(&loader, &ann(), "player").entries;
+    for id in ["give", "chest"] {
+        let entry = drawn.iter().find(|entry| entry.id == id).unwrap();
         let items = entry.args.iter().filter(|arg| arg.kind == ArgView::ITEM);
         assert_eq!(items.count(), 1, "{id}");
     }
@@ -276,16 +272,15 @@ fn clear_destroys_every_stack_whole_and_a_part_the_game_turns_down_is_told_and_l
         "1Clearing what Ann carries."
     );
     let requests = loader.inventory_requests();
-    let destroyed: Vec<u64> = requests
+    let destroyed: Vec<(u32, u32)> = requests
         .iter()
         .flat_map(|request| request.ops.iter())
         .filter(|op| op.kind == InventoryOp::DESTROY_SLOT)
-        .map(|op| op.target)
+        .map(|op| (op.target.0, op.slot))
         .collect();
-    let slot = |inventory: u32, index: u64| u64::from(inventory) | index << 32;
     assert_eq!(
         destroyed,
-        [slot(BACKPACK, 0), slot(BACKPACK, 1), slot(LOOKS, 0)],
+        [(BACKPACK, 0), (BACKPACK, 1), (LOOKS, 0)],
         "looks included"
     );
     assert!(

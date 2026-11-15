@@ -4,12 +4,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use enshwick::PlayerKey;
-use enshwick::abi::ActionCall;
-use enshwick::actions::sheet::decode;
 use enshwick::console;
 use enshwick::events::{ShutdownStarted, WorldLoaded, WorldSaved, WorldSaving};
 
-use super::game::{Scratch, ann, bob, file_until, hosted, run, said, scratch, server, tick_until};
+use super::game::{
+    Scratch, allowed, ann, bob, file_until, hosted, run, said, scratch, server, tick_until,
+};
 
 #[test]
 fn the_status_names_the_uptime_and_the_world_for_everyone_and_the_console() {
@@ -67,13 +67,9 @@ fn a_restart_warning_that_runs_out_stops_the_server_once_and_the_audit_log_keeps
 fn a_hosted_game_offers_no_restart_warning() {
     let dir = scratch("hosted-restart");
     let loader = hosted("", &dir);
-    let sheet = decode(
-        &loader
-            .ask_actions(ActionCall::SHEET, &ann(), 0, "", "")
-            .unwrap(),
-    );
-    assert!(sheet.iter().all(|entry| entry.id != "restart"));
-    assert!(sheet.iter().any(|entry| entry.id == "save"));
+    let ids = allowed(&loader, &ann());
+    assert!(ids.iter().all(|id| id != "restart"));
+    assert!(ids.iter().any(|id| id == "save"));
     assert!(run(&loader, &ann(), "restart", "n5").starts_with('0'));
 }
 

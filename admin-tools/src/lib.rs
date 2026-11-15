@@ -256,7 +256,7 @@ impl Tools {
         })?;
         let ticks = Arc::clone(self);
         load.on_tick(TICK, move |tick| {
-            ticks.tick(core::time::Duration::from_nanos(tick.elapsed_nanos));
+            ticks.tick(tick.elapsed());
             ticks.drop_stale_gods();
             ticks.find_zone_builders();
         })?;

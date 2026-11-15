@@ -322,7 +322,7 @@ fn set_ban(
     };
     // The game takes a ban only of a player online; a lift always.
     let game = if !on {
-        Some(AccountAction::UnBan)
+        Some(AccountAction::Unban)
     } else if tools.world.player_by_key(key).is_some() {
         Some(AccountAction::Ban)
     } else {
@@ -495,7 +495,7 @@ fn heal(tools: &Tools, request: &Request<'_>) -> Outcome {
         return no_player(request);
     };
     let Some(vitals) = tools.world.vitals(player.entity) else {
-        return Tools::failed(request, name, &WorldError::Missing);
+        return Tools::failed(request, name, &WorldError::Unavailable);
     };
     match tools.world.set_health(player.entity, vitals.health.max) {
         Ok(_) => Outcome::done(request.say(texts::REPLY_HEALED, &[(texts::value::NAME, name)])),
@@ -594,7 +594,7 @@ fn mark(tools: &Tools, request: &Request<'_>) -> Outcome {
     };
     let waypoint = tools
         .map
-        .ok_or(WorldError::Missing)
+        .ok_or(WorldError::Unavailable)
         .and_then(|map| map.waypoint(me.entity));
     match waypoint {
         Ok(Some(at)) => place_at(tools, request, *key, name, at),

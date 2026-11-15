@@ -356,7 +356,7 @@ A zone refuses placing things. It does not refuse digging or opening chests.
 
 Type `/adm spawn <player> Enemy_Wildbeast_Wolf 3` to spawn three wolves
 around a player. Name the creature by the game's template name or its GUID.
-An unknown name lists the names near it.
+The window lists the game's templates to search, as it lists items.
 
 The values after the name may be left out:
 

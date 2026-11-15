@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         loader.set_save_info(Some(enshwick::abi::SaveInfo {
             header: Header::of::<enshwick::abi::SaveInfo>(),
-            world: [1; 16],
+            world: Guid([1; 16]),
             saved_at: 60,
             size: 10,
             backups: 0,

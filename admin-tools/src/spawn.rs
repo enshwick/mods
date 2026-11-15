@@ -11,7 +11,7 @@ use enshwick::world::{TransactionId, WorldTransform};
 use enshwick::{Off, PlayerKey, Relock as _, WorldError};
 use rustc_hash::FxHashMap;
 
-use crate::items::{self, ResolveKnowledgeError};
+use crate::items;
 use crate::players::{axis, bad_args, no_player};
 use crate::{Late, Tools, ids, texts};
 
@@ -61,7 +61,7 @@ pub(crate) fn name_templates() {
 /// many, the level, the minutes it stays and whether the save keeps it.
 fn spawn_args(action: Action) -> Action {
     action
-        .arg(Arg::text(texts::ARG_TEMPLATE, items::MAX_NAME))
+        .arg(Arg::template(texts::ARG_TEMPLATE))
         .arg(Arg::number(texts::ARG_COUNT, 1.0..=MAX_COUNT, 1.0).optional(Value::Number(1.0)))
         .arg(Arg::number(texts::ARG_LEVEL, 0.0..=MAX_LEVEL, 1.0).optional(Value::Number(0.0)))
         .arg(Arg::number(texts::ARG_LIFETIME, 0.0..=MAX_MINUTES, 1.0).optional(Value::Number(0.0)))
@@ -145,11 +145,11 @@ fn spawn_at(tools: &Tools, request: &Request<'_>) -> Outcome {
     spawn_from(tools, request, [*x, *y, *z], 0.0, &whereabouts, how)
 }
 
-/// What a spawn's values after where it goes ask for: the template's text,
+/// What a spawn's values after where it goes ask for: the template,
 /// how many, and how each starts.
-fn asked(request: &Request<'_>, how: &[Value]) -> Result<(String, u32, Spawn), Outcome> {
+fn asked(request: &Request<'_>, how: &[Value]) -> Result<(Guid, u32, Spawn), Outcome> {
     let [
-        Value::Text(template),
+        Value::Template(template),
         Value::Number(count),
         Value::Number(level),
         Value::Number(minutes),
@@ -172,7 +172,7 @@ fn asked(request: &Request<'_>, how: &[Value]) -> Result<(String, u32, Spawn), O
     if minutes > 0 {
         start = start.despawn_after(core::time::Duration::from_secs(u64::from(minutes) * 60));
     }
-    Ok((template.clone(), count, start))
+    Ok((*template, count, start))
 }
 
 /// Spawns what `how` asks for on a ring of [`RING`] around `centre`, or
@@ -186,26 +186,15 @@ fn spawn_from(
     whereabouts: &str,
     how: &[Value],
 ) -> Outcome {
-    let (text, count, start) = match asked(request, how) {
+    let (template, count, start) = match asked(request, how) {
         Ok(asked) => asked,
         Err(refused) => return refused,
-    };
-    let template = match template(&text) {
-        Ok(template) => template,
-        // Templates take no number, as the item text's advice offers.
-        Err(ResolveKnowledgeError::Unreadable) => {
-            return Outcome::refused(request.say(
-                texts::REPLY_TEMPLATES_UNREAD,
-                &[(texts::value::ITEM, &text)],
-            ));
-        }
-        Err(why) => return items::refused(request, &text, &why),
     };
     let ring = if count > 1 { RING } else { alone };
     let mut made = 0;
     let mut failed = None;
     for at in spots(centre, count, ring) {
-        match tools.effects.spawn(template.0, at, start) {
+        match tools.effects.spawn(template, at, start) {
             Ok(_) => made += 1,
             Err(why) => {
                 failed = Some(why);
@@ -215,7 +204,7 @@ fn spawn_from(
     }
     let values = [
         (texts::value::NAME, whereabouts.to_owned()),
-        (texts::value::ITEM, text),
+        (texts::value::ITEM, shown(template)),
         (texts::value::COUNT, count.to_string()),
         (texts::value::GIVEN, made.to_string()),
     ];
@@ -231,14 +220,13 @@ fn spawn_from(
     }
 }
 
-/// The template `text` names: its GUID, or a vanilla template's name in
-/// any case, such as `Enemy_Wildbeast_Wolf`.
-fn template(text: &str) -> Result<Guid, ResolveKnowledgeError> {
-    let text = text.trim();
-    if let Some(guid) = Guid::try_parse(text) {
-        return Ok(guid);
-    }
-    items::by_name(text, vanilla::template).map(|(guid, _)| guid)
+/// How a reply names `template`: a vanilla template's name, such as
+/// `Enemy_Wildbeast_Wolf`, else its GUID.
+fn shown(template: Guid) -> String {
+    vanilla::templates()
+        .ok()
+        .and_then(|all| all.into_iter().find(|known| known.guid == template))
+        .map_or_else(|| template.to_string(), |known| known.name)
 }
 
 /// Where each of `count` creatures stands: evenly on a circle of `radius`
@@ -298,7 +286,7 @@ fn place(
 ) -> Outcome {
     let (prop, shown) = tools.picked(item, request.language);
     let Some(late) = Late::new(tools, request, id) else {
-        return Tools::failed(request, whereabouts, &WorldError::Missing);
+        return Tools::failed(request, whereabouts, &WorldError::Unavailable);
     };
     let placed = tools
         .world
@@ -394,44 +382,6 @@ mod tests {
     fn one_creature_at_a_position_stands_on_it() {
         let at: Vec<[f64; 3]> = spots([1.0, 2.0, 3.0], 1, 0.0).collect();
         assert_eq!(at, [[1.0, 2.0, 3.0]]);
-    }
-
-    #[test]
-    fn a_template_s_guid_names_it_without_the_game_s_list() {
-        let guid = "7ced0410-b6d4-4927-a64f-da77e19e42e4";
-        assert_eq!(template(guid), Ok(Guid::parse(guid)));
-    }
-
-    #[test]
-    fn a_template_name_resolves_in_any_case_or_tells_the_names_near_it_or_the_guids_to_pick() {
-        use vanilla::VanillaError;
-        const WOLF: Guid = Guid([0x40; 16]);
-        let game = |name: &str| match name {
-            "Enemy_Wildbeast_Wolf" => Ok(WOLF),
-            "Twin" => Err(VanillaError::AmbiguousTemplate {
-                name: name.to_owned(),
-                templates: vec![WOLF, Guid([0x41; 16])],
-            }),
-            "Lost" => Err(VanillaError::Unreadable("templates")),
-            _ => Err(VanillaError::UnknownTemplate {
-                name: name.to_owned(),
-                near: vec!["Enemy_Wildbeast_Wolf".to_owned()],
-            }),
-        };
-        let by = |name| items::by_name(name, game).map(|(guid, _)| guid);
-        assert_eq!(by("Enemy_Wildbeast_Wolf"), Ok(WOLF));
-        assert_eq!(by("enemy_wildbeast_wolf"), Ok(WOLF), "any case");
-        assert_eq!(
-            by("Enemy_Wolv"),
-            Err(ResolveKnowledgeError::Name {
-                near: vec!["Enemy_Wildbeast_Wolf".to_owned()]
-            })
-        );
-        assert_eq!(
-            by("Twin"),
-            Err(ResolveKnowledgeError::Several(vec![WOLF, Guid([0x41; 16])]))
-        );
-        assert_eq!(by("Lost"), Err(ResolveKnowledgeError::Unreadable));
     }
 
     #[test]

@@ -66,6 +66,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
+name = "block-buffer"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,7 +113,7 @@ dependencies = [
 [[package]]
 name = "cargo-enshwick"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -325,12 +334,78 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "crypto-common"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
+name = "curve25519-dalek"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5eed333089e2e1c1ac8c6c0398e5e2497b4c9926ca6d0365ed1e099afa5bc23"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "curve25519-dalek-derive",
+ "digest",
+ "fiat-crypto",
+ "rustc_version",
+ "subtle",
+]
+
+[[package]]
+name = "curve25519-dalek-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "digest"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
+dependencies = [
+ "block-buffer",
+ "crypto-common",
+]
+
+[[package]]
 name = "document-features"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
 dependencies = [
  "litrs",
+]
+
+[[package]]
+name = "ed25519"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29fcf32e6c73d1079f83ab4d782de2d81620346a5f38c6237a86a22f8368980a"
+dependencies = [
+ "signature",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ebaa1a2bf1290ab3bfe5a7b771d050ebffab2711c19a81691c683a5144a25de"
+dependencies = [
+ "curve25519-dalek",
+ "ed25519",
+ "sha2",
+ "subtle",
 ]
 
 [[package]]
@@ -354,7 +429,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "enshwick"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "document-features",
  "enshwick-abi",
@@ -375,7 +450,7 @@ dependencies = [
 [[package]]
 name = "enshwick-abi"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "bytemuck",
  "enshwick-values",
@@ -386,7 +461,7 @@ dependencies = [
 [[package]]
 name = "enshwick-actions"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "bytemuck",
  "enshwick-abi",
@@ -425,7 +500,7 @@ dependencies = [
 [[package]]
 name = "enshwick-base"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "aho-corasick",
  "bytemuck",
@@ -466,7 +541,7 @@ dependencies = [
 [[package]]
 name = "enshwick-content"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "bcdec_rs",
  "enshwick-abi",
@@ -483,7 +558,7 @@ dependencies = [
 [[package]]
 name = "enshwick-core"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "enshwick-abi",
  "enshwick-actions",
@@ -503,7 +578,7 @@ dependencies = [
 [[package]]
 name = "enshwick-fake"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "bytemuck",
  "enshwick-core",
@@ -526,8 +601,9 @@ dependencies = [
 [[package]]
 name = "enshwick-gamedata"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
+ "ed25519-dalek",
  "enshwick-base",
  "enshwick-content",
  "iced-x86",
@@ -545,7 +621,7 @@ dependencies = [
 [[package]]
 name = "enshwick-inventory"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "bytemuck",
  "enshwick-abi",
@@ -564,7 +640,7 @@ dependencies = [
 [[package]]
 name = "enshwick-knowledge"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "enshwick-abi",
  "enshwick-base",
@@ -580,7 +656,7 @@ dependencies = [
 [[package]]
 name = "enshwick-luau"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "arc-swap",
  "enshwick-core",
@@ -593,7 +669,7 @@ dependencies = [
 [[package]]
 name = "enshwick-macros"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -615,7 +691,7 @@ dependencies = [
 [[package]]
 name = "enshwick-packs"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "enshwick-abi",
  "enshwick-base",
@@ -700,7 +776,7 @@ dependencies = [
 [[package]]
 name = "enshwick-typed"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "enshwick-values",
  "thiserror",
@@ -709,7 +785,7 @@ dependencies = [
 [[package]]
 name = "enshwick-ui"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "enshwick-abi",
  "enshwick-base",
@@ -724,8 +800,9 @@ dependencies = [
 [[package]]
 name = "enshwick-values"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
+ "bytemuck",
  "const-sha1",
  "const_format",
  "enshwick-macros",
@@ -737,7 +814,7 @@ dependencies = [
 [[package]]
 name = "enshwick-world"
 version = "1.0.0-alpha.16"
-source = "git+https://github.com/enshwick/enshwick?rev=2be7b272c73920024f3ff93d0f4e3804fcdb154f#2be7b272c73920024f3ff93d0f4e3804fcdb154f"
+source = "git+https://github.com/enshwick/enshwick?rev=5407694d9fa460955ce493016cecded82e15545e#5407694d9fa460955ce493016cecded82e15545e"
 dependencies = [
  "enshwick-abi",
  "enshwick-base",
@@ -762,6 +839,12 @@ name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
 
 [[package]]
 name = "find-msvc-tools"
@@ -820,6 +903,15 @@ name = "hound"
 version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
+
+[[package]]
+name = "hybrid-array"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
+dependencies = [
+ "typenum",
+]
 
 [[package]]
 name = "iced-x86"
@@ -1148,6 +1240,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1233,10 +1334,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha2"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "signature"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
 
 [[package]]
 name = "simd-adler32"
@@ -1255,6 +1373,12 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "subtle"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
@@ -1358,6 +1482,12 @@ name = "typed-path"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
+
+[[package]]
+name = "typenum"
+version = "1.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "unarray"

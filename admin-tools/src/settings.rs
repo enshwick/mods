@@ -596,7 +596,7 @@ mod tests {
 
     use super::*;
 
-    fn player(key: u64, permissions: u8) -> Player {
+    fn player(key: u64, permissions: u32) -> Player {
         Player {
             entity: Entity(2),
             slot: 0,

@@ -107,13 +107,12 @@ impl AltarTable {
     }
 
     /// Altars allowed at `flame_level`, where the game allows `vanilla`.
-    pub(crate) fn altars(&self, flame_level: u32, vanilla: u8) -> u8 {
+    pub(crate) fn altars(&self, flame_level: u32, vanilla: u32) -> u32 {
         let index = usize::try_from(flame_level).unwrap_or(usize::MAX);
         self.table
             .get(index)
             .or(self.table.last())
-            .copied()
-            .unwrap_or(vanilla)
+            .map_or(vanilla, |&n| u32::from(n))
     }
 }
 
@@ -160,18 +159,18 @@ impl AltarCount {
     /// The altars `flame_level` allows, where the game allows `vanilla`:
     /// the table's answer, between 1 and the cap. Other mods' filters in the
     /// loader's chain change it after.
-    pub(crate) fn limit(&self, flame_level: u32, vanilla: u8) -> u8 {
+    pub(crate) fn limit(&self, flame_level: u32, vanilla: u32) -> u32 {
         self.table
             .load()
             .altars(flame_level, vanilla)
-            .clamp(1, self.cap)
+            .clamp(1, u32::from(self.cap))
     }
 
     /// Takes the table and the bases of `count`, the settings now in force.
     pub(crate) fn apply(&self, count: &Count) {
         self.table
             .store(Arc::new(AltarTable::from_settings(count, self.cap)));
-        match enshwick::altars::set_base_cap(u32::from(count.bases)) {
+        match enshwick::altars::set_base_limit(u32::from(count.bases)) {
             Ok(()) => enshwick::info!("bases: {}", count.bases),
             Err(off) => enshwick::warn!("bases stay as asked at start: {off}"),
         }

@@ -16,7 +16,7 @@ use super::game::{
 
 /// The window `id` on `who`'s client; panics with the windows they hold
 /// when it is not among them.
-fn window(loader: &Installed, who: &PlayerInfo, id: &str) -> View {
+pub(super) fn window(loader: &Installed, who: &PlayerInfo, id: &str) -> View {
     let held = loader.carried_windows(who, 0);
     let text = held
         .iter()
@@ -500,11 +500,11 @@ fn a_lookup_from_the_interface_shows_the_changes_in_a_window_with_a_way_there() 
     let placed = BuildingData {
         header: Header::of::<BuildingData>(),
         entity: Entity(900),
-        player: bob().entity,
+        character: bob().entity,
         item: ItemId::new(0),
         kind: BuildingData::PLACED,
         replay: 0,
-        template: [0; 16],
+        template: enshwick::content::Guid([0; 16]),
         position: [1.0, 20.0, 7.0],
     };
     assert!(loader.raise::<BuildingPlaced>(&placed) >= 1);

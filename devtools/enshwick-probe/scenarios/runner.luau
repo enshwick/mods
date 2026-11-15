@@ -99,7 +99,7 @@ local function after(seconds: number, run: () -> ())
 end
 
 enshwick.on("Ticked", function(data)
-	clock += (tonumber(data.elapsed_nanos) or 0) / 1e9
+	clock += (tonumber(data.elapsed_ns) or 0) / 1e9
 	local due = {}
 	for i = #timers, 1, -1 do
 		if timers[i].at <= clock then

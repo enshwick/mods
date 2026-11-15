@@ -207,6 +207,7 @@ fn running_build() -> String {
     let fingerprint = host.build().fingerprint;
     let mut name = fingerprint
         .guid
+        .0
         .iter()
         .fold("build ".to_owned(), |mut hex, b| {
             let _ = write!(hex, "{b:02x}");

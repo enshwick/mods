@@ -5,8 +5,7 @@
 use std::time::Duration;
 
 use enshwick::PlayerKey;
-use enshwick::abi::{ActionCall, PlayerInfo};
-use enshwick::actions::sheet::decode;
+use enshwick::abi::PlayerInfo;
 use enshwick::commands::{self, Caller};
 use enshwick::console;
 use enshwick::events::{SettingsReplaced, ShutdownStarted, WorldLoaded};
@@ -14,23 +13,26 @@ use enshwick::test::Installed;
 use enshwick::world::PlayerPermissions;
 
 use super::game::{
-    ADMIN, HEALTH, ann, bob, file_until, joins, player, run, scratch, server, server_with,
+    ADMIN, HEALTH, allowed, ann, bob, file_until, joins, player, run, scratch, server, server_with,
 };
+
+/// The players the `banned` action lists in Ann's accounts window, each
+/// with whether it is on.
+fn banned_list(loader: &Installed) -> Vec<(PlayerKey, String, bool)> {
+    assert_eq!(run(loader, &ann(), "open", "c1"), "1");
+    super::windows::window(loader, &ann(), "accounts")
+        .entries
+        .into_iter()
+        .find(|entry| entry.id == "banned")
+        .map(|entry| entry.players)
+        .unwrap_or_default()
+}
 
 #[test]
 fn a_player_sees_only_the_reads_and_an_administrator_sees_every_action() {
     let dir = scratch("sheet");
     let loader = server("", &dir);
-    let ids = |who: &PlayerInfo| -> Vec<String> {
-        decode(
-            &loader
-                .ask_actions(ActionCall::SHEET, who, 0, "", "")
-                .unwrap(),
-        )
-        .into_iter()
-        .map(|entry| entry.id)
-        .collect()
-    };
+    let ids = |who: &PlayerInfo| allowed(&loader, who);
     assert_eq!(ids(&bob()), ["online", "motd", "status"]);
     assert_eq!(ids(&ann()).len(), 50);
     assert!(run(&loader, &bob(), "kick", "p0000000000000001").starts_with('0'));
@@ -44,13 +46,7 @@ fn the_world_s_rights_give_an_action_to_a_permission_and_take_one_away() {
         &dir,
     );
     let builder = player(12, 3, "Cid", PlayerInfo::CAN_EDIT_BASE);
-    let sheet = decode(
-        &loader
-            .ask_actions(ActionCall::SHEET, &builder, 0, "", "")
-            .unwrap(),
-    );
-    let ids: Vec<&str> = sheet.iter().map(|entry| entry.id.as_str()).collect();
-    assert_eq!(ids, ["heal", "motd", "status"]);
+    assert_eq!(allowed(&loader, &builder), ["heal", "motd", "status"]);
     assert!(
         run(&loader, &ann(), "online", "").starts_with('0'),
         "nobody includes admins"
@@ -124,15 +120,8 @@ fn an_administrator_bans_a_player_online_and_lifts_the_ban_while_they_are_away()
         "1Bob is banned."
     );
     assert_eq!(loader.banned(), [PlayerKey::new(2)]);
-    let sheet = decode(
-        &loader
-            .ask_actions(ActionCall::SHEET, &ann(), 0, "", "")
-            .unwrap(),
-    );
-    let banned = sheet.iter().find(|entry| entry.id == "banned").unwrap();
     assert!(
-        banned
-            .players
+        banned_list(&loader)
             .iter()
             .any(|(key, _, on)| *key == PlayerKey::new(2) && *on),
         "the list keeps Bob while he is away"
@@ -157,19 +146,12 @@ fn a_ban_kept_from_an_earlier_run_bans_the_account_again_when_it_joins() {
     )
     .unwrap();
     let loader = server("", &dir);
-    let sheet = decode(
-        &loader
-            .ask_actions(ActionCall::SHEET, &ann(), 0, "", "")
-            .unwrap(),
-    );
-    let banned = sheet.iter().find(|entry| entry.id == "banned").unwrap();
+    let banned = banned_list(&loader);
     assert!(
         banned
-            .players
             .iter()
             .any(|(key, _, on)| *key == PlayerKey::new(2) && *on),
-        "the kept ban reads: {:?}",
-        banned.players
+        "the kept ban reads: {banned:?}"
     );
     joins(&loader, &ann());
     assert!(loader.banned().is_empty());

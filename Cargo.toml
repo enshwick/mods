@@ -17,6 +17,10 @@ members = [
 ]
 resolver = "3"
 
+# The pinned toolchain's major and minor; every member inherits it.
+[workspace.package]
+rust-version = "1.100"
+
 # The loader release the next release of the mods builds on and `release`
 # pins: `cargo xtask built-for` names it in the release pull request.
 [workspace.metadata.release]

@@ -63,6 +63,7 @@ pub(crate) fn check() -> Result<Vec<String>, String> {
         problems.extend(feature_names(name, package));
         problems.extend(rust_version(name, package, &toolchain));
         let own = manifest(path)?;
+        problems.extend(own_rust_version(name, &own));
         problems.extend(platform_outside_workspace(name, &own));
         problems.extend(inline_workspace_dependency(name, &own, &shared));
         if !mods.contains(&name) {
@@ -146,6 +147,18 @@ fn rust_version(name: &str, package: &serde_json::Value, toolchain: &str) -> Opt
     (!same).then(|| {
         format!("{name}: rust-version {version:?} is not the pinned toolchain's {toolchain}")
     })
+}
+
+/// A member's `rust-version` not taken from `[workspace.package]`, so a
+/// toolchain bump changes one manifest, not every mod's.
+fn own_rust_version(name: &str, manifest: &toml::Table) -> Option<String> {
+    let inherited = manifest
+        .get("package")
+        .and_then(|package| package.get("rust-version"))
+        .and_then(|version| version.get("workspace"))
+        .and_then(toml::Value::as_bool)
+        == Some(true);
+    (!inherited).then(|| format!("{name}: set rust-version.workspace = true in its Cargo.toml"))
 }
 
 /// A platform crate in `[workspace.dependencies]` or a `[patch]` table of
@@ -435,6 +448,15 @@ mod tests {
         assert!(rust_version("a", &at("1.98"), "1.99").is_some());
         assert!(rust_version("a", &at("1.990"), "1.99").is_some());
         assert!(rust_version("a", &serde_json::json!({}), "1.99").is_some());
+    }
+
+    #[test]
+    fn a_member_s_own_rust_version_is_a_problem_until_it_inherits() {
+        let at = |text: &str| own_rust_version("a", &text.parse().unwrap());
+        assert!(at("[package]\nrust-version.workspace = true\n").is_none());
+        assert!(at("[package]\nrust-version = \"1.100\"\n").is_some());
+        assert!(at("[package]\nrust-version.workspace = false\n").is_some());
+        assert!(at("[package]\n").is_some());
     }
 
     #[test]

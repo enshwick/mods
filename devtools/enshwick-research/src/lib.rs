@@ -636,7 +636,7 @@ fn actions(load: &mut Load<'_>) -> Result<Actions, Off> {
         move |request| {
             let values = dir
                 .as_deref()
-                .map_or_else(Vec::new, |dir| settings_in::<Settings>(dir).mark_values);
+                .map_or_default(|dir| settings_in::<Settings>(dir).mark_values);
             mark(request, &values)
         },
     )?;

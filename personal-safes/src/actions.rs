@@ -279,16 +279,12 @@ pub fn declare(
             let Some(at) = subject.map(|s| unpack(s.id)) else {
                 return Vec::new();
             };
-            snapshots()
-                .owners
-                .load()
-                .get(&at)
-                .map_or_else(Vec::new, |safe| {
-                    safe.allowed
-                        .iter()
-                        .map(|a| (a.key, a.name.clone()))
-                        .collect()
-                })
+            snapshots().owners.load().get(&at).map_or_default(|safe| {
+                safe.allowed
+                    .iter()
+                    .map(|a| (a.key, a.name.clone()))
+                    .collect()
+            })
         })
         .help(texts::ACTION_ACCESS_HELP)
         .at(move |ask| {

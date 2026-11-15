@@ -608,9 +608,12 @@ impl Tools {
         let Some(dir) = self.world.data_dir() else {
             return;
         };
-        let (name, account) = line.player.map_or_else(Default::default, |key| {
-            let name = self.world.player_by_key(key).map(|player| player.name);
-            (name.unwrap_or_default(), crate::account_id(key))
+        let (name, account) = line.player.map_or_default(|key| {
+            let name = self
+                .world
+                .player_by_key(key)
+                .map_or_default(|player| player.name);
+            (name, crate::account_id(key))
         });
         let kind = match line.kind {
             ChatKind::Player => "say",

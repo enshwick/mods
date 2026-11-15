@@ -101,9 +101,9 @@ fn survivor_name(staff: &Staff, language: Language) -> String {
     }
     let role = staff.key().replace('_', " ");
     let mut chars = role.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
+    chars
+        .next()
+        .map_or_default(|first| first.to_uppercase().chain(chars).collect())
 }
 
 /// Adds every copy staff and its texts; a full staff holds `charges`.

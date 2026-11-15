@@ -6,6 +6,8 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-15
+
 ### Added
 
 - Protected zones: an administrator marks a circle or a box around them

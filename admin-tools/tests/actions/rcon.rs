@@ -246,7 +246,7 @@ fn login(loader: &enshwick::test::Installed, port: u16, password: &str) -> i32 {
         let _empty = read_packet(&mut stream);
         read_packet(&mut stream).map_or(0, |(id, ..)| id)
     });
-    assert!(real_until(&loader, || client.is_finished()));
+    assert!(real_until(loader, || client.is_finished()));
     client.join().unwrap()
 }
 

@@ -185,8 +185,7 @@ fn facing_back([dx, dz]: [f64; 2]) -> f32 {
 fn show_welcome(actions: &Actions, world: World, player: PlayerKey) {
     let name = world
         .player_by_key(player)
-        .map(|found| found.name)
-        .unwrap_or_default();
+        .map_or_else(String::new, |found| found.name);
     let window = Window::new(WELCOME, crate::texts::WELCOME_TITLE)
         .text(crate::texts::WELCOME_LINE, &[("name", &name)]);
     if let Err(why) = actions.show(window, &[player]) {

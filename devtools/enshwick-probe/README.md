@@ -31,6 +31,10 @@ Ten seconds after the world has loaded, and again on the `check` action:
   event in the next step; that a type off the allow list and a teleport of
   an entity not in the world are refused;
 - that destroy requests refuse entity 0 and an entity not in the world;
+- respawn points: a read for an entity that is no player answers none, and a
+  set to an entity that is no spawn point is refused, so this build's layout
+  resolved; a FAIL there names a layout the build lacks. Each
+  `PlayerSpawnInfoChangeEvent` is logged as it comes;
 - the clock: a reading, a time an hour past the next turn of day or night
   that reads back (the turn's event follows), the time put back, a factor of 10 on the speed that the clock's speed shows, and the
   factor put back; the turns of day and night are logged as they come; these
@@ -139,19 +143,21 @@ there the `check` key runs the same vitals, spawn and destroy checks on the
 world's entities. The scenarios `teleport`, `stats` and `knowledge` check the
 rest on a player.
 
-| Action      | Key             | What it does                                                                                                |
-| ----------- | --------------- | ----------------------------------------------------------------------------------------------------------- |
-| `census`    | `Shift+F2`      | the game events counted so far, by type                                                                     |
-| `check`     | `Shift+F3`      | runs the checks again                                                                                       |
-| `key`       | `Shift+F4`      | your account key                                                                                            |
-| `my-vitals` | `Shift+F5`      | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
-| `notice`    | `Shift+F6`      | shows a notice on your screen, or in chat without Enshwick                                                  |
-| `notices`   | `Ctrl+Shift+F6` | shows 20 notices at once, with the texts 1 to 20: four more than a client queues; the count goes to the log |
-| `stats`     | `Ctrl+Shift+F9` | your stats that differ from the defaults, and their sources                                                 |
-| `affix`     | `Shift+F11`     | rolls one to three affixes anew on everything you wear                                                      |
-| `vitals`    | console         | an entity's vitals and progress, against its replicated health                                              |
-| `destroy`   | console         | asks the world to destroy an entity; on a copy of a world only                                              |
-| `spawn`     | console         | spawns a copy of an entity above it and follows it as the checks do                                         |
+| Action        | Key             | What it does                                                                                                |
+| ------------- | --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `census`      | `Shift+F2`      | the game events counted so far, by type                                                                     |
+| `check`       | `Shift+F3`      | runs the checks again                                                                                       |
+| `key`         | `Shift+F4`      | your account key                                                                                            |
+| `respawn`     | `Ctrl+Shift+F4` | where you respawn: the spawn point, its kind and where it stands; the probe remembers it                    |
+| `set-respawn` | `Ctrl+Shift+F5` | moves where you respawn back to the point `respawn` last showed you in this world                           |
+| `my-vitals`   | `Shift+F5`      | your character's raw health, stamina and mana sets, every slot, the replicated copies and the API's reading |
+| `notice`      | `Shift+F6`      | shows a notice on your screen, or in chat without Enshwick                                                  |
+| `notices`     | `Ctrl+Shift+F6` | shows 20 notices at once, with the texts 1 to 20: four more than a client queues; the count goes to the log |
+| `stats`       | `Ctrl+Shift+F9` | your stats that differ from the defaults, and their sources                                                 |
+| `affix`       | `Shift+F11`     | rolls one to three affixes anew on everything you wear                                                      |
+| `vitals`      | console         | an entity's vitals and progress, against its replicated health                                              |
+| `destroy`     | console         | asks the world to destroy an entity; on a copy of a world only                                              |
+| `spawn`       | console         | spawns a copy of an entity above it and follows it as the checks do                                         |
 
 ## Settings
 

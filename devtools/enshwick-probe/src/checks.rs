@@ -15,6 +15,8 @@ use enshwick::state::WorldStore;
 use enshwick::world::{ContainerKinds, Notice, World, WritableType};
 use enshwick::{Load, Off, WorldError};
 
+/// An entity id no world holds, for the checks of what a call refuses.
+const NOT_IN_WORLD: Entity = Entity(u32::MAX - 1);
 /// Entities whose stats a check compares.
 const SAMPLE: usize = 5;
 /// How long a destroyed entity may take to leave the world.
@@ -79,6 +81,8 @@ pub(crate) struct Checks {
     ping_position: usize,
     /// The check each sampled entity was marked at.
     marks: EntityData<u32>,
+    /// The `respawn` and `set-respawn` actions.
+    pub(crate) respawns: crate::respawns::RespawnPoints,
 }
 
 pub(crate) fn pass(what: &str) {
@@ -123,6 +127,7 @@ impl Checks {
             ping_position: usize::try_from(load.constant("ui_ping_event.position")?)
                 .map_err(|_| Off::new("ui_ping_event.position: out of range"))?,
             marks: load.entity_data("mark", Replication::Server)?,
+            respawns: crate::respawns::RespawnPoints::new(world),
         })
     }
 
@@ -334,7 +339,7 @@ impl Checks {
         }
         match self
             .effects
-            .teleport(Entity(u32::MAX - 1), [0.0; 3], Teleport::new())
+            .teleport(NOT_IN_WORLD, [0.0; 3], Teleport::new())
         {
             Err(WorldError::Gone) => pass("teleport refuses an entity not in the world"),
             other => fail(&format!("teleport of a missing entity: {other:?}")),
@@ -489,7 +494,7 @@ impl Checks {
             Err(WorldError::Refused) => pass("destroy refuses entity 0"),
             other => fail(&format!("destroy of entity 0: {other:?}")),
         }
-        match self.world.destroy(Entity(u32::MAX - 1)) {
+        match self.world.destroy(NOT_IN_WORLD) {
             Err(WorldError::Gone) => pass("destroy refuses an entity not in the world"),
             other => fail(&format!("destroy of a missing entity: {other:?}")),
         }
@@ -501,6 +506,24 @@ impl Checks {
             other => fail(&format!(
                 "permission change of an account not in game: {other:?}"
             )),
+        }
+        // None and NotASpawnPoint, not unavailable: the respawn point's layout resolved.
+        let no_player = enshwick::world::Player {
+            entity: NOT_IN_WORLD,
+            slot: 0,
+            key: nobody,
+            permissions: 0,
+            name: String::new(),
+        };
+        match self.world.respawn_point(&no_player) {
+            Ok(None) => pass("respawn point: none for an entity that is no player"),
+            other => fail(&format!("respawn point of no player: {other:?}")),
+        }
+        match self.world.set_respawn_point(&no_player, NOT_IN_WORLD) {
+            Err(WorldError::NotASpawnPoint) => {
+                pass("set respawn point refuses an entity that is no spawn point");
+            }
+            other => fail(&format!("set respawn point to no spawn point: {other:?}")),
         }
     }
 
@@ -616,7 +639,7 @@ impl Checks {
                 now.len()
             ));
         }
-        match self.marks.set(Entity(u32::MAX - 1), &check) {
+        match self.marks.set(NOT_IN_WORLD, &check) {
             Err(_) => pass("entity data: a missing entity is refused"),
             Ok(()) => fail("entity data: a missing entity took a value"),
         }

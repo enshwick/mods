@@ -22,6 +22,7 @@ mod damage;
 mod knowledge;
 mod platform;
 mod raw_stats;
+mod respawns;
 mod saves;
 mod scenarios;
 mod settings;
@@ -43,7 +44,7 @@ use enshwick::game_events::{
     AcceptOfferedInteractionEvent, BuildingPickUpEvent, BuildingPlaceEvent, BuildingTearDownEvent,
     CraftRecipeEvent, CraftRecipeSuccessEvent, EntityDiedEvent, FlameAltarEvent,
     HandleEquipmentSlotChangedEvent, HitEvent, LevelUpEvent, LootInteractionEvent,
-    RevivedPlayerEvent, XpGainedEvent,
+    PlayerSpawnInfoChangeEvent, RevivedPlayerEvent, XpGainedEvent,
 };
 use enshwick::i18n::Texts;
 use enshwick::schedule::Scheduler;
@@ -231,14 +232,17 @@ const fn id(value: f64) -> u32 {
 }
 
 /// The keys of the actions, as action and default key: Shift with F2 to F6
-/// and F11, Ctrl+Shift on F6 for the burst beside the single notice and on
-/// F9, where Admin Tools' panel takes Shift+F9. The set is clear of the
+/// and F11, Ctrl+Shift on F4 and F5 for the respawn point beside the key
+/// and vitals, on F6 for the burst beside the single notice and on F9,
+/// where Admin Tools' panel takes Shift+F9. The set is clear of the
 /// game's F1 (its tutorial), the research mod's F7 and F8 and the test UI's
 /// Shift+F10. The last two need the affix checks.
-const CONTROLS: [(&str, &str); 8] = [
+const CONTROLS: [(&str, &str); 10] = [
     ("census", "Shift+F2"),
     ("check", "Shift+F3"),
     ("key", "Shift+F4"),
+    ("respawn", "Ctrl+Shift+F4"),
+    ("set-respawn", "Ctrl+Shift+F5"),
     ("my-vitals", "Shift+F5"),
     ("notice", "Shift+F6"),
     ("notices", "Ctrl+Shift+F6"),
@@ -303,6 +307,15 @@ fn actions(
             [Value::Number(n)] => Outcome::done(spawning.spawn_copy(Entity(id(*n)))),
             _ => Outcome::refused(""),
         },
+    )?;
+    let respawns = Arc::clone(checks);
+    actions.add(admin("respawn", "Your respawn point"), move |request| {
+        respawns.respawns.show(request.player)
+    })?;
+    let moving = Arc::clone(checks);
+    actions.add(
+        admin("set-respawn", "Respawn at the point last shown"),
+        move |request| moving.respawns.set(request.player),
     )?;
     let noticing = Arc::clone(checks);
     actions.add(admin("notice", "Show yourself a notice"), move |request| {
@@ -388,6 +401,7 @@ impl Mod for Probe {
         log_typed::<LootInteractionEvent>(load);
         log_typed::<HandleEquipmentSlotChangedEvent>(load);
         log_typed::<RevivedPlayerEvent>(load);
+        log_typed::<PlayerSpawnInfoChangeEvent>(load);
 
         vetoes(load, &settings);
         // Before the chat filter, so the scenarios see the lines it drops.
@@ -449,6 +463,8 @@ impl Mod for Probe {
                 scheduler.after(CHECK_DELAY, move || run());
             })?;
         }
+        let loaded = Arc::clone(&checks);
+        load.on::<WorldLoaded>(move |()| loaded.respawns.forget())?;
         let saved = Arc::clone(&checks);
         load.on::<WorldSaved>(move |()| saved.saved())?;
         let affixes = affix_checks.is_some();
@@ -567,7 +583,16 @@ mod keys {
         let names: Vec<&str> = super::keyed(false).iter().map(|c| c.0).collect();
         assert_eq!(
             names,
-            ["census", "check", "key", "my-vitals", "notice", "notices"]
+            [
+                "census",
+                "check",
+                "key",
+                "respawn",
+                "set-respawn",
+                "my-vitals",
+                "notice",
+                "notices"
+            ]
         );
         assert_eq!(super::keyed(true), CONTROLS);
     }

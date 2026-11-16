@@ -3,9 +3,13 @@
 "mod.description" = "Development only: content of its own for checking the platform in game"
 "altar.name" = "Test Flame Altar"
 "chest.name" = "Test Chest"
+"welcome.title" = "Welcome"
+"welcome.line" = "Welcome, {name}. Test Content runs on this server."
 
 [uk]
 "mod.name" = "Test Content"
 "mod.description" = "Лише для розробки: власний вміст для перевірки платформи в грі"
 "altar.name" = "Тестовий вівтар Полум'я"
 "chest.name" = "Тестова скриня"
+"welcome.title" = "Вітаємо"
+"welcome.line" = "Вітаємо, {name}. На цьому сервері працює Test Content."

@@ -11,6 +11,8 @@ Each entry says what players notice; a release's notes show its section.
 - A chest or prop that an action places is filled or kept once it stands
   in the world, a step after the game places it; one that does not stand
   within 10 seconds is taken back and reported, as before.
+- `/adm spawn` and `/adm spawnat` take the game's template name in any
+  case, and a name several templates share lists their GUIDs to pick from.
 
 ## [0.2.0] - 2026-11-15
 

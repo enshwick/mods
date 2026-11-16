@@ -26,6 +26,11 @@ Each entry says what players notice; a release's notes show its section.
   case, an exact match first. A name that several templates or items share
   lists up to eight of their GUIDs to pick from.
 
+### Fixed
+
+- A zone builder who respawns on a server builds in a zone from the next
+  server step, instead of being refused for up to a second.
+
 ## [0.2.0] - 2026-11-15
 
 ### Changed

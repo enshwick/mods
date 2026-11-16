@@ -335,6 +335,7 @@ mod tests {
             item: enshwick::ItemId::new(7),
             position: [x, 0.0, 0.0],
             reason: core::ptr::null_mut(),
+            account: enshwick::PlayerKey::default(),
         };
         assert_eq!(
             loader.build(&at(14.9)),

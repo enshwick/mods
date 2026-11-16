@@ -646,10 +646,7 @@ mod tests {
             .world()
             .items()
             .workshops()
-            .vanilla_items(&[(
-                enshwick::content::Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d"),
-                writes::CHEST,
-            )])
+            .vanilla_items(&[(CHEST_GUID, writes::CHEST)])
             .code(&CODE)
             .system(writes::COUNTED, code_at(COUNTED_AT))
             .server_world(0x7ff0_0000)
@@ -703,6 +700,107 @@ mod tests {
             !logged_exactly(&loader, "SKIP platform: world writes is off")
                 && logged_exactly(&loader, "SKIP transaction: no placed entity"),
             "{:?}",
+            loader.logs()
+        );
+    }
+
+    /// The GUID the fake's vanilla items give [`writes::CHEST`].
+    const CHEST_GUID: enshwick::content::Guid =
+        enshwick::content::Guid::parse("6943053a-32c1-4718-ae22-e61427ddf54d");
+    /// The chest the transaction check places, as the fake knows it.
+    const CHEST: enshwick::ItemId = enshwick::ItemId::from_guid(CHEST_GUID);
+
+    /// The write checks started with a placed entity for the chest to go
+    /// above and the chest placeable, run once.
+    fn placing() -> Installed {
+        use enshwick::content::EngineFacts as _;
+        let host = every_part_but_inventories()
+            .item(CHEST, 1, 0)
+            .item_places(CHEST, enshwick::content::Guid([0x3a; 16]));
+        let transform = host
+            .hash(enshwick::test::facts::CURRENT_TRANSFORM.id())
+            .unwrap();
+        let host = host.placed(transform, enshwick::Entity(40), [50.0, 40.0, 50.0]);
+        let (loader, checks) = started(host);
+        loader.set_terrain(&[]);
+        checks.writes.run();
+        loader
+    }
+
+    /// The id of the transaction that placed the chest, the only one the
+    /// write checks commit.
+    fn placed(loader: &Installed) -> u64 {
+        let transactions = loader.transactions();
+        assert_eq!(transactions.len(), 1, "{:?}", loader.logs());
+        transactions[0].id
+    }
+
+    /// Runs the queued transactions and server steps until a line starting
+    /// with `start` is logged, for at most five seconds of the clock the
+    /// scheduler's waits count by.
+    fn drive_until(loader: &Installed, start: &str) -> bool {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !logged_starting(loader, start) && std::time::Instant::now() < deadline {
+            loader.run_transactions();
+            let _ran = loader.tick(Duration::from_millis(100));
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        logged_starting(loader, start)
+    }
+
+    #[test]
+    fn a_chest_that_stands_passes_the_transaction_check_and_is_undone() {
+        let loader = placing();
+        assert!(
+            drive_until(
+                &loader,
+                "PASS transaction status Applied, its entities name chest"
+            ),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(
+            drive_until(
+                &loader,
+                "PASS transaction undo: status Undone, the chest gone"
+            ),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_chest_whose_undo_is_refused_fails_the_undo_check() {
+        let loader = placing();
+        assert!(
+            drive_until(
+                &loader,
+                "PASS transaction status Applied, its entities name chest"
+            ),
+            "{:?}",
+            loader.logs()
+        );
+        loader.fail_transaction(placed(&loader), Status::REFUSED);
+        assert!(
+            drive_until(&loader, "FAIL transaction undo: status Some(UndoRefused("),
+            "{:?}",
+            loader.logs()
+        );
+    }
+
+    #[test]
+    fn a_chest_whose_placement_fails_fails_the_transaction_check() {
+        let loader = placing();
+        loader.fail_transaction(placed(&loader), Status::NOT_LOADED);
+        assert!(
+            drive_until(&loader, "FAIL transaction status Some(Failed("),
+            "{:?}",
+            loader.logs()
+        );
+        assert!(
+            !logged_starting(&loader, "PASS transaction undo")
+                && !logged_starting(&loader, "FAIL transaction undo"),
+            "a placement that never applied leaves nothing to undo: {:?}",
             loader.logs()
         );
     }

@@ -264,6 +264,7 @@ label_language = \"en\"
             target: Entity(700),
             item: None,
             position: None,
+            moved: None,
         };
         assert!(
             enshwick_personal_safes::access::filter(&stock),
@@ -681,6 +682,7 @@ label_language = \"en\"
             target: Entity(900),
             item: Some(safe),
             position: Some([20.0, 1.0, 20.0]),
+            moved: None,
         };
         assert!(
             !enshwick_personal_safes::access::filter(&open),

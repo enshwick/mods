@@ -138,9 +138,9 @@ pub(crate) struct Tools {
     /// The shapes of the zones that are on, read without a lock by the build
     /// filter.
     guarded: ArcSwap<Vec<zones::Shape>>,
-    /// The characters that may build in a zone, read without a lock by the
+    /// The players who may build in a zone, read without a lock by the
     /// build filter.
-    zone_builders: ArcSwap<Vec<Entity>>,
+    zone_builders: ArcSwap<zones::Builders>,
     /// The shapes of the zones that take permissions, with the bits each
     /// takes; `None` while the zones do not read or no world runs, when the
     /// limits stay as they are.
@@ -218,7 +218,7 @@ impl Mod for AdminTools {
             running: AtomicBool::new(false),
             zones,
             guarded: ArcSwap::from_pointee(Vec::new()),
-            zone_builders: ArcSwap::from_pointee(Vec::new()),
+            zone_builders: ArcSwap::from_pointee(zones::Builders::default()),
             limiting: ArcSwapOption::empty(),
             limited: Mutex::default(),
             limits_off: AtomicBool::new(false),

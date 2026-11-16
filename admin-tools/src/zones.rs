@@ -7,9 +7,9 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
-use enshwick::vetoes::BuildVerdict;
+use enshwick::vetoes::{BuildVerdict, Placement};
 use enshwick::world::{Player, PlayerPermissions};
-use enshwick::{Entity, Load, Off, Relock as _};
+use enshwick::{Entity, Load, Off, PlayerKey, Relock as _};
 use serde::{Deserialize, Serialize};
 
 use crate::players::{bad_args, character};
@@ -268,6 +268,30 @@ impl Zones {
     }
 }
 
+/// The players online whom the world's rule lets build in a zone, by
+/// account, which a new character of the same player keeps, and by
+/// character, for a placement whose account the loader cannot tell.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct Builders(Vec<(PlayerKey, Entity)>);
+
+impl Builders {
+    fn of<'a>(players: impl Iterator<Item = &'a Player>) -> Self {
+        Self(players.map(|p| (p.key, p.entity)).collect())
+    }
+
+    /// Whether the builder of `placement` is one of them.
+    fn admit(&self, placement: &Placement) -> bool {
+        self.admits(placement.player, placement.account)
+    }
+
+    // shortcut: without an account (a hosted game's own prediction, a character made in the current step) a new character is refused until the next tick (1 s); drop the fallback once the loader gives every placement its account.
+    fn admits(&self, character: Entity, account: Option<PlayerKey>) -> bool {
+        self.0
+            .iter()
+            .any(|&(key, entity)| account.map_or(entity == character, |account| key == account))
+    }
+}
+
 /// Declares the zone actions and the build filter that keeps them; without
 /// the filter on this build, neither.
 pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
@@ -277,7 +301,7 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
     let filter = load.on_build(move |placement| {
         let guarded = filtered.guarded.load();
         if !guarded.iter().any(|shape| shape.holds(placement.position))
-            || filtered.zone_builders.load().contains(&placement.player)
+            || filtered.zone_builders.load().admit(placement)
         {
             return BuildVerdict::Allow;
         }
@@ -659,8 +683,8 @@ impl Tools {
         self.limit_in_zones(&players);
     }
 
-    /// Hands the build filter the characters of the players online whose
-    /// user group the world's rule lets build in a zone.
+    /// Hands the build filter the accounts and characters of the players
+    /// online whose user group the world's rule lets build in a zone.
     pub(crate) fn find_zone_builders(&self) {
         let players = if self.guarded.load().is_empty() {
             Vec::new()
@@ -670,18 +694,17 @@ impl Tools {
         self.sort_zone_builders(&players);
     }
 
-    // shortcut: a respawned character is refused until the next tick (1 s): the filter runs off the game thread with only the entity, so it cannot look the player up; rebuild on a respawn event or take the account from the placement once the platform gives one.
     fn sort_zone_builders(&self, players: &[Player]) {
-        let builders: Vec<Entity> = if self.guarded.load().is_empty() {
-            Vec::new()
+        let builders = if self.guarded.load().is_empty() {
+            Builders::default()
         } else {
             let rule = self.settings.load().zone_rule();
             let limited = self.limited.relock();
-            players
-                .iter()
-                .filter(|player| admitted(rule, player, taken_from(&limited, player.key)))
-                .map(|player| player.entity)
-                .collect()
+            Builders::of(
+                players
+                    .iter()
+                    .filter(|player| admitted(rule, player, taken_from(&limited, player.key))),
+            )
         };
         if **self.zone_builders.load() != builders {
             self.zone_builders.store(Arc::new(builders));
@@ -692,7 +715,7 @@ impl Tools {
     /// platform ends every permission change with the world.
     pub(crate) fn drop_zones(&self) {
         self.guarded.store(Arc::new(Vec::new()));
-        self.zone_builders.store(Arc::new(Vec::new()));
+        self.zone_builders.store(Arc::new(Builders::default()));
         self.limiting.store(None);
         self.limited.relock().clear();
         self.limits_off.store(false, Ordering::Relaxed);
@@ -718,6 +741,21 @@ mod tests {
         z: -20.0,
         radius: 5.0,
     };
+
+    #[test]
+    fn a_builder_is_admitted_by_account_and_without_one_by_character() {
+        let builders = Builders(vec![(PlayerKey::new(7), Entity(10))]);
+        assert!(
+            builders.admits(Entity(40), Some(PlayerKey::new(7))),
+            "respawned"
+        );
+        assert!(
+            !builders.admits(Entity(10), Some(PlayerKey::new(8))),
+            "another account"
+        );
+        assert!(builders.admits(Entity(10), None), "listed character");
+        assert!(!builders.admits(Entity(40), None), "unknown character");
+    }
 
     #[test]
     fn a_circle_holds_every_height_within_its_radius_and_its_edge() {

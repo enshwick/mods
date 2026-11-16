@@ -1,7 +1,7 @@
 //! The build filter of protected zones, which runs on every frame a player
 //! aims to build: one check through the fake loader with no zone, and with
-//! the most zones a world keeps, refused in the first and allowed after
-//! all of them.
+//! the most zones a world keeps, refused in the first, allowed after all of
+//! them, and allowed inside one for a zone builder named by account.
 
 use std::hint::black_box;
 
@@ -26,6 +26,7 @@ fn check(at: [f64; 3]) -> BuildCheck {
         item: ItemId::new(7),
         position: at,
         reason: core::ptr::null_mut(),
+        account: enshwick::PlayerKey::default(),
     }
 }
 
@@ -49,6 +50,15 @@ fn filter(c: &mut Criterion) {
     assert!(loader.build(&open).is_ok());
     c.bench_function("build check, 64 zones, allowed", |b| {
         b.iter(|| loader.build(black_box(&open)));
+    });
+    let builder = BuildCheck {
+        character: Entity(10),
+        account: enshwick::PlayerKey::new(1),
+        ..inside
+    };
+    assert!(loader.build(&builder).is_ok());
+    c.bench_function("build check, 64 zones, zone builder by account", |b| {
+        b.iter(|| loader.build(black_box(&builder)));
     });
 }
 

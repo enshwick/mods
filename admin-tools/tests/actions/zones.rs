@@ -24,6 +24,7 @@ fn build(
         item: ItemId::new(7),
         position: at,
         reason: core::ptr::null_mut(),
+        account: PlayerKey::default(),
     })
 }
 
@@ -231,23 +232,13 @@ fn a_zone_set_to_stop_only_chests_lets_bob_build_and_takes_only_chests() {
 }
 
 #[test]
-fn a_respawned_bob_is_refused_and_a_respawned_zone_builder_builds_from_the_next_pass() {
+fn a_respawned_zone_builder_builds_at_once_and_a_respawned_bob_is_refused() {
     let dir = scratch("zone-respawn");
     let loader = server("", &dir);
     assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
     assert!(loader.respawn(ann().key, Entity(40)));
     assert!(loader.respawn(BOB_KEY, Entity(41)));
-    // The filter runs off the game thread and cannot look a new character up.
-    assert_eq!(
-        build(&loader, 40, [42.0, 12.0, -3.0]),
-        Err(Some(REFUSED.to_owned()))
-    );
-    assert!(tick_until(&loader, || build(
-        &loader,
-        40,
-        [42.0, 12.0, -3.0]
-    )
-    .is_ok()));
+    assert_eq!(build(&loader, 40, [42.0, 12.0, -3.0]), Ok(()));
     assert_eq!(
         build(&loader, 41, [42.0, 12.0, -3.0]),
         Err(Some(REFUSED.to_owned()))

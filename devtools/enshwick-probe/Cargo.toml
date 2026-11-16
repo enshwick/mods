@@ -25,6 +25,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 enshwick = { workspace = true, features = ["unstable"] }
 enshwick-luau.workspace = true
+rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true, features = ["parse", "serde"] }
 

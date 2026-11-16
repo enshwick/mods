@@ -325,8 +325,8 @@ fn place(
             (texts::value::ITEM, &shown),
         ],
     );
-    let (by, whereabouts) = (caller(request), whereabouts.to_owned());
-    crate::chest::once_placed(tools, transaction, move |stands| {
+    let (by, told) = (caller(request), whereabouts.to_owned());
+    let waited = crate::chest::once_placed(tools, transaction, move |stands| {
         if stands.is_some() {
             late.tools
                 .props
@@ -336,14 +336,14 @@ fn place(
             late.report(
                 false,
                 texts::REPLY_PROP_LOST,
-                &[
-                    (texts::value::NAME, &whereabouts),
-                    (texts::value::ITEM, &shown),
-                ],
+                &[(texts::value::NAME, &told), (texts::value::ITEM, &shown)],
             );
         }
     });
-    Outcome::done(reply)
+    match waited {
+        Ok(()) => Outcome::done(reply),
+        Err(why) => Tools::failed(request, whereabouts, &why),
+    }
 }
 
 /// Takes back the last prop the caller placed, as the game undoes a world

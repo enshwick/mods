@@ -31,9 +31,11 @@ pub(super) const COUNTED: &str = "last_transform";
 pub(super) const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
 /// Metres above the first entity where the chest stands, in the air.
 const CHEST_LIFT: f64 = 6.0;
-/// How often the probe looks at the transaction again.
+/// How long the chest's placement gets to stand.
+const PLACING: Duration = Duration::from_secs(10);
+/// How often the probe looks at an undo again.
 const LOOK: Duration = Duration::from_millis(250);
-/// How many looks a transaction or its undo may take to settle.
+/// How many looks an undo may take to settle.
 const LOOKS: u32 = 40;
 
 /// Where in the code section the first run of [`PATCH_LEN`] padding bytes
@@ -119,30 +121,6 @@ fn server_world() {
     }
 }
 
-/// What a look at the chest's placement finds.
-#[derive(Debug, PartialEq, Eq)]
-enum Placement {
-    /// The game has not placed it yet.
-    Wait,
-    /// It stands in the world, as this entity.
-    Stands(Entity),
-    /// It will not stand: the transaction ended otherwise, or took too long.
-    Lost,
-}
-
-/// What look number `looks` at a transaction at `status`, listing `chest`,
-/// finds. A prop listed before its transaction is applied is not in the
-/// world yet.
-fn placement(status: Option<&TransactionStatus>, chest: Option<Entity>, looks: u32) -> Placement {
-    match (status, chest) {
-        (Some(TransactionStatus::Applied), Some(chest)) => Placement::Stands(chest),
-        (Some(TransactionStatus::Pending | TransactionStatus::Applied), _) if looks < LOOKS => {
-            Placement::Wait
-        }
-        _ => Placement::Lost,
-    }
-}
-
 /// Whether an undo at `status` on look number `looks` passed, failed, or
 /// is still running (`None`).
 fn undone(status: Option<&TransactionStatus>, looks: u32) -> Option<bool> {
@@ -211,44 +189,43 @@ impl Writer {
             }
         };
         pass(&format!("transaction commit: {}", id.get()));
-        let mut looks = 0;
-        self.scheduler.every(LOOK, move || {
-            looks += 1;
-            let status = self.world.transaction_status(id);
-            let chest = self.world.transaction_entities(id).first().copied();
-            match placement(status.as_ref(), chest, looks) {
-                Placement::Wait => return ControlFlow::Continue(()),
-                Placement::Stands(chest) => {
-                    let found = self.world.position(chest);
-                    if stands_at(found, spot) {
-                        pass(&format!(
-                            "transaction status Applied, its entities name chest {} where it was placed",
-                            chest.0
-                        ));
-                    } else {
-                        fail(&format!(
-                            "transaction entities name {} at {found:?}, not the chest placed at {spot:?}",
-                            chest.0
-                        ));
-                    }
-                    if let Some(inventories) = self.inventories {
-                        self.give_and_take(inventories, id, chest);
-                    } else {
-                        off("inventories");
-                        self.undo(id, chest);
-                    }
+        let waited = self.world.when_settled(id, PLACING, move |settled| {
+            let Some(chest) = settled.standing() else {
+                let (status, chest) = (settled.status, settled.props.first().copied());
+                fail(&format!(
+                    "transaction status {status:?}, its entities {chest:?}, once settled or after {PLACING:?}"
+                ));
+                if let Some(chest) = chest.filter(|_| may_stand(status.as_ref())) {
+                    self.undo(id, chest);
                 }
-                Placement::Lost => {
-                    fail(&format!(
-                        "transaction status {status:?}, its entities {chest:?}, after {looks} looks"
-                    ));
-                    if let Some(chest) = chest.filter(|_| may_stand(status.as_ref())) {
-                        self.undo(id, chest);
-                    }
-                }
+                return;
+            };
+            let found = self.world.position(chest);
+            if stands_at(found, spot) {
+                let status = settled.status.map_or_else(String::new, |s| format!("{s:?}"));
+                pass(&format!(
+                    "transaction status {status}, its entities name chest {} where it was placed",
+                    chest.0
+                ));
+            } else {
+                fail(&format!(
+                    "transaction entities name {} at {found:?}, not the chest placed at {spot:?}",
+                    chest.0
+                ));
             }
-            ControlFlow::Break(())
+            if let Some(inventories) = self.inventories {
+                self.give_and_take(inventories, id, chest);
+            } else {
+                off("inventories");
+                self.undo(id, chest);
+            }
         });
+        if let Err(why) = waited {
+            fail(&format!("transaction wait: {why}"));
+            if let Err(why) = self.world.undo(id) {
+                fail(&format!("transaction undo after a refused wait: {why}"));
+            }
+        }
     }
 
     /// Gives one item to `chest` and takes it back, each as an inventory
@@ -382,38 +359,6 @@ impl WriteChecks {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_chest_stands_once_applied_and_listed() {
-        let chest = Entity(7);
-        assert_eq!(
-            placement(Some(&TransactionStatus::Applied), Some(chest), 1),
-            Placement::Stands(chest)
-        );
-    }
-
-    #[test]
-    fn a_pending_or_unlisted_chest_waits_until_the_last_look() {
-        assert_eq!(
-            placement(Some(&TransactionStatus::Pending), None, 1),
-            Placement::Wait
-        );
-        assert_eq!(
-            placement(Some(&TransactionStatus::Applied), None, LOOKS - 1),
-            Placement::Wait
-        );
-        assert_eq!(
-            placement(Some(&TransactionStatus::Pending), None, LOOKS),
-            Placement::Lost
-        );
-    }
-
-    #[test]
-    fn a_failed_or_forgotten_transaction_is_lost_at_once() {
-        let failed = TransactionStatus::Failed(enshwick::WorldError::NotLoaded);
-        assert_eq!(placement(Some(&failed), None, 1), Placement::Lost);
-        assert_eq!(placement(None, None, 1), Placement::Lost);
-    }
 
     #[test]
     fn an_undo_passes_once_undone_and_fails_when_it_stalls_or_is_refused() {

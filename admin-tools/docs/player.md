@@ -213,15 +213,18 @@ item with a typed command.
 
 In a typed command:
 
-- By its debug name, such as `Tool_Glider_T1`, in any case.
+- By its debug name, such as `Tool_Glider_T1`, in any case; an exact match
+  comes first.
 - By its GUID, or by a mod's content id, such as `you.lockers:locker`.
 - In a game a player hosts, also by the name the game shows, such as
   `Glider`, in any language the game offers. A dedicated server does not
   have these names.
 - Any knowledge by its number for `learn`.
 
-An unknown item or recipe name lists the names near it. `give`, `chest` and `chestat` hand
-over as many stacks as the items need, and you read how many did not fit.
+An unknown item or recipe name lists the names near it. A debug name that
+several items share lists up to eight of their GUIDs. `give`, `chest` and
+`chestat` hand over as many stacks as the items need, and you read how many
+did not fit.
 
 Items from `copy` start new, without wear or level, and the look and
 currency slots are not copied. A chest outside every base is not saved.
@@ -356,9 +359,11 @@ A zone refuses placing things. It does not refuse digging or opening chests.
 
 Type `/adm spawn <player> Enemy_Wildbeast_Wolf 3` to spawn three wolves
 around a player. Name the creature by its GUID, a mod's template id or the
-game's template name, in any case. An unknown name lists the names near it.
-A name that several templates share lists their GUIDs: type one of them
-instead.
+game's template name.
+
+The game's template name matches in any case, and an exact match comes
+first. A name that several templates share lists up to eight of their GUIDs:
+type one of them instead. An unknown name lists the names near it.
 
 The window lists the game's templates to search, as it lists items.
 

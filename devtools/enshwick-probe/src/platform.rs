@@ -735,17 +735,11 @@ mod tests {
         transactions[0].id
     }
 
-    /// Runs the queued transactions and server steps until a line starting
-    /// with `start` is logged, for at most five seconds of the clock the
-    /// scheduler's waits count by.
+    /// Drives the fake server until a line starting with `start` is logged,
+    /// for at most twenty seconds of its clock: twice the longest an undo's
+    /// looks may take.
     fn drive_until(loader: &Installed, start: &str) -> bool {
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while !logged_starting(loader, start) && std::time::Instant::now() < deadline {
-            loader.run_transactions();
-            let _ran = loader.tick(Duration::from_millis(100));
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        logged_starting(loader, start)
+        loader.drive_until(Duration::from_secs(20), || logged_starting(loader, start))
     }
 
     #[test]

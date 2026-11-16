@@ -6,10 +6,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use core::time::Duration;
 
+use enshwick::actions::{Actions, Window};
 use enshwick::content::props::PropId;
 use enshwick::content::templates::TemplateId;
 use enshwick::effects::{Effects, Spawn};
 use enshwick::events::{PlayerJoined, WorldLoaded};
+use enshwick::i18n::Texts;
 use enshwick::inventory::Inventories;
 use enshwick::knowledge::{Grant, Knowledge};
 use enshwick::schedule::Scheduler;
@@ -21,6 +23,9 @@ use enshwick::{Entity, ItemId, Load, Off, PlayerKey, RecipeId};
 /// The features' names on the Mods screen.
 pub(crate) const GIFTS: &str = "gifts at join";
 pub(crate) const ENEMY_AT_JOIN: &str = "enemy at join";
+pub(crate) const WELCOME_AT_JOIN: &str = "welcome window at join";
+/// The welcome window's id.
+const WELCOME: &str = "welcome";
 /// How long after the first player joins the enemy comes.
 pub(crate) const ENEMY_AFTER: Duration = Duration::from_secs(30);
 /// How far in front of the player it stands, in metres.
@@ -175,10 +180,31 @@ fn facing_back([dx, dz]: [f64; 2]) -> f32 {
     (-dx).atan2(-dz) as f32
 }
 
-/// Hands out the gifts at each join, and sends the enemy `after` the first
-/// player of each hosted game joins, each as a feature of its own; they
-/// hear joins where a server runs.
-pub(crate) fn link(load: &mut Load<'_>, gifts: Gifts, after: Duration) {
+/// Shows `player` the welcome window, which names them; the loader carries
+/// it once their client said hello. A player the world cannot name, gone
+/// or not listed yet, gets none.
+fn show_welcome(actions: &Actions, world: World, player: PlayerKey) {
+    let Some(found) = world.player_by_key(player) else {
+        enshwick::warn!("no welcome window for {player:?}: not among the players");
+        return;
+    };
+    let name = found.name;
+    let window = Window::new(WELCOME, crate::texts::WELCOME_TITLE)
+        .text(crate::texts::WELCOME_LINE, &[("name", &name)]);
+    if let Err(why) = actions.show(window, &[player]) {
+        enshwick::warn!("no welcome window for {player:?}: {why}");
+    }
+}
+
+/// Hands out the gifts at each join, shows each joining player the welcome
+/// window in `texts`, and sends the enemy `after` the first player of each
+/// hosted game joins, each as a feature of its own; they hear joins where
+/// a server runs.
+pub(crate) fn link(load: &mut Load<'_>, texts: Texts, gifts: Gifts, after: Duration) {
+    let _welcome = load.feature(WELCOME_AT_JOIN, |load| {
+        let (actions, world) = (load.actions(texts)?, load.world()?);
+        load.on::<PlayerJoined>(move |joined| show_welcome(&actions, world, joined.key))
+    });
     let _gifts = load.feature(GIFTS, |load| {
         let (inventories, knowledge) = (load.inventories()?, load.knowledge());
         load.on::<PlayerJoined>(move |joined| {
@@ -235,7 +261,8 @@ mod tests {
     impl Mod for Joins {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
             let gifts = Gifts::new(Some(WOLF), Some(prop(1)), Some(prop(3)));
-            link(load, gifts, Duration::ZERO);
+            let texts = load.texts()?;
+            link(load, texts, gifts, Duration::ZERO);
             Ok(Self)
         }
     }
@@ -409,6 +436,108 @@ mod tests {
             taught,
             [Entity(6), ann, ann, ann].map(|who| (Some(who), recipe)),
             "the chest's recipe at each join"
+        );
+    }
+
+    /// Ann, whose client holds back its hello, as the world lists her.
+    fn ann_info() -> PlayerInfo {
+        let mut info = PlayerInfo {
+            header: Header::of::<PlayerInfo>(),
+            slot: 0,
+            entity: Entity(5),
+            key: PlayerKey::new(7),
+            permissions: 0,
+            name_len: 3,
+            name: [0; PlayerInfo::NAME_MAX],
+        };
+        info.name[..3].copy_from_slice(b"Ann");
+        info
+    }
+
+    /// The mod started with the welcome on, where the world lists
+    /// `listed` and Ann's client has not said hello; Ann has joined.
+    fn ann_joined(listed: Option<PlayerInfo>) -> Installed {
+        let ann = ann_info();
+        let host = FakeHost::new().world().inventory_requests();
+        let host = match listed {
+            Some(info) => host.player(info),
+            None => host,
+        };
+        let loader = host.without_hello(ann.key).install();
+        // SAFETY: the exports of this module's `declare_mod!(Joins)`.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        assert!(
+            loader
+                .features()
+                .iter()
+                .any(|(name, off)| name == WELCOME_AT_JOIN && off.is_none()),
+            "{:?}",
+            loader.features()
+        );
+        join(&loader, ann.entity, ann.key);
+        loader
+    }
+
+    /// The warnings the mod logged.
+    fn warnings(loader: &Installed) -> Vec<String> {
+        loader
+            .logs()
+            .into_iter()
+            .filter(|(level, _)| *level == enshwick::abi::Level::WARN)
+            .map(|(_, line)| line)
+            .collect()
+    }
+
+    #[test]
+    fn a_joining_player_gets_the_welcome_window_once_their_client_says_hello() {
+        use enshwick::actions::window::{ItemView, decode};
+
+        let info = ann_info();
+        let loader = ann_joined(Some(info));
+        assert!(
+            loader.carried_windows(&info, 0).is_empty(),
+            "the window waits for the client's hello"
+        );
+        loader.say_hello(info.key);
+        let carried = loader.carried_windows(&info, 0);
+        let [(id, text)] = &carried[..] else {
+            panic!("{carried:?}");
+        };
+        assert_eq!(id, WELCOME);
+        let view = decode(text).unwrap();
+        assert_eq!(view.title, "Welcome");
+        assert_eq!(
+            view.items,
+            [ItemView::Text(
+                "Welcome, Ann. Test Content runs on this server.".into()
+            )]
+        );
+        assert_eq!(warnings(&loader), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_game_that_never_says_hello_gets_no_welcome_window_and_no_warning() {
+        let info = ann_info();
+        let loader = ann_joined(Some(info));
+        assert!(!loader.drive_until(Duration::from_secs(5), || {
+            !loader.carried_windows(&info, 0).is_empty()
+        }));
+        assert_eq!(warnings(&loader), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_player_the_world_cannot_name_gets_no_welcome_window() {
+        let loader = ann_joined(None);
+        loader.say_hello(ann_info().key);
+        assert!(loader.carried_windows(&ann_info(), 0).is_empty());
+        assert!(
+            warnings(&loader)
+                .iter()
+                .any(|line| line.contains("not among the players")),
+            "{:?}",
+            loader.logs()
         );
     }
 

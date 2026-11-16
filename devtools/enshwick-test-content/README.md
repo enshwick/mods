@@ -25,6 +25,9 @@ Where a server runs, on a dedicated server or in a game a client hosts:
 
 - at each join, the player gets one Test Flame Altar and one Test Chest, and
   learns the Test Chest's recipe;
+- at each join, the player gets a window that welcomes them by name, with a
+  Close. A window shown before the player's game says hello to the server
+  opens when it does, and a game without Enshwick gets none;
 - in each hosted game, 30 seconds after the first player joins, the wolf
   spawns 10 metres in front of them, facing them, at the level its template
   holds. It stays out of the world's save. If that player left, the next

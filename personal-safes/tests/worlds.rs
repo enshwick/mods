@@ -270,11 +270,11 @@ label_language = \"en\"
             enshwick_personal_safes::access::filter(&stock),
             "not seen yet"
         );
-        // The sweep runs every 2 s of wall time, on the next tick after.
-        std::thread::sleep(Duration::from_millis(2100));
-        let _ran = loader.tick(Duration::from_millis(100));
+        // The sweep runs every 2 s of the scheduler's clock.
         assert!(
-            !enshwick_personal_safes::access::filter(&stock),
+            loader.drive_until(Duration::from_secs(3), || {
+                !enshwick_personal_safes::access::filter(&stock)
+            }),
             "the sweep found the Safe: {:?}",
             loader.logs()
         );
@@ -695,11 +695,15 @@ label_language = \"en\"
             position: None,
             ..open
         };
-        // The sweep runs every 2 s of wall time, on the next tick after.
-        std::thread::sleep(Duration::from_millis(2100));
-        let _ran = loader.tick(Duration::from_millis(100));
         assert!(
-            !enshwick_personal_safes::access::filter(&stock),
+            enshwick_personal_safes::access::filter(&stock),
+            "lent until the sweep has seen the Safe"
+        );
+        // The sweep runs every 2 s of the scheduler's clock.
+        assert!(
+            loader.drive_until(Duration::from_secs(3), || {
+                !enshwick_personal_safes::access::filter(&stock)
+            }),
             "lends no stock either"
         );
         assert!(loader.raise::<WorldSaved>(&()) >= 1);

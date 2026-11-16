@@ -6,8 +6,9 @@
 //! reach the starting area wherever it starts; an enemy copied from a wolf,
 //! sent to the first player who joins; a Flame Altar kind with a wider zone,
 //! held at level 1; and a chest of its own. Each joining player gets the
-//! altar and the chest, and learns the chest's recipe. Each part turns off
-//! alone, with its reason on the Mods screen.
+//! altar and the chest, learns the chest's recipe and sees a window that
+//! welcomes them by name. Each part turns off alone, with its reason on the
+//! Mods screen.
 
 mod join;
 
@@ -221,6 +222,7 @@ impl Mod for TestContent {
         let chest = load.feature(CHEST_PART, chest);
         join::link(
             load,
+            texts,
             join::Gifts::new(enemy, altar, chest),
             join::ENEMY_AFTER,
         );

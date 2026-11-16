@@ -8,8 +8,8 @@ use enshwick::abi::{
 };
 
 use super::game::{
-    BACKPACK, CHEST, GLIDER, LOOKS, WOOD, ann, bob, file_until, run, said, scratch, server,
-    tick_until,
+    BACKPACK, CHEST, DRIVE, GLIDER, LOOKS, WOOD, ann, bob, file_until, near, run, said, scratch,
+    server,
 };
 
 /// The gives the mod submitted so far: each one's inventory, item and count.
@@ -41,14 +41,9 @@ fn left(remaining: u32) -> InventoryOpResult {
 
 /// Whether Ann was told a line that starts with `start`.
 fn ann_hears(loader: &enshwick::test::Installed, start: &str) -> bool {
-    tick_until(loader, || {
+    loader.drive_until(DRIVE, || {
         said(loader, 1).iter().any(|line| line.starts_with(start))
     })
-}
-
-/// Whether two positions are the same to a millimetre.
-fn near(a: [f64; 3], b: [f64; 3]) -> bool {
-    a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-3)
 }
 
 #[test]
@@ -318,10 +313,11 @@ fn a_chest_the_game_never_places_is_undone_and_gets_no_items() {
             .iter()
             .any(|line| line.starts_with("No chest went up at 10, 20, 30"))
     };
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    while !lost(&loader) && std::time::Instant::now() < deadline {
+    for _ in 0..20 {
+        if lost(&loader) {
+            break;
+        }
         let _ran = loader.tick(std::time::Duration::from_secs(1));
-        std::thread::sleep(std::time::Duration::from_millis(50));
     }
     assert!(lost(&loader), "{:?}", said(&loader, 1));
     assert!(gives(&loader).is_empty());
@@ -426,11 +422,14 @@ fn a_chest_goes_up_at_a_position_and_then_gets_its_items() {
         "1A chest with Resource_Wood × 250 goes up at 10, 20, 30."
     );
     let chest = ItemId::from_guid(CHEST);
-    assert!(tick_until(&loader, || loader.props().iter().any(
-        |(_, item, at)| *item == chest && near(*at, [10.0, 20.0, 30.0])
-    )));
+    assert!(loader.drive_until(DRIVE, || {
+        loader
+            .props()
+            .iter()
+            .any(|(_, item, at)| *item == chest && near(*at, [10.0, 20.0, 30.0]))
+    }));
     let (entity, _, _) = loader.props()[0];
-    assert!(tick_until(&loader, || gives(&loader)
+    assert!(loader.drive_until(DRIVE, || gives(&loader)
         == [(u64::from(entity.0), ItemId::from_guid(WOOD), 250)]));
 }
 
@@ -447,10 +446,12 @@ fn a_chest_at_a_player_stands_beside_them_and_bob_may_not_place_one() {
         ),
         "1A chest with Tool_Glider_T1 × 1 goes up at Bob."
     );
-    assert!(tick_until(&loader, || loader
-        .props()
-        .iter()
-        .any(|(_, _, at)| near(*at, [2.0, 20.0, 7.0]))));
+    assert!(loader.drive_until(DRIVE, || {
+        loader
+            .props()
+            .iter()
+            .any(|(_, _, at)| near(*at, [2.0, 20.0, 7.0]))
+    }));
     assert!(
         run(
             &loader,

@@ -6,7 +6,10 @@ use enshwick::ItemId;
 use enshwick::abi::SpawnRequest;
 use enshwick::test::CREATURE;
 
-use super::game::{CHEST, ann, bob, run, scratch, server, tick_until};
+use super::game::{CHEST, DRIVE, ann, bob, near, run, scratch, server};
+
+/// The name the fake's template collection gives [`CREATURE`].
+const WOLF: &str = "Enemy_Wolf";
 
 /// The spawns asked for so far.
 fn spawns(loader: &enshwick::test::Installed) -> Vec<SpawnRequest> {
@@ -28,7 +31,7 @@ fn spawn_puts_each_creature_on_a_ring_around_the_player_out_of_the_save() {
             "spawn",
             &format!("p0000000000000002\te{CREATURE}\tn3\tn0\tn0\tb0")
         ),
-        format!("1{CREATURE} × 3 appear at Bob.")
+        format!("1{WOLF} × 3 appear at Bob.")
     );
     let asked = spawns(&loader);
     assert_eq!(asked.len(), 3);
@@ -50,17 +53,18 @@ fn a_typed_spawn_takes_a_level_a_lifetime_and_a_keep_or_leaves_them_out() {
     let dir = scratch("spawn-typed");
     let loader = server("", &dir);
     assert_eq!(
-        enshwick::console::run(&format!("adm spawnat 1 2 3 {CREATURE}")),
-        Ok(format!("{CREATURE} × 1 appear at 1, 2, 3."))
+        enshwick::console::run(&format!("adm spawnat 1 2 3 {WOLF}")),
+        Ok(format!("{WOLF} × 1 appear at 1, 2, 3."))
     );
     let [one] = spawns(&loader)[..] else {
         panic!("one spawn");
     };
     assert_eq!(one.position, [1.0, 2.0, 3.0], "one stands on the spot");
+    assert_eq!(one.template, CREATURE, "named by its template's name");
     assert!(
         enshwick::console::run(&format!("adm spawnat 1 2 3 {CREATURE} 1 12 5 on"))
             .unwrap()
-            .starts_with(&format!("{CREATURE} × 1"))
+            .starts_with(&format!("{WOLF} × 1"))
     );
     let kept = spawns(&loader)[1];
     assert_eq!(kept.level, 12);
@@ -130,18 +134,18 @@ fn a_prop_goes_up_beside_the_player_and_the_last_one_is_taken_back_once() {
     );
     assert_eq!(reply, "1Prop_Storage_32_T2_Chest_Wood goes up at Bob.");
     let chest = ItemId::from_guid(CHEST);
-    assert!(tick_until(&loader, || loader.props().iter().any(
-        |(_, item, at)| *item == chest
-            && at
-                .iter()
-                .zip([2.0, 20.0, 7.0])
-                .all(|(a, b)| (a - b).abs() < 1e-3)
-    )));
-    // The mod remembers the prop at a look after the game placed it; a
-    // take-back before that finds none and changes nothing.
-    assert!(tick_until(&loader, || run(&loader, &ann(), "unprop", "")
-        == "1Your last prop, Prop_Storage_32_T2_Chest_Wood, will be taken back."));
-    assert!(tick_until(&loader, || loader.props().is_empty()));
+    assert!(loader.drive_until(DRIVE, || {
+        loader
+            .props()
+            .iter()
+            .any(|(_, item, at)| *item == chest && near(*at, [2.0, 20.0, 7.0]))
+    }));
+    assert_eq!(
+        run(&loader, &ann(), "unprop", ""),
+        "1Your last prop, Prop_Storage_32_T2_Chest_Wood, will be taken back.",
+        "remembered in the step that placed it"
+    );
+    assert!(loader.drive_until(DRIVE, || loader.props().is_empty()));
     assert_eq!(
         run(&loader, &ann(), "unprop", ""),
         "0You placed no prop to take back."

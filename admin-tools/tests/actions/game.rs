@@ -430,20 +430,34 @@ pub(crate) fn ends(loader: &Installed) {
     assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
 }
 
-/// Ticks the fake server a second at a time until `done` holds or ten
-/// seconds of real time pass; whether it held.
-pub(crate) fn tick_until(loader: &Installed, done: impl Fn() -> bool) -> bool {
+/// How much of the fake's time a test drives the server for a change to
+/// show: well past the mod's longest wait on the server's clock, a
+/// restart's one-minute warning.
+pub(crate) const DRIVE: Duration = Duration::from_secs(300);
+
+/// How much of the fake's time [`real_until`] drives between two looks at
+/// the real clock.
+const REAL_SLICE: Duration = Duration::from_secs(1);
+
+/// Steps the fake server until `done` holds, for at most ten seconds of
+/// real time; whether it held. For what a thread runs beside the server's
+/// steps, such as a backup's copy or a console's socket, whose real time
+/// the fake's clock does not count; every other wait is
+/// [`Installed::drive_until`]'s.
+pub(crate) fn real_until(loader: &Installed, done: impl Fn() -> bool) -> bool {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
-        if done() {
+        if loader.drive_until(REAL_SLICE, &done) {
             return true;
         }
-        let _ran = loader.tick(Duration::from_secs(1));
-        // The game writes committed transactions between its steps.
-        loader.run_transactions();
         std::thread::sleep(Duration::from_millis(10));
     }
     done()
+}
+
+/// Whether two positions are the same to a millimetre.
+pub(crate) fn near(a: [f64; 3], b: [f64; 3]) -> bool {
+    a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-3)
 }
 
 pub(crate) fn said(loader: &Installed, key: u64) -> Vec<String> {

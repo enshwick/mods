@@ -6,6 +6,12 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Changed
+
+- A chest or prop that an action places is filled or kept once it stands
+  in the world, a step after the game places it; one that does not stand
+  within 10 seconds is taken back and reported, as before.
+
 ## [0.2.0] - 2026-11-15
 
 ### Changed

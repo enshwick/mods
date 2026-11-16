@@ -311,8 +311,8 @@ fn a_chest_the_game_never_places_is_undone_and_gets_no_items() {
         )
         .starts_with('1')
     );
-    // No `run_transactions`: the placement stays queued for every look,
-    // which the scheduler times by the clock: ten seconds.
+    // No `run_transactions`: the placement stays queued until the wait's
+    // bound, which the scheduler times by the clock: ten seconds.
     let lost = |loader: &enshwick::test::Installed| {
         said(loader, 1)
             .iter()

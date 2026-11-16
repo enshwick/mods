@@ -1,14 +1,13 @@
 //! Chests of items: a wooden chest placed beside a player or at a position,
 //! then filled with items.
 
-use core::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Duration;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::content::{Guid, vanilla};
 use enshwick::inventory::{Batch, Op};
-use enshwick::world::{TransactionId, TransactionStatus, WorldTransform};
+use enshwick::world::{TransactionId, World, WorldTransform};
 use enshwick::{Entity, ItemId, Off, WorldError};
 
 use crate::inventory::report;
@@ -22,12 +21,6 @@ const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
 /// How far beside a player a chest stands, in metres along x, so it does
 /// not stand in them.
 const BESIDE: f64 = 2.0;
-
-/// How often a placed prop is looked for while the game places it.
-const LOOK: Duration = Duration::from_millis(250);
-
-/// How many looks a prop gets to be placed before the wait gives up.
-const LOOKS: u32 = 40;
 
 /// Declares the chest actions.
 pub(crate) fn add(tools: &Arc<Tools>) -> Result<(), Off> {
@@ -143,45 +136,29 @@ fn place(
             (texts::value::ITEM, &shown),
         ],
     );
-    fill(late, placed, (item, count), shown, whereabouts.to_owned());
+    fill(late, placed, (item, count), shown, whereabouts.to_owned())
+        .map_err(|why| Tools::failed(request, whereabouts, &why))?;
     Ok(Outcome::done(reply))
 }
 
-/// What a look at a chest's placement finds.
-#[derive(Debug, PartialEq, Eq)]
-enum Look {
-    /// The game has not placed it yet.
-    Wait,
-    /// It stands in the world, as this entity.
-    Placed(Entity),
-    /// It will not stand: the placement ended otherwise, or took too long.
-    Lost,
-}
+/// How long a placement gets to stand before the wait gives up on it.
+const PLACING: Duration = Duration::from_secs(10);
 
-/// What the look number `looks` finds of a placement at `status` that lists
-/// `chest`. A chest listed before its transaction is applied is not in the
-/// world yet, so a give to it would roll back.
-fn look(status: Option<&TransactionStatus>, chest: Option<Entity>, looks: u32) -> Look {
-    match (status, chest) {
-        (Some(TransactionStatus::Applied), Some(chest)) => Look::Placed(chest),
-        (Some(TransactionStatus::Pending | TransactionStatus::Applied), _) if looks < LOOKS => {
-            Look::Wait
-        }
-        _ => Look::Lost,
-    }
-}
-
-/// Looks for the chest the transaction `placed` puts in the world and
+/// Waits for the chest the transaction `placed` puts in the world and
 /// gives it `count` items `item`, shown as `shown`, in as many stacks as
 /// fit. A chest that does not get placed is told to the caller, and its
 /// placement undone, so no empty chest follows.
+///
+/// # Errors
+///
+/// As [`once_placed`].
 fn fill(
     late: Arc<Late>,
     placed: TransactionId,
     (item, count): (ItemId, u32),
     shown: String,
     whereabouts: String,
-) {
+) -> Result<(), WorldError> {
     let tools = Arc::clone(&late.tools);
     once_placed(&tools, placed, move |chest| match chest {
         Some(chest) => {
@@ -207,74 +184,38 @@ fn fill(
                 (texts::value::ITEM, &shown),
             ],
         ),
-    });
+    })
 }
 
-/// Looks for the prop the transaction `placed` puts in the world and hands
-/// it to `then` once the game has placed it, or `None` once it will not
-/// stand, after undoing the placement so no stray prop follows.
+/// Waits for the prop the transaction `placed` puts in the world and hands
+/// it to `then` once it stands, or `None` once it will not, after undoing
+/// the placement so no stray prop follows.
+///
+/// # Errors
+///
+/// When the world refuses the wait: the placement is undone and `then`
+/// never runs, so the action can refuse instead of replying done.
 pub(crate) fn once_placed(
     tools: &Tools,
     placed: TransactionId,
     then: impl FnOnce(Option<Entity>) + Send + 'static,
-) {
+) -> Result<(), WorldError> {
     let world = tools.world;
-    let mut then = Some(then);
-    let mut looks = 0;
-    tools.scheduler.every(LOOK, move || {
-        let status = world.transaction_status(placed);
-        let prop = world.transaction_entities(placed).first().copied();
-        looks += 1;
-        let stands = match look(status.as_ref(), prop, looks) {
-            Look::Wait => return ControlFlow::Continue(()),
-            Look::Placed(prop) => Some(prop),
-            Look::Lost => {
-                enshwick::warn!("prop not placed: {status:?}");
-                if let Err(why) = world.undo(placed) {
-                    enshwick::debug!("prop placement not undone: {why}");
-                }
-                None
+    world
+        .when_settled(placed, PLACING, move |settled| {
+            let stands = settled.standing();
+            if stands.is_none() {
+                lost(world, placed, &settled.status);
             }
-        };
-        if let Some(then) = then.take() {
             then(stands);
-        }
-        ControlFlow::Break(())
-    });
+        })
+        .inspect_err(|why| lost(world, placed, why))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_chest_listed_while_its_placement_is_pending_waits_for_it_to_be_applied() {
-        let chest = Some(Entity(7));
-        assert_eq!(
-            look(Some(&TransactionStatus::Pending), chest, 1),
-            Look::Wait
-        );
-        assert_eq!(
-            look(Some(&TransactionStatus::Applied), chest, 1),
-            Look::Placed(Entity(7))
-        );
-        assert_eq!(look(Some(&TransactionStatus::Applied), None, 1), Look::Wait);
-    }
-
-    #[test]
-    fn a_placement_that_ended_otherwise_or_took_every_look_is_lost() {
-        let chest = Some(Entity(7));
-        assert_eq!(
-            look(Some(&TransactionStatus::Pending), chest, LOOKS),
-            Look::Lost
-        );
-        assert_eq!(
-            look(Some(&TransactionStatus::Applied), None, LOOKS),
-            Look::Lost
-        );
-        assert_eq!(look(Some(&TransactionStatus::Undone), chest, 1), Look::Lost);
-        let failed = TransactionStatus::Failed(WorldError::NotLoaded);
-        assert_eq!(look(Some(&failed), None, 1), Look::Lost);
-        assert_eq!(look(None, None, 1), Look::Lost);
+/// Undoes the placement `placed` of a prop that will not stand.
+fn lost(world: World, placed: TransactionId, why: &dyn core::fmt::Debug) {
+    enshwick::warn!("prop not placed: {why:?}");
+    if let Err(why) = world.undo(placed) {
+        enshwick::debug!("prop placement not undone: {why}");
     }
 }

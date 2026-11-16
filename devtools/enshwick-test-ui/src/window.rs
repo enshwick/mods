@@ -192,24 +192,19 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settin
             },
         )
     });
-    let input = load.feature("input read", Load::input);
     let mut window = Window {
         open,
         actions: actions.clone(),
-        input,
+        input: load.feature("input read", Load::input),
         tone,
         creature: container(&settings.creature_sound, "creature_sound"),
         hints: "not drawn yet".to_owned(),
         read_at: None,
         last: String::new(),
     };
-    let drawn = load.feature("window", |load| {
+    let _window = load.feature("window", |load| {
         load.on_frame(move |frame| window.draw(frame))
     });
-    if drawn.is_some() {
-        // The loader's first ask only starts its reads and answers `None`.
-        let _starts_reads = input.and_then(Input::local_held);
-    }
 }
 
 #[cfg(test)]

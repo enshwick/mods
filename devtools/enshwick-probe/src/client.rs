@@ -40,7 +40,15 @@ impl ClientChecks {
             );
             return;
         }
-        answered("client sampler status", self.input.local_status());
+        // Opening the input in `new` asked for the held controls, so the
+        // loader must say the reads started.
+        match self.input.local_status() {
+            Ok(status) if status.requested => pass(&format!("client sampler status: {status:?}")),
+            Ok(status) => fail(&format!(
+                "client sampler status: {status:?}: opening the input did not start the held reads"
+            )),
+            Err(error) => fail(&format!("client sampler status: {error:?} on a client")),
+        }
         match self.input.client_snapshot() {
             Ok(snapshot) => {
                 pass(&format!("client snapshot: {snapshot:?}"));
@@ -100,14 +108,6 @@ fn unavailable<T: core::fmt::Debug>(what: &str, got: Result<T, WorldError>) {
     match got {
         Err(WorldError::Unavailable) => pass(&format!("{what}: unavailable on a server")),
         other => fail(&format!("{what}: {other:?} on a server")),
-    }
-}
-
-/// Logs `PASS` with the answer when a client call answers on a client.
-fn answered<T: core::fmt::Debug>(what: &str, got: Result<T, WorldError>) {
-    match got {
-        Ok(answer) => pass(&format!("{what}: {answer:?}")),
-        Err(error) => fail(&format!("{what}: {error:?} on a client")),
     }
 }
 

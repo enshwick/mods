@@ -272,7 +272,7 @@ fn the_help_lists_every_action_under_its_group() {
         .filter(|line| !line.ends_with(':'))
         .filter_map(|line| line.split([' ', ':']).next())
         .collect();
-    assert_eq!(helped.len(), 50, "{help}");
+    assert_eq!(helped.len(), 51, "{help}");
     let groups = help.lines().filter(|line| line.ends_with(':')).count();
     assert_eq!(groups, 11, "the actions sit under their groups: {help}");
     // A unit test holds every page to the groups' order and the default rules.

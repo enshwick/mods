@@ -85,6 +85,7 @@ may be left out.
 | `/adm zonebox <name> <width> <height> <depth>` | Protects a box centred on you from building, its sides in metres. | Admins |
 | `/adm zones` | Lists the protected zones. | Admins |
 | `/adm zoneswitch <name> on` or `off` | Switches a protected zone on or off. | Admins |
+| `/adm zonerules <name> <building> <breaking> <chests>` | Sets what a protected zone stops, each `on` or `off`. | Admins |
 | `/adm unzone <name>` | Removes a protected zone. | Admins |
 | `/adm spawn <player> <template> [count] [level] [minutes] [keep]` | Spawns creatures around a player, such as `Enemy_Wildbeast_Wolf`. They leave with the next world load unless `keep` is `on`. | Admins |
 | `/adm spawnat <x> <y> <z> <template> [count] [level] [minutes] [keep]` | Spawns creatures at a position. | Admins |

@@ -71,7 +71,13 @@ pub(crate) enum Shown {
 }
 
 /// The actions that change the protected zones.
-const ZONE_CHANGES: [&str; 4] = [ids::ZONE, ids::ZONE_BOX, ids::ZONE_SWITCH, ids::UNZONE];
+const ZONE_CHANGES: [&str; 5] = [
+    ids::ZONE,
+    ids::ZONE_BOX,
+    ids::ZONE_SWITCH,
+    ids::ZONE_RULES,
+    ids::UNZONE,
+];
 
 /// The actions that take a player online off the server.
 const REMOVES: [&str; 4] = [ids::KICK, ids::BAN, ids::BANNED, ids::ACCOUNT];
@@ -547,9 +553,9 @@ impl Tools {
             .window
     }
 
-    /// Making zones, then each zone with buttons to switch it and remove
-    /// it: the platform cuts a window too big from its end, so the forms
-    /// come first.
+    /// Making zones and setting what one stops, then each zone with what it
+    /// stops and buttons to switch it and remove it: the platform cuts a
+    /// window too big from its end, so the forms come first.
     fn zones_window(&self, viewer: &Player) -> Window {
         let build = Build::new(self, viewer, ZONES, texts::WINDOW_ZONES);
         let Some(zones) = self.zones.with(|zones| zones.zones.clone()) else {
@@ -559,7 +565,10 @@ impl Tools {
                 .text(texts::REPLY_ZONES_SHUT, &[(texts::value::WHY, &why)])
                 .window;
         };
-        let build = build.action(ids::ZONE).action(ids::ZONE_BOX);
+        let build = build
+            .action(ids::ZONE)
+            .action(ids::ZONE_BOX)
+            .action(ids::ZONE_RULES);
         // The list is the zones' read right, and absent on a build without
         // the filter, where no zone guards anything.
         if !build.may(ids::ZONES) {
@@ -567,8 +576,11 @@ impl Tools {
         }
         let count = zones.len().to_string();
         let mut build = build.text(texts::REPLY_ZONES, &[(texts::value::COUNT, &count)]);
+        // The stops in each row are words in the viewer's language.
+        let language = self.world.language_of(viewer.key);
         for zone in zones.iter().take(MAX_ROWS) {
-            let (key, values) = crate::zones::row(zone);
+            let (key, values) =
+                crate::zones::row(zone, |word| self.texts.fill(word, language, &[]));
             let name = Value::Text(zone.name.clone());
             let switch: &[Value] = &[name.clone(), Value::Toggle(!zone.on)];
             let label = if zone.on {

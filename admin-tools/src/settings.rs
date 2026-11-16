@@ -16,6 +16,10 @@ pub(crate) const MAX_ANNOUNCEMENTS: usize = 16;
 /// The key of the rule of who builds inside protected zones.
 const ZONE_BUILDERS: &str = "zone_builders";
 
+/// The margin around a protected zone unless the world says otherwise, in
+/// metres; an in-game check measures how far the game's tools reach.
+const ZONE_MARGIN: u32 = 10;
+
 /// The rule that lets every player use an action.
 const EVERYONE: &str = "everyone";
 
@@ -89,8 +93,11 @@ pub(crate) struct Settings {
     /// The remote console's password, 16 to 128 characters; when it is empty, Admin Tools writes a random one here.
     #[config(secret)]
     pub rcon_password: String,
-    /// Who may still build inside a protected zone: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
+    /// Who may still build, dig and open chests inside a protected zone: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
     pub zone_builders: String,
+    /// How many metres around a protected zone a player who is not a zone builder already cannot dig, break or open chests, so they cannot reach into the zone from outside.
+    #[config(range = 0..=50)]
+    pub zone_margin: u32,
     /// Who may use each action: everyone, nobody, or the players whose user group gives a permission, such as `CanKickBan` for the administrators.
     #[config(group)]
     pub rights: Rights,
@@ -114,6 +121,7 @@ impl Default for Settings {
             rcon_port: RCON_PORT,
             rcon_password: String::new(),
             zone_builders: ADMINS.to_owned(),
+            zone_margin: ZONE_MARGIN,
             rights: Rights::default(),
         }
     }
@@ -137,6 +145,7 @@ impl core::fmt::Debug for Settings {
             .field("rcon_ip", &self.rcon_ip)
             .field("rcon_port", &self.rcon_port)
             .field("zone_builders", &self.zone_builders)
+            .field("zone_margin", &self.zone_margin)
             .field("rights", &self.rights)
             .finish_non_exhaustive()
     }
@@ -382,6 +391,8 @@ pub(crate) struct Rights {
     pub zones: String,
     /// Switching a protected zone on or off.
     pub zoneswitch: String,
+    /// Setting what a protected zone stops.
+    pub zonerules: String,
     /// Removing a protected zone.
     pub unzone: String,
     /// Spawning creatures beside a player.
@@ -444,6 +455,7 @@ impl Default for Rights {
             zonebox: admins(),
             zones: admins(),
             zoneswitch: admins(),
+            zonerules: admins(),
             unzone: admins(),
             spawn: admins(),
             spawnat: admins(),
@@ -503,6 +515,7 @@ impl Rights {
             ids::ZONE_BOX => &self.zonebox,
             ids::ZONES => &self.zones,
             ids::ZONE_SWITCH => &self.zoneswitch,
+            ids::ZONE_RULES => &self.zonerules,
             ids::UNZONE => &self.unzone,
             ids::SPAWN => &self.spawn,
             ids::SPAWN_AT => &self.spawnat,

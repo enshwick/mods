@@ -68,7 +68,11 @@ settings:
     applies: at-once
   - key: zone_builders
     default: CanKickBan
-    meaning: Who may still build inside a protected zone. everyone, nobody, or a permission of the player's user group.
+    meaning: Who may still build, dig and open chests inside a protected zone. everyone, nobody, or a permission of the player's user group.
+    applies: at-once
+  - key: zone_margin
+    default: "10"
+    meaning: How many metres around a protected zone other players already cannot dig, break or open chests, so they cannot reach into the zone from outside. 0 to 50.
     applies: at-once
   - key: rights.<action>
     default: CanKickBan, and everyone for online, status and motd
@@ -186,6 +190,7 @@ one. An argument in square brackets may be left out.
 | `/adm zonebox <name> <width> <height> <depth>` | Protects a box centred on you from building, its sides in metres. | Admins |
 | `/adm zones` | Lists the protected zones. | Admins |
 | `/adm zoneswitch <name> on` or `off` | Switches a protected zone on or off. | Admins |
+| `/adm zonerules <name> <building> <breaking> <chests>` | Sets what a protected zone stops, each `on` or `off`. | Admins |
 | `/adm unzone <name>` | Removes a protected zone. | Admins |
 | `/adm spawn <player> <template> [count] [level] [minutes] [keep]` | Spawns creatures around a player. | Admins |
 | `/adm spawnat <x> <y> <z> <template> [count] [level] [minutes] [keep]` | Spawns creatures at a position. | Admins |
@@ -353,7 +358,41 @@ A world keeps up to 64 zones, in `zones.toml` in
 longer reads, only zone builders can build anywhere in the world. `/adm zones`
 then says what is wrong.
 
-A zone refuses placing things. It does not refuse digging or opening chests.
+## How do I stop digging, bombs and chest theft in a zone?
+
+A zone also stops digging, bombs and breaking placed pieces, by default.
+It can stop opening chests too. This holds for every player who is not a
+zone builder:
+
+- while the player stands inside the zone, or within the zone margin of it;
+- digging, bombs, breaking and changing Flame Altars stop there, and so does building;
+- opening chests and other containers in a base stops there when the zone stops chests.
+
+The player reads a notice when they come near such a zone. They get their
+rights back when they walk away, and when the zone goes off or is removed.
+
+Type `/adm zonerules market on on on` to make the zone `market` stop
+building, breaking and chests. The three switches are building, breaking and
+chests, each `on` or `off`. `/adm zonerules market off off on` locks only the
+chests and lets everyone build and dig there.
+
+The **Protected zones** window sets the same, and each zone's row says what
+it stops.
+
+The game guards chests this way only inside a base. A chest outside every
+Flame Altar's building zone stays open.
+
+The zone margin is **Zone margin** (`zone_margin`) in
+[the settings](#how-do-i-change-the-settings), 10 metres by default. Raise it
+if players dig into a zone from outside.
+
+The check goes by where the player stands, once a second. A bomb thrown or
+an arrow shot from beyond the margin still lands. A player who joins,
+respawns or travels into a zone keeps their rights for up to a second.
+
+The game itself refuses the edits on the server, so players without
+Enshwick are refused too. A player's game may show a dig for a moment
+before the server puts the ground back.
 
 ## How do I spawn a creature or place a prop?
 

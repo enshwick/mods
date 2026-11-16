@@ -8,7 +8,8 @@ use enshwick::console;
 use enshwick::events::{WorldLoaded, WorldSaved, WorldSaving};
 
 use super::game::{
-    Scratch, allowed, ann, bob, ends, file_until, hosted, run, said, scratch, server, tick_until,
+    DRIVE, Scratch, allowed, ann, bob, ends, file_until, hosted, real_until, run, said, scratch,
+    server,
 };
 
 #[test]
@@ -53,7 +54,7 @@ fn a_restart_warning_that_runs_out_stops_the_server_once_and_the_audit_log_keeps
     let loader = server("audit = \"on\"\n", &dir);
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
     assert!(!loader.stop_asked());
-    assert!(tick_until(&loader, || loader.stop_asked()));
+    assert!(loader.drive_until(DRIVE, || loader.stop_asked()));
     assert!(said(&loader, 2).contains(&"The server restarts now.".to_owned()));
     // The game's own stop saves the world last.
     assert_eq!(loader.saves(), 0);
@@ -142,7 +143,7 @@ fn a_backup_holds_the_saves_copies_the_world_and_lets_the_saves_go() {
         "one at a time"
     );
     let backups = data.join("backups");
-    assert!(tick_until(&loader, || !loader.saves_held()));
+    assert!(real_until(&loader, || !loader.saves_held()));
     let made: Vec<PathBuf> = std::fs::read_dir(&backups)
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -155,7 +156,7 @@ fn a_backup_holds_the_saves_copies_the_world_and_lets_the_saves_go() {
     assert!(made[0].join("world0-mod-settings").is_dir());
     assert!(!made[0].join("world1.ksd").exists());
     assert!(!made[0].join("world0-mod-data/admin-tools/backups").exists());
-    assert!(tick_until(&loader, || said(&loader, 1)
+    assert!(real_until(&loader, || said(&loader, 1)
         .iter()
         .any(|line| line.starts_with("The backup is in "))));
 }
@@ -178,8 +179,8 @@ fn a_backup_that_fails_lets_the_saves_go_and_says_why() {
     std::fs::write(data.join("backups"), "in the way").unwrap();
     let loader = server("", &data);
     assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
-    assert!(tick_until(&loader, || !loader.saves_held()));
-    assert!(tick_until(&loader, || said(&loader, 1)
+    assert!(real_until(&loader, || !loader.saves_held()));
+    assert!(real_until(&loader, || said(&loader, 1)
         .iter()
         .any(|line| line.starts_with("The backup failed"))));
 }
@@ -199,12 +200,12 @@ fn a_backup_waits_for_a_save_under_way_and_the_restart_stops_the_server_once_it_
     assert!(loader.raise::<WorldSaving>(&()) >= 1);
     assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
-    assert!(tick_until(&loader, || said(&loader, 2)
+    assert!(real_until(&loader, || said(&loader, 2)
         .contains(&"The server restarts now.".to_owned())));
     assert!(loader.saves_held(), "the copy waits for the save to end");
     assert!(!loader.stop_asked(), "the stop waits for the backup");
     assert!(loader.raise::<WorldSaved>(&()) >= 1);
-    assert!(tick_until(&loader, || loader.stop_asked()));
+    assert!(real_until(&loader, || loader.stop_asked()));
     assert!(!loader.saves_held());
     assert_eq!(std::fs::read_dir(data.join("backups")).unwrap().count(), 1);
 }
@@ -214,11 +215,11 @@ fn a_restart_the_game_refuses_to_stop_saves_the_world_instead_and_the_audit_log_
     let dir = scratch("restart-refused");
     let loader = server("audit = \"on\"\n", &dir);
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
-    assert!(tick_until(&loader, || loader.stop_asked()));
+    assert!(loader.drive_until(DRIVE, || loader.stop_asked()));
     assert_eq!(loader.saves(), 0);
     // The game takes one stop; a second warning's stop is refused.
     assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
-    assert!(tick_until(&loader, || loader.saves() == 1));
+    assert!(loader.drive_until(DRIVE, || loader.saves() == 1));
     let audit = file_until(&dir, "audit.log", |text| {
         text.matches("server\t\trestart").count() == 2
     });
@@ -258,7 +259,7 @@ fn the_console_hears_where_a_backup_s_end_is_written() {
         console::run("adm backup").unwrap(),
         "The backup has started. The server's log names where it went when it is done, and so does the audit log when it is on."
     );
-    assert!(tick_until(&loader, || !loader.saves_held()));
+    assert!(real_until(&loader, || !loader.saves_held()));
 }
 
 #[test]

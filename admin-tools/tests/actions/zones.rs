@@ -6,7 +6,7 @@ use enshwick::abi::{BuildCheck, Header, PlayerData, PlayerInfo};
 use enshwick::events::{PlayerJoined, SettingsReplaced, ShutdownStarted};
 use enshwick::{Entity, ItemId, PlayerKey};
 
-use super::game::{ann, bob, file_until, run, said, scratch, server, tick_until};
+use super::game::{DRIVE, ann, bob, file_until, run, said, scratch, server};
 
 /// The reason key the filter hands the builder.
 const REFUSED: &str = "notice.zone";
@@ -142,20 +142,10 @@ fn the_zone_builders_rule_lets_others_build_and_bob_may_not_make_a_zone() {
     assert!(run(&loader, &bob(), "zone", "tmine\tn10").starts_with('0'));
     loader.set_settings("settings", "zone_builders = \"everyone\"\n");
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-    assert!(tick_until(&loader, || build(
-        &loader,
-        BOB,
-        [40.0, 12.0, -3.0]
-    )
-    .is_ok()));
+    assert!(loader.drive_until(DRIVE, || build(&loader, BOB, [40.0, 12.0, -3.0]).is_ok()));
     loader.set_settings("settings", "zone_builders = \"nobody\"\n");
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-    assert!(tick_until(&loader, || build(
-        &loader,
-        ANN,
-        [40.0, 12.0, -3.0]
-    )
-    .is_err()));
+    assert!(loader.drive_until(DRIVE, || build(&loader, ANN, [40.0, 12.0, -3.0]).is_err()));
 }
 
 #[test]
@@ -181,8 +171,7 @@ fn a_zone_takes_digging_from_bob_near_it_tells_him_once_and_gives_it_back_when_i
     let loader = server("", &dir);
     // Bob stands about 41 m from Ann, inside a circle of 50 m around her.
     assert!(run(&loader, &ann(), "zone", "tmarket\tn50").starts_with('1'));
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY)
-        == (BREAKING, 0)));
+    assert!(loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY) == (BREAKING, 0)));
     assert_eq!(
         loader.permission_change(ann().key),
         (0, 0),
@@ -199,7 +188,7 @@ fn a_zone_takes_digging_from_bob_near_it_tells_him_once_and_gives_it_back_when_i
         said(&loader, 2)
     );
     assert!(run(&loader, &ann(), "zoneswitch", "tmarket\tb0").starts_with('1'));
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY) == (0, 0)));
+    assert!(loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY) == (0, 0)));
 }
 
 #[test]
@@ -208,11 +197,10 @@ fn the_margin_reaches_past_the_zone_s_edge_and_a_margin_of_0_does_not() {
     let loader = server("", &dir);
     // 35 m plus the 10 m margin reaches Bob at about 41 m.
     assert!(run(&loader, &ann(), "zone", "tmarket\tn35").starts_with('1'));
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY)
-        == (BREAKING, 0)));
+    assert!(loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY) == (BREAKING, 0)));
     loader.set_settings("settings", "zone_margin = 0\n");
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY) == (0, 0)));
+    assert!(loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY) == (0, 0)));
 }
 
 #[test]
@@ -224,8 +212,10 @@ fn a_zone_set_to_stop_only_chests_lets_bob_build_and_takes_only_chests() {
         run(&loader, &ann(), "zonerules", "tMARKET\tb0\tb0\tb1"),
         "1The zone market stops building: no; digging and breaking: no; opening chests: yes."
     );
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY)
-        == (PlayerInfo::CAN_ACCESS_INVENTORIES, 0)));
+    assert!(
+        loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY)
+            == (PlayerInfo::CAN_ACCESS_INVENTORIES, 0))
+    );
     assert_eq!(build(&loader, BOB, [42.0, 12.0, -3.0]), Ok(()));
     assert!(run(&loader, &bob(), "zonerules", "tmarket\tb1\tb1\tb1").starts_with('0'));
 }
@@ -242,12 +232,7 @@ fn a_respawned_bob_is_refused_and_a_respawned_zone_builder_builds_from_the_next_
         build(&loader, 40, [42.0, 12.0, -3.0]),
         Err(Some(REFUSED.to_owned()))
     );
-    assert!(tick_until(&loader, || build(
-        &loader,
-        40,
-        [42.0, 12.0, -3.0]
-    )
-    .is_ok()));
+    assert!(loader.drive_until(DRIVE, || build(&loader, 40, [42.0, 12.0, -3.0]).is_ok()));
     assert_eq!(
         build(&loader, 41, [42.0, 12.0, -3.0]),
         Err(Some(REFUSED.to_owned()))
@@ -266,7 +251,7 @@ fn after_the_world_stops_the_zones_take_no_rights_again() {
             .count()
     };
     assert!(run(&loader, &ann(), "zone", "tmarket\tn50").starts_with('1'));
-    assert!(tick_until(&loader, || notices() == 1));
+    assert!(loader.drive_until(DRIVE, || notices() == 1));
     assert!(loader.raise::<ShutdownStarted>(&()) >= 1);
     for _ in 0..3 {
         let _ran = loader.tick(std::time::Duration::from_secs(1));
@@ -279,10 +264,9 @@ fn removing_the_zone_gives_bob_his_rights_back() {
     let dir = scratch("zone-removed");
     let loader = server("", &dir);
     assert!(run(&loader, &ann(), "zone", "tmarket\tn50").starts_with('1'));
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY)
-        == (BREAKING, 0)));
+    assert!(loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY) == (BREAKING, 0)));
     assert!(run(&loader, &ann(), "unzone", "tmarket").starts_with('1'));
-    assert!(tick_until(&loader, || loader.permission_change(BOB_KEY) == (0, 0)));
+    assert!(loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY) == (0, 0)));
 }
 
 #[test]
@@ -297,7 +281,7 @@ fn a_rejoin_inside_the_zone_takes_the_rights_again_and_a_character_with_no_place
             .count()
     };
     assert!(run(&loader, &ann(), "zone", "tmarket\tn50").starts_with('1'));
-    assert!(tick_until(&loader, || notices() == 1));
+    assert!(loader.drive_until(DRIVE, || notices() == 1));
     // The platform ends a change as its player leaves, so the mod takes the
     // rights again for the player who joins back in the zone.
     let joined = PlayerData {
@@ -307,7 +291,7 @@ fn a_rejoin_inside_the_zone_takes_the_rights_again_and_a_character_with_no_place
         key: BOB_KEY,
     };
     assert!(loader.raise::<PlayerJoined>(&joined) >= 1);
-    assert!(tick_until(&loader, || notices() == 2));
+    assert!(loader.drive_until(DRIVE, || notices() == 2));
     assert_eq!(loader.permission_change(BOB_KEY), (BREAKING, 0));
     // A new character with no place yet, as after a respawn at an altar:
     // what the zones took stays until the place reads.

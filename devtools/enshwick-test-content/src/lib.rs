@@ -221,6 +221,7 @@ impl Mod for TestContent {
         let chest = load.feature(CHEST_PART, chest);
         join::link(
             load,
+            texts,
             join::Gifts::new(enemy, altar, chest),
             join::ENEMY_AFTER,
         );

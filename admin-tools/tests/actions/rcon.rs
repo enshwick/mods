@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use enshwick::events::SettingsReplaced;
 
-use super::game::{ends, file_until, hosted, scratch, server, tick_until};
+use super::game::{ends, file_until, hosted, real_until, scratch, server};
 
 /// A port no program listens on now.
 fn free_port() -> u16 {
@@ -112,7 +112,7 @@ fn an_rcon_tool_logs_in_and_runs_a_command_with_the_console_s_rights() {
         let unknown = read_packet(&mut stream).unwrap();
         (online, end, unknown)
     });
-    assert!(tick_until(&loader, || client.is_finished()));
+    assert!(real_until(&loader, || client.is_finished()));
     let (online, end, unknown) = client.join().unwrap();
     assert_eq!(
         online,
@@ -164,7 +164,7 @@ fn rcon_closes_on_a_hostile_size_a_command_before_login_and_repeated_failures() 
         let waiting = read_packet(&mut again);
         (huge, early, after, waiting)
     });
-    assert!(tick_until(&loader, || client.is_finished()));
+    assert!(real_until(&loader, || client.is_finished()));
     let (huge, early, after, waiting) = client.join().unwrap();
     assert_eq!(huge, None, "a hostile size closes the connection");
     assert_eq!(early, None, "no command before a login");
@@ -201,7 +201,7 @@ fn a_dedicated_server_writes_a_new_rcon_password_into_its_setting_and_never_logs
             read_packet(&mut stream)
         }
     });
-    assert!(tick_until(&loader, || client.is_finished()));
+    assert!(real_until(&loader, || client.is_finished()));
     assert_eq!(client.join().unwrap(), Some((1, 2, String::new())));
     let logs = format!("{:?}", loader.logs());
     assert!(logs.contains("rcon_password"), "{logs}");
@@ -246,7 +246,7 @@ fn login(loader: &enshwick::test::Installed, port: u16, password: &str) -> i32 {
         let _empty = read_packet(&mut stream);
         read_packet(&mut stream).map_or(0, |(id, ..)| id)
     });
-    assert!(tick_until(loader, || client.is_finished()));
+    assert!(real_until(&loader, || client.is_finished()));
     client.join().unwrap()
 }
 

@@ -93,6 +93,8 @@ pub(crate) const ZONE_BOX: &str = "zonebox";
 pub(crate) const ZONES: &str = "zones";
 /// Switches a protected zone on or off.
 pub(crate) const ZONE_SWITCH: &str = "zoneswitch";
+/// Sets what a protected zone stops: building, breaking, containers.
+pub(crate) const ZONE_RULES: &str = "zonerules";
 /// Removes a protected zone.
 pub(crate) const UNZONE: &str = "unzone";
 /// Spawns creatures beside a player.
@@ -107,7 +109,7 @@ pub(crate) const PROP_AT: &str = "propat";
 pub(crate) const UNPROP: &str = "unprop";
 
 /// Every action, in the order the help lists them.
-pub(crate) const ALL: [&str; 50] = [
+pub(crate) const ALL: [&str; 51] = [
     PANEL,
     OPEN,
     PLAYER,
@@ -152,6 +154,7 @@ pub(crate) const ALL: [&str; 50] = [
     ZONE_BOX,
     ZONES,
     ZONE_SWITCH,
+    ZONE_RULES,
     UNZONE,
     SPAWN,
     SPAWN_AT,
@@ -180,7 +183,7 @@ pub(crate) const GROUPS: [(&str, &[&str]); 11] = [
     (texts::GROUP_LOGS, &[AUDIT, CHAT, WHO]),
     (
         texts::GROUP_ZONES,
-        &[ZONE, ZONE_BOX, ZONES, ZONE_SWITCH, UNZONE],
+        &[ZONE, ZONE_BOX, ZONES, ZONE_SWITCH, ZONE_RULES, UNZONE],
     ),
     (
         texts::GROUP_SPAWNS,

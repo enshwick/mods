@@ -566,8 +566,8 @@ fn the_zones_section_lists_the_zones_only_to_a_viewer_who_may_read_them() {
     assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
     assert_eq!(run(&loader, &ann(), "open", "c4"), "1");
     let zones = window(&loader, &ann(), "zones");
-    assert_eq!(whole(&zones), ["zone", "zonebox"]);
-    assert_eq!(zones.items.len(), 2, "{:?}", zones.items);
+    assert_eq!(whole(&zones), ["zone", "zonebox", "zonerules"]);
+    assert_eq!(zones.items.len(), 3, "{:?}", zones.items);
 }
 
 #[test]
@@ -598,7 +598,7 @@ fn a_zone_s_buttons_switch_it_the_other_way_and_remove_it() {
     assert_eq!(
         rows(&zones),
         [(
-            "market (on): 10 m around 40, -3".to_owned(),
+            "market (on): 10 m around 40, -3; stops building, breaking".to_owned(),
             vec!["Off".to_owned(), "Remove".to_owned()]
         )]
     );

@@ -4,15 +4,22 @@
 //! client without the mod is refused too.
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::vetoes::BuildVerdict;
-use enshwick::{Entity, Load, Off};
+use enshwick::world::{Player, PlayerPermissions};
+use enshwick::{Entity, Load, Off, Relock as _};
 use serde::{Deserialize, Serialize};
 
 use crate::players::{bad_args, character};
 use crate::settings::Who;
 use crate::{Tools, ids, texts};
+
+mod limits;
+
+pub(crate) use limits::Limit;
+use limits::{admitted, taken_from};
 
 /// The world store's file name, `zones.toml`.
 pub(crate) const STORE: &str = "zones";
@@ -50,6 +57,56 @@ pub(crate) struct Zone {
     pub on: bool,
     /// Who made it.
     pub by: String,
+    /// What it stops while it is on; a zone kept before these existed stops
+    /// building and breaking.
+    #[serde(default)]
+    pub stops: Stops,
+}
+
+/// What a zone stops for the players the zone builders rule does not name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Stops {
+    /// Placing building pieces and props inside it, which the build filter
+    /// refuses.
+    pub building: bool,
+    /// Digging, bombs, breaking placed pieces and changing Flame Altars: a
+    /// player near it loses the game's `CanEditWorld`, `CanEditBase` and
+    /// `CanExtendBase`, which stops their building there too.
+    pub breaking: bool,
+    /// Opening chests and other containers in a base: a player near it
+    /// loses the game's `CanAccessInventories`, which the game checks only
+    /// inside bases.
+    pub containers: bool,
+}
+
+impl Default for Stops {
+    fn default() -> Self {
+        Self {
+            building: true,
+            breaking: true,
+            containers: false,
+        }
+    }
+}
+
+impl Stops {
+    /// The permission bits a player near the zone loses.
+    const fn denied(self) -> u32 {
+        let breaking = if self.breaking {
+            PlayerPermissions::CanEditWorld.bit()
+                | PlayerPermissions::CanEditBase.bit()
+                | PlayerPermissions::CanExtendBase.bit()
+        } else {
+            0
+        };
+        let containers = if self.containers {
+            PlayerPermissions::CanAccessInventories.bit()
+        } else {
+            0
+        };
+        breaking | containers
+    }
 }
 
 /// Where a zone lies, in metres.
@@ -153,26 +210,50 @@ impl Zones {
         Some(kept)
     }
 
-    /// Switches the zone named `name` on or off, and any a hand edit gave
+    /// Changes the zone named `name` with `change`, and any a hand edit gave
     /// the same name; its name as kept.
-    pub(crate) fn switch(&mut self, name: &str, on: bool) -> Option<String> {
+    fn edit(&mut self, name: &str, change: impl FnMut(&mut Zone)) -> Option<String> {
         let kept = self.zones[self.find(name)?].name.clone();
-        for zone in &mut self.zones {
-            if same_name(&zone.name, name) {
-                zone.on = on;
-            }
-        }
+        self.zones
+            .iter_mut()
+            .filter(|zone| same_name(&zone.name, name))
+            .for_each(change);
         Some(kept)
     }
 
-    /// The shapes of the zones that are on and usable, at most
-    /// [`MAX_ZONES`] of a file edited by hand.
-    pub(crate) fn guarded(&self) -> Vec<Shape> {
+    /// Switches the zone named `name` on or off; its name as kept.
+    pub(crate) fn switch(&mut self, name: &str, on: bool) -> Option<String> {
+        self.edit(name, |zone| zone.on = on)
+    }
+
+    /// Sets what the zone named `name` stops; its name as kept.
+    pub(crate) fn set_stops(&mut self, name: &str, stops: Stops) -> Option<String> {
+        self.edit(name, |zone| zone.stops = stops)
+    }
+
+    /// The zones that are on and usable, at most [`MAX_ZONES`] of a file
+    /// edited by hand.
+    fn active(&self) -> impl Iterator<Item = &Zone> {
         self.zones
             .iter()
             .filter(|zone| zone.on && zone.shape.usable())
             .take(MAX_ZONES)
+    }
+
+    /// The shapes of the active zones that stop building.
+    pub(crate) fn guarded(&self) -> Vec<Shape> {
+        self.active()
+            .filter(|zone| zone.stops.building)
             .map(|zone| zone.shape)
+            .collect()
+    }
+
+    /// The shapes of the active zones that take permissions, with the bits
+    /// each takes.
+    fn limiting(&self) -> Vec<(Shape, u32)> {
+        self.active()
+            .map(|zone| (zone.shape, zone.stops.denied()))
+            .filter(|&(_, denied)| denied != 0)
             .collect()
     }
 
@@ -191,7 +272,8 @@ impl Zones {
 /// the filter on this build, neither.
 pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
     let filtered = Arc::clone(tools);
-    // Runs on every frame a player aims to build: no lock, allocation or log.
+    // Runs on the game's cursor-check worker threads on every frame a player
+    // aims to build: no lock, allocation, log or world read.
     let filter = load.on_build(move |placement| {
         let guarded = filtered.guarded.load();
         if !guarded.iter().any(|shape| shape.holds(placement.position))
@@ -233,6 +315,15 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
             .arg(name())
             .arg(Arg::toggle(texts::ARG_ON)),
         switch,
+    )?;
+    tools.add(
+        Action::new(ids::ZONE_RULES, texts::ACTION_ZONERULES)
+            .help(texts::ACTION_ZONERULES_HELP)
+            .arg(name())
+            .arg(Arg::toggle(texts::ARG_BUILDING))
+            .arg(Arg::toggle(texts::ARG_BREAKING))
+            .arg(Arg::toggle(texts::ARG_CONTAINERS)),
+        rules,
     )?;
     tools.add(
         Action::new(ids::UNZONE, texts::ACTION_UNZONE)
@@ -318,6 +409,7 @@ fn add_zone(
         shape,
         on: true,
         by: request.player.name.clone(),
+        stops: Stops::default(),
     };
     match tools.zones.update(|zones| zones.add(zone)) {
         None => shut(tools, request),
@@ -335,10 +427,37 @@ fn add_zone(
     }
 }
 
+/// What a zone stops, as a list of words through `word`, which gives a
+/// text in the reader's language.
+fn stops(stops: Stops, word: impl Fn(&str) -> String) -> String {
+    let words: Vec<String> = [
+        (stops.building, texts::WORD_STOPS_BUILDING),
+        (stops.breaking, texts::WORD_STOPS_BREAKING),
+        (stops.containers, texts::WORD_STOPS_CHESTS),
+    ]
+    .into_iter()
+    .filter(|&(on, _)| on)
+    .map(|(_, key)| word(key))
+    .collect();
+    if words.is_empty() {
+        word(texts::WORD_STOPS_NOTHING)
+    } else {
+        words.join(", ")
+    }
+}
+
 /// A zone as a list row reads it: the text key for its shape and state,
-/// and its name and where it lies.
-pub(crate) fn row(zone: &Zone) -> (&'static str, Vec<(&'static str, String)>) {
-    let mut values = vec![(texts::value::NAME, zone.name.clone())];
+/// and its name, what it stops and where it lies; `word` gives a text in
+/// the reader's language, since a window's values reach the client as
+/// they are.
+pub(crate) fn row(
+    zone: &Zone,
+    word: impl Fn(&str) -> String,
+) -> (&'static str, Vec<(&'static str, String)>) {
+    let mut values = vec![
+        (texts::value::NAME, zone.name.clone()),
+        (texts::value::STOPS, stops(zone.stops, word)),
+    ];
     // The state is in the key: a window's values reach the client untranslated.
     let key = match (zone.shape, zone.on) {
         (Shape::Circle { x, z, radius }, on) => {
@@ -396,7 +515,7 @@ fn list(tools: &Tools, request: &Request<'_>) -> Outcome {
         .iter()
         .take(MAX_ZONES)
         .map(|zone| {
-            let (key, values) = row(zone);
+            let (key, values) = row(zone, |word| request.say(word, &[]));
             request.say(key, &crate::pairs(&values))
         })
         .collect();
@@ -421,6 +540,41 @@ fn switch(tools: &Tools, request: &Request<'_>) -> Outcome {
         texts::REPLY_ZONE_OFF
     };
     Outcome::done(request.say(reply, &[(texts::value::NAME, &kept)]))
+}
+
+/// Sets what a zone stops.
+fn rules(tools: &Tools, request: &Request<'_>) -> Outcome {
+    let [
+        Value::Text(name),
+        Value::Toggle(building),
+        Value::Toggle(breaking),
+        Value::Toggle(containers),
+    ] = request.args
+    else {
+        return bad_args(request);
+    };
+    let stops = Stops {
+        building: *building,
+        breaking: *breaking,
+        containers: *containers,
+    };
+    let Some(found) = tools.zones.update(|zones| zones.set_stops(name, stops)) else {
+        return shut(tools, request);
+    };
+    let Some(kept) = found else {
+        return no_zone(request, name);
+    };
+    tools.zones_changed();
+    let word = |on: bool| request.say(if on { texts::WORD_ON } else { texts::WORD_OFF }, &[]);
+    Outcome::done(request.say(
+        texts::REPLY_ZONE_RULES,
+        &[
+            (texts::value::NAME, &kept),
+            (texts::value::BUILDING, &word(stops.building)),
+            (texts::value::BREAKING, &word(stops.breaking)),
+            (texts::value::CONTAINERS, &word(stops.containers)),
+        ],
+    ))
 }
 
 /// Removes a zone.
@@ -480,30 +634,52 @@ impl Tools {
             if !unusable.is_empty() {
                 enshwick::warn!("zones that guard nothing: {}", unusable.join(", "));
             }
-            zones.guarded()
+            (zones.guarded(), zones.limiting())
         });
         let shut = self.zones.shut_reason();
         if let Some(why) = &shut {
-            enshwick::warn!("zones do not read, so only zone builders build: {why}");
+            enshwick::warn!(
+                "zones do not read, so only zone builders build and the limits stay: {why}"
+            );
         }
+        let (guarded, limiting) = read.unzip();
         let everyone = self.settings.load().zone_rule() == Who::Everyone;
         self.guarded
-            .store(Arc::new(guarding(everyone, read, shut.is_some())));
+            .store(Arc::new(guarding(everyone, guarded, shut.is_some())));
+        // Zones that do not read keep the limits as they are.
+        self.limiting.store(limiting.map(Arc::new));
         self.find_zone_builders();
+    }
+
+    /// Once a tick, from one read of the players online: hands the build
+    /// filter its builders, then takes and gives back what the zones take.
+    pub(crate) fn follow_zones(&self) {
+        let players = self.world.players();
+        self.sort_zone_builders(&players);
+        self.limit_in_zones(&players);
     }
 
     /// Hands the build filter the characters of the players online whose
     /// user group the world's rule lets build in a zone.
-    // shortcut: a respawned character is refused until the next tick (1 s), since the API raises no respawn event; rebuild on one when it does.
     pub(crate) fn find_zone_builders(&self) {
+        let players = if self.guarded.load().is_empty() {
+            Vec::new()
+        } else {
+            self.world.players()
+        };
+        self.sort_zone_builders(&players);
+    }
+
+    // shortcut: a respawned character is refused until the next tick (1 s): the filter runs off the game thread with only the entity, so it cannot look the player up; rebuild on a respawn event or take the account from the placement once the platform gives one.
+    fn sort_zone_builders(&self, players: &[Player]) {
         let builders: Vec<Entity> = if self.guarded.load().is_empty() {
             Vec::new()
         } else {
             let rule = self.settings.load().zone_rule();
-            self.world
-                .players()
+            let limited = self.limited.relock();
+            players
                 .iter()
-                .filter(|player| rule.admits(player))
+                .filter(|player| admitted(rule, player, taken_from(&limited, player.key)))
                 .map(|player| player.entity)
                 .collect()
         };
@@ -512,10 +688,14 @@ impl Tools {
         }
     }
 
-    /// Lets the build filter go when the world stops.
+    /// Lets the build filter and the limits go when the world stops; the
+    /// platform ends every permission change with the world.
     pub(crate) fn drop_zones(&self) {
         self.guarded.store(Arc::new(Vec::new()));
         self.zone_builders.store(Arc::new(Vec::new()));
+        self.limiting.store(None);
+        self.limited.relock().clear();
+        self.limits_off.store(false, Ordering::Relaxed);
     }
 }
 
@@ -529,6 +709,7 @@ mod tests {
             shape,
             on: true,
             by: "Ann".into(),
+            stops: Stops::default(),
         }
     }
 
@@ -634,6 +815,36 @@ mod tests {
         assert!(guarding(true, Some(vec![MARKET]), false).is_empty());
         assert_eq!(guarding(false, Some(vec![MARKET]), false), [MARKET]);
         assert!(guarding(false, None, false).is_empty(), "no world runs");
+    }
+
+    #[test]
+    fn a_zone_kept_before_its_stops_existed_stops_building_and_breaking() {
+        let text = "[[zones]]\nname = \"Market\"\non = true\nby = \"Ann\"\n\n[zones.shape]\nkind = \"circle\"\nx = 10.0\nz = -20.0\nradius = 5.0\n";
+        let zones: Zones = toml::from_str(text).unwrap();
+        assert_eq!(zones.zones[0].stops, Stops::default());
+        assert_eq!(
+            zones.limiting(),
+            [(
+                MARKET,
+                PlayerPermissions::CanEditWorld.bit()
+                    | PlayerPermissions::CanEditBase.bit()
+                    | PlayerPermissions::CanExtendBase.bit()
+            )]
+        );
+    }
+
+    #[test]
+    fn a_zone_that_stops_nothing_but_building_takes_no_permission() {
+        let mut zones = Zones::default();
+        zones.add(zone("Market", MARKET)).unwrap();
+        let only_building = Stops {
+            building: true,
+            breaking: false,
+            containers: false,
+        };
+        assert!(zones.set_stops("market", only_building).is_some());
+        assert!(zones.limiting().is_empty());
+        assert_eq!(zones.guarded(), [MARKET]);
     }
 
     #[test]

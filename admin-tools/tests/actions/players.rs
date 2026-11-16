@@ -34,7 +34,7 @@ fn a_player_sees_only_the_reads_and_an_administrator_sees_every_action() {
     let loader = server("", &dir);
     let ids = |who: &PlayerInfo| allowed(&loader, who);
     assert_eq!(ids(&bob()), ["online", "motd", "status"]);
-    assert_eq!(ids(&ann()).len(), 50);
+    assert_eq!(ids(&ann()).len(), 51);
     assert!(run(&loader, &bob(), "kick", "p0000000000000001").starts_with('0'));
 }
 

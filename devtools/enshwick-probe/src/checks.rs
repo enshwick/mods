@@ -493,6 +493,15 @@ impl Checks {
             Err(WorldError::Gone) => pass("destroy refuses an entity not in the world"),
             other => fail(&format!("destroy of a missing entity: {other:?}")),
         }
+        // Refused, not unavailable: the permission table, the step link and the removal link resolved.
+        let nobody = enshwick::PlayerKey::new(0x0e45_4157_0000_0001);
+        let taken = [enshwick::world::PlayerPermissions::CanEditWorld];
+        match self.world.change_permissions(nobody, &taken, &[]) {
+            Err(WorldError::Refused) => pass("permission change refuses an account not in game"),
+            other => fail(&format!(
+                "permission change of an account not in game: {other:?}"
+            )),
+        }
     }
 
     /// Notes a finished save.

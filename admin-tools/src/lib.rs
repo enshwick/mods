@@ -34,7 +34,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use enshwick::abi::Side;
 use enshwick::actions::{Action, Actions, Outcome, Request, Value, Via};
 use enshwick::content::Guid;
@@ -141,6 +141,15 @@ pub(crate) struct Tools {
     /// The characters that may build in a zone, read without a lock by the
     /// build filter.
     zone_builders: ArcSwap<Vec<Entity>>,
+    /// The shapes of the zones that take permissions, with the bits each
+    /// takes; `None` while the zones do not read or no world runs, when the
+    /// limits stay as they are.
+    limiting: ArcSwapOption<Vec<(zones::Shape, u32)>>,
+    /// What the zones take from each player online, by account.
+    limited: Mutex<Vec<zones::Limit>>,
+    /// Whether the platform refused to take permissions in this world, so
+    /// zones stop only building; warned once.
+    limits_off: AtomicBool,
     /// The last prop each caller placed, which they may take back.
     props: Mutex<FxHashMap<spawn::Caller, spawn::Placed>>,
 }
@@ -210,6 +219,9 @@ impl Mod for AdminTools {
             zones,
             guarded: ArcSwap::from_pointee(Vec::new()),
             zone_builders: ArcSwap::from_pointee(Vec::new()),
+            limiting: ArcSwapOption::empty(),
+            limited: Mutex::default(),
+            limits_off: AtomicBool::new(false),
             props: Mutex::default(),
         });
         let loaded = Arc::clone(&tools);
@@ -247,6 +259,7 @@ impl Tools {
         let joins = Arc::clone(self);
         load.on::<PlayerJoined>(move |joined| {
             joins.welcome(joined.key);
+            joins.forget_limits(joined.key);
             joins.find_zone_builders();
         })?;
         let leaves = Arc::clone(self);
@@ -255,13 +268,14 @@ impl Tools {
             leaves.forget_window(left.key);
             leaves.set_god(left.key, None);
             leaves.props.relock().retain(|(key, _), _| *key != left.key);
+            leaves.forget_limits(left.key);
             leaves.find_zone_builders();
         })?;
         let ticks = Arc::clone(self);
         load.on_tick(TICK, move |tick| {
             ticks.tick(tick.elapsed());
             ticks.drop_stale_gods();
-            ticks.find_zone_builders();
+            ticks.follow_zones();
         })?;
         Ok(())
     }

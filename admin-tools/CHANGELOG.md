@@ -6,6 +6,17 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Added
+
+- Protected zones also stop digging, bombs, breaking placed pieces and
+  changing Flame Altars for everyone but zone builders while they stand in
+  a zone or within its margin, 10 metres by default, and can stop opening
+  chests in bases there too. The game itself refuses the edits, so players
+  without Enshwick are refused too, and a player reads a notice on coming
+  near. `/adm zonerules` and the Protected zones window set what each zone
+  stops, and the zone list shows it; **Zone margin** sets the margin. Zones
+  made before stop digging and breaking as well.
+
 ### Changed
 
 - A chest or prop that an action places is filled or kept once it stands

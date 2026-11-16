@@ -745,6 +745,7 @@ mod tests {
                 target: Entity(700),
                 item,
                 position: item.map(|_| at),
+                moved: None,
             })
         };
         let safe = Some(ItemId::from_guid(crate::content::SAFE.guid()));

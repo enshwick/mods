@@ -77,7 +77,7 @@ fn marked(survivor: Entity, labelled: bool) -> Outcome {
 
 /// Names the survivor nearest `player`, within [`MARK_REACH`], [`SURVIVOR`],
 /// so its prompt says so.
-fn mark(server: Server, player: Entity) -> Outcome {
+fn mark(server: &Server, player: Entity) -> Outcome {
     let Some(me) = server.world.position(player) else {
         return Outcome::refused("your character has no position");
     };
@@ -113,7 +113,7 @@ fn spawn_outcome(kept: Option<Entity>, unsaved: Option<Entity>) -> Outcome {
 /// Spawns two chests of the template of the placed container nearest
 /// `player`, Kept and Unsaved, and takes Unsaved out of the save a few steps
 /// later.
-fn spawn(server: Server, player: Entity) -> Outcome {
+fn spawn(server: &Server, player: Entity) -> Outcome {
     let Some(me) = server.world.position(player) else {
         return Outcome::refused("your character has no position");
     };
@@ -160,9 +160,9 @@ fn services(load: &mut Load<'_>) -> Result<Server, Off> {
 /// [`Off`] when the loader refuses an action.
 pub(crate) fn register(load: &mut Load<'_>, actions: &Actions) -> Result<(), Off> {
     let server = load.feature("server actions", services);
-    let on_server = move |act: fn(Server, Entity) -> Outcome| {
+    let on_server = move |act: fn(&Server, Entity) -> Outcome| {
         move |request: &enshwick::actions::Request<'_>| {
-            server.map_or_else(
+            server.as_ref().map_or_else(
                 || Outcome::refused("no server runs here"),
                 |server| act(server, request.player.entity),
             )

@@ -20,8 +20,8 @@ Each entry says what players notice; a release's notes show its section.
 ### Changed
 
 - A chest or prop that an action places is filled or kept once it stands
-  in the world, a step after the game places it; one that does not stand
-  within 10 seconds is taken back and reported, as before.
+  in the world, right after the step the game places it in; one that does
+  not stand within 10 seconds is taken back and reported, as before.
 - Typed commands take the game's template and item debug names in any
   case, an exact match first. A name that several templates or items share
   lists up to eight of their GUIDs to pick from.

@@ -197,7 +197,7 @@ pub(crate) fn server_with(settings: &str, dir: &Path, more: &[PlayerInfo]) -> Ga
     game(settings, dir, more, false)
 }
 
-/// [`server`] in a game a player hosts.
+/// [`server`] in a game Ann hosts.
 pub(crate) fn hosted(settings: &str, dir: &Path) -> Game {
     game(settings, dir, &[], true)
 }
@@ -230,7 +230,10 @@ pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool
 fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventory: bool) -> Game {
     let settings = on_loopback(settings);
     let host = if hosted {
-        FakeHost::new().side(Side::CLIENT).hosting(true)
+        FakeHost::new()
+            .side(Side::CLIENT)
+            .hosting(true)
+            .host_key(ann().key)
     } else {
         FakeHost::new().side(Side::SERVER)
     }

@@ -270,7 +270,8 @@ impl Zones {
 
 /// The players online whom the world's rule lets build in a zone, by
 /// account, which a new character of the same player keeps, and by
-/// character, for a placement whose account the loader cannot tell.
+/// character for a placement without an account: every placement has none
+/// on a game build where the loader cannot copy the player slots.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Builders(Vec<(PlayerKey, Entity)>);
 
@@ -284,7 +285,6 @@ impl Builders {
         self.admits(placement.player, placement.account)
     }
 
-    // shortcut: without an account (a hosted game's own prediction, a character made in the current step) a new character is refused until the next tick (1 s); drop the fallback once the loader gives every placement its account.
     fn admits(&self, character: Entity, account: Option<PlayerKey>) -> bool {
         self.0
             .iter()
@@ -683,8 +683,8 @@ impl Tools {
         self.limit_in_zones(&players);
     }
 
-    /// Hands the build filter the accounts and characters of the players
-    /// online whose user group the world's rule lets build in a zone.
+    /// Hands the build filter the players online whose user group the
+    /// world's rule lets build in a zone.
     pub(crate) fn find_zone_builders(&self) {
         let players = if self.guarded.load().is_empty() {
             Vec::new()
@@ -753,7 +753,10 @@ mod tests {
             !builders.admits(Entity(10), Some(PlayerKey::new(8))),
             "another account"
         );
-        assert!(builders.admits(Entity(10), None), "listed character");
+        assert!(
+            builders.admits(Entity(10), None),
+            "a loader that copies no slots"
+        );
         assert!(!builders.admits(Entity(40), None), "unknown character");
     }
 

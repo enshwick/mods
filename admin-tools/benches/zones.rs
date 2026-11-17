@@ -26,7 +26,7 @@ fn check(at: [f64; 3]) -> BuildCheck {
         item: ItemId::new(7),
         position: at,
         reason: core::ptr::null_mut(),
-        account: enshwick::PlayerKey::default(),
+        account: enshwick::PlayerKey::new(2),
     }
 }
 

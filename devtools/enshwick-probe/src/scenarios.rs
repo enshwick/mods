@@ -79,7 +79,7 @@ fn run(load: &mut Load<'_>, list: &[(&str, &str)], limits: Limits) -> Result<(),
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
+    use std::cell::RefCell;
     use std::time::Duration;
 
     use enshwick::abi::{Header, PlayerInfo, Status};
@@ -94,8 +94,12 @@ mod tests {
     /// `enshwick.on`.
     const HOOKED: [&str; 4] = ["ChatSaid", "ChatTyped", "ItemAction", "FrontChanged"];
 
-    /// The scenarios a test runs, set before the mod starts.
-    static LIST: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
+    thread_local! {
+        /// The scenarios a test runs, set before the mod starts; per thread,
+        /// as the fake host is, since `cargo test` runs tests in one process.
+        static LIST: RefCell<Option<Vec<(&'static str, &'static str)>>> =
+            const { RefCell::new(None) };
+    }
 
     /// The shipped limits with one real second of script time per real
     /// second: the fake host packs minutes of server time into milliseconds,
@@ -108,8 +112,8 @@ mod tests {
 
     impl Mod for Runner {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-            let list = LIST.get().map_or(&SCENARIOS[..], Vec::as_slice);
-            super::run(load, list, limits())?;
+            let list = LIST.with_borrow(Clone::clone);
+            super::run(load, list.as_deref().unwrap_or(&SCENARIOS), limits())?;
             crate::chat::register(load);
             Ok(Self)
         }
@@ -144,9 +148,7 @@ mod tests {
     /// the world's setting naming `scenario`, with Ann online, and loads the
     /// world.
     fn start(list: Option<Vec<(&'static str, &'static str)>>, scenario: &str) -> Installed {
-        if let Some(list) = list {
-            LIST.set(list).unwrap();
-        }
+        LIST.set(list);
         let loader = FakeHost::new()
             .world()
             .player(ann())
@@ -284,6 +286,14 @@ mod tests {
     #[should_panic(expected = "the scripts turned off")]
     fn a_run_fails_with_the_cause_when_the_scripts_turn_off() {
         let _loader = start(Some(vec![("t", SPINS)]), "t");
+    }
+
+    const BROKEN: &str = "return { about = ";
+
+    #[test]
+    #[should_panic(expected = "syntax error: scenarios/t.luau:1: Expected identifier")]
+    fn a_scenario_that_does_not_compile_fails_its_run_naming_the_reason() {
+        let _loader = start(Some(vec![("t", BROKEN)]), "t");
     }
 
     const WAITS: &str = r#"

@@ -79,7 +79,7 @@ fn run(load: &mut Load<'_>, list: &[(&str, &str)], limits: Limits) -> Result<(),
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
+    use std::cell::Cell;
     use std::time::Duration;
 
     use enshwick::abi::{Header, PlayerInfo, Status};
@@ -94,8 +94,13 @@ mod tests {
     /// `enshwick.on`.
     const HOOKED: [&str; 4] = ["ChatSaid", "ChatTyped", "ItemAction", "FrontChanged"];
 
-    /// The scenarios a test runs, set before the mod starts.
-    static LIST: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
+    thread_local! {
+        /// The scenarios a test runs, set before the mod starts: per thread,
+        /// since `cargo test` runs tests as threads of one process and a test
+        /// sets its list before it waits for the fake host's turn.
+        static LIST: Cell<Option<&'static [(&'static str, &'static str)]>> =
+            const { Cell::new(None) };
+    }
 
     /// The shipped limits with one real second of script time per real
     /// second: the fake host packs minutes of server time into milliseconds,
@@ -108,8 +113,7 @@ mod tests {
 
     impl Mod for Runner {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-            let list = LIST.get().map_or(&SCENARIOS[..], Vec::as_slice);
-            super::run(load, list, limits())?;
+            super::run(load, LIST.get().unwrap_or(&SCENARIOS), limits())?;
             crate::chat::register(load);
             Ok(Self)
         }
@@ -143,10 +147,8 @@ mod tests {
     /// Starts the runner over `list`, the shipped scenarios for `None`, with
     /// the world's setting naming `scenario`, with Ann online, and loads the
     /// world.
-    fn start(list: Option<Vec<(&'static str, &'static str)>>, scenario: &str) -> Installed {
-        if let Some(list) = list {
-            LIST.set(list).unwrap();
-        }
+    fn start(list: Option<&'static [(&'static str, &'static str)]>, scenario: &str) -> Installed {
+        LIST.set(list);
         let loader = FakeHost::new()
             .world()
             .player(ann())
@@ -242,7 +244,7 @@ mod tests {
 
     #[test]
     fn a_scenario_logs_a_pass_per_step_and_a_pass_at_the_end() {
-        let loader = start(Some(vec![("t", PASSES)]), "t");
+        let loader = start(Some(&[("t", PASSES)]), "t");
         assert_logged(&loader, "scenario t: start: waits and hears");
         run_for(&loader, Duration::from_secs(2));
         assert_logged(&loader, "scenario t: step 1 waits a second: PASS");
@@ -265,7 +267,7 @@ mod tests {
 
     #[test]
     fn a_failed_check_names_its_step_and_both_values_and_ends_the_scenario() {
-        let loader = start(Some(vec![("t", FAILS)]), "t");
+        let loader = start(Some(&[("t", FAILS)]), "t");
         assert_logged(&loader, "scenario t: FAIL at step 1 adds: ");
         assert_logged(&loader, "the sum: expected 3, got 2");
         assert_not_logged(&loader, "never runs");
@@ -283,7 +285,15 @@ mod tests {
     #[test]
     #[should_panic(expected = "the scripts turned off")]
     fn a_run_fails_with_the_cause_when_the_scripts_turn_off() {
-        let _loader = start(Some(vec![("t", SPINS)]), "t");
+        let _loader = start(Some(&[("t", SPINS)]), "t");
+    }
+
+    const BROKEN: &str = "return { about = ";
+
+    #[test]
+    #[should_panic(expected = "scenarios/t.luau:1")]
+    fn a_scenario_that_does_not_compile_stops_the_start_naming_its_chunk_and_line() {
+        let _loader = start(Some(&[("t", BROKEN)]), "t");
     }
 
     const WAITS: &str = r#"
@@ -297,7 +307,7 @@ mod tests {
 
     #[test]
     fn an_event_that_does_not_come_in_time_fails_its_step() {
-        let loader = start(Some(vec![("t", WAITS)]), "t");
+        let loader = start(Some(&[("t", WAITS)]), "t");
         run_for(&loader, Duration::from_secs(1));
         assert_not_logged(&loader, "FAIL");
         run_for(&loader, Duration::from_secs(2));
@@ -320,7 +330,7 @@ mod tests {
 
     #[test]
     fn an_error_in_an_event_test_fails_the_scenario_at_once() {
-        let loader = start(Some(vec![("t", BAD_TEST)]), "t");
+        let loader = start(Some(&[("t", BAD_TEST)]), "t");
         let _handled = loader.raise::<WorldSaved>(&());
         run_for(&loader, Duration::from_millis(200));
         assert_logged(
@@ -332,7 +342,7 @@ mod tests {
 
     #[test]
     fn a_scenario_still_waiting_when_the_world_loads_again_fails() {
-        let loader = start(Some(vec![("t", WAITS)]), "t");
+        let loader = start(Some(&[("t", WAITS)]), "t");
         let _handled = loader.raise::<WorldLoaded>(&());
         run_for(&loader, Duration::from_millis(200));
         assert_logged(
@@ -410,7 +420,7 @@ mod tests {
     fn a_scenario_hears_an_item_action_and_lets_it_happen() {
         use enshwick::abi::ItemAction;
 
-        let loader = start(Some(vec![("t", HEARS_AN_ITEM_ACTION)]), "t");
+        let loader = start(Some(&[("t", HEARS_AN_ITEM_ACTION)]), "t");
         let call = ItemAction {
             header: Header::of::<ItemAction>(),
             kind: ItemAction::CONSUME,

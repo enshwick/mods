@@ -491,11 +491,16 @@ mod tests {
 
     use super::*;
 
-    /// Starts the probe on a fake host with `settings`; the status and the
-    /// host to look at.
-    /// The mod started with `settings` as the file in its own folder.
+    /// Starts the probe on a fake host with `settings` as the file in a
+    /// folder of this test's own, as `cargo test` runs tests as threads of
+    /// one process; the status and the host to look at.
     fn start(settings: &str) -> (Status, enshwick::test::Installed) {
-        let dir = std::env::temp_dir().join(format!("enshwick-probe-{}", std::process::id()));
+        let test = std::thread::current()
+            .name()
+            .unwrap_or_default()
+            .replace(':', "_");
+        let dir =
+            std::env::temp_dir().join(format!("enshwick-probe-{}-{test}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("settings.toml"), settings).unwrap();
         let loader = enshwick::test::FakeHost::new()
@@ -526,7 +531,13 @@ mod tests {
     #[test]
     fn off_by_default_it_starts_and_registers_nothing() {
         let (status, loader) = start("");
-        assert_eq!(status, Status::OK);
+        assert_eq!(
+            status,
+            Status::OK,
+            "{:?} {:?}",
+            loader.faults(),
+            loader.logs()
+        );
         assert!(loader.faults().is_empty(), "{:?}", loader.faults());
         assert!(
             !loader.logs().iter().any(|(_, line)| line == "probe on"),

@@ -236,18 +236,39 @@ fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
 }
 
 /// The answer to a login with `password` on `port`: id 1 for in, -1 for
-/// refused.
+/// refused, 0 when no try started within ten seconds was answered.
+///
+/// A console that just closed keeps its port until its thread wakes, and
+/// the connection it takes then, or one its dropped listener still held,
+/// ends unanswered, reset or not; so a login that gets no answer tries
+/// again until the console that took the port answers.
+///
+/// # Panics
+///
+/// When one try is not over within the ten seconds of driving the game.
 fn login(loader: &enshwick::test::Installed, port: u16, password: &str) -> i32 {
     use std::io::Write as _;
-    let password = password.to_owned();
-    let client = std::thread::spawn(move || {
-        let mut stream = connect(port);
-        stream.write_all(&packet(1, 3, &password)).unwrap();
-        let _empty = read_packet(&mut stream);
-        read_packet(&mut stream).map_or(0, |(id, ..)| id)
-    });
-    assert!(real_until(loader, || client.is_finished()));
-    client.join().unwrap()
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let password = password.to_owned();
+        let client = std::thread::spawn(move || {
+            let mut stream = connect(port);
+            if stream.write_all(&packet(1, 3, &password)).is_err() {
+                return 0;
+            }
+            let _empty = read_packet(&mut stream);
+            read_packet(&mut stream).map_or(0, |(id, ..)| id)
+        });
+        assert!(
+            real_until(loader, || client.is_finished()),
+            "a login try is still waiting"
+        );
+        let answer = client.join().unwrap();
+        if answer != 0 || std::time::Instant::now() > deadline {
+            return answer;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
 
 #[test]

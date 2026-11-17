@@ -34,6 +34,8 @@ Each entry says what players notice; a release's notes show its section.
   take it back, instead of an empty chest staying unnoticed.
 - A zone builder who respawns on a server builds in a zone from the next
   server step, instead of being refused for up to a second.
+- A zone builder who hosts the game sees the build cursor allowed in a zone,
+  also right after a respawn.
 
 ## [0.2.0] - 2026-11-15
 

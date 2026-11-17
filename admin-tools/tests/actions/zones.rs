@@ -6,7 +6,7 @@ use enshwick::abi::{BuildCheck, Header, PlayerData, PlayerInfo};
 use enshwick::events::{PlayerJoined, SettingsReplaced, ShutdownStarted};
 use enshwick::{Entity, ItemId, PlayerKey};
 
-use super::game::{DRIVE, ann, bob, file_until, run, said, scratch, server};
+use super::game::{DRIVE, ann, bob, file_until, hosted, run, said, scratch, server};
 
 /// The reason key the filter hands the builder.
 const REFUSED: &str = "notice.zone";
@@ -47,6 +47,15 @@ fn a_zone_refuses_bob_inside_it_and_lets_him_build_outside_while_ann_builds_anyw
     );
     assert_eq!(build(&loader, BOB, [55.0, 12.0, -3.0]), Ok(()));
     assert_eq!(build(&loader, ANN, [42.0, 12.0, -3.0]), Ok(()));
+}
+
+#[test]
+fn the_host_s_own_prediction_lets_her_build_in_a_zone_with_a_character_no_server_player_names() {
+    let dir = scratch("zone-hosted");
+    let loader = hosted("", &dir);
+    assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
+    assert_eq!(build(&loader, 40, [42.0, 12.0, -3.0]), Ok(()));
+    assert!(build(&loader, BOB, [42.0, 12.0, -3.0]).is_err());
 }
 
 #[test]

@@ -148,7 +148,7 @@ fn a_unit_test_s_console_beyond_loopback_is_refused_before_it_listens() {
     for address in [
         SocketAddr::from(([0, 0, 0, 0], 0)),
         // Refused before the thread starts, so nothing listens.
-        // ast-grep-ignore: test-modules-listen-on-loopback
+        // ast-grep-ignore: tests-listen-on-loopback
         SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)),
     ] {
         let config = Config {

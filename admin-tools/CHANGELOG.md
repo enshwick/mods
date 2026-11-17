@@ -36,6 +36,10 @@ Each entry says what players notice; a release's notes show its section.
   server step, instead of being refused for up to a second.
 - A zone builder who hosts the game sees the build cursor allowed in a zone,
   also right after a respawn.
+- A new remote console password takes effect on the open port, so a tool
+  logging in meanwhile gets an answer instead of a dropped connection. Tools
+  logged in with the old password are closed at once, and failed logins are
+  forgotten, as when the console opened again.
 
 ## [0.2.0] - 2026-11-15
 

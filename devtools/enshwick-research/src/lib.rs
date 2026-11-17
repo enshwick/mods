@@ -217,28 +217,15 @@ mod tests {
 
     use super::*;
 
-    /// This test's own folder for the mod, so tests on threads of one
-    /// process never write each other's `settings.toml`.
-    fn own_dir() -> std::path::PathBuf {
-        let test = std::thread::current()
-            .name()
-            .unwrap_or_default()
-            .replace(':', "_");
-        std::env::temp_dir().join(format!("enshwick-research-{}-{test}", std::process::id()))
-    }
-
     /// Starts the research mod on a fake host of `side` with `settings` as
     /// the file in its own folder; the status and the host to look at.
     fn start(side: Side, settings: &str) -> (Status, enshwick::test::Installed) {
-        let dir = own_dir();
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("settings.toml"), settings).unwrap();
         // A client hosts, as a server mod's keys need.
         let loader = enshwick::test::FakeHost::new()
             .developer_tools(true)
             .side(side)
             .hosting(side == Side::CLIENT)
-            .mod_dir(dir.to_str().unwrap())
+            .mod_file("settings.toml", settings)
             .install();
         // SAFETY: the exports of the `declare_mod!` below.
         let status =
@@ -309,7 +296,7 @@ mod tests {
         };
         assert!(marked("[7, 42]"), "{:?}", loader.logs());
         std::fs::write(
-            own_dir().join("settings.toml"),
+            loader.mod_dir().join("settings.toml"),
             "enabled = true\nmark_values = [5]\n",
         )
         .unwrap();
@@ -371,19 +358,16 @@ mod tests {
             "skills",
             "respawn",
         ];
-        let dir = own_dir().join(format!("{setting}-{:x}", code.as_ptr().addr()));
-        std::fs::create_dir_all(&dir).unwrap();
         let only = features
             .iter()
             .fold("enabled = true\n".to_owned(), |text, f| {
                 format!("{text}{f} = {}\n", *f == setting)
             });
-        std::fs::write(dir.join("settings.toml"), only).unwrap();
         let host = enshwick::test::FakeHost::new()
             .developer_tools(true)
             .side(side)
             .hosting(side == Side::CLIENT)
-            .mod_dir(dir.to_str().unwrap())
+            .mod_file("settings.toml", only)
             .world()
             .type_hash(entities::LOCAL_PLAYER, 0x7e57)
             .code(code);

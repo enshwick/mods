@@ -28,7 +28,7 @@ pub(super) const WRITTEN: [u8; PATCH_LEN] = [0x90; PATCH_LEN];
 /// The system at whose entry the probe's hook at an instruction counts hits.
 pub(super) const COUNTED: &str = "last_transform";
 /// The prop the transaction places: a wooden chest, a container.
-pub(super) const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
+pub(crate) const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
 /// Metres above the first entity where the chest stands, in the air.
 const CHEST_LIFT: f64 = 6.0;
 /// How long the chest's placement gets to stand.
@@ -231,12 +231,14 @@ impl Writer {
     /// Gives one item to `chest` and takes it back, each as an inventory
     /// batch, then undoes the transaction `id` that placed it.
     fn give_and_take(self, inventories: Inventories, id: TransactionId, chest: Entity) {
-        let give_one = Batch::new().with(Op::Give {
-            to: chest,
-            item: self.chest_item,
-            count: 1,
-            fill: None,
-        });
+        let give_one = Batch::new()
+            .with(Op::Give {
+                to: chest,
+                item: self.chest_item,
+                count: 1,
+                fill: None,
+            })
+            .hide_in_ui();
         let _ticket = inventories.submit(&give_one, move |gave| {
             if gave.done == Done::TimedOut {
                 enshwick::info!(
@@ -254,7 +256,7 @@ impl Writer {
             let _ticket = inventories.submit(&take_one, move |took| {
                 let (took, left) = (took.is_committed(), inventories.count(chest, self.chest_item));
                 let line = format!(
-                    "inventory submit: give committed {gave}, chest held {held}; take committed {took}, chest holds {left}"
+                    "inventory submit: give hidden in the UI committed {gave}, chest held {held}; take committed {took}, chest holds {left}"
                 );
                 if gave && held == 1 && took && left == 0 {
                     pass(&line);

@@ -8,8 +8,8 @@ use enshwick::abi::{
 };
 
 use super::game::{
-    BACKPACK, CHEST, DRIVE, GLIDER, LOOKS, WOOD, ann, bob, file_until, near, run, said, scratch,
-    server,
+    BACKPACK, CHEST, DRIVE, GLIDER, Game, LOOKS, WOOD, ann, bob, file_until, near, run, said,
+    scratch, server,
 };
 
 /// The gives the mod submitted so far: each one's inventory, item and count.
@@ -352,6 +352,66 @@ fn a_chest_whose_placement_fails_is_told_kept_in_the_audit_log_and_gets_no_items
         "{audit}"
     );
     assert!(outcome.ends_with("\trefused"), "{audit}");
+}
+
+/// Places a chest of five wood at 10, 20, 30 and has the game give it
+/// nothing, as when the chest's inventory is not set up yet; the second give
+/// waits.
+fn chest_that_took_nothing(name: &str) -> Game {
+    let loader = server("", &scratch(name));
+    assert!(
+        run(
+            &loader,
+            &ann(),
+            "chestat",
+            &format!("n10\tn20\tn30\ti{WOOD}\tn5")
+        )
+        .starts_with('1')
+    );
+    assert!(loader.drive_until(DRIVE, || !loader.inventory_requests().is_empty()));
+    assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
+    assert!(
+        loader.drive_until(DRIVE, || !loader.inventory_requests().is_empty()),
+        "the items are given again a pass later"
+    );
+    loader
+}
+
+#[test]
+fn a_chest_that_takes_none_of_its_items_twice_is_undone_and_told_not_filled() {
+    let loader = chest_that_took_nothing("chest-unfilled");
+    assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
+    assert!(ann_hears(&loader, "No chest went up at 10, 20, 30"));
+    let state = loader.transactions()[0].info.state;
+    assert!(
+        [TransactionInfo::UNDOING, TransactionInfo::UNDONE].contains(&state),
+        "no empty chest follows: {state}"
+    );
+}
+
+#[test]
+fn a_chest_that_takes_its_items_on_the_second_give_stays() {
+    let loader = chest_that_took_nothing("chest-second");
+    let all = InventoryOpResult {
+        error: 0,
+        remaining: 0,
+    };
+    assert!(loader.finish_inventory(InventoryResult::COMMITTED, &[all]));
+    assert!(!loader.drive_until(std::time::Duration::from_secs(1), || {
+        loader.transactions()[0].info.state != TransactionInfo::APPLIED
+    }));
+    assert!(!ann_hears(&loader, "No chest went up"));
+}
+
+#[test]
+fn a_chest_that_takes_nothing_and_cannot_be_taken_back_is_told_empty() {
+    let loader = chest_that_took_nothing("chest-kept");
+    loader.expire_transactions();
+    assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
+    assert!(ann_hears(
+        &loader,
+        "The chest at 10, 20, 30 took none of Resource_Wood × 5 and could not be taken back"
+    ));
 }
 
 #[test]

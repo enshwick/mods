@@ -204,6 +204,7 @@ fn a_backup_waits_for_a_save_under_way_and_the_restart_stops_the_server_once_it_
         said(&loader, 2).contains(&"The server restarts now.".to_owned())
     }));
     assert!(loader.saves_held(), "the copy waits for the save to end");
+    assert!(!data.join("backups").exists(), "nothing copied yet");
     assert!(!loader.stop_asked(), "the stop waits for the backup");
     assert!(loader.raise::<WorldSaved>(&()) >= 1);
     assert!(real_until(&loader, || loader.stop_asked()));
@@ -240,14 +241,50 @@ fn a_backup_waiting_for_a_save_copies_nothing_once_the_world_stops() {
     let loader = server("", &data);
     assert!(loader.raise::<WorldSaving>(&()) >= 1);
     assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
-    // The copy starts a second after the hold, on the game's clock.
+    // The wait for the save starts a second after the hold.
     let _ran = loader.tick(Duration::from_secs(1));
-    std::thread::sleep(Duration::from_millis(200));
     ends(&loader);
-    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        loader.drive_until(DRIVE, || {
+            said(&loader, 1)
+                .iter()
+                .any(|line| line.starts_with("The backup failed"))
+        }),
+        "the wait ended and said why"
+    );
+    assert!(!loader.drive_until(DRIVE, || data.join("backups").exists()));
     assert!(
         !data.join("backups").exists(),
         "not copied while the final save may be written"
+    );
+}
+
+#[test]
+fn a_backup_gives_up_on_a_save_that_never_ends_lets_the_saves_go_and_says_why() {
+    let (_saves, data) = saves("backup-save-stuck");
+    let loader = server("", &data);
+    assert!(loader.raise::<WorldSaving>(&()) >= 1);
+    assert!(run(&loader, &ann(), "backup", "").starts_with('1'));
+    assert!(!loader.drive_until(Duration::from_secs(100), || !loader.saves_held()));
+    assert!(loader.drive_until(DRIVE, || !loader.saves_held()));
+    assert!(loader.drive_until(DRIVE, || {
+        said(&loader, 1)
+            .iter()
+            .any(|line| line.starts_with("The backup failed"))
+    }));
+    assert!(
+        !data.join("backups").exists(),
+        "a save half written is never copied"
+    );
+    assert!(
+        run(&loader, &ann(), "backup", "").starts_with('1'),
+        "the next backup is free to start"
+    );
+    assert!(real_until(&loader, || !loader.saves_held()));
+    assert_eq!(
+        std::fs::read_dir(data.join("backups")).unwrap().count(),
+        1,
+        "the missed save's end is not waited for again"
     );
 }
 

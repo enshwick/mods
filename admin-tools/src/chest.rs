@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::content::{Guid, vanilla};
-use enshwick::inventory::{Batch, Op};
 use enshwick::world::{TransactionId, World, WorldTransform};
 use enshwick::{Entity, ItemId, Off, WorldError};
 
@@ -144,10 +143,15 @@ fn place(
 /// How long a placement gets to stand before the wait gives up on it.
 const PLACING: Duration = Duration::from_secs(10);
 
+/// How many times a chest that takes none of its items is given them, a
+/// scheduler pass apart, before it is taken back: a chest that just stood
+/// may get its inventory a step later.
+const GIVE_TRIES: u32 = 2;
+
 /// Waits for the chest the transaction `placed` puts in the world and
 /// gives it `count` items `item`, shown as `shown`, in as many stacks as
-/// fit. A chest that does not get placed is told to the caller, and its
-/// placement undone, so no empty chest follows.
+/// fit. A chest that does not get placed, or takes none of its items, is
+/// told to the caller, and its placement undone, so no empty chest follows.
 ///
 /// # Errors
 ///
@@ -160,31 +164,85 @@ fn fill(
     whereabouts: String,
 ) -> Result<(), WorldError> {
     let tools = Arc::clone(&late.tools);
-    once_placed(&tools, placed, move |chest| match chest {
-        Some(chest) => {
-            if let Some(inventories) = &late.tools.inventories {
-                let batch = Batch::new()
-                    .with(Op::Give {
-                        to: chest,
-                        item,
-                        count,
-                        fill: None,
-                    })
-                    .allow_partial();
-                let done = report(Arc::clone(&late), shown, count, whereabouts);
-                let _ticket = inventories.submit(&batch, done);
-            }
+    once_placed(&tools, placed, move |chest| {
+        let Some(chest) = chest else {
+            return late.report(
+                false,
+                texts::REPLY_CHEST_NOT_FILLED,
+                &[
+                    (texts::value::NAME, &whereabouts),
+                    (texts::value::COUNT, &count.to_string()),
+                    (texts::value::ITEM, &shown),
+                ],
+            );
+        };
+        Filling {
+            late,
+            placed,
+            chest,
+            item,
+            count,
+            shown,
+            whereabouts,
         }
-        None => late.report(
-            false,
-            texts::REPLY_CHEST_NOT_FILLED,
-            &[
-                (texts::value::NAME, &whereabouts),
-                (texts::value::COUNT, &count.to_string()),
-                (texts::value::ITEM, &shown),
-            ],
-        ),
+        .give(GIVE_TRIES);
     })
+}
+
+/// A chest that stands and the items it is to hold.
+struct Filling {
+    late: Arc<Late>,
+    placed: TransactionId,
+    chest: Entity,
+    item: ItemId,
+    count: u32,
+    shown: String,
+    whereabouts: String,
+}
+
+impl Filling {
+    /// Gives the chest its items, in as many stacks as fit. When it takes
+    /// none, gives them again a scheduler pass later while `tries` last,
+    /// then takes the chest back and tells the caller no chest went up, or
+    /// that it stands empty when it cannot be taken back.
+    fn give(self, tries: u32) {
+        let Some(inventories) = self.late.tools.inventories else {
+            return;
+        };
+        let (chest, item, count) = (self.chest, self.item, self.count);
+        let _ticket = inventories.give_what_fits(chest, item, count, move |left, given| {
+            if left < self.count {
+                let late = Arc::clone(&self.late);
+                return report(late, self.shown, self.count, self.whereabouts)(given);
+            }
+            if tries > 1 {
+                let scheduler = self.late.tools.scheduler;
+                scheduler.after(Duration::ZERO, move || self.give(tries - 1));
+                return;
+            }
+            enshwick::warn!(
+                "chest at {} took none of {} {}: {:?}",
+                self.whereabouts,
+                self.count,
+                self.shown,
+                given.done
+            );
+            let text = if undo(self.late.tools.world, self.placed) {
+                texts::REPLY_CHEST_NOT_FILLED
+            } else {
+                texts::REPLY_CHEST_EMPTY
+            };
+            self.late.report(
+                false,
+                text,
+                &[
+                    (texts::value::NAME, &self.whereabouts),
+                    (texts::value::COUNT, &self.count.to_string()),
+                    (texts::value::ITEM, &self.shown),
+                ],
+            );
+        });
+    }
 }
 
 /// Waits for the prop the transaction `placed` puts in the world and hands
@@ -215,7 +273,13 @@ pub(crate) fn once_placed(
 /// Undoes the placement `placed` of a prop that will not stand.
 fn lost(world: World, placed: TransactionId, why: &dyn core::fmt::Debug) {
     enshwick::warn!("prop not placed: {why:?}");
-    if let Err(why) = world.undo(placed) {
-        enshwick::debug!("prop placement not undone: {why}");
-    }
+    undo(world, placed);
+}
+
+/// Undoes the placement `placed`; whether the world took it back.
+fn undo(world: World, placed: TransactionId) -> bool {
+    world
+        .undo(placed)
+        .inspect_err(|why| enshwick::warn!("prop placement not undone: {why}"))
+        .is_ok()
 }

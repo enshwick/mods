@@ -28,6 +28,10 @@ Each entry says what players notice; a release's notes show its section.
 
 ### Fixed
 
+- A chest of items that takes none of its items is given them once more a
+  moment later. If it still takes none, it is taken back and the admin
+  reads that no chest went up, or that it stands empty when the game cannot
+  take it back, instead of an empty chest staying unnoticed.
 - A zone builder who respawns on a server builds in a zone from the next
   server step, instead of being refused for up to a second.
 

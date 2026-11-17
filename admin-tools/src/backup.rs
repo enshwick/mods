@@ -3,6 +3,7 @@
 //! by the time, off the game thread, lets the saves go again, also after an
 //! error, and keeps the newest backups the world's settings name.
 
+use core::ops::ControlFlow;
 use core::time::Duration;
 use std::fs;
 use std::io;
@@ -90,7 +91,7 @@ fn backup(tools: &Tools, request: &Request<'_>) -> Outcome {
     };
     tools
         .scheduler
-        .after(SETTLE, move || Arc::clone(&me).copy_aside(&plan, caller));
+        .after(SETTLE, move || me.copy_after_save(plan, caller));
     // The console and a remote console get no notice: the logs keep the end.
     let started = if caller.key.0 == 0 {
         texts::REPLY_BACKUP_STARTED_LOG
@@ -139,8 +140,8 @@ impl Tools {
         })
     }
 
-    /// Copies the world aside on a thread of its own, once a save being
-    /// written has ended, lets the saves go and tells the caller how it went.
+    /// Copies the world aside on a thread of its own, lets the saves go and
+    /// tells the caller how it went.
     fn copy_aside(self: Arc<Self>, plan: &Plan, caller: Caller) {
         let (tools, copying) = (Arc::clone(&self), plan.clone());
         let spawned = std::thread::Builder::new()
@@ -158,31 +159,41 @@ impl Tools {
         }
     }
 
-    /// Waits until no save is being written while the world runs, at most
-    /// [`SAVE_WAIT`]: the hold keeps a new save from starting, never one
+    /// Copies the world aside once no save is being written, looking on the
+    /// game thread now and every [`SAVE_LOOK`], at most [`SAVE_WAIT`] of the
+    /// server's steps: the hold keeps a new save from starting, never one
     /// under way. A world that stopped meanwhile is not copied, as its final
     /// save may be under way; past the wait the save's end is taken as
     /// missed, so the next backup does not wait for it again.
-    fn wait_for_save(&self) -> io::Result<()> {
-        let waited = wait_while(
-            || self.saving.load(Ordering::Acquire) && self.running.load(Ordering::Relaxed),
-            SAVE_WAIT,
-        );
-        if waited.is_err() {
-            self.saving.store(false, Ordering::Release);
+    fn copy_after_save(self: Arc<Self>, plan: Plan, caller: Caller) {
+        let scheduler = self.scheduler;
+        let deadline = self.steps.now() + SAVE_WAIT;
+        let look = move || {
+            let saving =
+                self.saving.load(Ordering::Acquire) && self.running.load(Ordering::Relaxed);
+            if saving && self.steps.now() < deadline {
+                return ControlFlow::Continue(());
+            }
+            if saving {
+                self.saving.store(false, Ordering::Release);
+                let why = io::Error::other("the game is still writing the save");
+                self.finish_backup(&plan, Err(why), caller);
+            } else if self.running.load(Ordering::Relaxed) {
+                Arc::clone(&self).copy_aside(&plan, caller);
+            } else {
+                let why = io::Error::other("the world stopped before the copy");
+                self.finish_backup(&plan, Err(why), caller);
+            }
+            ControlFlow::Break(())
+        };
+        if look().is_continue() {
+            scheduler.every(SAVE_LOOK, look);
         }
-        waited?;
-        if !self.running.load(Ordering::Relaxed) {
-            return Err(io::Error::other("the world stopped before the copy"));
-        }
-        Ok(())
     }
 
-    /// Copies the world while its saves stay held, after a save under way
-    /// ended and again when the save on disk changed during the copy; the
-    /// backup's folder.
+    /// Copies the world while its saves stay held, again when the save on
+    /// disk changed during the copy; the backup's folder.
     fn copy_held(&self, plan: &Plan) -> io::Result<PathBuf> {
-        self.wait_for_save()?;
         for _ in 0..TRIES {
             let before = self.world.save_info();
             let into = copy(plan, &folder_name(journal::now()))?;
@@ -229,19 +240,6 @@ impl Tools {
             }
         });
     }
-}
-
-/// Waits until `saving` is false, at most `limit`, looking every
-/// [`SAVE_LOOK`]; past it, the error that a save is still being written.
-fn wait_while(saving: impl Fn() -> bool, limit: Duration) -> io::Result<()> {
-    let deadline = std::time::Instant::now() + limit;
-    while saving() {
-        if std::time::Instant::now() >= deadline {
-            return Err(io::Error::other("the game is still writing the save"));
-        }
-        std::thread::sleep(SAVE_LOOK);
-    }
-    Ok(())
 }
 
 /// A backup folder's name for `seconds` since 1970: the UTC time, sortable,
@@ -356,8 +354,6 @@ pub(crate) fn prune(root: &Path, kept: usize) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
@@ -411,33 +407,6 @@ mod tests {
         assert!(!is_backup("photos"));
         assert!(!is_backup("2026-11-04 12-00-00"));
         assert!(!is_backup("2026-11-04_12-00-0x"));
-    }
-
-    #[test]
-    fn a_copy_waits_for_a_save_to_end_and_fails_when_it_never_does() {
-        let saving = AtomicBool::new(false);
-        assert!(
-            wait_while(|| saving.load(Ordering::Acquire), Duration::ZERO).is_ok(),
-            "no save, no wait"
-        );
-        saving.store(true, Ordering::Release);
-        let started = std::time::Instant::now();
-        assert!(
-            wait_while(
-                || saving.load(Ordering::Acquire),
-                Duration::from_millis(250)
-            )
-            .is_err()
-        );
-        assert!(started.elapsed() >= Duration::from_millis(250));
-        let written = Arc::new(AtomicBool::new(true));
-        let writer = Arc::clone(&written);
-        let save = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(150));
-            writer.store(false, Ordering::Release);
-        });
-        assert!(wait_while(|| written.load(Ordering::Acquire), Duration::from_secs(5)).is_ok());
-        save.join().unwrap();
     }
 
     #[test]

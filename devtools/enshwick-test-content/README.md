@@ -14,7 +14,7 @@ Keep it off servers people play on.
 | `enshwick.test-content:rain` | a copy of one of the game's rain phenomena in the first weather layer, which holds no rain of its own, picked there with probability 1, 15 km across and lasting 5 to 10 minutes |
 | `enshwick.test-content:wolf` | an enemy copied from the vanilla wolf `Enemy_Wildbeast_wolf_earlygame`, at level 30 with twice its health |
 | `enshwick.test-content:altar` | a Flame Altar kind copied from the vanilla Flame Altar, named Test Flame Altar: its level-1 zone is 40 cells wider on each side, twice the vanilla width, at the vanilla height, and it stays at level 1, as this mod refuses its upgrade to level 2 |
-| `enshwick.test-content:chest` | a prop copied from the vanilla wooden chest, named Test Chest, with a recipe that costs what the wooden chest's does, listed after it in the build menu |
+| `enshwick.test-content:chest` | a container copied from the vanilla wooden chest, named Test Chest, with 40 slots where the wooden chest has 32 and a recipe that costs what the wooden chest's does, listed after it in the build menu; a Test Chest does not go into a Test Chest |
 
 A rain front in the first weather layer is therefore this mod's rain: the
 probe's `weather` scenario waits for one.

@@ -6,7 +6,8 @@
 //! reach the starting area wherever it starts; an enemy copied from a wolf,
 //! sent to the first player who joins; a Flame Altar kind with a wider zone,
 //! held at level 1; and a chest of its own. Each joining player gets the
-//! altar and the chest, learns the chest's recipe and sees a window that
+//! altar and the chest, a container of 40 slots that keeps another Test
+//! Chest out, learns the chest's recipe and sees a window that
 //! welcomes them by name. Each part turns off alone, with its reason on the
 //! Mods screen.
 
@@ -20,10 +21,11 @@ use enshwick::content::items::NewItem;
 use enshwick::content::props::{NewProp, PropId};
 use enshwick::content::templates::TemplateId;
 use enshwick::content::{Guid, Id, id, vanilla};
+use enshwick::inventory::containers::NewContainer;
 use enshwick::resources::Registry;
 use enshwick::typed::{ResourceType, WeatherPhenomenonEffect as GameEffect, WeatherSystemResource};
 use enshwick::weather::{NewPhenomenon, PhenomenonChange, WeatherPhenomenonEffect};
-use enshwick::{Load, Mod, Off};
+use enshwick::{ItemId, Load, Mod, Off};
 
 // The mod's name and description, in each language.
 enshwick::texts!();
@@ -112,6 +114,9 @@ const VANILLA_CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
 /// The chest's item and its name text.
 const CHEST: Id = id!("chest");
 const CHEST_NAME: Id = CHEST.part("name");
+/// How many slots it holds, eight more than the vanilla chest's 32, so a
+/// player tells the two apart.
+const CHEST_SLOTS: u8 = 40;
 /// Its recipe's ingredients against the vanilla chest's.
 const CHEST_COST: u32 = 1;
 
@@ -122,6 +127,7 @@ const ENEMY_PART: &str = "enemy";
 const ALTAR_PART: &str = "altar kind";
 const ALTAR_LIMIT_PART: &str = "altar level limit";
 const CHEST_PART: &str = "chest";
+const CHEST_RULE_PART: &str = "chest rule";
 
 /// The vanilla item or template named `name`, or why not.
 fn named(name: &str, find: fn(&str) -> Result<Guid, vanilla::VanillaError>) -> Result<Guid, Off> {
@@ -183,16 +189,30 @@ fn new_chest(like: Guid) -> NewProp {
     }
 }
 
-/// Adds the chest and its recipe.
+/// Adds the chest, a container of [`CHEST_SLOTS`] slots, and its recipe.
 fn chest(load: &mut Load<'_>) -> Result<PropId, Off> {
     let like = named(VANILLA_CHEST, vanilla::item)?;
-    let chest = load.add_prop(new_chest(like))?;
+    let chest = load.add_container(NewContainer::new(new_chest(like), CHEST_SLOTS))?;
     enshwick::info!(
-        "chest {} added, a copy of {VANILLA_CHEST} {like} placing {}, with its recipe",
+        "PASS add container: chest {} of {CHEST_SLOTS} slots added, a copy of {VANILLA_CHEST} {like} placing {}, with its recipe",
         chest.item.0,
         chest.template.guid()
     );
     Ok(chest)
+}
+
+/// Keeps a Test Chest out of every Test Chest, logging each stack it keeps
+/// out; the rule runs per stack moved, so a stack let in logs nothing.
+fn chest_rule(load: &mut Load<'_>, chest: ItemId) -> Result<(), Off> {
+    load.container_rule(chest, move |put| {
+        let takes = put.item != chest;
+        if !takes {
+            enshwick::info!("container rule kept out: {put:?}");
+        }
+        takes
+    })?;
+    enshwick::info!("PASS container rule registered for chest {}", chest.0);
+    Ok(())
 }
 
 /// The test content.
@@ -220,6 +240,9 @@ impl Mod for TestContent {
             });
         }
         let chest = load.feature(CHEST_PART, chest);
+        if let Some(added) = chest {
+            let _rule = load.feature(CHEST_RULE_PART, |load| chest_rule(load, added.item));
+        }
         join::link(
             load,
             texts,

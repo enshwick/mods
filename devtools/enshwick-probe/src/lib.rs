@@ -18,8 +18,10 @@ mod chat;
 mod checks;
 mod client;
 mod clock;
+mod containers;
 mod damage;
 mod knowledge;
+mod notifiers;
 mod platform;
 mod raw_stats;
 mod respawns;
@@ -129,6 +131,14 @@ fn extras(load: &mut Load<'_>, scheduler: Scheduler, settings: &Settings) -> Vec
     match saves::SaveChecks::new(load, scheduler) {
         Ok(saves) => extras.push(Box::new(move || saves.run())),
         Err(off) => enshwick::warn!("FAIL saves: {off}"),
+    }
+    match containers::ContainerChecks::new(load) {
+        Ok(containers) => extras.push(Box::new(move || containers.run())),
+        Err(off) => enshwick::warn!("FAIL containers: {off}"),
+    }
+    match notifiers::NotifierChecks::new(load, scheduler) {
+        Ok(notifiers) => extras.push(Box::new(move || notifiers.run())),
+        Err(off) => enshwick::warn!("FAIL notifiers: {off}"),
     }
     match client::ClientChecks::new(load) {
         Ok(client) => extras.push(Box::new(move || client.run())),

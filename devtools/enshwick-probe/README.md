@@ -76,6 +76,12 @@ Ten seconds after the world has loaded, and again on the `check` action:
 - affixes: the first weapon or armour in any container rolled two affixes
   from a seed and again the same, its lines named, and its old stats put
   back (skipped when no such item is found, or no player was online yet);
+- containers: the vanilla wooden chest's placement metadata, the game's
+  pickup message refused for an entity that is no player and shown to the
+  first player online (skipped with nobody online); each move a player makes
+  is logged with what it moves as it comes;
+- notifiers: one of the game's notifiers raised far from every player and
+  heard back as the server's notify event within two seconds;
 - terrain: the materials, a dry dig at the first placed entity, a mound
   added 40 metres above it and dug away again, and a radius of 100 metres
   refused;
@@ -110,10 +116,10 @@ Ten seconds after the world has loaded, and again on the `check` action:
   functions, which no code runs, read back; a hook at the entry of the
   `last_transform` system, its hits counted over five seconds; a wooden
   chest placed 6 metres above the first placed entity in one transaction,
-  its status and entity read, one chest item given to it and taken back
-  (skipped while nobody is online, since the game then runs no inventory
-  step), then the transaction undone and the chest gone. A run with
-  `scenario_only` skips these.
+  its status and entity read, one chest item given to it with its pickup
+  message hidden and taken back (skipped while nobody is online, since the
+  game then runs no inventory step), then the transaction undone and the
+  chest gone. A run with `scenario_only` skips these.
 
 At start it also checks a system, a field offset, a type's size and a
 symbol by name, the code section, and the base limit and task worker

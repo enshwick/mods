@@ -578,6 +578,7 @@ impl Default for Access {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use enshwick::interactions::{Move, Transfer};
 
     const OWNER: Seen = Seen {
         key: PlayerKey::new(1),
@@ -739,16 +740,14 @@ mod tests {
         ])));
         let at = centre((40, 2, 40));
         let ask = |kind, player, item: Option<ItemId>| {
-            filter(&Interaction {
-                kind,
-                player: Entity(player),
-                target: Entity(700),
-                item,
-                position: item.map(|_| at),
-                moved: None,
+            let call = Interaction::new(kind, Entity(player), Entity(700));
+            filter(&match item {
+                Some(item) => call.with_item(item).with_position(at),
+                None => call,
             })
         };
-        let safe = Some(ItemId::from_guid(crate::content::SAFE.guid()));
+        let safe_item = ItemId::from_guid(crate::content::SAFE.guid());
+        let safe = Some(safe_item);
         // Unknown and not seen yet: open to all.
         assert!(ask(Kind::Open, 12, None));
         snapshots().placed(Entity(700), (40, 2, 40), OWNER.key, "Ann");
@@ -758,6 +757,28 @@ mod tests {
         assert!(!ask(Kind::Stock, 12, None));
         assert!(ask(Kind::Dismantle, 10, safe));
         assert!(!ask(Kind::Upgrade, 10, safe), "nobody upgrades a Safe");
+        for transfer in [
+            Transfer::DepositStacks,
+            Transfer::DepositAll,
+            Transfer::TakeAll,
+            Transfer::RefillStacks,
+        ] {
+            let moved = |player| {
+                let (character, chest) = (Some(Entity(player)), Some(Entity(700)));
+                let (from, to) = match transfer {
+                    Transfer::TakeAll | Transfer::RefillStacks => (chest, character),
+                    _ => (character, chest),
+                };
+                filter(
+                    &Interaction::new(Kind::Move, Entity(player), Entity(700))
+                        .with_item(safe_item)
+                        .with_position(at)
+                        .with_moved(Move::new(transfer, from, to)),
+                )
+            };
+            assert!(!moved(12), "{transfer:?} by a stranger");
+            assert!(moved(10), "{transfer:?} by the owner");
+        }
         assert!(snapshots().removed(Entity(700)).is_some());
         assert!(
             ask(Kind::Upgrade, 10, Some(ItemId::new(1))),

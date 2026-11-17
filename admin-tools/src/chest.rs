@@ -146,8 +146,8 @@ const PLACING: Duration = Duration::from_secs(10);
 
 /// Waits for the chest the transaction `placed` puts in the world and
 /// gives it `count` items `item`, shown as `shown`, in as many stacks as
-/// fit. A chest that does not get placed is told to the caller, and its
-/// placement undone, so no empty chest follows.
+/// fit. A chest that does not get placed, or takes none of its items, is
+/// told to the caller, and its placement undone, so no empty chest follows.
 ///
 /// # Errors
 ///
@@ -160,31 +160,44 @@ fn fill(
     whereabouts: String,
 ) -> Result<(), WorldError> {
     let tools = Arc::clone(&late.tools);
-    once_placed(&tools, placed, move |chest| match chest {
-        Some(chest) => {
-            if let Some(inventories) = &late.tools.inventories {
-                let batch = Batch::new()
-                    .with(Op::Give {
-                        to: chest,
-                        item,
-                        count,
-                        fill: None,
-                    })
-                    .allow_partial();
-                let done = report(Arc::clone(&late), shown, count, whereabouts);
-                let _ticket = inventories.submit(&batch, done);
+    once_placed(&tools, placed, move |chest| {
+        let Some(chest) = chest else {
+            return not_filled(&late, count, &shown, &whereabouts);
+        };
+        let Some(inventories) = late.tools.inventories else {
+            return;
+        };
+        let batch = Batch::new()
+            .with(Op::Give {
+                to: chest,
+                item,
+                count,
+                fill: None,
+            })
+            .allow_partial();
+        let short = report(Arc::clone(&late), shown.clone(), count, whereabouts.clone());
+        let _ticket = inventories.submit(&batch, move |given| {
+            if crate::inventory::shortfall(given, count) < count {
+                return short(given);
             }
-        }
-        None => late.report(
-            false,
-            texts::REPLY_CHEST_NOT_FILLED,
-            &[
-                (texts::value::NAME, &whereabouts),
-                (texts::value::COUNT, &count.to_string()),
-                (texts::value::ITEM, &shown),
-            ],
-        ),
+            lost(late.tools.world, placed, &given.done);
+            not_filled(&late, count, &shown, &whereabouts);
+        });
     })
+}
+
+/// Tells the caller no chest went up at `whereabouts`, so `count` of
+/// `shown` were not given.
+fn not_filled(late: &Late, count: u32, shown: &str, whereabouts: &str) {
+    late.report(
+        false,
+        texts::REPLY_CHEST_NOT_FILLED,
+        &[
+            (texts::value::NAME, whereabouts),
+            (texts::value::COUNT, &count.to_string()),
+            (texts::value::ITEM, shown),
+        ],
+    );
 }
 
 /// Waits for the prop the transaction `placed` puts in the world and hands

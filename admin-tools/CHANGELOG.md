@@ -25,9 +25,15 @@ Each entry says what players notice; a release's notes show its section.
 - Typed commands take the game's template and item debug names in any
   case, an exact match first. A name that several templates or items share
   lists up to eight of their GUIDs to pick from.
+- A backup started while the game writes a save waits for the save on the
+  server's game thread and starts its copy only once the save ended; no
+  thread sleeps through the wait. Its replies and the restart after it stay
+  as before.
 
 ### Fixed
 
+- A chest of items that takes none of its items is taken back and the
+  admin reads that no chest went up, instead of an empty chest staying.
 - A zone builder who respawns on a server builds in a zone from the next
   server step, instead of being refused for up to a second.
 

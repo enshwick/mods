@@ -23,14 +23,14 @@ developer = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-enshwick = { workspace = true, features = ["unstable"] }
+enshwick = { workspace = true, features = ["typed", "unstable"] }
 enshwick-luau.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true, features = ["parse", "serde"] }
 
 [dev-dependencies]
-enshwick = { workspace = true, features = ["test", "unstable"] }
+enshwick = { workspace = true, features = ["test", "typed", "unstable"] }
 
 [lints]
 workspace = true

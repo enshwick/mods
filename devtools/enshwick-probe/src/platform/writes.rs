@@ -231,12 +231,14 @@ impl Writer {
     /// Gives one item to `chest` and takes it back, each as an inventory
     /// batch, then undoes the transaction `id` that placed it.
     fn give_and_take(self, inventories: Inventories, id: TransactionId, chest: Entity) {
-        let give_one = Batch::new().with(Op::Give {
-            to: chest,
-            item: self.chest_item,
-            count: 1,
-            fill: None,
-        });
+        let give_one = Batch::new()
+            .with(Op::Give {
+                to: chest,
+                item: self.chest_item,
+                count: 1,
+                fill: None,
+            })
+            .hide_in_ui();
         let _ticket = inventories.submit(&give_one, move |gave| {
             if gave.done == Done::TimedOut {
                 enshwick::info!(
@@ -254,7 +256,7 @@ impl Writer {
             let _ticket = inventories.submit(&take_one, move |took| {
                 let (took, left) = (took.is_committed(), inventories.count(chest, self.chest_item));
                 let line = format!(
-                    "inventory submit: give committed {gave}, chest held {held}; take committed {took}, chest holds {left}"
+                    "inventory submit: give hidden in the UI committed {gave}, chest held {held}; take committed {took}, chest holds {left}"
                 );
                 if gave && held == 1 && took && left == 0 {
                     pass(&line);

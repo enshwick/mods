@@ -355,6 +355,30 @@ fn a_chest_whose_placement_fails_is_told_kept_in_the_audit_log_and_gets_no_items
 }
 
 #[test]
+fn a_chest_that_takes_none_of_its_items_is_undone_and_told_not_filled() {
+    let dir = scratch("chest-unfilled");
+    let loader = server("", &dir);
+    assert!(
+        run(
+            &loader,
+            &ann(),
+            "chestat",
+            &format!("n10\tn20\tn30\ti{WOOD}\tn5")
+        )
+        .starts_with('1')
+    );
+    assert!(loader.drive_until(DRIVE, || !loader.inventory_requests().is_empty()));
+    // The game gives nothing, as when the chest's inventory is not set up yet.
+    assert!(loader.finish_inventory(InventoryResult::ROLLED_BACK, &[]));
+    assert!(ann_hears(&loader, "No chest went up at 10, 20, 30"));
+    let state = loader.transactions()[0].info.state;
+    assert!(
+        [TransactionInfo::UNDOING, TransactionInfo::UNDONE].contains(&state),
+        "no empty chest follows: {state}"
+    );
+}
+
+#[test]
 fn what_did_not_fit_is_told_with_how_many_arrived() {
     let dir = scratch("give-short");
     let loader = server("", &dir);

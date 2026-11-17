@@ -77,7 +77,7 @@ fn asked(ops: &[Op]) -> u32 {
 
 /// How many of the `asked` items a request left out: all of them when the
 /// game turned it down, else what its operations could not place.
-pub(crate) fn shortfall(outcome: &Given, asked: u32) -> u32 {
+fn shortfall(outcome: &Given, asked: u32) -> u32 {
     if !outcome.is_committed() {
         return asked;
     }

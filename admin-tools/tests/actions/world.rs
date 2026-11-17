@@ -244,6 +244,14 @@ fn a_backup_waiting_for_a_save_copies_nothing_once_the_world_stops() {
     // The wait for the save starts a second after the hold.
     let _ran = loader.tick(Duration::from_secs(1));
     ends(&loader);
+    assert!(
+        loader.drive_until(DRIVE, || {
+            said(&loader, 1)
+                .iter()
+                .any(|line| line.starts_with("The backup failed"))
+        }),
+        "the wait ended and said why"
+    );
     assert!(!loader.drive_until(DRIVE, || data.join("backups").exists()));
     assert!(
         !data.join("backups").exists(),

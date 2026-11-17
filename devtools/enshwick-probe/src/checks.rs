@@ -16,15 +16,16 @@ use enshwick::world::{ContainerKinds, Notice, World, WritableType};
 use enshwick::{Load, Off, WorldError};
 
 /// An entity id no world holds, for the checks of what a call refuses.
-const NOT_IN_WORLD: Entity = Entity(u32::MAX - 1);
+pub(crate) const NOT_IN_WORLD: Entity = Entity(u32::MAX - 1);
 /// Entities whose stats a check compares.
 const SAMPLE: usize = 5;
 /// How long a destroyed entity may take to leave the world.
 const DESTROY_WAIT: Duration = Duration::from_secs(2);
 /// How long a written component may take to reach its replicated copy.
 const REPLICATION_WAIT: Duration = Duration::from_secs(1);
-/// Where the probe pings, far from anything a player would see.
-const PING_AT: [f64; 3] = [-12345.0, -500.0, 777.0];
+/// Where the probe pings and raises a notifier, far from anything a player
+/// would see or hear.
+pub(crate) const PING_AT: [f64; 3] = [-12345.0, -500.0, 777.0];
 /// When the probe looks at a teleported entity's components.
 const TELEPORT_PEEK: Duration = Duration::from_millis(500);
 /// How high above its source the probe spawns a copy, so it never spawns in

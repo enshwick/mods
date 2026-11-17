@@ -201,12 +201,14 @@ fn chest(load: &mut Load<'_>) -> Result<PropId, Off> {
     Ok(chest)
 }
 
-/// Keeps a Test Chest out of every Test Chest, logging each stack the rule
-/// is asked about.
+/// Keeps a Test Chest out of every Test Chest, logging each stack it keeps
+/// out; the rule runs per stack moved, so a stack let in logs nothing.
 fn chest_rule(load: &mut Load<'_>, chest: ItemId) -> Result<(), Off> {
     load.container_rule(chest, move |put| {
         let takes = put.item != chest;
-        enshwick::info!("container rule: {put:?}, takes it: {takes}");
+        if !takes {
+            enshwick::info!("container rule kept out: {put:?}");
+        }
         takes
     })?;
     enshwick::info!("PASS container rule registered for chest {}", chest.0);

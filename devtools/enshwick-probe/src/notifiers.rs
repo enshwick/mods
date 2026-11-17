@@ -13,11 +13,8 @@ use enshwick::schedule::Scheduler;
 use enshwick::typed::{NotifierResource, ResourceType};
 use enshwick::{Load, Off};
 
-use crate::checks::{fail, pass};
+use crate::checks::{PING_AT as NOTIFY_AT, fail, pass};
 
-/// Where the probe raises its notifier, far from anything a player would
-/// hear.
-const NOTIFY_AT: [f64; 3] = [-12345.0, -500.0, 777.0];
 /// How far from [`NOTIFY_AT`] the event heard back may name its place.
 const NOTIFY_SLACK: f64 = 1.0;
 /// How long the raised notifier may take to come back as an event.
@@ -30,6 +27,8 @@ pub(crate) struct NotifierChecks {
     scheduler: Scheduler,
     notifier: Guid,
     heard: Arc<AtomicBool>,
+    /// Whether a run waits for its verdict, which a second run would spoil.
+    judging: Arc<AtomicBool>,
 }
 
 impl NotifierChecks {
@@ -55,20 +54,29 @@ impl NotifierChecks {
             scheduler,
             notifier,
             heard,
+            judging: Arc::new(AtomicBool::new(false)),
         })
     }
 
     /// Raises the notifier and looks whether the server's notify event
-    /// named it, on the game thread.
+    /// named it, on the game thread; skipped while an earlier run waits for
+    /// its verdict.
     pub(crate) fn run(&self) {
+        if self.judging.swap(true, Ordering::AcqRel) {
+            enshwick::info!("SKIP effects notify: an earlier check still listens");
+            return;
+        }
         self.heard.store(false, Ordering::Release);
         let notify = Notify::new(self.notifier, NotifyAt::Position(NOTIFY_AT));
         if let Err(why) = self.effects.notify(&notify) {
+            self.judging.store(false, Ordering::Release);
             fail(&format!("effects notify of {}: {why}", self.notifier));
             return;
         }
         let (heard, notifier) = (Arc::clone(&self.heard), self.notifier);
+        let judging = Arc::clone(&self.judging);
         self.scheduler.after(HEAR_WAIT, move || {
+            judging.store(false, Ordering::Release);
             if heard.load(Ordering::Acquire) {
                 pass(&format!(
                     "effects notify: notifier {notifier} raised and heard back"

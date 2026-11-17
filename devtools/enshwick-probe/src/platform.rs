@@ -25,6 +25,8 @@ use crate::checks::{SPAWN_LIFT, fail, pass};
 
 mod writes;
 
+pub(crate) use writes::CHEST;
+
 /// The field of the reflected type the probe looks up.
 const SHAPE_FIELD: &str = "rangeX";
 /// An ECS system every server build has.

@@ -160,19 +160,18 @@ impl Tools {
     }
 
     /// Copies the world aside once no save is being written, looking on the
-    /// game thread now and every [`SAVE_LOOK`], at most [`SAVE_WAIT`]: the
-    /// hold keeps a new save from starting, never one under way. A world
-    /// that stopped meanwhile is not copied, as its final save may be under
-    /// way; past the wait the save's end is taken as missed, so the next
-    /// backup does not wait for it again.
+    /// game thread now and every [`SAVE_LOOK`], at most [`SAVE_WAIT`] of the
+    /// server's steps: the hold keeps a new save from starting, never one
+    /// under way. A world that stopped meanwhile is not copied, as its final
+    /// save may be under way; past the wait the save's end is taken as
+    /// missed, so the next backup does not wait for it again.
     fn copy_after_save(self: Arc<Self>, plan: Plan, caller: Caller) {
         let scheduler = self.scheduler;
-        let mut waited = Duration::ZERO;
-        let mut look = move || {
+        let deadline = self.steps.now() + SAVE_WAIT;
+        let look = move || {
             let saving =
                 self.saving.load(Ordering::Acquire) && self.running.load(Ordering::Relaxed);
-            if saving && waited < SAVE_WAIT {
-                waited += SAVE_LOOK;
+            if saving && self.steps.now() < deadline {
                 return ControlFlow::Continue(());
             }
             if saving {

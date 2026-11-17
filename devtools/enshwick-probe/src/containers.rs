@@ -6,15 +6,10 @@ use enshwick::content::vanilla;
 use enshwick::interactions::Kind;
 use enshwick::inventory::Inventories;
 use enshwick::world::World;
-use enshwick::{Entity, ItemId, Load, Off, WorldError};
+use enshwick::{ItemId, Load, Off, WorldError};
 
-use crate::checks::{fail, pass};
-
-/// The vanilla wooden chest, as the item registry of server 26430253 lists
-/// it.
-const CHEST: &str = "Prop_Storage_32_T2_Chest_Wood";
-/// An entity id no world holds, which a pickup message refuses.
-const NO_PLAYER: Entity = Entity(u32::MAX - 1);
+use crate::checks::{NOT_IN_WORLD, fail, pass};
+use crate::platform::CHEST;
 
 /// The container checks and what they need.
 #[derive(Debug)]
@@ -31,6 +26,7 @@ impl ContainerChecks {
         let chest = vanilla::item(CHEST)
             .map(ItemId::from_guid)
             .map_err(|why| Off::new(format!("{CHEST}: {why}")))?;
+        let (world, inventories) = (load.world()?, load.inventories()?);
         load.on_interaction(|interaction| {
             if interaction.kind == Kind::Move {
                 enshwick::info!(
@@ -43,8 +39,8 @@ impl ContainerChecks {
         })?;
         pass("interaction filter registered, logging each move's moved");
         Ok(Self {
-            world: load.world()?,
-            inventories: load.inventories()?,
+            world,
+            inventories,
             chest,
         })
     }
@@ -55,7 +51,7 @@ impl ContainerChecks {
             Ok(info) => pass(&format!("prop placement info of {CHEST}: {info:?}")),
             Err(why) => fail(&format!("prop placement info of {CHEST}: {why}")),
         }
-        match self.inventories.show_pickup(NO_PLAYER, self.chest, 1) {
+        match self.inventories.show_pickup(NOT_IN_WORLD, self.chest, 1) {
             Err(WorldError::Refused) => pass("show pickup refuses an entity that is no player"),
             shown => fail(&format!(
                 "show pickup to an entity that is no player: {shown:?}, not refused"

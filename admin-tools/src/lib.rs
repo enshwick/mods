@@ -50,6 +50,7 @@ use enshwick::knowledge::Knowledge;
 use enshwick::map::Map;
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
+use enshwick::time::StepClock;
 use enshwick::weather::Weather;
 use enshwick::world::World;
 use enshwick::{Entity, Load, Mod, Off, PlayerKey, Relock as _};
@@ -76,6 +77,9 @@ pub(crate) struct Tools {
     world: World,
     effects: Effects,
     clock: Clock,
+    /// The time the server's steps counted, which a wait on the game
+    /// thread measures.
+    steps: &'static StepClock,
     weather: Weather,
     knowledge: Knowledge,
     /// The inventories, `None` on a build without them.
@@ -167,6 +171,7 @@ impl Mod for AdminTools {
             .inspect_err(|why| enshwick::warn!("the world action is off: {why}"))
             .ok();
         let scheduler = load.scheduler()?;
+        let steps = load.step_clock()?;
         let knowledge = load.knowledge();
         let inventories = load
             .inventories()
@@ -186,6 +191,7 @@ impl Mod for AdminTools {
             world,
             effects,
             clock,
+            steps,
             weather,
             knowledge,
             inventories,

@@ -687,7 +687,7 @@ fn destroy_marked(world: World, scheduler: Scheduler, marks: EntityData<u32>, en
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
+    use std::cell::Cell;
 
     use enshwick::abi::Status;
     use enshwick::ecs::ComponentType;
@@ -726,7 +726,12 @@ mod tests {
     // ast-grep-ignore: engine-names-stay-in-loader
     const NETWORK_HEALTH: &str = "keen::ecs::NetworkHealth";
 
-    static RESOLVED: OnceLock<(World, WritableType, ComponentType)> = OnceLock::new();
+    thread_local! {
+        /// What the mod of this test resolved: init runs on the test's thread,
+        /// and `cargo test` runs tests as threads of one process.
+        static RESOLVED: Cell<Option<(World, WritableType, ComponentType)>> =
+            const { Cell::new(None) };
+    }
 
     struct Copies;
 
@@ -735,7 +740,7 @@ mod tests {
             let world = load.world()?;
             let copy = WritableType::resolve(load, NETWORK_HEALTH)?;
             let health = ComponentType::resolve(load, NETWORK_HEALTH)?;
-            let _first = RESOLVED.set((world, copy, health));
+            RESOLVED.set(Some((world, copy, health)));
             Ok(Self)
         }
     }
@@ -763,7 +768,7 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, copy, _) = RESOLVED.get().unwrap();
-        Checks::copy_write(*world, *copy, Entity(3));
+        Checks::copy_write(world, copy, Entity(3));
         let logs = loader.logs();
         assert!(
             logs.iter()
@@ -786,7 +791,7 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, _, health) = RESOLVED.get().unwrap();
-        Checks::compare(*world, *health, Entity(3));
+        Checks::compare(world, health, Entity(3));
         let logs = loader.logs();
         assert!(
             logs.iter()
@@ -829,7 +834,7 @@ mod tests {
         let (world, _, _) = RESOLVED.get().unwrap();
         let ann = world.players().remove(0);
         let count = crate::NOTICES;
-        assert_eq!(Checks::burst(*world, &ann), count as usize);
+        assert_eq!(Checks::burst(world, &ann), count as usize);
         let sent = loader.notices();
         let expected: Vec<_> = (1..=count).map(|n| (key, n.to_string())).collect();
         assert_eq!(sent, expected);

@@ -67,7 +67,7 @@ impl RespawnPoints {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
+    use std::cell::Cell;
 
     use enshwick::abi::{Header, PlayerInfo, RespawnPointInfo, Status};
     use enshwick::{Entity, Load, Mod, Off, PlayerKey};
@@ -78,13 +78,17 @@ mod tests {
     const ALTAR: Entity = Entity(40);
     const SPIRE: Entity = Entity(41);
 
-    static WORLD: OnceLock<enshwick::world::World> = OnceLock::new();
+    thread_local! {
+        /// The world of this test's mod: init runs on the test's thread, and
+        /// `cargo test` runs tests as threads of one process.
+        static WORLD: Cell<Option<enshwick::world::World>> = const { Cell::new(None) };
+    }
 
     struct Homes;
 
     impl Mod for Homes {
         fn init(load: &mut Load<'_>) -> Result<Self, Off> {
-            let _first = WORLD.set(load.world()?);
+            WORLD.set(Some(load.world()?));
             Ok(Self)
         }
     }
@@ -121,7 +125,7 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        let world = *WORLD.get().unwrap();
+        let world = WORLD.get().unwrap();
         let player = world.players().remove(0);
         (loader, RespawnPoints::new(world), player)
     }

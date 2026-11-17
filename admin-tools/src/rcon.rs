@@ -81,7 +81,7 @@ const RETRY: Duration = Duration::from_millis(500);
 const WAKE: Duration = Duration::from_secs(1);
 
 /// Where the remote console listens and the password it takes.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub(crate) struct Config {
     /// The address and port.
     pub address: SocketAddr,
@@ -105,7 +105,10 @@ pub(crate) struct Listener {
 
 /// What the listener's threads share.
 struct Shared {
-    config: Config,
+    address: SocketAddr,
+    /// The password a login takes; a new one replaces it whole, so a client
+    /// tells by its pointer whether the one it logged in with still holds.
+    password: Mutex<Arc<str>>,
     stop: AtomicBool,
     /// Where the listener took its port, once it has.
     bound: OnceLock<SocketAddr>,
@@ -173,9 +176,19 @@ impl Listener {
         self.shared.stop.load(Ordering::SeqCst)
     }
 
-    /// Where it listens and the password it takes.
-    pub(crate) fn config(&self) -> &Config {
-        &self.shared.config
+    /// Where it listens.
+    pub(crate) fn address(&self) -> SocketAddr {
+        self.shared.address
+    }
+
+    /// Makes logins take `password` from now on, keeping the port and the
+    /// waiting connections; a client logged in with another password closes
+    /// at its next packet.
+    pub(crate) fn set_password(&self, password: &str) {
+        let mut current = self.shared.password.relock();
+        if **current != *password {
+            *current = password.into();
+        }
     }
 
     /// Stops listening and shuts every connection down; the threads end on
@@ -227,7 +240,7 @@ fn listen_on(shared: &Arc<Shared>) {
     };
     let _set = shared
         .bound
-        .set(socket.local_addr().unwrap_or(shared.config.address));
+        .set(socket.local_addr().unwrap_or(shared.address));
     fence(Ordering::SeqCst);
     accept(&socket, shared);
 }
@@ -235,7 +248,7 @@ fn listen_on(shared: &Arc<Shared>) {
 /// Takes the console's port, again while another socket still holds it;
 /// `None` once the console closed or every try failed.
 fn bind(shared: &Shared) -> Option<TcpListener> {
-    let address = shared.config.address;
+    let address = shared.address;
     for tries in 1..=BIND_TRIES {
         if shared.stop.load(Ordering::SeqCst) {
             return None;
@@ -292,7 +305,8 @@ fn accept(socket: &TcpListener, shared: &Arc<Shared>) {
 impl Shared {
     fn new(config: Config, tools: Weak<Tools>) -> Self {
         Self {
-            config,
+            address: config.address,
+            password: Mutex::new(config.password.into()),
             stop: AtomicBool::new(false),
             bound: OnceLock::new(),
             open: Mutex::default(),
@@ -385,6 +399,11 @@ impl Shared {
         }
     }
 
+    /// The password a login takes now.
+    fn password(&self) -> Arc<str> {
+        Arc::clone(&self.password.relock())
+    }
+
     /// Writes a login to the audit log while it is on.
     fn log_login(&self, label: &str, outcome: &str) {
         if let Some(tools) = self.tools.upgrade() {
@@ -427,7 +446,6 @@ impl Pace {
 /// closes. A read that waited out its time closes the connection, since
 /// Windows leaves a socket whose receive timed out unusable.
 fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
-    let password = &shared.config.password;
     // A client that stops reading cannot keep its thread and slot for good.
     stream.set_write_timeout(Some(COMMAND_TIMEOUT))?;
     stream.set_nodelay(true)?;
@@ -439,9 +457,10 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
         since: opened,
         count: 0,
     };
-    let mut logged_in = false;
+    // The password the client logged in with.
+    let mut logged_in: Option<Arc<str>> = None;
     while !shared.stop.load(Ordering::SeqCst) {
-        let wait = if logged_in {
+        let wait = if logged_in.is_some() {
             IDLE
         } else {
             LOGIN_TIME.saturating_sub(opened.elapsed())
@@ -459,7 +478,7 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
                     io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                 ) =>
             {
-                let why = if logged_in {
+                let why = if logged_in.is_some() {
                     "silent too long"
                 } else {
                     "no login in time"
@@ -473,10 +492,17 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
             if !pace.admit() {
                 return Err(io::Error::other("too many packets a second"));
             }
+            if logged_in
+                .as_ref()
+                .is_some_and(|mine| !Arc::ptr_eq(mine, &shared.password()))
+            {
+                return Err(io::Error::other("the password changed"));
+            }
             match packet.kind {
                 packet::AUTH => {
-                    logged_in = same(&packet.body, password.as_bytes());
-                    let id = if logged_in { packet.id } else { -1 };
+                    let password = shared.password();
+                    logged_in = same(&packet.body, password.as_bytes()).then_some(password);
+                    let id = if logged_in.is_some() { packet.id } else { -1 };
                     send(&mut stream, &Packet::answer(packet.id, ""))?;
                     send(
                         &mut stream,
@@ -486,14 +512,16 @@ fn serve(mut stream: TcpStream, ip: IpAddr, shared: &Shared) -> io::Result<()> {
                             body: Vec::new(),
                         }],
                     )?;
-                    shared.log_login(&label, if logged_in { "ok" } else { "refused" });
-                    if logged_in {
+                    shared.log_login(&label, if logged_in.is_some() { "ok" } else { "refused" });
+                    if logged_in.is_some() {
                         shared.forgive(ip);
                     } else if shared.strike(ip) {
                         return Err(io::Error::other("too many failed logins"));
                     }
                 }
-                _ if !logged_in => return Err(io::Error::other("a command before a login")),
+                _ if logged_in.is_none() => {
+                    return Err(io::Error::other("a command before a login"));
+                }
                 packet::EXEC => {
                     let line = String::from_utf8_lossy(&packet.body).into_owned();
                     let reply = run(line, &label, shared);
@@ -567,7 +595,8 @@ fn run(line: String, label: &str, shared: &Shared) -> String {
 impl Tools {
     /// Opens, moves or closes the remote console as `settings` say: it
     /// listens while they turn it on and a world runs, and opens again
-    /// when the address or the password changes. With no password, it
+    /// when the address changes; a new password takes effect on the open
+    /// port, so no login arriving meanwhile is dropped. With no password, it
     /// closes and writes a new one into the world's setting, whose change
     /// opens it again: that write, once per world, is the one file this
     /// reads or writes, and the listener's thread takes the port.
@@ -578,14 +607,20 @@ impl Tools {
         {
             let mut slot = self.rcon.relock();
             let alive = slot.as_ref().filter(|listener| !listener.ended());
-            if alive.map(Listener::config) != wanted.as_ref() {
-                if let Some(old) = slot.take() {
-                    old.close();
+            match (alive, wanted) {
+                (None, None) => {}
+                (Some(listener), Some(config)) if listener.address() == config.address => {
+                    listener.set_password(&config.password);
                 }
-                if let Some(config) = wanted {
-                    match Listener::open(config, Weak::clone(&self.me)) {
-                        Ok(listener) => *slot = Some(listener),
-                        Err(why) => enshwick::warn!("the remote console does not start: {why}"),
+                (_, wanted) => {
+                    if let Some(old) = slot.take() {
+                        old.close();
+                    }
+                    if let Some(config) = wanted {
+                        match Listener::open(config, Weak::clone(&self.me)) {
+                            Ok(listener) => *slot = Some(listener),
+                            Err(why) => enshwick::warn!("the remote console does not start: {why}"),
+                        }
                     }
                 }
             }
@@ -857,6 +892,55 @@ mod tests {
     }
 
     #[test]
+    fn a_new_password_keeps_the_port_and_ends_only_the_sessions_of_the_old_one() {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let listener = Listener::open(
+            Config {
+                address: SocketAddr::from(([127, 0, 0, 1], port)),
+                password: "the old long password".into(),
+            },
+            Weak::new(),
+        )
+        .unwrap();
+        // The id of the second answer to a login: the packet's own for in, -1 for refused.
+        let login = |client: &mut TcpStream, password: &str| {
+            let auth = Packet {
+                id: 1,
+                kind: packet::AUTH,
+                body: password.as_bytes().to_vec(),
+            };
+            client.write_all(&auth.encode()).unwrap();
+            let mut answers = [0u8; 28];
+            client.read_exact(&mut answers).unwrap();
+            i32::from_le_bytes(answers[18..22].try_into().unwrap())
+        };
+        let mut old = connect(port);
+        assert_eq!(login(&mut old, "the old long password"), 1);
+        let mut waiting = connect(port);
+        listener.set_password("the new long password");
+        assert_eq!(login(&mut waiting, "the new long password"), 1);
+        let mut fresh = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        assert_eq!(login(&mut fresh, "the old long password"), -1);
+        let command = Packet {
+            id: 2,
+            kind: packet::EXEC,
+            body: b"adm online".to_vec(),
+        };
+        let _sent = old.write_all(&command.encode());
+        let mut rest = Vec::new();
+        assert_eq!(
+            old.read_to_end(&mut rest).unwrap_or(0),
+            0,
+            "the old session ends"
+        );
+        listener.close();
+    }
+
+    #[test]
     fn each_tracked_client_gets_its_own_number_and_one_tracked_after_closing_is_shut_down() {
         let server = TcpListener::bind("127.0.0.1:0").unwrap();
         let mut client = TcpStream::connect(server.local_addr().unwrap()).unwrap();
@@ -883,7 +967,7 @@ mod tests {
     fn the_console_takes_its_port_once_another_socket_lets_it_go() {
         let holder = TcpListener::bind("127.0.0.1:0").unwrap();
         let mut shared = shared("pw");
-        shared.config.address = holder.local_addr().unwrap();
+        shared.address = holder.local_addr().unwrap();
         let shared = Arc::new(shared);
         let binding = Arc::clone(&shared);
         let bound = std::thread::spawn(move || bind(&binding));

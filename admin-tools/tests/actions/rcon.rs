@@ -238,10 +238,11 @@ fn the_remote_console_closes_with_the_game_and_moves_when_its_port_changes() {
 /// The answer to a login with `password` on `port`: id 1 for in, -1 for
 /// refused, 0 when no try started within ten seconds was answered.
 ///
-/// A console that just closed keeps its port until its thread wakes, and
-/// the connection it takes then, or one its dropped listener still held,
-/// ends unanswered, reset or not; so a login that gets no answer tries
-/// again until the console that took the port answers.
+/// A console that just closed, as clearing the password closes it, keeps
+/// its port until its thread wakes, and the connection it takes then, or
+/// one its dropped listener still held, ends unanswered, reset or not; so a
+/// login that gets no answer tries again until the console that took the
+/// port answers.
 ///
 /// # Panics
 ///
@@ -283,6 +284,31 @@ fn clearing_the_rcon_password_closes_the_console_and_opens_it_again_with_a_new_o
     assert_ne!(new, PASSWORD);
     assert_eq!(login(&loader, port, PASSWORD), -1, "the old one is gone");
     assert_eq!(login(&loader, port, &new), 1);
+}
+
+#[test]
+fn a_new_rcon_password_applies_on_the_open_port_to_a_connection_already_waiting() {
+    use std::io::Write as _;
+    const NEW: &str = "a brand new rcon password";
+    let dir = scratch("rcon-new-password");
+    let port = free_port();
+    let loader = server(&rcon_settings(port), &dir);
+    let mut waiting = connect(port);
+    loader.set_settings("settings", &rcon_settings(port).replace(PASSWORD, NEW));
+    assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
+    let client = std::thread::spawn(move || {
+        waiting.write_all(&packet(1, 3, PASSWORD)).unwrap();
+        let _empty = read_packet(&mut waiting);
+        let old = read_packet(&mut waiting);
+        let mut fresh = connect(port);
+        fresh.write_all(&packet(2, 3, NEW)).unwrap();
+        let _empty = read_packet(&mut fresh);
+        (old, read_packet(&mut fresh))
+    });
+    assert!(real_until(&loader, || client.is_finished()));
+    let (old, new) = client.join().unwrap();
+    assert_eq!(old, Some((-1, 2, String::new())), "the old one is refused");
+    assert_eq!(new, Some((2, 2, String::new())), "answered, not dropped");
 }
 
 /// Whether the port stops taking connections within two seconds: a closed

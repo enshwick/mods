@@ -491,21 +491,12 @@ mod tests {
 
     use super::*;
 
-    /// Starts the probe on a fake host with `settings` as the file in a
-    /// folder of this test's own, as `cargo test` runs tests as threads of
-    /// one process; the status and the host to look at.
+    /// Starts the probe on a fake host with `settings` as the file in its
+    /// own folder; the status and the host to look at.
     fn start(settings: &str) -> (Status, enshwick::test::Installed) {
-        let test = std::thread::current()
-            .name()
-            .unwrap_or_default()
-            .replace(':', "_");
-        let dir =
-            std::env::temp_dir().join(format!("enshwick-probe-{}-{test}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("settings.toml"), settings).unwrap();
         let loader = enshwick::test::FakeHost::new()
             .developer_tools(true)
-            .mod_dir(dir.to_str().unwrap())
+            .mod_file("settings.toml", settings)
             .install();
         // SAFETY: the exports of the `declare_mod!` below.
         let status =

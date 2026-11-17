@@ -107,27 +107,15 @@ mod tests {
 
     use super::*;
 
-    /// The mod's own folder in this test: one per test thread.
-    fn own_dir() -> std::path::PathBuf {
-        std::env::temp_dir().join(format!(
-            "enshwick-test-ui-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ))
-    }
-
     /// The mod started on `host` with `settings` as the file in its own
     /// folder, which the tone is written into.
     fn start_on(
         host: enshwick::test::FakeHost,
         settings: &[u8],
     ) -> (Status, enshwick::test::Installed) {
-        let dir = own_dir();
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("settings.toml"), settings).unwrap();
         let loader = host
             .developer_tools(true)
-            .mod_dir(dir.to_str().unwrap())
+            .mod_file("settings.toml", settings)
             .install();
         // SAFETY: the exports of `declare_mod!` above.
         let status =
@@ -170,7 +158,7 @@ mod tests {
         let (status, loader) = start_on(host, settings.as_bytes());
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         assert_eq!(
-            std::fs::read(own_dir().join("tone.wav")).unwrap(),
+            std::fs::read(loader.mod_dir().join("tone.wav")).unwrap(),
             tone::wav()
         );
         assert!(

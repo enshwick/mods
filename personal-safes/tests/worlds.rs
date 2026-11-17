@@ -258,14 +258,7 @@ label_language = \"en\"
                 Entity(10),
                 stranger,
             )])));
-        let stock = Interaction {
-            kind: Kind::Stock,
-            player: Entity(10),
-            target: Entity(700),
-            item: None,
-            position: None,
-            moved: None,
-        };
+        let stock = Interaction::new(Kind::Stock, Entity(10), Entity(700));
         assert!(
             enshwick_personal_safes::access::filter(&stock),
             "not seen yet"
@@ -676,25 +669,14 @@ label_language = \"en\"
                     admin: false,
                 },
             )])));
-        let open = Interaction {
-            kind: Kind::Open,
-            player: Entity(10),
-            target: Entity(900),
-            item: Some(safe),
-            position: Some([20.0, 1.0, 20.0]),
-            moved: None,
-        };
+        let open = Interaction::new(Kind::Open, Entity(10), Entity(900))
+            .with_item(safe)
+            .with_position([20.0, 1.0, 20.0]);
         assert!(
             !enshwick_personal_safes::access::filter(&open),
             "a Safe whose owner is unknown stays shut"
         );
-        let stock = Interaction {
-            kind: Kind::Stock,
-            target: Entity(700),
-            item: None,
-            position: None,
-            ..open
-        };
+        let stock = Interaction::new(Kind::Stock, Entity(10), Entity(700));
         assert!(
             enshwick_personal_safes::access::filter(&stock),
             "lent until the sweep has seen the Safe"

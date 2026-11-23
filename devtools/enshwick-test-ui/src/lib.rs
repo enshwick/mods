@@ -36,6 +36,15 @@ pub(crate) struct Settings {
     /// The GUID of a vanilla sound container to play at volume 0.2, such as
     /// a chest's opening sound; empty for none.
     pub(crate) quiet_sound: String,
+    /// The GUID of a vanilla sound container whose takes the 440 Hz tone
+    /// replaces, which the window's "Play tone take" plays; empty for none.
+    pub(crate) tone_takes: String,
+    /// The GUID of a vanilla recording an 880 Hz tone replaces; empty for
+    /// none.
+    pub(crate) replaced_sound: String,
+    /// The GUID of a vanilla sound container that plays `replaced_sound`,
+    /// which the window's "Play replaced recording" plays; empty for none.
+    pub(crate) replaced_container: String,
     /// The GUID of the template whose storage chests get the "Chest" panel,
     /// as the read line names it while such a chest's screen is open; empty
     /// for none.
@@ -159,7 +168,7 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         assert_eq!(
             std::fs::read(loader.mod_dir().join("tone.wav")).unwrap(),
-            tone::wav()
+            tone::wav(tone::TONE)
         );
         assert!(
             logged(&loader, "plays at volume 0.2"),
@@ -168,6 +177,22 @@ mod tests {
             loader.features()
         );
         assert!(!logged(&loader, "no creature_sound"), "{:?}", loader.logs());
+    }
+
+    #[test]
+    fn a_folder_sound_whose_folder_is_no_id_name_is_off_with_the_reason() {
+        let host = on(Side::CLIENT)
+            .mod_file("sounds/Horn Blast/1.wav", tone::wav(tone::TONE))
+            .mod_file("sounds/horn.sound/1.wav", tone::wav(tone::TONE));
+        let (status, loader) = start_on(host, b"");
+        assert_eq!(status, Status::OK, "{:?}", loader.faults());
+        for folder in ["Horn Blast", "horn.sound"] {
+            let feature = format!("sound {folder}");
+            let off = loader.features().iter().any(|(name, reason)| {
+                *name == feature && reason.as_deref().is_some_and(|r| r.contains("a-z, 0-9"))
+            });
+            assert!(off, "{folder}: {:?}", loader.features());
+        }
     }
 
     #[test]

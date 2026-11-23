@@ -12,7 +12,13 @@ use enshwick::actions::Actions;
 use enshwick::content::id;
 use enshwick::controls::{Control, Key};
 use enshwick::input::Input;
-use enshwick::sound::{NewSound, SoundChange, SoundContainerId, SoundContainerScene};
+use std::path::Path;
+
+use enshwick::content::Id;
+use enshwick::sound::{
+    AddedSound, NewSound, NewTake, SoundChange, SoundContainerId, SoundContainerScene, SoundId,
+    Take, Takes,
+};
 use enshwick::typed::input_mapping::runtime::GameplayAction;
 use enshwick::ui::{Frame, Screen, Sound};
 use enshwick::{Load, Off};
@@ -27,21 +33,138 @@ const WINDOW: &str = "test-ui";
 const TITLE: &str = "Test UI";
 /// The tone's file in the mod's folder.
 const TONE_FILE: &str = "tone.wav";
+/// The file of the tone that replaces a vanilla recording.
+const REPLACED_FILE: &str = "replaced.wav";
+/// The folder in the mod's folder whose folders are sounds of their files.
+const SOUNDS_DIR: &str = "sounds";
+/// The extensions of the files a folder sound takes, in lower case.
+const AUDIO: [&str; 4] = ["wav", "flac", "ogg", "mp3"];
 /// The volume of the quiet vanilla container.
 const QUIET: f32 = 0.2;
 /// How often the reads are looked at.
 const READ_EVERY: Duration = Duration::from_secs(1);
 
+/// Writes a tone of `pitch` hertz into the mod's folder as `file`.
+fn write_tone(load: &Load<'_>, file: &str, pitch: f64) -> Result<(), Off> {
+    let path = load.mod_dir()?.join(file);
+    std::fs::write(&path, crate::tone::wav(pitch))
+        .map_err(|e| Off::new(format!("{}: {e}", path.display())))
+}
+
 /// Writes the tone into the mod's folder and adds it as a sound of the
 /// interface scene.
-fn tone(load: &mut Load<'_>) -> Result<SoundContainerId, Off> {
-    let path = load.mod_dir()?.join(TONE_FILE);
-    std::fs::write(&path, crate::tone::wav())
-        .map_err(|e| Off::new(format!("{}: {e}", path.display())))?;
+fn tone(load: &mut Load<'_>) -> Result<AddedSound, Off> {
+    write_tone(load, TONE_FILE, crate::tone::TONE)?;
     load.add_sound(NewSound {
-        scene: SoundContainerScene::Ui,
+        container: SoundChange {
+            scene: Some(SoundContainerScene::Ui),
+            ..SoundChange::default()
+        },
         ..NewSound::new(id!("tone"), TONE_FILE)
     })
+}
+
+/// Makes the vanilla container `container` play only the tone's recording.
+fn tone_takes(load: &mut Load<'_>, container: SoundContainerId, tone: SoundId) -> Result<(), Off> {
+    let change = SoundChange {
+        takes: Some(Takes::Replace(vec![Take::new(tone)])),
+        ..SoundChange::default()
+    };
+    load.change_sound(container, change)
+}
+
+/// Writes the higher tone and plays it wherever the game plays `sound`.
+fn replace(load: &mut Load<'_>, sound: SoundId) -> Result<(), Off> {
+    write_tone(load, REPLACED_FILE, crate::tone::REPLACED)?;
+    load.replace_sound(sound, REPLACED_FILE)
+}
+
+/// The names of the folders in `dir`, or of its files with `files`, sorted;
+/// a `dir` that is not there has none, and one that does not list is logged.
+fn names(dir: &Path, files: bool) -> Vec<String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(e) => {
+            enshwick::warn!("{}: {e}", dir.display());
+            return Vec::new();
+        }
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| {
+            entry
+                .inspect_err(|e| enshwick::warn!("{}: {e}", dir.display()))
+                .ok()
+        })
+        .filter(|entry| entry.path().is_file() == files)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// Whether `file` is one of the audio files a folder sound takes.
+fn is_audio(file: &str) -> bool {
+    Path::new(file)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| AUDIO.iter().any(|a| a.eq_ignore_ascii_case(extension)))
+}
+
+/// The content id of the sound of `folder`, `<mod>:sounds/<folder>`, apart
+/// from the mod's own sounds; a dot would name another folder's take.
+fn folder_id(namespace: &'static str, folder: &str) -> Result<Id, Off> {
+    // Ids live for the process, as a data pack's do.
+    let name: &'static str = Box::leak(format!("{SOUNDS_DIR}/{folder}").into_boxed_str());
+    Id::try_of(namespace, name)
+        .filter(|_| !folder.contains('.'))
+        .ok_or_else(|| Off::new("a folder sound's name is a-z, 0-9, _ or -"))
+}
+
+/// A folder sound: its folder, its button and its container.
+struct FolderSound {
+    folder: String,
+    button: String,
+    container: SoundContainerId,
+}
+
+/// Adds each folder of `sounds/` in the mod's folder as an interface sound
+/// whose takes are its audio files, in name order; each turns off alone.
+fn folder_sounds(load: &mut Load<'_>) -> Vec<FolderSound> {
+    let Ok(dir) = load.mod_dir().map(|dir| dir.join(SOUNDS_DIR)) else {
+        return Vec::new();
+    };
+    let mut sounds = Vec::new();
+    for folder in names(&dir, false) {
+        let takes: Vec<NewTake> = names(&dir.join(&folder), true)
+            .into_iter()
+            .filter(|file| is_audio(file))
+            .map(|file| NewTake::new(format!("{SOUNDS_DIR}/{folder}/{file}")))
+            .collect();
+        let added = load.feature(&format!("sound {folder}"), |load| {
+            let id = folder_id(id!("tone").namespace(), &folder)?;
+            load.add_sound(NewSound {
+                takes,
+                container: SoundChange {
+                    scene: Some(SoundContainerScene::Ui),
+                    ..SoundChange::default()
+                },
+                ..NewSound::new(id, "")
+            })
+        });
+        if let Some(added) = added {
+            enshwick::info!(
+                "{SOUNDS_DIR}/{folder} is sound container {}",
+                added.container.guid()
+            );
+            sounds.push(FolderSound {
+                button: format!("Play {folder}"),
+                folder,
+                container: added.container,
+            });
+        }
+    }
+    sounds
 }
 
 /// The container a setting names, or `None` with the reason in the log.
@@ -81,6 +204,9 @@ struct Window {
     input: Option<Input>,
     tone: Option<SoundContainerId>,
     creature: Option<SoundContainerId>,
+    tone_take: Option<SoundContainerId>,
+    replaced: Option<SoundContainerId>,
+    folders: Vec<FolderSound>,
     hints: String,
     read_at: Option<Instant>,
     last: String,
@@ -150,6 +276,37 @@ impl Window {
                     None => enshwick::warn!("no creature_sound in settings.toml"),
                 }
             }
+            if w.button("Play tone take") {
+                match self.tone_take {
+                    Some(container) => played(
+                        &format!("sound container {} with the tone's take", container.guid()),
+                        w.play(container),
+                    ),
+                    None => enshwick::warn!("the tone take is off; see the log at start"),
+                }
+            }
+            if w.button("Play replaced recording") {
+                match self.replaced {
+                    Some(container) => played(
+                        &format!(
+                            "sound container {} of the replaced recording",
+                            container.guid()
+                        ),
+                        w.play(container),
+                    ),
+                    None => enshwick::warn!(
+                        "no replaced recording to play: replaced_sound or replaced_container is empty, or the replacement is off; see the log at start"
+                    ),
+                }
+            }
+            for sound in &self.folders {
+                if w.button(sound.button.as_str()) {
+                    played(
+                        &format!("{SOUNDS_DIR}/{}", sound.folder),
+                        w.play(sound.container),
+                    );
+                }
+            }
             if w.button("Spawn kept and unsaved") {
                 self.run(SPAWN);
             }
@@ -167,9 +324,29 @@ impl Window {
 
 /// Adds the window, its key and its sounds; each part turns off alone.
 pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settings) {
-    let tone = load
-        .feature("mod sound", tone)
-        .inspect(|tone| enshwick::info!("the tone is sound container {}", tone.guid()));
+    let added = load.feature("mod sound", tone).inspect(|added| {
+        enshwick::info!(
+            "the tone is sound container {}, recording {:?}",
+            added.container.guid(),
+            added.takes.first().map(|take| take.guid())
+        );
+    });
+    let tone = added.as_ref().map(|added| added.container);
+    let recording = added.and_then(|added| added.takes.first().copied());
+    let tone_take = container(&settings.tone_takes, "tone_takes").and_then(|container| {
+        load.feature("tone take", |load| {
+            let recording = recording.ok_or_else(|| Off::new("the mod sound is off"))?;
+            tone_takes(load, container, recording)
+        })
+        .map(|()| container)
+    });
+    let replaced = crate::guid(&settings.replaced_sound, "replaced_sound")
+        .and_then(|sound| {
+            load.feature("replaced recording", |load| {
+                replace(load, SoundId::from_guid(sound))
+            })
+        })
+        .and_then(|()| container(&settings.replaced_container, "replaced_container"));
     if let Some(quiet) = container(&settings.quiet_sound, "quiet_sound") {
         let change = SoundChange {
             volume: Some(QUIET),
@@ -198,6 +375,9 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settin
         input: load.feature("input read", Load::input),
         tone,
         creature: container(&settings.creature_sound, "creature_sound"),
+        tone_take,
+        replaced,
+        folders: folder_sounds(load),
         hints: "not drawn yet".to_owned(),
         read_at: None,
         last: String::new(),
@@ -217,5 +397,28 @@ mod tests {
         assert!(!shows(false, Screen::InGame));
         assert!(!shows(true, Screen::Menu), "its key cannot close it there");
         assert!(!shows(true, Screen::Loading));
+    }
+
+    #[test]
+    fn a_folder_sound_takes_only_audio_files_in_any_case() {
+        for file in ["1.wav", "2.FLAC", "a.b.Ogg", "x.mp3"] {
+            assert!(is_audio(file), "{file}");
+        }
+        for file in ["notes.txt", "desktop.ini", "wav", "a.wav.bak"] {
+            assert!(!is_audio(file), "{file}");
+        }
+    }
+
+    #[test]
+    fn a_folder_sound_s_id_stays_apart_from_the_mod_s_own_sounds_and_takes() {
+        let tone = id!("tone");
+        let folder = folder_id(tone.namespace(), "tone").unwrap();
+        assert_eq!(
+            folder.to_string(),
+            format!("{}:sounds/tone", tone.namespace())
+        );
+        assert_ne!(folder.guid(), tone.guid());
+        assert!(folder_id(tone.namespace(), "horn.sound").is_err());
+        assert!(folder_id(tone.namespace(), "Horn Blast").is_err());
     }
 }

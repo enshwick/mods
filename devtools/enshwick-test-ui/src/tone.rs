@@ -1,20 +1,23 @@
-//! The mod's test sound: one second of a 440 Hz tone, 16-bit mono at the
+//! The mod's test sounds: one second of a tone, 16-bit mono at the
 //! game's sample rate, written into the mod's folder at start so no binary
 //! file ships in the source.
 
 use enshwick::sound::SAMPLE_RATE;
 
-/// The tone's pitch, in hertz.
-const PITCH: f64 = 440.0;
+/// The pitch of the mod's own sound, in hertz.
+pub(crate) const TONE: f64 = 440.0;
+/// The pitch of the tone that replaces a game recording, an octave above
+/// [`TONE`], in hertz.
+pub(crate) const REPLACED: f64 = 880.0;
 /// Its loudness, as a share of full scale.
 const LOUDNESS: f64 = 0.5;
 
-/// The tone as a WAV file.
+/// A tone of `pitch` hertz as a WAV file.
 #[expect(
     clippy::cast_possible_truncation,
     reason = "each sample stays within half of the i16 range"
 )]
-pub(crate) fn wav() -> Vec<u8> {
+pub(crate) fn wav(pitch: f64) -> Vec<u8> {
     let frames = SAMPLE_RATE;
     let data = frames * 2;
     let mut out = Vec::with_capacity(44 + data as usize);
@@ -32,7 +35,7 @@ pub(crate) fn wav() -> Vec<u8> {
     out.extend_from_slice(&16u16.to_le_bytes());
     out.extend_from_slice(b"data");
     out.extend_from_slice(&data.to_le_bytes());
-    let step = core::f64::consts::TAU * PITCH / f64::from(SAMPLE_RATE);
+    let step = core::f64::consts::TAU * pitch / f64::from(SAMPLE_RATE);
     for frame in 0..frames {
         let sample = (f64::from(frame) * step).sin() * LOUDNESS * f64::from(i16::MAX);
         out.extend_from_slice(&(sample as i16).to_le_bytes());
@@ -46,7 +49,7 @@ mod tests {
 
     #[test]
     fn the_tone_is_one_second_of_16_bit_mono_at_the_game_s_rate() {
-        let wav = wav();
+        let wav = wav(TONE);
         let word = |at: usize| u32::from_le_bytes(wav[at..at + 4].try_into().unwrap());
         assert_eq!(&wav[..4], b"RIFF");
         assert_eq!(&wav[8..16], b"WAVEfmt ");
@@ -60,7 +63,7 @@ mod tests {
 
     #[test]
     fn the_tone_crosses_zero_about_880_times_a_second() {
-        let wav = wav();
+        let wav = wav(TONE);
         let samples: Vec<i16> = wav[44..]
             .as_chunks::<2>()
             .0

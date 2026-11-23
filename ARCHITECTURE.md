@@ -21,6 +21,7 @@ checks every mod.
 | `better-altars/` | Better Altars |
 | `build-camera/` | Build Camera |
 | `game-rates/` | Game Rates |
+| `map-markers/` | Map Markers |
 | `optimizer/` | Optimizer |
 | `personal-safes/` | Personal Safes |
 | `shared-experience/` | Shared Experience |

@@ -679,6 +679,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "enshwick-map-markers"
+version = "0.1.0"
+dependencies = [
+ "enshwick",
+ "postcard",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "enshwick-optimizer"
 version = "0.1.1"
 dependencies = [

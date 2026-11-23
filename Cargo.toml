@@ -5,6 +5,7 @@ members = [
     "better-altars",
     "build-camera",
     "game-rates",
+    "map-markers",
     "optimizer",
     "personal-safes",
     "shared-experience",

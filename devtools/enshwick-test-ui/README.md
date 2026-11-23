@@ -34,15 +34,27 @@ On a client:
 - a log line for each screen change, with its host;
 - a window on Shift+F10 with the buttons `Play vanilla sound` (the interface
   sound Confirm), `Play mod sound` (a 1-second 440 Hz tone, 16-bit, 48 kHz,
-  added as an interface sound), `Play creature sound`, `Spawn kept and
-  unsaved` and `Mark the nearest survivor`, and two input hints for the
+  added as an interface sound), `Play creature sound`, `Play tone take`
+  (the container `tone_takes` names, its takes replaced by the tone),
+  `Play replaced recording` (the container `replaced_container` names,
+  whose recording `replaced_sound` an 880 Hz tone replaces), `Spawn kept
+  and unsaved` and `Mark the nearest survivor`, and two input hints for the
   interact control, one labelled `Interact` and one without a label; the
   window closes when the game is left;
 - once a second while in a game, one log line when it changed: the controls
   held by name (`input::local_held`), the open screen, its host and template, the
   prompt, and what the two input hints drew.
 
-The mod writes the tone into its own folder as `tone.wav` at start.
+On a client, the mod writes the 440 Hz tone into its own folder as
+`tone.wav` at start, and the 880 Hz tone as `replaced.wav` when
+`replaced_sound` names a recording.
+
+Each folder in `sounds/` in the mod's own folder becomes an interface sound
+whose takes are the folder's audio files (`.wav`, `.flac`, `.ogg` or `.mp3`,
+at most 32), in name order, with a `Play <folder>` button in the window;
+other files are left out. A folder name is lowercase `a-z`, `0-9`, `_` or
+`-`. A folder with another name, or whose files do not read, turns off
+alone, with the reason in the log and on the Mods screen.
 
 ## Settings
 
@@ -54,6 +66,13 @@ file, all are empty:
 creature_sound = ""
 # The GUID of a vanilla sound container to play at volume 0.2.
 quiet_sound = ""
+# The GUID of a vanilla sound container whose takes the 440 Hz tone replaces,
+# for "Play tone take".
+tone_takes = ""
+# The GUID of a vanilla recording an 880 Hz tone replaces, and of a vanilla
+# sound container that plays it, for "Play replaced recording".
+replaced_sound = ""
+replaced_container = ""
 # The GUID of the template whose storage chests get the "Chest" panel: the
 # `template` of the read line while such a chest's screen is open.
 chest_template = ""

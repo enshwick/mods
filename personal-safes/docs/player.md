@@ -21,7 +21,8 @@ settings:
 - The server's administrators may also open and remove every Safe, unless the
   server turns that off.
 - Hover over a Safe to see its owner, such as "Safe · Ann". The name is in the
-  language of the game of the player who placed the Safe.
+  language of the game of the player who placed the Safe. In a game you host
+  from the game itself, your own Safes show the name in English.
 
 ## How do I let another player in?
 

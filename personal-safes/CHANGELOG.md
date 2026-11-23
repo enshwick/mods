@@ -9,7 +9,8 @@ Each entry says what players notice; a release's notes show its section.
 ### Changed
 
 - A Safe names its owner in the language of the game of the player who placed
-  it, English for a game without the mod. The `label_language` setting is
+  it, English for a game without the mod and for the host's own Safes in a
+  game hosted from the game itself. The `label_language` setting is
   gone; the loader removes it from a world's settings file when the world
   loads.
 

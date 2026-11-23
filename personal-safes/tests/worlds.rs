@@ -465,6 +465,68 @@ admins_can_open = true
     }
 
     #[test]
+    fn a_safe_named_later_takes_its_owner_s_language_while_online_else_english() {
+        use std::time::Duration;
+
+        use enshwick::i18n::Language;
+        use enshwick_personal_safes::access::Safe;
+
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-later-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let item = ItemId::from_guid(content::SAFE.guid()).get().to_le_bytes();
+        let host = containers(host());
+        let (setup, used) = (
+            hash(&host, facts::INVENTORY_SETUP),
+            hash(&host, facts::USED_ITEM),
+        );
+        let loader = host
+            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
+            .component(Entity(700), used, &item)
+            .placed(setup, Entity(701), [30.0, 1.0, 30.0])
+            .component(Entity(701), used, &item)
+            .player(player(10, 1, "Ann"))
+            .player_language(PlayerKey::new(1), Language::UK_UA)
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
+            .data_dir(dir.join("worlds/world0-ln").to_str().unwrap())
+            .world_key("world0-ln")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
+        snapshots().load_owners(rustc_hash::FxHashMap::from_iter([
+            ((40, 2, 40), Safe::new(PlayerKey::new(1), "Ann")),
+            ((60, 2, 60), Safe::new(PlayerKey::new(2), "Bob")),
+        ]));
+        // The labels run every 2 s of the scheduler's clock.
+        assert!(
+            loader.drive_until(Duration::from_secs(5), || loader.labels().len() == 2),
+            "both Safes named: {:?}",
+            loader.logs()
+        );
+        assert_eq!(
+            loader.labels(),
+            vec![
+                (700, "Сейф · Ann".to_owned()),
+                (701, "Safe · Bob".to_owned()),
+            ],
+            "Bob is offline, so English"
+        );
+        assert!(loader.faults().is_empty());
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn the_access_actions_act_on_the_nearest_safe_the_player_may_manage() {
         use enshwick::abi::ActionCall;
         use enshwick::points::Verdict;

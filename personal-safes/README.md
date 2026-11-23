@@ -18,7 +18,8 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 A Safe gets its owner's name when the owner places it, such as "Safe · Ann". The
 name is in the language of the owner's game, as it told the server when it
 joined, and shows on hover. A game without the mod, or in a language the mod
-has no texts for, gets English. A name, once written, stays in its language.
+has no texts for, gets English. In a game hosted from the game itself, the
+host's own Safes get English. A name, once written, stays in its language.
 A Safe without a name gets one a few seconds after its area loads, in the
 owner's language while the owner is online, else in English. The server must
 know the owner's name first, from its records or because the owner is online.

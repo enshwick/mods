@@ -5,6 +5,7 @@ rustup), [lefthook](https://lefthook.dev),
 [rumdl](https://github.com/rvben/rumdl), cargo-nextest,
 [committed](https://github.com/crate-ci/committed) for commit messages,
 [typos](https://github.com/crate-ci/typos), cargo-deny,
+[ShellCheck](https://www.shellcheck.net) and jq for the git hooks,
 [ast-grep](https://ast-grep.github.io) and
 [cargo-machete](https://github.com/bnjbvr/cargo-machete) for
 `cargo xtask check`, and off Windows

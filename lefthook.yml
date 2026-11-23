@@ -13,6 +13,9 @@ pre-commit:
       run: rumdl check {staged_files}
     typos:
       run: typos --force-exclude {staged_files}
+    jira:
+      glob: '.github/**'
+      run: shellcheck .github/scripts/*.sh && bash .github/scripts/jira-test.sh
 
 # committed checks the header against committed.toml. Messages git writes
 # itself (merges, reverts, fixups) pass as they are. A subject starts in
@@ -45,6 +48,9 @@ pre-push:
       run: rumdl check {push_files}
     typos:
       run: typos --force-exclude {push_files}
+    jira:
+      glob: '.github/**'
+      run: shellcheck .github/scripts/*.sh && bash .github/scripts/jira-test.sh
     commits:
       # Each commit no remote has yet, merges left out: a merge of main
       # into a branch carries git's own message.

@@ -43,7 +43,7 @@ mod tests {
             .constant(ACCEPT[1], 8)
             .constant(ACCEPT[2], 12)
             .constant(ACCEPT[3], 16)
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
     }
 
     fn player(entity: u32, key: u64, name: &str) -> PlayerInfo {
@@ -501,7 +501,7 @@ mod tests {
             .recipes()
             .workshops()
             .vanilla_items(&[(Guid([9; 16]), content::CHEST)])
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .side(Side::CLIENT)
             .net_peer(Peer::Server)
             .install();

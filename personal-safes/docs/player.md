@@ -13,11 +13,6 @@ settings:
     default: true
     meaning: The server's administrators may open, remove and rename every Safe.
     applies: at-once
-  - key: label_language
-    default: en
-    range: a language code, such as en, uk or de
-    meaning: The language of the owner's name on a Safe. Safes named from then on use it.
-    applies: at-once
 ---
 
 - The Safe is a chest you craft at the same workshop as the Wooden Chest.
@@ -25,7 +20,8 @@ settings:
 - Only you pick it up or take it apart.
 - The server's administrators may also open and remove every Safe, unless the
   server turns that off.
-- Hover over a Safe to see its owner, such as "Safe · Ann".
+- Hover over a Safe to see its owner, such as "Safe · Ann". The name is in the
+  language of the game of the player who placed the Safe.
 
 ## How do I let another player in?
 

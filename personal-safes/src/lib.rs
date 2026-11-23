@@ -29,25 +29,22 @@ use std::time::Duration;
 
 use enshwick::abi::BuildingData;
 use enshwick::abi::Side;
-use enshwick::config::ConfigError;
 use enshwick::events::{
     BuildingPlaced, BuildingRemoved, PlayerJoined, PlayerLeft, ShutdownStarted, Ticked,
     WorldLoaded, WorldSaved,
 };
-use enshwick::i18n::Language;
+use enshwick::i18n::{Texts, language};
 use enshwick::state::{ModLocal, WorldStore};
 use enshwick::world::Rename;
 use enshwick::world::{ContainerKinds, World};
 use enshwick::{Entity, Load, Mod, Off, PlayerKey};
 
 use crate::access::{Action, Allowed, Cell, Safe, Seen, snapshots};
-use crate::actions::Phrases;
 use enshwick::Relock;
 
 /// Safe settings.
 #[enshwick::config]
 #[derive(Debug)]
-#[config(validate = Settings::check)]
 struct Settings {
     /// The Safe costs the wooden chest's ingredients times this. A joined
     /// player's crafting menu shows the server's value.
@@ -55,8 +52,6 @@ struct Settings {
     cost_multiplier: u32,
     /// Whether the server's administrators may open, remove and rename every Safe.
     admins_can_open: bool,
-    /// The language of the owner's name on a Safe: "en", "uk", "de", ...
-    label_language: String,
 }
 
 impl Default for Settings {
@@ -64,23 +59,7 @@ impl Default for Settings {
         Self {
             cost_multiplier: 2,
             admins_can_open: true,
-            label_language: "en".into(),
         }
-    }
-}
-
-impl Settings {
-    fn check(&self) -> Result<(), ConfigError> {
-        self.language().map(|_| ()).ok_or_else(|| {
-            ConfigError::text(
-                texts::CONFIG_LABEL_LANGUAGE_UNKNOWN,
-                &[(texts::value::CODE, &self.label_language)],
-            )
-        })
-    }
-
-    fn language(&self) -> Option<Language> {
-        Language::from_code(&self.label_language)
     }
 }
 
@@ -299,10 +278,7 @@ impl Mod for PersonalSafes {
         snapshots()
             .admins_open
             .store(settings.admins_can_open, Ordering::Relaxed);
-        let phrases: &'static Phrases = Box::leak(Box::new(Phrases::new(
-            texts,
-            settings.language().unwrap_or(Language::FALLBACK),
-        )));
+        let phrases: &'static Texts = Box::leak(Box::new(texts));
         guard(load, phrases)?;
         enshwick::info!(
             "the Safe costs the wooden chest x{cost}; administrators may open Safes: {}",
@@ -313,7 +289,7 @@ impl Mod for PersonalSafes {
 }
 
 /// The server half: owners, players, the refusals, labels and the actions.
-fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
+fn guard(load: &mut Load<'_>, phrases: &'static Texts) -> Result<(), Off> {
     let world = load.world()?;
     let client = load.host().build().side == Side::CLIENT;
     // Before the store's own handler, which writes what this hands over.
@@ -358,7 +334,6 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         snapshots()
             .admins_open
             .store(settings.admins_can_open, Ordering::Relaxed);
-        phrases.set_language(settings.language().unwrap_or(Language::FALLBACK));
         set_cost(settings.cost_multiplier);
     })?;
     label_seen(load, world, phrases, store)?;
@@ -370,7 +345,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     let actions = actions::declare(
         load,
         world,
-        phrases.texts.clone(),
+        phrases.clone(),
         move || save(store),
         move |seen, character| {
             if let Some(channel) = channel {
@@ -384,7 +359,7 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
         });
     }
     if client && channel.is_some() {
-        let texts = phrases.texts.clone();
+        let texts = phrases.clone();
         let _shown = load.feature(panel::FEATURE, |load| {
             panel::extend(load, last, actions, texts)
         });
@@ -392,8 +367,9 @@ fn guard(load: &mut Load<'_>, phrases: &'static Phrases) -> Result<(), Off> {
     Ok(())
 }
 
-/// Records a Safe just placed, with its owner, and names the owner on it.
-fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
+/// Records a Safe just placed, with its owner, and names the owner on it in
+/// the language of the placer's game, which a building event is read in.
+fn placed_safe(world: World, phrases: &Texts, placed: &BuildingData) {
     let entity = placed.character;
     let player = world.player(entity);
     let key = player
@@ -408,7 +384,11 @@ fn placed_safe(world: World, phrases: &Phrases, placed: &BuildingData) {
     let position = placed.position.map(f64::from);
     snapshots().placed(placed.entity, access::cell(position), key, &name);
     if !name.is_empty() {
-        let label = phrases.say(texts::SAFE_LABEL, &[(texts::value::OWNER, &name)]);
+        let label = phrases.fill(
+            texts::SAFE_LABEL,
+            language(),
+            &[(texts::value::OWNER, &name)],
+        );
         if !world.set_label(placed.entity, &label) {
             enshwick::warn!("Safe {} not labelled", placed.entity);
         }
@@ -469,11 +449,12 @@ fn learn_safes(world: World) {
 
 /// Names the owner on every Safe seen this session that has no name yet,
 /// on the game thread; the owner's name comes from the record, or from the
-/// owner when they are online. Learns the world's Safes first.
+/// owner when they are online, and the label's language from the owner's
+/// game while they are online, else English. Learns the world's Safes first.
 fn label_seen(
     load: &mut Load<'_>,
     world: World,
-    phrases: &'static Phrases,
+    phrases: &'static Texts,
     store: &'static WorldStore<Owners>,
 ) -> Result<(), Off> {
     let mut done: FxHashSet<Entity> = FxHashSet::default();
@@ -505,7 +486,11 @@ fn label_seen(
             if name.is_empty() {
                 continue;
             }
-            let label = phrases.say(texts::SAFE_LABEL, &[(texts::value::OWNER, &name)]);
+            let label = phrases.fill(
+                texts::SAFE_LABEL,
+                world.language_of(owner),
+                &[(texts::value::OWNER, &name)],
+            );
             if world.set_label(entity, &label) {
                 done.insert(entity);
             }
@@ -589,25 +574,11 @@ mod tests {
         assert_eq!(settings.cost_multiplier, 2);
         assert!(settings.admins_can_open);
         assert!(settings.validate().is_ok());
-        assert_eq!(settings.label_language, "en");
         let zero = Settings {
             cost_multiplier: 0,
             ..Settings::default()
         };
         assert!(zero.validate().is_err());
-        let unknown = Settings {
-            label_language: "xx".into(),
-            ..Settings::default()
-        };
-        assert_eq!(
-            unknown.check().map_err(|refused| refused.to_string()),
-            Err(format!(
-                "{} (code = xx)",
-                texts::CONFIG_LABEL_LANGUAGE_UNKNOWN
-            )),
-            "refused with a text of the mod's own"
-        );
-        assert!(unknown.validate().is_err());
     }
 
     #[test]
@@ -623,7 +594,6 @@ mod tests {
             .vanilla_items(&[(enshwick::content::Guid([9; 16]), content::CHEST)])
             .settings(
                 "cost_multiplier = 2
-label_language = \"en\"
 ",
             )
             .install();
@@ -642,7 +612,6 @@ label_language = \"en\"
         loader.set_settings(
             "settings",
             "cost_multiplier = 2
-label_language = \"en\"
 ",
         );
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
@@ -654,7 +623,6 @@ label_language = \"en\"
         loader.set_settings(
             "settings",
             "cost_multiplier = 5
-label_language = \"uk\"
 ",
         );
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);

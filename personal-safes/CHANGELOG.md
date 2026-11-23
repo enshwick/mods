@@ -6,6 +6,13 @@ Each entry says what players notice; a release's notes show its section.
 
 ## [Unreleased]
 
+### Changed
+
+- A Safe names its owner in the language of the game of the player who placed
+  it, English for a game without the mod. The `label_language` setting is
+  gone; the loader removes it from a world's settings file when the world
+  loads.
+
 ### Fixed
 
 - The panel no longer shows the list of a chest you closed when you open

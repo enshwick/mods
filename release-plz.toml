@@ -66,6 +66,11 @@ release = false
 git_release_name = "Game Rates {{ version }}"
 
 [[package]]
+name = "enshwick-map-markers"
+release = false
+git_release_name = "Map Markers {{ version }}"
+
+[[package]]
 name = "enshwick-optimizer"
 release = false
 git_release_name = "Optimizer {{ version }}"

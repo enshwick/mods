@@ -25,6 +25,7 @@ other lines are kept here by hand.
 | [Better Altars](better-altars/README.md) | More Flame Altars, zones that grow together. |
 | [Build Camera](build-camera/README.md) | The flying build camera, without the skill. |
 | [Game Rates](game-rates/README.md) | Set how much recipes, loot and experience give. |
+| [Map Markers](map-markers/README.md) | Loot chests and resources around you, on your map. |
 | [Optimizer](optimizer/README.md) | Less CPU for a dedicated server. |
 | [Personal Safes](personal-safes/README.md) | A chest for its owner and the players they allow. |
 | [Shared Experience](shared-experience/README.md) | All players stay on the same level. |

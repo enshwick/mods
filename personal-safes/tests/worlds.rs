@@ -30,7 +30,7 @@ mod tests {
         let loader = bare()
             .workshops()
             .vanilla_items(&[(Guid([7; 16]), "Prop_Storage_24_T1_Box")])
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
@@ -87,7 +87,7 @@ mod tests {
         )
         .unwrap();
         let loader = host()
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .data_dir(dir.join("worlds/world0-aa").to_str().unwrap())
             .world_key("world0-aa")
             .install();
@@ -133,7 +133,7 @@ mod tests {
         )
         .unwrap();
         let loader = host()
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .data_dir(dir.join("worlds/world0-cc").to_str().unwrap())
             .world_key("world0-cc")
             .install();
@@ -228,7 +228,6 @@ mod tests {
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
-label_language = \"en\"
 ",
             )
             .data_dir(dir.join("worlds/world0-bb").to_str().unwrap())
@@ -281,7 +280,7 @@ label_language = \"en\"
         use std::time::Duration;
 
         let loader = host()
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .install();
         // SAFETY: the exports of the mod's `declare_mod!`.
         let status = unsafe {
@@ -320,7 +319,6 @@ label_language = \"en\"
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
-label_language = \"en\"
 ",
             )
             .data_dir(dir.join("worlds/world0-dd").to_str().unwrap())
@@ -408,6 +406,127 @@ label_language = \"en\"
     }
 
     #[test]
+    fn each_safe_names_its_owner_in_the_language_of_the_game_that_placed_it() {
+        use enshwick::abi::{BuildingData, Header};
+        use enshwick::events::BuildingPlaced;
+        use enshwick::i18n::Language;
+
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-labels-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let german = Language::from_code("de").unwrap();
+        let loader = host()
+            .player(player(10, 1, "Ann"))
+            .player(player(11, 2, "Bob"))
+            .player(player(12, 3, "Cat"))
+            .player_language(PlayerKey::new(1), Language::UK_UA)
+            .player_language(PlayerKey::new(2), german)
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
+            .data_dir(dir.join("worlds/world0-ll").to_str().unwrap())
+            .world_key("world0-ll")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
+        for (placer, safe, x) in [(10, 800, 10.0), (11, 801, 20.0), (12, 802, 30.0)] {
+            let placed = BuildingData {
+                header: Header::of::<BuildingData>(),
+                entity: Entity(safe),
+                character: Entity(placer),
+                item: ItemId::from_guid(content::SAFE.guid()),
+                kind: BuildingData::PLACED,
+                replay: 0,
+                template: Guid([0; 16]),
+                position: [x, 0.0, 0.0],
+            };
+            assert!(loader.raise::<BuildingPlaced>(&placed) >= 1);
+        }
+        assert_eq!(
+            loader.labels(),
+            vec![
+                (800, "Сейф · Ann".to_owned()),
+                (801, "Tresor · Bob".to_owned()),
+                (802, "Safe · Cat".to_owned()),
+            ],
+            "Cat's game runs no Enshwick, so English"
+        );
+        assert!(loader.faults().is_empty());
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_safe_named_later_takes_its_owner_s_language_while_online_else_english() {
+        use std::time::Duration;
+
+        use enshwick::i18n::Language;
+        use enshwick_personal_safes::access::Safe;
+
+        let dir = std::env::temp_dir().join(format!(
+            "enshwick-personal-safes-later-{}",
+            std::process::id()
+        ));
+        let _gone = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let item = ItemId::from_guid(content::SAFE.guid()).get().to_le_bytes();
+        let host = containers(host());
+        let (setup, used) = (
+            hash(&host, facts::INVENTORY_SETUP),
+            hash(&host, facts::USED_ITEM),
+        );
+        let loader = host
+            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
+            .component(Entity(700), used, &item)
+            .placed(setup, Entity(701), [30.0, 1.0, 30.0])
+            .component(Entity(701), used, &item)
+            .player(player(10, 1, "Ann"))
+            .player_language(PlayerKey::new(1), Language::UK_UA)
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
+            .data_dir(dir.join("worlds/world0-ln").to_str().unwrap())
+            .world_key("world0-ln")
+            .install();
+        // SAFETY: the exports of the mod's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                enshwick_personal_safes::enshwick_mod_query,
+                enshwick_personal_safes::enshwick_mod_init,
+                enshwick_personal_safes::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
+        snapshots().load_owners(rustc_hash::FxHashMap::from_iter([
+            ((40, 2, 40), Safe::new(PlayerKey::new(1), "Ann")),
+            ((60, 2, 60), Safe::new(PlayerKey::new(2), "Bob")),
+        ]));
+        // The labels run every 2 s of the scheduler's clock.
+        assert!(
+            loader.drive_until(Duration::from_secs(5), || loader.labels().len() == 2),
+            "both Safes named: {:?}",
+            loader.logs()
+        );
+        assert_eq!(
+            loader.labels(),
+            vec![
+                (700, "Сейф · Ann".to_owned()),
+                (701, "Safe · Bob".to_owned()),
+            ],
+            "Bob is offline, so English"
+        );
+        assert!(loader.faults().is_empty());
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn the_access_actions_act_on_the_nearest_safe_the_player_may_manage() {
         use enshwick::abi::ActionCall;
         use enshwick::points::Verdict;
@@ -437,7 +556,6 @@ label_language = \"en\"
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
-label_language = \"en\"
 ",
             )
             .data_dir(dir.join("worlds/world0-ee").to_str().unwrap())
@@ -540,7 +658,6 @@ label_language = \"en\"
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
-label_language = \"en\"
 ",
             )
             .data_dir(dir.join("worlds/world0-ff").to_str().unwrap())
@@ -646,7 +763,7 @@ label_language = \"en\"
         let loader = host
             .placed(setup, Entity(700), [20.0, 1.0, 20.0])
             .component(Entity(700), used, &safe.get().to_le_bytes())
-            .settings("cost_multiplier = 2\nadmins_can_open = true\nlabel_language = \"en\"\n")
+            .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .data_dir(dir.join("worlds/world0-dd").to_str().unwrap())
             .world_key("world0-dd")
             .install();

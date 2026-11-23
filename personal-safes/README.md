@@ -16,9 +16,13 @@ Built on [Enshwick](https://github.com/enshwick/enshwick).
 ## How does a Safe show its owner?
 
 A Safe gets its owner's name when the owner places it, such as "Safe · Ann". The
-name is in the server's language and shows on hover. A Safe without a name
-gets one a few seconds after its area loads. The server must know the
-owner's name first, from its records or because the owner is online.
+name is in the language of the owner's game, as it told the server when it
+joined, and shows on hover. A game without the mod, or in a language the mod
+has no texts for, gets English. In a game hosted from the game itself, the
+host's own Safes get English. A name, once written, stays in its language.
+A Safe without a name gets one a few seconds after its area loads, in the
+owner's language while the owner is online, else in English. The server must
+know the owner's name first, from its records or because the owner is online.
 
 Only the owner can rename a Safe. Administrators can rename it too when the
 settings allow.
@@ -65,14 +69,12 @@ The loader writes the file as the world first loads (see
 ```toml
 cost_multiplier = 2
 admins_can_open = true
-label_language = "en"
 ```
 
-| Key               | Default | Range                                       | Meaning                                                       |
-| ----------------- | ------- | ------------------------------------------- | ------------------------------------------------------------- |
-| `cost_multiplier` | 2       | 1 to 100                                    | the Safe costs the ingredients of the Wooden Chest times this |
-| `admins_can_open` | true    |                                             | administrators can open, remove and rename every Safe         |
-| `label_language`  | `en`    | a language code, such as `en`, `uk` or `de` | the language of the owner's name on a Safe                    |
+| Key               | Default | Range    | Meaning                                                       |
+| ----------------- | ------- | -------- | ------------------------------------------------------------- |
+| `cost_multiplier` | 2       | 1 to 100 | the Safe costs the ingredients of the Wooden Chest times this |
+| `admins_can_open` | true    |          | administrators can open, remove and rename every Safe         |
 
 `cost_multiplier` is the server's value. A joined player's crafting menu shows
 the server's cost. A change applies at once, without a restart of the game. This
@@ -80,10 +82,7 @@ is also true for a world with another value.
 
 `admins_can_open` applies while the game runs.
 
-`label_language` refuses any value that is not a language code. The Mods screen
-then shows the reason in the player's language. A change applies while the game
-runs, to Safes named after the change. The panel and the
-Shift+L notice use each player's own language.
+The panel and the Shift+L notice use each player's own language.
 
 The texts come in English and Ukrainian, and in the other languages of
 [texts.toml](src/texts.toml) where they are translated; an untranslated text

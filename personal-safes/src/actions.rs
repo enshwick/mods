@@ -10,11 +10,10 @@
 //! on, or one another mod lets them manage.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use enshwick::actions::{Action, Actions, Ask, FindSubjectError, Outcome, Request, Subject, Value};
 use enshwick::controls::Key;
-use enshwick::i18n::{Language, Texts};
+use enshwick::i18n::Texts;
 use enshwick::world::{Player, World};
 use enshwick::{Entity, Load, Off, PlayerKey};
 
@@ -31,40 +30,6 @@ pub const REACH: f64 = 4.0;
 pub(crate) const ACCESS_ACTION: &str = "access";
 /// The action that names who may open the Safe at hand.
 const LIST_ACTION: &str = "list";
-
-/// The mod's texts in the server's language, for the owner's name on a
-/// Safe.
-#[derive(Debug)]
-pub struct Phrases {
-    /// Every text the mod has.
-    pub texts: Texts,
-    /// The language picked in the settings in force.
-    language: AtomicU32,
-}
-
-impl Phrases {
-    /// `texts` in `language`.
-    #[must_use]
-    pub const fn new(texts: Texts, language: Language) -> Self {
-        Self {
-            texts,
-            language: AtomicU32::new(language.0),
-        }
-    }
-
-    /// Speaks `language` from now on.
-    pub fn set_language(&self, language: Language) {
-        self.language.store(language.0, Ordering::Relaxed);
-    }
-
-    /// The text `key` with each `{name}` replaced by its value; the key
-    /// itself when there is no text.
-    #[must_use]
-    pub fn say(&self, key: &str, values: &[(&str, &str)]) -> String {
-        let language = Language(self.language.load(Ordering::Relaxed));
-        self.texts.fill(key, language, values)
-    }
-}
 
 /// A cell as the player reads it: the Safe's position in whole metres.
 fn place(at: Cell) -> String {

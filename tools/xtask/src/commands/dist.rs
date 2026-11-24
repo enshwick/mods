@@ -40,25 +40,13 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     {
         return Err(format!("{missing} is not a mod of this workspace"));
     }
-    let mut command: Vec<&str> = Vec::new();
     // CI's dev builds embed the dependency tree in each DLL, for
     // `cargo audit bin` and other scanners.
-    if std::env::var_os("ENSHWICK_AUDITABLE").is_some_and(|value| value == "1") {
-        command.push("auditable");
-    }
-    if !cfg!(windows) {
-        command.push("xwin");
-    }
-    command.extend(["build", "--release", "--locked", "--target", WINDOWS_TARGET]);
-    if chosen.is_empty() {
-        command.push("--workspace");
-    } else {
-        for name in &chosen {
-            command.extend(["--package", name]);
+    let auditable = std::env::var_os("ENSHWICK_AUDITABLE").is_some_and(|value| value == "1");
+    for package in &mods {
+        if !Step::new(&build_args(cfg!(windows), auditable, &package.name)).run(false) {
+            return Ok(false);
         }
-    }
-    if !Step::new(&command).run(false) {
-        return Ok(false);
     }
     std::fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
     let license = read(Path::new("LICENSE"))?;
@@ -90,6 +78,28 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     Ok(true)
 }
 
+/// The cargo arguments that build `package`'s library in release as a
+/// Windows DLL. It builds as a cdylib alone, since cargo runs the release
+/// profile's LTO only on a unit whose every crate type can take it, and a
+/// mod's rlib for its tests cannot.
+fn build_args(windows_host: bool, auditable: bool, package: &str) -> Vec<&str> {
+    let auditable: &[&str] = if auditable { &["auditable"] } else { &[] };
+    let xwin: &[&str] = if windows_host { &[] } else { &["xwin"] };
+    let rustc = [
+        "rustc",
+        "--release",
+        "--locked",
+        "--target",
+        WINDOWS_TARGET,
+        "--package",
+        package,
+        "--lib",
+        "--crate-type",
+        "cdylib",
+    ];
+    [auditable, xwin, &rustc].concat()
+}
+
 fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))
 }
@@ -111,4 +121,32 @@ fn zip(entries: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
         .finish()
         .map(Cursor::into_inner)
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_mod_builds_as_a_cdylib_alone_so_fat_lto_reaches_it() {
+        assert_eq!(
+            build_args(true, false, "enshwick-better-altars"),
+            [
+                "rustc",
+                "--release",
+                "--locked",
+                "--target",
+                WINDOWS_TARGET,
+                "--package",
+                "enshwick-better-altars",
+                "--lib",
+                "--crate-type",
+                "cdylib"
+            ]
+        );
+        assert_eq!(
+            build_args(false, true, "enshwick-better-altars")[..3],
+            ["auditable", "xwin", "rustc"]
+        );
+    }
 }

@@ -115,6 +115,9 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
+# Fat LTO reaches each mod's DLL because `cargo xtask dist` builds it as a
+# cdylib alone; a plain `cargo build --release` also builds the rlib for the
+# tests, and cargo then runs no LTO.
 [profile.release]
 opt-level = 3
 lto = "fat"

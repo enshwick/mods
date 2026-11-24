@@ -4,10 +4,18 @@
 //! with its reason and time.
 
 use enshwick::abi::Side;
-use enshwick::input::{ClientCommand, CommandAction, CommandState, Input};
+use enshwick::controls::GameAction;
+use enshwick::input::{CancelReason, ClientCommand, CommandAction, CommandState, Input};
 use enshwick::{Load, Off, WorldError};
 
 use crate::checks::{fail, pass};
+
+/// A one-step press of block: it neither turns the camera nor moves the
+/// character, should a frame take it before the cancel.
+const BLOCK_TAP: CommandAction = CommandAction::Press {
+    action: GameAction::Block,
+    hold_ms: 1,
+};
 
 /// The client control checks.
 #[derive(Debug, Clone, Copy)]
@@ -38,6 +46,10 @@ impl ClientChecks {
                 "client command",
                 self.input.client_command(&ClientCommand::new(walk, 1)),
             );
+            unavailable(
+                "client press",
+                self.input.client_command(&ClientCommand::new(BLOCK_TAP, 1)),
+            );
             return;
         }
         // Opening the input in `new` asked for the held controls, so the
@@ -52,34 +64,35 @@ impl ClientChecks {
         match self.input.client_snapshot() {
             Ok(snapshot) => {
                 pass(&format!("client snapshot: {snapshot:?}"));
-                self.cancelled_command(snapshot.session());
+                let still = CommandAction::Look {
+                    yaw: 0.0,
+                    pitch: 0.0,
+                };
+                self.cancelled("client command", still, snapshot.session());
+                self.cancelled("client press", BLOCK_TAP, snapshot.session());
             }
             Err(error) => fail(&format!("client snapshot: {error:?} on a client")),
         }
     }
 
-    /// Queues a still look and cancels it before a frame takes it, so the
+    /// Queues `action` and cancels it before a frame takes it, so the
     /// player's camera and character stay where they are.
-    fn cancelled_command(self, session: u64) {
-        let still = CommandAction::Look {
-            yaw: 0.0,
-            pitch: 0.0,
-        };
+    fn cancelled(self, what: &str, action: CommandAction, session: u64) {
         let id = match self
             .input
-            .client_command(&ClientCommand::new(still, session))
+            .client_command(&ClientCommand::new(action, session))
         {
             Ok(id) => id,
-            Err(error) => return fail(&format!("client command: {error:?} on a client")),
+            Err(error) => return fail(&format!("{what}: {error:?} on a client")),
         };
         if let Err(error) = self.input.cancel_command(id) {
-            return fail(&format!("client command: cancel {id:?}: {error:?}"));
+            return fail(&format!("{what}: cancel {id:?}: {error:?}"));
         }
         match self.input.command_status(id) {
-            Ok(status) if matches!(status.state, CommandState::Cancelled(_)) => {
-                pass(&format!("client command: {id:?} queued and cancelled"));
+            Ok(status) if matches!(status.state, CommandState::Cancelled(CancelReason::ByMod)) => {
+                pass(&format!("{what}: {id:?} queued and cancelled"));
             }
-            other => fail(&format!("client command: {id:?} after cancel: {other:?}")),
+            other => fail(&format!("{what}: {id:?} after cancel: {other:?}")),
         }
     }
 }
@@ -165,6 +178,7 @@ mod tests {
             "PASS client snapshot: unavailable on a server",
             "PASS client sampler status: unavailable on a server",
             "PASS client command: unavailable on a server",
+            "PASS client press: unavailable on a server",
         ] {
             assert!(logged(&loader, line), "{line}: {:?}", loader.logs());
         }
@@ -183,6 +197,7 @@ mod tests {
             "PASS client snapshot: ",
             "PASS client sampler status: ",
             "PASS client command: ",
+            "PASS client press: ",
         ] {
             assert!(logged(&loader, line), "{line}: {:?}", loader.logs());
         }

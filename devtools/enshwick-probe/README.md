@@ -92,9 +92,10 @@ Ten seconds after the world has loaded, and again on the `check` action:
   save on disk was written and its size as each one ends, a player's saves
   in a hosted game included;
 - the client's own calls: on a dedicated server the client snapshot, the
-  input sampler's status and a client command each unavailable; on a client
-  that hosts, the snapshot and the status read, and a still look queued and
-  cancelled before a frame runs it, so nothing moves;
+  input sampler's status, a client command and a press each unavailable; on
+  a client that hosts, the snapshot and the status read, and a still look and
+  a one-step press of block each queued and cancelled by the probe before a
+  frame runs it, so nothing moves;
 - the loader's list of what it turned off, each part or feature with its
   name, reason and time;
 - the platform's other reads: the system its start hooked, run over five

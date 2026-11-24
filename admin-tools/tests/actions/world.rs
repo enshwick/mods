@@ -236,6 +236,32 @@ fn a_restart_the_game_refuses_to_stop_saves_the_world_instead_and_the_audit_log_
 }
 
 #[test]
+fn a_restart_save_refused_thirty_times_stops_asking_and_warns() {
+    let dir = scratch("restart-save-refused");
+    let loader = server("", &dir);
+    assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
+    assert!(loader.drive_until(DRIVE, || loader.stop_asked()));
+    // The game takes one stop, so this restart saves, and another mod's hold
+    // refuses every save.
+    loader.set_saves_refused(true);
+    assert!(run(&loader, &ann(), "restart", "n1").starts_with('1'));
+    assert!(loader.drive_until(DRIVE, || {
+        loader
+            .logs()
+            .iter()
+            .any(|(_, line)| line.contains("no save before the restart"))
+    }));
+    loader.set_saves_refused(false);
+    assert!(!loader.drive_until(DRIVE, || loader.saves() > 0));
+    let warned = loader
+        .logs()
+        .iter()
+        .filter(|(_, line)| line.contains("no save before the restart"))
+        .count();
+    assert_eq!(warned, 1, "the warning comes once, after the last try");
+}
+
+#[test]
 fn a_backup_waiting_for_a_save_copies_nothing_once_the_world_stops() {
     let (_saves, data) = saves("backup-shutdown");
     let loader = server("", &data);

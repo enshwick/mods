@@ -5,10 +5,17 @@
 
 use enshwick::abi::Side;
 use enshwick::controls::GameAction;
-use enshwick::input::{ClientCommand, CommandAction, CommandState, Input};
+use enshwick::input::{CancelReason, ClientCommand, CommandAction, CommandState, Input};
 use enshwick::{Load, Off, WorldError};
 
 use crate::checks::{fail, pass};
+
+/// A one-step press of block: it neither turns the camera nor moves the
+/// character, should a frame take it before the cancel.
+const BLOCK_TAP: CommandAction = CommandAction::Press {
+    action: GameAction::Block,
+    hold_ms: 1,
+};
 
 /// The client control checks.
 #[derive(Debug, Clone, Copy)]
@@ -39,6 +46,10 @@ impl ClientChecks {
                 "client command",
                 self.input.client_command(&ClientCommand::new(walk, 1)),
             );
+            unavailable(
+                "client press",
+                self.input.client_command(&ClientCommand::new(BLOCK_TAP, 1)),
+            );
             return;
         }
         // Opening the input in `new` asked for the held controls, so the
@@ -58,11 +69,7 @@ impl ClientChecks {
                     pitch: 0.0,
                 };
                 self.cancelled("client command", still, snapshot.session());
-                let block = CommandAction::Press {
-                    action: GameAction::Block,
-                    hold_ms: 1,
-                };
-                self.cancelled("client press", block, snapshot.session());
+                self.cancelled("client press", BLOCK_TAP, snapshot.session());
             }
             Err(error) => fail(&format!("client snapshot: {error:?} on a client")),
         }
@@ -82,7 +89,7 @@ impl ClientChecks {
             return fail(&format!("{what}: cancel {id:?}: {error:?}"));
         }
         match self.input.command_status(id) {
-            Ok(status) if matches!(status.state, CommandState::Cancelled(_)) => {
+            Ok(status) if matches!(status.state, CommandState::Cancelled(CancelReason::ByMod)) => {
                 pass(&format!("{what}: {id:?} queued and cancelled"));
             }
             other => fail(&format!("{what}: {id:?} after cancel: {other:?}")),
@@ -171,6 +178,7 @@ mod tests {
             "PASS client snapshot: unavailable on a server",
             "PASS client sampler status: unavailable on a server",
             "PASS client command: unavailable on a server",
+            "PASS client press: unavailable on a server",
         ] {
             assert!(logged(&loader, line), "{line}: {:?}", loader.logs());
         }

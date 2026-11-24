@@ -350,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn other_mods_leave_containers_out() {
+    fn the_point_is_defined_first_and_a_mod_that_is_off_hears_no_other_mod() {
         use enshwick::abi::Status;
         use enshwick::points::Verdict;
 
@@ -371,12 +371,16 @@ mod tests {
         };
         assert_ne!(status, Status::OK);
         assert_eq!(loader.defined_points(), ["enshwick.area-loot:eligible"]);
-        assert!(eligible(Entity(1), Entity(2), Entity(3), 4.0));
         assert!(
             loader.extend_point(|loot: &Eligible, _: &bool| { Verdict::Set(loot.distance <= 5.0) })
         );
-        assert!(eligible(Entity(1), Entity(2), Entity(3), 4.0));
-        assert!(!eligible(Entity(1), Entity(2), Entity(3), 6.0));
+        // As in the game, the loader runs no point of a mod that is off, so
+        // every container stays as the mod's default leaves it.
+        assert!(eligible(Entity(1), Entity(2), Entity(3), 6.0));
+    }
+
+    #[test]
+    fn the_ground_distance_leaves_out_the_height() {
         assert!((ground([0.0, 0.0, 0.0], [3.0, 9.0, 4.0]) - 5.0).abs() < f32::EPSILON);
     }
 

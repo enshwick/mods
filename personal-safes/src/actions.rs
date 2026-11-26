@@ -255,8 +255,6 @@ pub fn declare(
         .at(move |ask| {
             let found = at_hand(world, ask, true);
             // A switch refused here never runs, so its panel hears the list now, not after a wait.
-            // shortcut: the loader asks twice per run (its players, then the run), so the list
-            // goes twice; send it once if a refusal ever costs.
             if found.is_err() && ask.target.is_some() {
                 refused(ask.player);
             }

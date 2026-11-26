@@ -10,14 +10,14 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
-use enshwick::altars::{AltarZone, ZoneSizes};
+use enshwick::altars::{AltarZone, CellBox, ZoneSizes};
 use enshwick::state::ModLocal;
 
-use crate::geometry::{Altar, Box3, clusters};
+use crate::geometry::{Altar, clusters};
 use enshwick::Relock;
 
 /// Per altar: its level and its vanilla zone at each level up to it.
-type Input = BTreeMap<u32, Vec<Box3>>;
+type Input = BTreeMap<u32, Vec<CellBox>>;
 
 #[derive(Debug)]
 struct State {
@@ -186,7 +186,7 @@ fn input(altars: Vec<enshwick::altars::Altar>) -> (Input, usize) {
             let levels = altar
                 .levels
                 .iter()
-                .map(|zone| Box3::new(zone.min, zone.max))
+                .map(|zone| CellBox::new(zone.min, zone.max))
                 .collect();
             (altar.entity.0, levels)
         })
@@ -325,7 +325,7 @@ mod tests {
         levels
             .iter()
             .zip(1..)
-            .map(|(&level, id)| (id, vec![Box3::new([0, 0, 0], [8, 8, 8]); level]))
+            .map(|(&level, id)| (id, vec![CellBox::new([0, 0, 0], [8, 8, 8]); level]))
             .collect()
     }
 
@@ -384,7 +384,7 @@ mod tests {
     #[test]
     fn the_next_game_solves_the_same_altars_again() {
         let mut input = Input::new();
-        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        input.insert(1, vec![CellBox::new([0, 0, 0], [80, 80, 80])]);
         let mut state = State::new();
         assert!(state.switch(true));
         assert!(state.wants(&input));
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn a_world_with_clusters_off_solves_nothing_and_drops_a_running_solve() {
         let mut input = Input::new();
-        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        input.insert(1, vec![CellBox::new([0, 0, 0], [80, 80, 80])]);
         let mut state = State::new();
         assert!(!state.wants(&input), "off until the settings turn it on");
         assert!(state.switch(true));
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn a_solve_that_cannot_start_turns_clusters_off_until_the_next_world() {
         let mut input = Input::new();
-        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
+        input.insert(1, vec![CellBox::new([0, 0, 0], [80, 80, 80])]);
         let mut state = State::new();
         assert!(state.switch(true));
         state.solving = true;
@@ -441,9 +441,9 @@ mod tests {
     #[test]
     fn two_touching_altars_grow_alike_and_a_lone_one_keeps_its_zone() {
         let mut input = Input::new();
-        input.insert(1, vec![Box3::new([0, 0, 0], [80, 80, 80])]);
-        input.insert(2, vec![Box3::new([80, 0, 0], [160, 80, 80])]);
-        input.insert(3, vec![Box3::new([1000, 0, 0], [1080, 80, 80])]);
+        input.insert(1, vec![CellBox::new([0, 0, 0], [80, 80, 80])]);
+        input.insert(2, vec![CellBox::new([80, 0, 0], [160, 80, 80])]);
+        input.insert(3, vec![CellBox::new([1000, 0, 0], [1080, 80, 80])]);
         let sizes = sizes(&input);
         assert_eq!(sizes.len(), 3);
         assert_eq!(sizes[0].grow, sizes[1].grow);

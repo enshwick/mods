@@ -17,25 +17,7 @@ pub(crate) type Entity = u32;
 /// An altar's identity: its entity.
 pub(crate) type AltarKey = u64;
 
-/// An altar's zone in whole cells, half-open like the engine's point test.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Zone {
-    /// The inclusive lower corner.
-    pub(crate) min: [i64; 3],
-    /// The exclusive upper corner.
-    pub(crate) max: [i64; 3],
-}
-
-impl Zone {
-    pub(crate) const fn new(min: [i64; 3], max: [i64; 3]) -> Self {
-        Self { min, max }
-    }
-
-    /// Whether `point` lies inside: `min <= point < max` on every axis.
-    fn contains_point(&self, point: [i64; 3]) -> bool {
-        (0..3).all(|axis| self.min[axis] <= point[axis] && point[axis] < self.max[axis])
-    }
-}
+use enshwick::altars::CellBox as Zone;
 
 /// What a copy staff's use does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,7 +90,7 @@ impl Copies {
     pub(crate) fn altar_at(&self, point: [i64; 3]) -> Option<AltarKey> {
         self.altars
             .iter()
-            .filter(|(_, zone)| zone.contains_point(point))
+            .filter(|(_, zone)| zone.contains(point))
             .min_by_key(|(key, zone)| {
                 let centre = |a: usize| i64::midpoint(zone.min[a], zone.max[a]);
                 let d: i128 = [0, 2]

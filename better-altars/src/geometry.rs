@@ -21,11 +21,12 @@
 //! # Examples
 //!
 //! ```
-//! use enshwick_better_altars::geometry::{Altar, Box3, clusters};
+//! use enshwick::altars::CellBox;
+//! use enshwick_better_altars::geometry::{Altar, clusters};
 //!
 //! // Two altars whose zones touch grow together.
-//! let a = Altar::new(1, Box3::new([0, 0, 0], [10, 10, 10]));
-//! let b = Altar::new(2, Box3::new([10, 0, 0], [20, 10, 10]));
+//! let a = Altar::new(1, CellBox::new([0, 0, 0], [10, 10, 10]));
+//! let b = Altar::new(2, CellBox::new([10, 0, 0], [20, 10, 10]));
 //! let placements = clusters(&[a, b])?;
 //! assert_eq!(placements[0].cluster, placements[1].cluster);
 //! # Ok::<(), enshwick_better_altars::geometry::ClusterError>(())
@@ -34,33 +35,18 @@
 mod flow;
 mod growth;
 
-/// A world-aligned, half-open box in voxel-grid cells; axis 1 is up.
-///
-/// # Examples
-///
-/// ```
-/// use enshwick_better_altars::geometry::Box3;
-///
-/// let zone = Box3::new([0, 0, 0], [4, 2, 3]);
-/// assert_eq!(zone.footprint_area(), 12);
-/// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Box3 {
-    /// The inclusive lower corner.
-    pub min: [i64; 3],
-    /// The exclusive upper corner.
-    pub max: [i64; 3],
-}
+use enshwick::altars::CellBox;
 
 /// An altar and its vanilla zones, the input of [`clusters`].
 ///
 /// # Examples
 ///
 /// ```
-/// use enshwick_better_altars::geometry::{Altar, Box3};
+/// use enshwick::altars::CellBox;
+/// use enshwick_better_altars::geometry::Altar;
 ///
-/// let altar = Altar::new(7, Box3::new([0, 0, 0], [10, 10, 10]));
-/// assert_eq!(altar.zone(), Box3::new([0, 0, 0], [10, 10, 10]));
+/// let altar = Altar::new(7, CellBox::new([0, 0, 0], [10, 10, 10]));
+/// assert_eq!(altar.zone(), CellBox::new([0, 0, 0], [10, 10, 10]));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Altar {
@@ -70,7 +56,7 @@ pub struct Altar {
     /// Its vanilla zone at every level from the first to the current one,
     /// each inside the next. A zone with an empty footprint, such as level
     /// 0's, takes part in nothing.
-    pub levels: Vec<Box3>,
+    pub levels: Vec<CellBox>,
 }
 
 impl Altar {
@@ -80,7 +66,7 @@ impl Altar {
     ///
     /// See [`Altar`].
     #[must_use]
-    pub fn new(key: u64, zone: Box3) -> Self {
+    pub fn new(key: u64, zone: CellBox) -> Self {
         Self {
             key,
             levels: vec![zone],
@@ -94,11 +80,11 @@ impl Altar {
     ///
     /// See [`Altar`].
     #[must_use]
-    pub fn zone(&self) -> Box3 {
+    pub fn zone(&self) -> CellBox {
         self.levels
             .last()
             .copied()
-            .unwrap_or(Box3::new([0; 3], [0; 3]))
+            .unwrap_or(CellBox::new([0; 3], [0; 3]))
     }
 }
 
@@ -116,7 +102,7 @@ pub struct Placement {
     /// Cells every member of the cluster grew by on each horizontal side.
     pub growth: i64,
     /// The altar's zone.
-    pub zone: Box3,
+    pub zone: CellBox,
 }
 
 /// Why [`clusters`] refused its input.
@@ -124,9 +110,10 @@ pub struct Placement {
 /// # Examples
 ///
 /// ```
-/// use enshwick_better_altars::geometry::{Altar, Box3, ClusterError, clusters};
+/// use enshwick::altars::CellBox;
+/// use enshwick_better_altars::geometry::{Altar, ClusterError, clusters};
 ///
-/// let zone = Box3::new([0, 0, 0], [1, 1, 1]);
+/// let zone = CellBox::new([0, 0, 0], [1, 1, 1]);
 /// let error = clusters(&[Altar::new(1, zone), Altar::new(1, zone)]).unwrap_err();
 /// assert_eq!(error, ClusterError::DuplicateKey(1));
 /// ```
@@ -147,142 +134,23 @@ pub enum ClusterError {
     NotNested(u64),
 }
 
-impl Box3 {
-    /// A box from its corners.
-    ///
-    /// # Examples
-    ///
-    /// See [`Box3`].
-    #[must_use]
-    pub const fn new(min: [i64; 3], max: [i64; 3]) -> Self {
-        Self { min, max }
-    }
-
-    /// The footprint area, over axes 0 and 2.
-    ///
-    /// # Examples
-    ///
-    /// See [`Box3`].
-    #[must_use]
-    pub fn footprint_area(&self) -> i128 {
-        let x = i128::from((self.max[0] - self.min[0]).max(0));
-        let z = i128::from((self.max[2] - self.min[2]).max(0));
-        x * z
-    }
-
-    /// Whether the footprints touch or overlap; a shared edge or corner counts.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use enshwick_better_altars::geometry::Box3;
-    ///
-    /// let a = Box3::new([0, 0, 0], [2, 1, 2]);
-    /// assert!(a.footprint_touches(&Box3::new([2, 0, 2], [3, 1, 3])));
-    /// assert!(!a.footprint_touches(&Box3::new([3, 0, 0], [4, 1, 1])));
-    /// ```
-    #[must_use]
-    pub fn footprint_touches(&self, other: &Self) -> bool {
-        [0, 2]
-            .iter()
-            .all(|&axis| self.min[axis] <= other.max[axis] && other.min[axis] <= self.max[axis])
-    }
-
-    /// The box grown by `k` cells on every horizontal side.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use enshwick_better_altars::geometry::Box3;
-    ///
-    /// let grown = Box3::new([0, 0, 0], [2, 1, 2]).grown(1);
-    /// assert_eq!(grown, Box3::new([-1, 0, -1], [3, 1, 3]));
-    /// ```
-    #[must_use]
-    pub fn grown(&self, k: i64) -> Self {
-        let mut grown = *self;
-        for axis in [0, 2] {
-            grown.min[axis] -= k;
-            grown.max[axis] += k;
-        }
-        grown
-    }
-
-    /// Whether `point` lies inside: `min <= point < max` on every axis.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use enshwick_better_altars::geometry::Box3;
-    ///
-    /// let zone = Box3::new([0, 0, 0], [2, 2, 2]);
-    /// assert!(zone.contains_point([1, 1, 1]));
-    /// assert!(!zone.contains_point([2, 1, 1]));
-    /// ```
-    #[must_use]
-    pub fn contains_point(&self, point: [i64; 3]) -> bool {
-        (0..3).all(|axis| self.min[axis] <= point[axis] && point[axis] < self.max[axis])
-    }
-
-    fn contains(&self, inner: &Self) -> bool {
-        (0..3).all(|axis| self.min[axis] <= inner.min[axis] && inner.max[axis] <= self.max[axis])
-    }
-
-    fn height(&self) -> i64 {
-        self.max[1] - self.min[1]
-    }
-
-    /// The box made `height` tall around its own centre. An odd difference
-    /// puts the extra cell on top.
-    fn with_height(&self, height: i64) -> Self {
-        let extra = height - self.height();
-        let mut tall = *self;
-        tall.min[1] -= extra / 2;
-        tall.max[1] += extra - extra / 2;
-        tall
-    }
+/// Whether `inner` lies inside `outer`, corner by corner.
+fn holds(outer: &CellBox, inner: &CellBox) -> bool {
+    (0..3).all(|axis| outer.min[axis] <= inner.min[axis] && inner.max[axis] <= outer.max[axis])
 }
 
-/// The area of the union of the boxes' footprints.
-///
-/// # Examples
-///
-/// ```
-/// use enshwick_better_altars::geometry::{Box3, union_footprint_area};
-///
-/// let a = Box3::new([0, 0, 0], [2, 1, 2]);
-/// let b = Box3::new([1, 0, 1], [3, 1, 3]);
-/// assert_eq!(union_footprint_area(&[a, b]), 7);
-/// ```
-#[must_use]
-pub fn union_footprint_area(boxes: &[Box3]) -> i128 {
-    let boxes: Vec<&Box3> = boxes.iter().filter(|b| b.footprint_area() > 0).collect();
-    let mut xs: Vec<i64> = boxes.iter().flat_map(|b| [b.min[0], b.max[0]]).collect();
-    xs.sort_unstable();
-    xs.dedup();
+fn height(zone: &CellBox) -> i64 {
+    zone.max[1] - zone.min[1]
+}
 
-    let mut area = 0;
-    for strip in xs.windows(2) {
-        let (x0, x1) = (strip[0], strip[1]);
-        let mut spans: Vec<(i64, i64)> = boxes
-            .iter()
-            .filter(|b| b.min[0] <= x0 && x1 <= b.max[0])
-            .map(|b| (b.min[2], b.max[2]))
-            .collect();
-        spans.sort_unstable();
-
-        let mut covered: i128 = 0;
-        let mut reached = i64::MIN;
-        for (z0, z1) in spans {
-            let from = z0.max(reached);
-            if z1 > from {
-                covered += i128::from(z1 - from);
-            }
-            reached = reached.max(z1);
-        }
-        area += covered * i128::from(x1 - x0);
-    }
-    area
+/// `zone` made `height` tall around its own centre. An odd difference puts
+/// the extra cell on top.
+fn with_height(zone: &CellBox, height: i64) -> CellBox {
+    let extra = height - self::height(zone);
+    let mut tall = *zone;
+    tall.min[1] -= extra / 2;
+    tall.max[1] += extra - extra / 2;
+    tall
 }
 
 /// Computes every altar's zone; the result is sorted by key.
@@ -314,7 +182,7 @@ pub fn clusters(altars: &[Altar]) -> Result<Vec<Placement>, ClusterError> {
         if altar
             .levels
             .windows(2)
-            .any(|pair| !pair[1].contains(&pair[0]))
+            .any(|pair| !holds(&pair[1], &pair[0]))
         {
             return Err(ClusterError::NotNested(altar.key));
         }
@@ -336,7 +204,7 @@ pub fn clusters(altars: &[Altar]) -> Result<Vec<Placement>, ClusterError> {
     // Each round either merges groups or stops, and the number of groups
     // only decreases, so this terminates.
     let grown = loop {
-        let grown: Vec<(i64, Vec<Box3>)> =
+        let grown: Vec<(i64, Vec<CellBox>)> =
             groups.iter().map(|group| grow(&altars, group)).collect();
         let merged = components(groups.len(), |a, b| {
             grown[a]
@@ -385,18 +253,18 @@ pub fn clusters(altars: &[Altar]) -> Result<Vec<Placement>, ClusterError> {
 }
 
 /// The growth and the zones of one cluster, in the order of `members`.
-fn grow(altars: &[Altar], members: &[usize]) -> (i64, Vec<Box3>) {
-    let chains: Vec<&[Box3]> = members
+fn grow(altars: &[Altar], members: &[usize]) -> (i64, Vec<CellBox>) {
+    let chains: Vec<&[CellBox]> = members
         .iter()
         .map(|&i| altars[i].levels.as_slice())
         .collect();
     let growth = growth::growth(&chains);
 
-    let current: Vec<Box3> = members.iter().map(|&i| altars[i].zone()).collect();
-    let height = current.iter().map(Box3::height).max().unwrap_or(0);
+    let current: Vec<CellBox> = members.iter().map(|&i| altars[i].zone()).collect();
+    let height = current.iter().map(height).max().unwrap_or(0);
     let zones = current
         .iter()
-        .map(|b| b.grown(growth).with_height(height))
+        .map(|b| with_height(&b.grown(growth), height))
         .collect();
     (growth, zones)
 }
@@ -443,16 +311,16 @@ mod tests {
 
     /// A zone near the origin, so that zones often touch; a zero width
     /// gives the empty footprint of level 0.
-    fn zone() -> impl Strategy<Value = Box3> {
+    fn zone() -> impl Strategy<Value = CellBox> {
         ([-24i64..24, -4..4, -24..24], [0i64..10, 1..8, 0..10]).prop_map(|(min, size)| {
-            Box3::new(min, [min[0] + size[0], min[1] + size[1], min[2] + size[2]])
+            CellBox::new(min, [min[0] + size[0], min[1] + size[1], min[2] + size[2]])
         })
     }
 
     /// `zone` widened by `by`: the lower corner moves down by the first three,
     /// the upper corner up by the last three.
-    fn widened(zone: Box3, by: [i64; 6]) -> Box3 {
-        Box3::new(
+    fn widened(zone: CellBox, by: [i64; 6]) -> CellBox {
+        CellBox::new(
             [
                 zone.min[0] - by[0],
                 zone.min[1] - by[1],
@@ -473,7 +341,7 @@ mod tests {
 
     /// An altar's zones from its first level to its current one, each
     /// inside the next.
-    fn levels() -> impl Strategy<Value = Vec<Box3>> {
+    fn levels() -> impl Strategy<Value = Vec<CellBox>> {
         (zone(), prop::collection::vec(raise(), 0..3)).prop_map(|(first, raises)| {
             let mut levels = vec![first];
             for by in raises {
@@ -500,7 +368,7 @@ mod tests {
     }
 
     /// The vanilla zone of every altar, by key.
-    fn vanilla(altars: &[Altar]) -> BTreeMap<u64, Box3> {
+    fn vanilla(altars: &[Altar]) -> BTreeMap<u64, CellBox> {
         altars.iter().map(|a| (a.key, a.zone())).collect()
     }
 
@@ -541,7 +409,7 @@ mod tests {
             let vanilla = vanilla(&altars);
             for placement in clusters(&altars).unwrap() {
                 prop_assert!(
-                    placement.zone.contains(&vanilla[&placement.key]),
+                    holds(&placement.zone, &vanilla[&placement.key]),
                     "{placement:?} lost part of {:?}", vanilla[&placement.key]
                 );
             }
@@ -567,11 +435,11 @@ mod tests {
             for (cluster, members) in by_cluster(&placements, &altars) {
                 prop_assert_eq!(cluster, members[0].key, "the smallest key names the cluster");
                 let growth = members[0].growth;
-                let height = members.iter().map(|m| vanilla[&m.key].height()).max().unwrap();
+                let tallest = members.iter().map(|m| height(&vanilla[&m.key])).max().unwrap();
                 for member in &members {
                     let grown = vanilla[&member.key].grown(growth);
                     prop_assert_eq!(member.growth, growth);
-                    prop_assert_eq!(member.zone.height(), height);
+                    prop_assert_eq!(height(&member.zone), tallest);
                     prop_assert_eq!(
                         [member.zone.min[0], member.zone.max[0], member.zone.min[2], member.zone.max[2]],
                         [grown.min[0], grown.max[0], grown.min[2], grown.max[2]]
@@ -585,12 +453,12 @@ mod tests {
             let vanilla = vanilla(&altars);
             let placements = clusters(&altars).unwrap();
             for members in by_cluster(&placements, &altars).values() {
-                let budget: i128 = members.iter().map(|m| vanilla[&m.key].footprint_area()).sum();
-                let zones: Vec<Box3> = members.iter().map(|m| m.zone).collect();
-                let wider: Vec<Box3> = zones.iter().map(|z| z.grown(1)).collect();
+                let budget: i64 = members.iter().map(|m| vanilla[&m.key].footprint_area()).sum();
+                let zones: Vec<CellBox> = members.iter().map(|m| m.zone).collect();
+                let wider: Vec<CellBox> = zones.iter().map(|z| z.grown(1)).collect();
                 // The budget, to the nearest step: half a step rounds up.
                 prop_assert!(
-                    2 * budget < union_footprint_area(&zones) + union_footprint_area(&wider),
+                    2 * budget < CellBox::union_footprint_area(&zones) + CellBox::union_footprint_area(&wider),
                     "{members:?} short of {budget}"
                 );
             }
@@ -617,11 +485,11 @@ mod tests {
             let before = clusters(&altars).unwrap();
             let mut more = altars.clone();
             more.push(Altar { key: 0, levels });
-            let after: BTreeMap<u64, Box3> =
+            let after: BTreeMap<u64, CellBox> =
                 clusters(&more).unwrap().into_iter().map(|p| (p.key, p.zone)).collect();
             for placement in before {
                 prop_assert!(
-                    after[&placement.key].contains(&placement.zone),
+                    holds(&after[&placement.key], &placement.zone),
                     "{placement:?} shrank to {:?}", after[&placement.key]
                 );
             }
@@ -645,11 +513,11 @@ mod tests {
             let mut raised = altars.clone();
             let altar = &mut raised[which.index(altars.len())];
             altar.levels.push(widened(altar.zone(), by));
-            let after: BTreeMap<u64, Box3> =
+            let after: BTreeMap<u64, CellBox> =
                 clusters(&raised).unwrap().into_iter().map(|p| (p.key, p.zone)).collect();
             for placement in before {
                 prop_assert!(
-                    after[&placement.key].contains(&placement.zone),
+                    holds(&after[&placement.key], &placement.zone),
                     "{placement:?} shrank to {:?}", after[&placement.key]
                 );
             }

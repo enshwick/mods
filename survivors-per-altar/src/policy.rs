@@ -27,7 +27,9 @@ use enshwick::survivors::{
 use enshwick::{Entity, ItemId, Load, Off};
 
 use crate::Charges;
-use crate::copies::{Copies, CopyStaff, Verdict, Zone};
+use enshwick::altars::CellBox as Zone;
+
+use crate::copies::{Copies, CopyStaff, Verdict};
 use crate::points::{ChargeCost, CopyLimit};
 use enshwick::{Relock, RelockRw};
 
@@ -253,12 +255,7 @@ fn read_altars(altars: Altars) {
             now,
             list.iter()
                 .filter(|altar| !altar.zone.is_empty())
-                .map(|altar| {
-                    (
-                        u64::from(altar.entity.0),
-                        Zone::new(altar.zone.min, altar.zone.max),
-                    )
-                }),
+                .map(|altar| (u64::from(altar.entity.0), altar.zone)),
         );
     });
 }

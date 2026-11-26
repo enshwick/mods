@@ -333,6 +333,20 @@ mod tests {
     }
 
     #[test]
+    fn a_switch_refused_at_another_safe_sends_the_open_safe_s_list_once() {
+        let ann = player(10, 1, "Ann");
+        let (loader, [open_far, _], dir) = three_safes();
+        assert_eq!(loader.raise_game_event(0x0a11, &open_far), 1);
+        let opened = told(&loader).len();
+
+        let near = ActionTarget::at([1.0, 0.0, 0.0]);
+        let ran = loader.ask_action_at(&ann, 0, "access", "p0000000000000003\tb1", near);
+        assert!(ran.is_some_and(|ran| ran.starts_with('0')), "refused");
+        assert_eq!(told(&loader).len(), opened + 1);
+        let _gone = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn the_client_draws_switches_only_for_a_safe_and_a_switch_runs_the_access_action() {
         let loader = host().side(Side::CLIENT).net_peer(Peer::Server).install();
         // SAFETY: the exports of the mod's `declare_mod!`.

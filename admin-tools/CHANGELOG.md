@@ -34,6 +34,8 @@ Each entry says what players notice; a release's notes show its section.
   moment later. If it still takes none, it is taken back and the admin
   reads that no chest went up, or that it stands empty when the game cannot
   take it back, instead of an empty chest staying unnoticed.
+- God mode stays on after the player respawns, until they leave. Before,
+  it ended at the respawn.
 - A zone builder who respawns on a server builds in a zone from the next
   server step, instead of being refused for up to a second.
 - A zone builder who hosts the game sees the build cursor allowed in a zone,

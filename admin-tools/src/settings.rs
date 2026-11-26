@@ -576,9 +576,9 @@ impl Who {
             return Some(Self::Nobody);
         }
         PlayerPermissions::ALL
-            .into_iter()
+            .iter()
             .find(|permission| format!("{permission:?}").eq_ignore_ascii_case(word))
-            .map(Self::Permission)
+            .map(|&permission| Self::Permission(permission))
     }
 
     /// Whether the rule lets `player` in.
@@ -610,13 +610,13 @@ mod tests {
     use super::*;
 
     fn player(key: u64, permissions: u32) -> Player {
-        Player {
-            entity: Entity(2),
-            slot: 0,
-            key: PlayerKey::new(key),
+        Player::new(
+            Entity::from_engine(2),
+            0,
+            PlayerKey::new(key),
             permissions,
-            name: "Ann".into(),
-        }
+            "Ann".into(),
+        )
     }
 
     #[test]

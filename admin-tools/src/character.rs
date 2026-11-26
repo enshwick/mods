@@ -330,15 +330,23 @@ mod tests {
     #[test]
     fn god_mode_follows_a_player_to_a_new_character_and_waits_while_none_is_found() {
         let (ann, bob, cid) = (PlayerKey::new(1), PlayerKey::new(2), PlayerKey::new(3));
-        let gods = [(ann, Entity(10)), (bob, Entity(11)), (cid, Entity(12))];
+        let gods = [
+            (ann, Entity::from_engine(10)),
+            (bob, Entity::from_engine(11)),
+            (cid, Entity::from_engine(12)),
+        ];
         let now = |key| match key {
-            key if key == ann => Some(Entity(10)),
-            key if key == bob => Some(Entity(40)),
+            key if key == ann => Some(Entity::from_engine(10)),
+            key if key == bob => Some(Entity::from_engine(40)),
             _ => None,
         };
         assert_eq!(
             current(&gods, now),
-            [(ann, Entity(10)), (bob, Entity(40)), (cid, Entity(12))]
+            [
+                (ann, Entity::from_engine(10)),
+                (bob, Entity::from_engine(40)),
+                (cid, Entity::from_engine(12))
+            ]
         );
     }
 }

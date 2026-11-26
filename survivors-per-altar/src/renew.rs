@@ -23,8 +23,10 @@ fn renew(inventories: &Inventories, root: Entity, staffs: &[ItemId]) {
             outcome.done
         );
     });
-    if asked.is_some() {
-        enshwick::debug!("old copy staffs in {root}: renewal asked");
+    match asked {
+        Ok(Some(_)) => enshwick::debug!("old copy staffs in {root}: renewal asked"),
+        Ok(None) => {}
+        Err(error) => enshwick::warn_every!(SWEEP * 10, "old copy staffs not renewed: {error}"),
     }
 }
 
@@ -32,8 +34,10 @@ fn renew(inventories: &Inventories, root: Entity, staffs: &[ItemId]) {
 /// world fills with loot.
 fn holders(world: World) -> Vec<Entity> {
     let mut roots: Vec<Entity> = world.players().iter().map(|p| p.entity).collect();
-    let containers = world.containers(ContainerKinds::PLACED | ContainerKinds::LOOT);
-    roots.extend(containers.iter().map(|placed| placed.entity));
+    match world.containers(ContainerKinds::PLACED | ContainerKinds::LOOT) {
+        Ok(containers) => roots.extend(containers.iter().map(|placed| placed.entity)),
+        Err(error) => enshwick::warn_every!(SWEEP * 10, "containers not swept: {error}"),
+    }
     roots
 }
 

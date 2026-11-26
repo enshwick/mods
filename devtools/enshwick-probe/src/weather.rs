@@ -41,11 +41,10 @@ impl WeatherChecks {
     }
 
     pub(crate) fn run(self) {
-        let at = self
-            .world
-            .entities(self.world.transform_type())
-            .first()
-            .map_or([0.0; 3], |placed| placed.position);
+        let at =
+            crate::checks::listed("entities", self.world.entities(self.world.transform_type()))
+                .first()
+                .map_or([0.0; 3], |placed| placed.position);
         if let Some(now) = self.weather.at(at) {
             enshwick::info!("PASS weather at {at:?}: {:?} {now:?}", now.state());
         } else {

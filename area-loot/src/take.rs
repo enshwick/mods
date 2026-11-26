@@ -328,25 +328,23 @@ fn emptied(outcome: &Outcome) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use enshwick::inventory::{Done, OpError, OpResult};
+    use enshwick::inventory::{Done, OpResult, RunOpError};
 
     use super::*;
 
+    fn op(error: Option<RunOpError>, remaining: u32) -> OpResult {
+        let mut op = OpResult::default();
+        op.error = error;
+        op.remaining = remaining;
+        op
+    }
+
     #[test]
     fn only_a_full_commit_empties() {
-        let full = |error, remaining| Outcome {
-            done: Done::Committed,
-            ops: vec![OpResult { error, remaining }],
-        };
+        let full = |error, remaining| Outcome::new(Done::Committed, vec![op(error, remaining)]);
         assert!(emptied(&full(None, 0)));
-        assert!(!emptied(&full(Some(OpError::InvalidState), 0)));
-        assert!(!emptied(&Outcome {
-            done: Done::RolledBack,
-            ops: vec![OpResult {
-                error: None,
-                remaining: 0
-            }],
-        }));
+        assert!(!emptied(&full(Some(RunOpError::InvalidState), 0)));
+        assert!(!emptied(&Outcome::new(Done::RolledBack, vec![op(None, 0)])));
     }
 
     #[test]
@@ -355,7 +353,12 @@ mod tests {
         use enshwick::points::Verdict;
 
         assert!(
-            eligible(Entity(1), Entity(2), Entity(3), 4.0),
+            eligible(
+                Entity::from_engine(1),
+                Entity::from_engine(2),
+                Entity::from_engine(3),
+                4.0
+            ),
             "before init"
         );
         let loader = enshwick::test::FakeHost::new().install();
@@ -376,7 +379,12 @@ mod tests {
         );
         // As in the game, the loader runs no point of a mod that is off, so
         // every container stays as the mod's default leaves it.
-        assert!(eligible(Entity(1), Entity(2), Entity(3), 6.0));
+        assert!(eligible(
+            Entity::from_engine(1),
+            Entity::from_engine(2),
+            Entity::from_engine(3),
+            6.0
+        ));
     }
 
     #[test]

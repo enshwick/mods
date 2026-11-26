@@ -9,7 +9,7 @@ use enshwick::actions::{Action, Actions, Outcome};
 use enshwick::effects::{Effects, Spawn};
 use enshwick::events::AltarsChanged;
 use enshwick::schedule::Scheduler;
-use enshwick::vetoes::BuildVerdict;
+use enshwick::vetoes::Verdict;
 use enshwick::world::{ContainerKinds, Placed, World};
 use enshwick::{Entity, Load, Off};
 
@@ -81,17 +81,20 @@ fn mark(server: &Server, player: Entity) -> Outcome {
     let Some(me) = server.world.position(player) else {
         return Outcome::refused("your character has no position");
     };
-    let npcs = server.world.containers(ContainerKinds::NPCS);
+    let npcs = match server.world.containers(ContainerKinds::NPCS) {
+        Ok(npcs) => npcs,
+        Err(error) => return Outcome::refused(format!("survivors not listed: {error}")),
+    };
     let Some(survivor) = nearest_within(npcs, me, MARK_REACH) else {
         return Outcome::refused(format!("no survivor within {MARK_REACH} m"));
     };
     let labelled = server.world.set_label(survivor.entity, SURVIVOR);
     enshwick::info!(
-        "survivor {} at {:?} marked \"{SURVIVOR}\": {labelled}",
+        "survivor {} at {:?} marked \"{SURVIVOR}\": {labelled:?}",
         survivor.entity,
         survivor.position
     );
-    marked(survivor.entity, labelled)
+    marked(survivor.entity, labelled.is_ok())
 }
 
 /// What the player hears of the two spawns.
@@ -117,7 +120,10 @@ fn spawn(server: &Server, player: Entity) -> Outcome {
     let Some(me) = server.world.position(player) else {
         return Outcome::refused("your character has no position");
     };
-    let mut placed = server.world.containers(ContainerKinds::PLACED);
+    let mut placed = match server.world.containers(ContainerKinds::PLACED) {
+        Ok(placed) => placed,
+        Err(error) => return Outcome::refused(format!("chests not listed: {error}")),
+    };
     placed.sort_by(|a, b| a.distance(me).total_cmp(&b.distance(me)));
     let template = placed
         .iter()
@@ -205,9 +211,9 @@ pub(crate) fn refuse_near_altars(load: &mut Load<'_>) -> Result<(), Off> {
             .iter()
             .any(|&altar| distance(altar, placement.position) < ALTAR_DISTANCE);
         if near {
-            BuildVerdict::refuse_because(TOO_CLOSE)
+            Verdict::refuse_because(TOO_CLOSE)
         } else {
-            BuildVerdict::Allow
+            Verdict::Allow
         }
     })
 }
@@ -225,16 +231,13 @@ mod tests {
     }
 
     fn placed(entity: u32, x: f64) -> Placed {
-        Placed {
-            entity: Entity(entity),
-            position: [x, 0.0, 0.0],
-        }
+        Placed::new(Entity::from_engine(entity), [x, 0.0, 0.0])
     }
 
     #[test]
     fn only_a_survivor_within_reach_is_marked() {
         let near = nearest_within(vec![placed(1, 30.0), placed(2, 9.0)], [0.0; 3], MARK_REACH);
-        assert_eq!(near.map(|placed| placed.entity.0), Some(2));
+        assert_eq!(near.map(|placed| placed.entity.get()), Some(2));
         assert_eq!(
             nearest_within(vec![placed(1, 30.0)], [0.0; 3], MARK_REACH),
             None
@@ -243,13 +246,13 @@ mod tests {
 
     #[test]
     fn a_label_the_game_refused_is_not_reported_as_marked() {
-        assert!(marked(Entity(7), true).is_done());
-        assert!(!marked(Entity(7), false).is_done());
+        assert!(marked(Entity::from_engine(7), true).is_done());
+        assert!(!marked(Entity::from_engine(7), false).is_done());
     }
 
     #[test]
     fn a_spawn_that_half_failed_says_which_chest_stands() {
-        let (kept, unsaved) = (Entity(1), Entity(2));
+        let (kept, unsaved) = (Entity::from_engine(1), Entity::from_engine(2));
         assert_eq!(
             spawn_outcome(Some(kept), Some(unsaved)),
             Outcome::done("Kept 1 and Unsaved 2 spawned")

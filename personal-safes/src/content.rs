@@ -26,24 +26,16 @@ pub fn is_safe(item: ItemId) -> bool {
 /// The Safe item, a clone of `chest`.
 #[must_use]
 pub fn item(chest: Guid) -> NewItem {
-    NewItem {
-        name: Some(SAFE_NAME.guid()),
-        description: Some(SAFE_DESCRIPTION.guid()),
-        ..NewItem::new(SAFE, chest)
-    }
+    let mut item = NewItem::new(SAFE, chest);
+    item.name = Some(SAFE_NAME.guid());
+    item.description = Some(SAFE_DESCRIPTION.guid());
+    item
 }
 
 /// The Safe's recipe: `chest`'s, its ingredients times `cost`.
 #[must_use]
-pub const fn recipe(cost: u32, chest: Guid) -> NewRecipe {
-    NewRecipe {
-        id: SAFE_RECIPE,
-        like: chest,
-        output: SAFE.guid(),
-        output_count: 1,
-        cost,
-        workshop: None,
-    }
+pub fn recipe(cost: u32, chest: Guid) -> NewRecipe {
+    NewRecipe::new(SAFE_RECIPE, chest, SAFE.guid(), 1, cost)
 }
 
 #[cfg(test)]

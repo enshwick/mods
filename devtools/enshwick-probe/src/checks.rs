@@ -12,11 +12,11 @@ use enshwick::entity_data::{EntityData, Replication};
 use enshwick::game_events::{EventType, RawGameEvent};
 use enshwick::schedule::Scheduler;
 use enshwick::state::WorldStore;
-use enshwick::world::{ContainerKinds, Notice, World, WritableType};
+use enshwick::world::{ContainerKinds, Notice, Placed, World, WritableType};
 use enshwick::{Load, Off, WorldError};
 
 /// An entity id no world holds, for the checks of what a call refuses.
-pub(crate) const NOT_IN_WORLD: Entity = Entity(u32::MAX - 1);
+pub(crate) const NOT_IN_WORLD: Entity = Entity::from_engine(u32::MAX - 1);
 /// Entities whose stats a check compares.
 const SAMPLE: usize = 5;
 /// How long a destroyed entity may take to leave the world.
@@ -94,6 +94,14 @@ pub(crate) fn fail(what: &str) {
     enshwick::warn!("FAIL {what}");
 }
 
+/// The entities a world list `what` read, none after a failure it reports.
+pub(crate) fn listed(what: &str, read: Result<Vec<Placed>, WorldError>) -> Vec<Placed> {
+    read.unwrap_or_else(|why| {
+        fail(&format!("{what}: {why}"));
+        Vec::new()
+    })
+}
+
 impl Checks {
     pub(crate) fn new(load: &mut Load<'_>) -> Result<Self, Off> {
         let world = load.world()?;
@@ -144,17 +152,16 @@ impl Checks {
         self.writes();
         self.effects();
         self.spawns();
-        let now: Vec<(u32, u64)> = self
-            .world
-            .entities(self.world.transform_type())
-            .iter()
-            .take(ID_SAMPLE)
-            .filter_map(|placed| {
-                let template = self.world.template(placed.entity)?;
-                let head = u64::from_le_bytes(template.0[..8].try_into().ok()?);
-                Some((placed.entity.0, head))
-            })
-            .collect();
+        let now: Vec<(u32, u64)> =
+            listed("entities", self.world.entities(self.world.transform_type()))
+                .iter()
+                .take(ID_SAMPLE)
+                .filter_map(|placed| {
+                    let template = self.world.template(placed.entity)?;
+                    let head = u64::from_le_bytes(template.0[..8].try_into().ok()?);
+                    Some((placed.entity.get(), head))
+                })
+                .collect();
         match self.store.update(|visits| {
             visits.checks += 1;
             let before = std::mem::replace(&mut visits.seen, now.clone());
@@ -178,7 +185,7 @@ impl Checks {
     }
 
     fn queries(&self) {
-        let placed = self.world.entities(self.world.transform_type());
+        let placed = listed("entities", self.world.entities(self.world.transform_type()));
         if placed.is_empty() {
             fail("entities: no placed entity");
             return;
@@ -195,9 +202,11 @@ impl Checks {
                 first.entity, first.position
             )),
         }
-        let near = self
-            .world
-            .near(first.position, 5.0, self.world.transform_type());
+        let near = listed(
+            "near",
+            self.world
+                .near(first.position, 5.0, self.world.transform_type()),
+        );
         if near.first().map(|p| p.entity) == Some(first.entity) {
             pass(&format!(
                 "near: {} within 5 m of entity {}, itself first",
@@ -210,7 +219,7 @@ impl Checks {
     }
 
     fn stats(&self) {
-        let actors = self.world.entities(self.network_health);
+        let actors = listed("entities", self.world.entities(self.network_health));
         if actors.is_empty() {
             enshwick::info!("SKIP vitals: no actor with replicated health in the loaded world");
         }
@@ -234,15 +243,17 @@ impl Checks {
     fn writes(&self) {
         // The world refuses a copy by its type, so any entity shows it when
         // no actor has one.
-        let first = |ty| self.world.entities(ty).first().map(|placed| placed.entity);
+        let first = |ty| {
+            listed("entities", self.world.entities(ty))
+                .first()
+                .map(|placed| placed.entity)
+        };
         let any = first(self.network_health).or_else(|| first(self.world.transform_type()));
         match any {
             Some(entity) => Self::copy_write(self.world, self.copy, entity),
             None => enshwick::info!("SKIP writes: no entity in the loaded world"),
         }
-        let actor = self
-            .world
-            .entities(self.network_health)
+        let actor = listed("entities", self.world.entities(self.network_health))
             .into_iter()
             .map(|placed| placed.entity)
             .find(|&entity| {
@@ -326,7 +337,7 @@ impl Checks {
     /// Raises a ping and checks two refusals: a type off the allow list and
     /// a teleport of an entity not in the world.
     fn effects(&self) {
-        match self.effects.ping(Entity(0), PING_AT) {
+        match self.effects.ping(Entity::from_engine(0), PING_AT) {
             Ok(()) => {
                 self.ping_sent.store(true, Ordering::Release);
                 pass("ping raised; the game should hand it back next step");
@@ -351,12 +362,17 @@ impl Checks {
     /// preferring a survivor or an animal, then checks it arrived, writes its
     /// health, teleports it and destroys it.
     fn spawns(&self) {
-        let source = self
-            .world
-            .containers(ContainerKinds::NPCS | ContainerKinds::ANIMALS)
-            .into_iter()
-            .chain(self.world.entities(self.world.transform_type()))
-            .find_map(|placed| Some((self.world.template(placed.entity)?, placed.position)));
+        let source = listed(
+            "containers",
+            self.world
+                .containers(ContainerKinds::NPCS | ContainerKinds::ANIMALS),
+        )
+        .into_iter()
+        .chain(listed(
+            "entities",
+            self.world.entities(self.world.transform_type()),
+        ))
+        .find_map(|placed| Some((self.world.template(placed.entity)?, placed.position)));
         let Some((template, [x, y, z])) = source else {
             enshwick::info!("SKIP spawns: no entity with a template in the world");
             return;
@@ -491,7 +507,7 @@ impl Checks {
     }
 
     fn refusals(&self) {
-        match self.world.destroy(Entity(0)) {
+        match self.world.destroy(Entity::from_engine(0)) {
             Err(WorldError::Refused) => pass("destroy refuses entity 0"),
             other => fail(&format!("destroy of entity 0: {other:?}")),
         }
@@ -509,13 +525,7 @@ impl Checks {
             )),
         }
         // None and NotASpawnPoint, not unavailable: the respawn point's layout resolved.
-        let no_player = enshwick::world::Player {
-            entity: NOT_IN_WORLD,
-            slot: 0,
-            key: nobody,
-            permissions: 0,
-            name: String::new(),
-        };
+        let no_player = enshwick::world::Player::new(NOT_IN_WORLD, 0, nobody, 0, String::new());
         match self.world.respawn_point(&no_player) {
             Ok(None) => pass("respawn point: none for an entity that is no player"),
             other => fail(&format!("respawn point of no player: {other:?}")),
@@ -615,7 +625,7 @@ impl Checks {
         if !before.is_empty() {
             let kept = before
                 .iter()
-                .filter(|(id, _)| self.marks.get(Entity(*id)) == Some(check - 1))
+                .filter(|(id, _)| self.marks.get(Entity::from_engine(*id)) == Some(check - 1))
                 .count();
             enshwick::info!(
                 "entity data across loads: {kept} of {} marked entities keep their mark",
@@ -624,11 +634,11 @@ impl Checks {
         }
         let marked = now
             .iter()
-            .filter(|(id, _)| self.marks.set(Entity(*id), &check).is_ok())
+            .filter(|(id, _)| self.marks.set(Entity::from_engine(*id), &check).is_ok())
             .count();
         let read = now
             .iter()
-            .filter(|(id, _)| self.marks.get(Entity(*id)) == Some(check))
+            .filter(|(id, _)| self.marks.get(Entity::from_engine(*id)) == Some(check))
             .count();
         if marked == now.len() && read == marked {
             pass(&format!(
@@ -760,7 +770,7 @@ mod tests {
             .world()
             .type_hash(NETWORK_HEALTH, 7)
             .type_size(NETWORK_HEALTH, 8)
-            .component(Entity(3), 7, &[0; 8])
+            .component(Entity::from_engine(3), 7, &[0; 8])
             .refuse_write(7)
             .install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
@@ -768,14 +778,17 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, copy, _) = RESOLVED.get().unwrap();
-        Checks::copy_write(world, copy, Entity(3));
+        Checks::copy_write(world, copy, Entity::from_engine(3));
         let logs = loader.logs();
         assert!(
             logs.iter()
                 .any(|(_, line)| line == "PASS writes: a write to the replicated health is refused"),
             "{logs:?}"
         );
-        assert_eq!(loader.component_bytes(Entity(3), 7), Some(vec![0; 8]));
+        assert_eq!(
+            loader.component_bytes(Entity::from_engine(3), 7),
+            Some(vec![0; 8])
+        );
     }
 
     #[test]
@@ -784,14 +797,14 @@ mod tests {
             .world()
             .type_hash(NETWORK_HEALTH, 7)
             .type_size(NETWORK_HEALTH, 8)
-            .component(Entity(3), 7, &[0; 8])
+            .component(Entity::from_engine(3), 7, &[0; 8])
             .install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, _, health) = RESOLVED.get().unwrap();
-        Checks::compare(world, health, Entity(3));
+        Checks::compare(world, health, Entity::from_engine(3));
         let logs = loader.logs();
         assert!(
             logs.iter()
@@ -805,7 +818,7 @@ mod tests {
     #[test]
     fn a_burst_shows_the_player_each_number_once_in_order() {
         use enshwick::PlayerKey;
-        use enshwick::abi::{Header, PlayerInfo};
+        use enshwick::abi::PlayerInfo;
         use enshwick::net::Peer;
 
         let key = PlayerKey::new(7);
@@ -817,15 +830,14 @@ mod tests {
             .world()
             .type_hash(NETWORK_HEALTH, 7)
             .type_size(NETWORK_HEALTH, 8)
-            .player(PlayerInfo {
-                header: Header::of::<PlayerInfo>(),
+            .player(enshwick::abi::headed!(PlayerInfo {
                 slot: 0,
-                entity: Entity(10),
+                entity: Entity::from_engine(10),
                 key,
                 permissions: 0,
                 name_len: 3,
                 name,
-            })
+            }))
             .install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
         let status =

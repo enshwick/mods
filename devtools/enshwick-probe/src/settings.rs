@@ -7,7 +7,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use enshwick::game_settings::GameSettings;
+use enshwick::game_settings::{GameSettings, SettingsRead};
 use enshwick::state::ModLocal;
 use enshwick::{Load, Off};
 
@@ -54,15 +54,28 @@ impl SettingsChecks {
     /// Reads the settings, raises the perk cost by a half, reads it back
     /// and puts the settings back as they were.
     pub(crate) fn run(self) {
-        let Some((before, preset)) = self.settings.read() else {
-            enshwick::warn!("FAIL game settings: no reading");
-            return;
+        // The game settings' read, not a std lock.
+        // ast-grep-ignore: lock-through-relock
+        let (before, preset) = match self.settings.read() {
+            Ok(SettingsRead {
+                settings, preset, ..
+            }) => (settings, preset),
+            Err(why) => {
+                enshwick::warn!("FAIL game settings: {why}");
+                return;
+            }
         };
         enshwick::info!("PASS game settings read, preset {preset:?}: {before:?}");
         let wanted = before.perk_cost_factor + 0.5;
         match self.settings.change(|s| s.perk_cost_factor = wanted) {
+            // The game settings' read, not a std lock.
+            // ast-grep-ignore: lock-through-relock
             Ok(_) => match self.settings.read() {
-                Some((now, preset)) if (now.perk_cost_factor - wanted).abs() < 1e-6 => {
+                Ok(SettingsRead {
+                    settings: now,
+                    preset,
+                    ..
+                }) if (now.perk_cost_factor - wanted).abs() < 1e-6 => {
                     enshwick::info!(
                         "PASS game settings change reads back perk cost {}, preset {preset:?}",
                         now.perk_cost_factor
@@ -97,8 +110,12 @@ impl SettingsChecks {
         if (now - KEPT).abs() < 1e-6 {
             enshwick::info!("PASS a kept field came back with the world: boss health {now}");
             match self.settings.forget_kept() {
+                // The game settings' read, not a std lock.
+                // ast-grep-ignore: lock-through-relock
                 Ok(()) => match self.settings.read() {
-                    Some((after, _)) if (after.boss_health_factor - KEPT).abs() > 1e-6 => {
+                    Ok(SettingsRead {
+                        settings: after, ..
+                    }) if (after.boss_health_factor - KEPT).abs() > 1e-6 => {
                         enshwick::info!(
                             "PASS forgetting puts back boss health {}",
                             after.boss_health_factor
@@ -128,8 +145,12 @@ impl SettingsChecks {
             return;
         }
         keeping().store(true, Ordering::Release);
+        // The game settings' read, not a std lock.
+        // ast-grep-ignore: lock-through-relock
         match self.settings.read() {
-            Some((now, _)) if (now.boss_health_factor - KEPT).abs() < 1e-6 => {
+            Ok(SettingsRead { settings: now, .. })
+                if (now.boss_health_factor - KEPT).abs() < 1e-6 =>
+            {
                 enshwick::info!("PASS boss health {KEPT} kept and read back");
             }
             other => enshwick::warn!("FAIL a kept field reads {other:?}"),
@@ -137,8 +158,12 @@ impl SettingsChecks {
         match self.settings.forget_kept() {
             Ok(()) => {
                 keeping().store(false, Ordering::Release);
+                // The game settings' read, not a std lock.
+                // ast-grep-ignore: lock-through-relock
                 match self.settings.read() {
-                    Some((after, _)) if (after.boss_health_factor - before).abs() < 1e-6 => {
+                    Ok(SettingsRead {
+                        settings: after, ..
+                    }) if (after.boss_health_factor - before).abs() < 1e-6 => {
                         enshwick::info!(
                             "PASS forgetting puts back boss health {}",
                             after.boss_health_factor

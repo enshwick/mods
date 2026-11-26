@@ -20,7 +20,7 @@ use enshwick::sound::{
     Take, Takes,
 };
 use enshwick::typed::input_mapping::runtime::GameplayAction;
-use enshwick::ui::{Frame, Screen, Sound};
+use enshwick::ui::{Frame, Screen, Sound, UiError};
 use enshwick::{Load, Off};
 
 use crate::Settings;
@@ -55,21 +55,15 @@ fn write_tone(load: &Load<'_>, file: &str, pitch: f64) -> Result<(), Off> {
 /// interface scene.
 fn tone(load: &mut Load<'_>) -> Result<AddedSound, Off> {
     write_tone(load, TONE_FILE, crate::tone::TONE)?;
-    load.add_sound(NewSound {
-        container: SoundChange {
-            scene: Some(SoundContainerScene::Ui),
-            ..SoundChange::default()
-        },
-        ..NewSound::new(id!("tone"), TONE_FILE)
-    })
+    let mut sound = NewSound::new(id!("tone"), TONE_FILE);
+    sound.container.scene = Some(SoundContainerScene::Ui);
+    load.add_sound(sound)
 }
 
 /// Makes the vanilla container `container` play only the tone's recording.
 fn tone_takes(load: &mut Load<'_>, container: SoundContainerId, tone: SoundId) -> Result<(), Off> {
-    let change = SoundChange {
-        takes: Some(Takes::Replace(vec![Take::new(tone)])),
-        ..SoundChange::default()
-    };
+    let mut change = SoundChange::default();
+    change.takes = Some(Takes::Replace(vec![Take::new(tone)]));
     load.change_sound(container, change)
 }
 
@@ -143,14 +137,10 @@ fn folder_sounds(load: &mut Load<'_>) -> Vec<FolderSound> {
             .collect();
         let added = load.feature(&format!("sound {folder}"), |load| {
             let id = folder_id(id!("tone").namespace(), &folder)?;
-            load.add_sound(NewSound {
-                takes,
-                container: SoundChange {
-                    scene: Some(SoundContainerScene::Ui),
-                    ..SoundChange::default()
-                },
-                ..NewSound::new(id, "")
-            })
+            let mut sound = NewSound::new(id, "");
+            sound.takes = takes;
+            sound.container.scene = Some(SoundContainerScene::Ui);
+            load.add_sound(sound)
         });
         if let Some(added) = added {
             enshwick::info!(
@@ -178,7 +168,7 @@ const fn shows(open: bool, screen: Screen) -> bool {
 }
 
 /// Logs `result` of playing `what`.
-fn played(what: &str, result: Result<(), Off>) {
+fn played(what: &str, result: Result<(), UiError>) {
     match result {
         Ok(()) => enshwick::info!("played {what}"),
         Err(off) => enshwick::warn!("{what} not played: {off}"),
@@ -348,10 +338,8 @@ pub(crate) fn register(load: &mut Load<'_>, actions: &Actions, settings: &Settin
         })
         .and_then(|()| container(&settings.replaced_container, "replaced_container"));
     if let Some(quiet) = container(&settings.quiet_sound, "quiet_sound") {
-        let change = SoundChange {
-            volume: Some(QUIET),
-            ..SoundChange::default()
-        };
+        let mut change = SoundChange::default();
+        change.volume = Some(QUIET);
         if load
             .feature("quiet sound", |load| load.change_sound(quiet, change))
             .is_some()

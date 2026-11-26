@@ -158,16 +158,23 @@ impl StatChecks {
     /// Reads the buff's luck on a player's character, which is always
     /// watched, and on a watched entity that is no player.
     fn buff_checks(self) {
-        match self.world.containers(ContainerKinds::CHARACTERS).first() {
+        match crate::checks::listed(
+            "containers",
+            self.world.containers(ContainerKinds::CHARACTERS),
+        )
+        .first()
+        {
             Some(character) => self.under_buff("stat buff", character.entity, false),
             None => enshwick::info!("SKIP stat buff: no character in the world"),
         }
-        let other = self
-            .world
-            .containers(ContainerKinds::NPCS | ContainerKinds::ANIMALS)
-            .into_iter()
-            .map(|placed| placed.entity)
-            .find(|&entity| self.buffs.of(entity).is_ok());
+        let other = crate::checks::listed(
+            "containers",
+            self.world
+                .containers(ContainerKinds::NPCS | ContainerKinds::ANIMALS),
+        )
+        .into_iter()
+        .map(|placed| placed.entity)
+        .find(|&entity| self.buffs.of(entity).is_ok());
         match other {
             Some(entity) => self.under_buff("stat watch", entity, true),
             None => enshwick::info!("SKIP stat watch: no survivor or animal holds buffs"),
@@ -178,9 +185,16 @@ impl StatChecks {
     /// modifier adds; with `watch`, it first reads that the buff does not
     /// count while `target` is unwatched, then watches it.
     fn under_buff(self, what: &'static str, target: Entity, watch: bool) {
-        if self.buffs.has(target, HUNGER) {
-            enshwick::info!("SKIP {what}: {target:?} has {HUNGER:?} already");
-            return;
+        match self.buffs.has(target, HUNGER) {
+            Ok(false) => {}
+            Ok(true) => {
+                enshwick::info!("SKIP {what}: {target:?} has {HUNGER:?} already");
+                return;
+            }
+            Err(why) => {
+                crate::checks::fail(&format!("{what}: buffs of {target:?} not read: {why}"));
+                return;
+            }
         }
         let before = self.stats.value(target, self.luck);
         if let Err(why) = self

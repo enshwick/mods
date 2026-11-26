@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use enshwick::abi::{
-    ActionCall, DaytimeInfo, Header, MapFrameInfo, PlayerData, PlayerInfo, Side, Status,
-};
+use enshwick::abi::{ActionCall, DaytimeInfo, MapFrameInfo, PlayerData, PlayerInfo, Side, Status};
 use enshwick::content::EngineFacts as _;
 use enshwick::content::Guid;
 use enshwick::events::{PlayerJoined, SettingsReplaced, ShutdownStarted, WorldLoaded};
@@ -42,12 +40,12 @@ pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, -80.0];
 
 /// The world's map: 10 240 metres a side around the origin, in cells of 8
 /// metres.
-pub(crate) const MAP: MapFrameInfo = MapFrameInfo {
+pub(crate) const MAP: MapFrameInfo = enshwick::abi::headed!(MapFrameInfo {
     origin: [-5120.0; 2],
     size: [10240.0; 2],
     metres_per_cell: 8.0,
     ..MapFrameInfo::EMPTY
-};
+});
 
 /// The game's number of the ordinary storage category.
 const GENERIC: u8 = 4;
@@ -109,15 +107,14 @@ pub(crate) fn health(current: i32, max: i32) -> Vec<u8> {
 }
 
 pub(crate) fn player(entity: u32, key: u64, name: &str, permissions: u32) -> PlayerInfo {
-    let mut info = PlayerInfo {
-        header: Header::of::<PlayerInfo>(),
+    let mut info = enshwick::abi::headed!(PlayerInfo {
         slot: entity,
-        entity: Entity(entity),
+        entity: Entity::from_engine(entity),
         key: PlayerKey::new(key),
         permissions,
         name_len: u32::try_from(name.len()).unwrap(),
         name: [0; PlayerInfo::NAME_MAX],
-    };
+    });
     info.name[..name.len()].copy_from_slice(name.as_bytes());
     info
 }
@@ -297,8 +294,8 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
         let looks = stacks(&host, &[(GLIDER, 1)]);
         host = host
             .component(ann().entity, setup, &links)
-            .component(Entity(BACKPACK), inventory, &backpack)
-            .component(Entity(LOOKS), inventory, &looks);
+            .component(Entity::from_engine(BACKPACK), inventory, &backpack)
+            .component(Entity::from_engine(LOOKS), inventory, &looks);
     }
     let (waypoint, marked) = waypoint(&host);
     host = host.component(ann().entity, waypoint, &marked);
@@ -318,8 +315,7 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     // SAFETY: the exports of the mod under test.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
-    loader.set_daytime(DaytimeInfo {
-        header: Header::of::<DaytimeInfo>(),
+    loader.set_daytime(enshwick::abi::headed!(DaytimeInfo {
         time_ns: 0,
         day_start_ns: 6 * 3_600_000_000_000,
         day_end_ns: 18 * 3_600_000_000_000,
@@ -327,7 +323,7 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
         night_length_ns: 720_000_000_000,
         speed: 1.0,
         flags: 0,
-    });
+    }));
     loader.set_weather([1.0, 0.0, 0.0, 0.0], &[]);
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
     assert!(loader.raise::<WorldLoaded>(&()) >= 1);
@@ -419,12 +415,11 @@ pub(crate) fn allowed(loader: &Installed, who: &PlayerInfo) -> Vec<String> {
 }
 
 pub(crate) fn joins(loader: &Installed, who: &PlayerInfo) {
-    let data = PlayerData {
-        header: Header::of::<PlayerData>(),
+    let data = enshwick::abi::headed!(PlayerData {
         slot: who.slot,
         entity: who.entity,
         key: who.key,
-    };
+    });
     assert!(loader.raise::<PlayerJoined>(&data) >= 1);
 }
 

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use enshwick::altars::{BaseLimit, Grouping};
 use enshwick::events::{AltarsChanged, ShutdownStarted, WorldLoaded};
-use enshwick::state::{Hold, StoreError};
+use enshwick::state::{Hold, StoreFileError};
 use enshwick::{Load, Off};
 
 use crate::texts;
@@ -106,7 +106,7 @@ impl Watch {
 /// Sets the hold for a world of `grouping` past the game's own `limit`, with
 /// [`texts::HOLD_PAST`] for the reader and one line for a log without the
 /// mod.
-fn set_past(hold: &Hold, grouping: Grouping, limit: BaseLimit) -> Result<(), StoreError> {
+fn set_past(hold: &Hold, grouping: Grouping, limit: BaseLimit) -> Result<(), StoreFileError> {
     let [zones, bases, vanilla_zones, vanilla_bases] = [
         grouping.zones,
         grouping.bases,

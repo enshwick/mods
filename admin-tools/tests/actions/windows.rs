@@ -2,7 +2,7 @@
 //! panel, its sections, one player's window and the build log's changes.
 
 use enshwick::PlayerKey;
-use enshwick::abi::{BuildingData, Header, PlayerInfo};
+use enshwick::abi::{BuildingData, PlayerInfo};
 use enshwick::actions::Value;
 use enshwick::actions::window::{ButtonView, ItemView, MAX_LINE, View, decode};
 use enshwick::events::BuildingPlaced;
@@ -497,16 +497,15 @@ fn a_lookup_from_the_interface_shows_the_changes_in_a_window_with_a_way_there() 
         ItemView::Text("The build log is on.".into())
     );
     assert_eq!(whole(&builds), ["who"]);
-    let placed = BuildingData {
-        header: Header::of::<BuildingData>(),
-        entity: Entity(900),
+    let placed = enshwick::abi::headed!(BuildingData {
+        entity: Entity::from_engine(900),
         character: bob().entity,
         item: ItemId::new(0),
         kind: BuildingData::PLACED,
         replay: 0,
         template: enshwick::content::Guid([0; 16]),
         position: [1.0, 20.0, 7.0],
-    };
+    });
     assert!(loader.raise::<BuildingPlaced>(&placed) >= 1);
     let _log = file_until(&dir, "builds.log", |text| !text.is_empty());
     assert_eq!(

@@ -73,7 +73,7 @@ fn rain(load: &mut Load<'_>) -> Result<(), Off> {
         .duration(RAIN_LASTS.0, RAIN_LASTS.1)
         .effect(WeatherPhenomenonEffect::Rain);
     let new = NewPhenomenon::new(Id::new(RAIN), like)
-        .in_layer(layer)
+        .layer(layer)
         .values(values);
     let added = load.add_weather_phenomenon(new)?;
     enshwick::info!(
@@ -101,10 +101,7 @@ const ALTAR_NAME: Id = ALTAR.part("name");
 /// The kind's zone at level 1: 40 cells more on each side of the vanilla
 /// zone, 80 cells across at level 1 on server 26083076, so twice as wide;
 /// the vanilla height.
-const ALTAR_ZONE: KindZone = KindZone {
-    grow: 40,
-    height: 80,
-};
+const ALTAR_ZONE: KindZone = KindZone::new(40, 80);
 /// The kind's highest level.
 const ALTAR_MAX_LEVEL: u8 = 1;
 
@@ -136,11 +133,10 @@ fn named(name: &str, find: fn(&str) -> Result<Guid, vanilla::VanillaError>) -> R
 
 /// The enemy, a copy of the vanilla enemy `like`.
 fn new_enemy(like: Guid) -> NewEnemy {
-    NewEnemy {
-        level: Some(ENEMY_LEVEL),
-        health: Some(ENEMY_HEALTH),
-        ..NewEnemy::new(ENEMY, like)
-    }
+    let mut enemy = NewEnemy::new(ENEMY, like);
+    enemy.level = Some(ENEMY_LEVEL);
+    enemy.health = Some(ENEMY_HEALTH);
+    enemy
 }
 
 /// Adds the enemy.
@@ -156,14 +152,9 @@ fn enemy(load: &mut Load<'_>) -> Result<TemplateId, Off> {
 
 /// The Flame Altar kind, a copy of the vanilla altar item `like`.
 fn new_altar(like: Guid) -> NewFlameAltar {
-    NewFlameAltar {
-        item: NewItem {
-            name: Some(ALTAR_NAME.guid()),
-            ..NewItem::new(ALTAR, like)
-        },
-        zones: vec![ALTAR_ZONE],
-        recipe_cost: None,
-    }
+    let mut item = NewItem::new(ALTAR, like);
+    item.name = Some(ALTAR_NAME.guid());
+    NewFlameAltar::new(item, vec![ALTAR_ZONE])
 }
 
 /// Adds the Flame Altar kind.
@@ -180,13 +171,11 @@ fn altar(load: &mut Load<'_>) -> Result<PropId, Off> {
 
 /// The chest, a copy of the vanilla chest item `like`, with its recipe.
 fn new_chest(like: Guid) -> NewProp {
-    NewProp {
-        recipe_cost: Some(CHEST_COST),
-        ..NewProp::new(NewItem {
-            name: Some(CHEST_NAME.guid()),
-            ..NewItem::new(CHEST, like)
-        })
-    }
+    let mut item = NewItem::new(CHEST, like);
+    item.name = Some(CHEST_NAME.guid());
+    let mut chest = NewProp::new(item);
+    chest.recipe_cost = Some(CHEST_COST);
+    chest
 }
 
 /// Adds the chest, a container of [`CHEST_SLOTS`] slots, and its recipe.
@@ -246,7 +235,11 @@ impl Mod for TestContent {
         join::link(
             load,
             texts,
-            join::Gifts::new(enemy, altar, chest),
+            join::Gifts::new(
+                enemy,
+                altar.map(|kind| kind.item),
+                chest.map(|chest| chest.item),
+            ),
             join::ENEMY_AFTER,
         );
         Ok(Self)

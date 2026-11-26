@@ -69,14 +69,14 @@ impl RespawnPoints {
 mod tests {
     use std::cell::Cell;
 
-    use enshwick::abi::{Header, PlayerInfo, RespawnPointInfo, Status};
+    use enshwick::abi::{PlayerInfo, RespawnPointInfo, Status};
     use enshwick::{Entity, Load, Mod, Off, PlayerKey};
 
     use super::RespawnPoints;
 
-    const CHARACTER: Entity = Entity(10);
-    const ALTAR: Entity = Entity(40);
-    const SPIRE: Entity = Entity(41);
+    const CHARACTER: Entity = Entity::from_engine(10);
+    const ALTAR: Entity = Entity::from_engine(40);
+    const SPIRE: Entity = Entity::from_engine(41);
 
     thread_local! {
         /// The world of this test's mod: init runs on the test's thread, and
@@ -108,15 +108,14 @@ mod tests {
     ) {
         let loader = enshwick::test::FakeHost::new()
             .world()
-            .player(PlayerInfo {
-                header: Header::of::<PlayerInfo>(),
+            .player(enshwick::abi::headed!(PlayerInfo {
                 slot: 0,
                 entity: CHARACTER,
                 key: PlayerKey::new(7),
                 permissions: 0,
                 name_len: 0,
                 name: [0; PlayerInfo::NAME_MAX],
-            })
+            }))
             .spawn_point(ALTAR, RespawnPointInfo::BASE, [1.0; 3])
             .spawn_point(SPIRE, RespawnPointInfo::SAVE_POINT, [2.0; 3])
             .respawns_at(CHARACTER, SPIRE)
@@ -152,7 +151,7 @@ mod tests {
     fn a_point_that_no_longer_reads_is_forgotten() {
         let (_loader, points, mut player) = started();
         assert!(points.show(&player).is_done());
-        player.entity = Entity(9);
+        player.entity = Entity::from_engine(9);
         assert!(
             points.show(&player).is_done(),
             "no point is an answer, not a refusal"

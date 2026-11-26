@@ -505,7 +505,7 @@ fn heal(tools: &Tools, request: &Request<'_>) -> Outcome {
 
 /// The caller, when they have a character to move or to move others to.
 pub(crate) fn character<'a>(request: &'a Request<'_>) -> Result<&'a Player, Outcome> {
-    if request.player.entity == Entity(0) {
+    if request.player.entity == Entity::from_engine(0) {
         return Err(Outcome::refused(
             request.say(texts::REPLY_NO_CHARACTER, &[]),
         ));

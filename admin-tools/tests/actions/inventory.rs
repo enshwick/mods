@@ -19,7 +19,7 @@ fn gives(loader: &enshwick::test::Installed) -> Vec<(u64, ItemId, u32)> {
         .iter()
         .flat_map(|request| request.ops.iter())
         .filter(|op| op.kind == InventoryOp::GIVE)
-        .map(|op| (u64::from(op.target.0), op.item, op.count))
+        .map(|op| (u64::from(op.target.get()), op.item, op.count))
         .collect()
 }
 
@@ -57,7 +57,7 @@ fn give_hands_a_player_the_picked_item_told_by_its_debug_name_once() {
         &format!("p0000000000000002\ti{GLIDER}\tn1"),
     );
     assert_eq!(reply, "1Gave Tool_Glider_T1 × 1 to Bob.");
-    let bob = u64::from(bob().entity.0);
+    let bob = u64::from(bob().entity.get());
     assert_eq!(gives(&loader), [(bob, ItemId::from_guid(GLIDER), 1)]);
 }
 
@@ -69,7 +69,7 @@ fn a_typed_give_without_a_count_hands_over_one_item() {
         .type_in_chat(&ann(), 0, "/adm give Bob Tool_Glider_T1")
         .unwrap();
     assert_eq!(typed, "1Gave Tool_Glider_T1 × 1 to Bob.");
-    let bob = u64::from(bob().entity.0);
+    let bob = u64::from(bob().entity.get());
     assert_eq!(gives(&loader), [(bob, ItemId::from_guid(GLIDER), 1)]);
 }
 
@@ -112,7 +112,7 @@ fn give_takes_a_typed_guid_and_more_than_a_stack() {
         ),
         "1Gave Tool_Glider_T1 × 5 to Bob."
     );
-    let bob = u64::from(bob().entity.0);
+    let bob = u64::from(bob().entity.get());
     assert_eq!(
         gives(&loader),
         [(bob, wood, 100), (bob, wood, 5), (bob, glider, 5)]
@@ -220,7 +220,7 @@ fn copy_gives_what_fits_leaves_the_look_slots_out_and_tells_how_many_stayed_out(
         ),
         "1Copying what Ann carries to Bob."
     );
-    let bob = u64::from(bob().entity.0);
+    let bob = u64::from(bob().entity.get());
     assert_eq!(
         gives(&loader),
         [
@@ -271,7 +271,7 @@ fn clear_destroys_every_stack_whole_and_a_part_the_game_turns_down_is_told_and_l
         .iter()
         .flat_map(|request| request.ops.iter())
         .filter(|op| op.kind == InventoryOp::DESTROY_SLOT)
-        .map(|op| (op.target.0, op.slot))
+        .map(|op| (op.target.get(), op.slot))
         .collect();
     assert_eq!(
         destroyed,
@@ -490,7 +490,7 @@ fn a_chest_goes_up_at_a_position_and_then_gets_its_items() {
     }));
     let (entity, _, _) = loader.props()[0];
     assert!(loader.drive_until(DRIVE, || gives(&loader)
-        == [(u64::from(entity.0), ItemId::from_guid(WOOD), 250)]));
+        == [(u64::from(entity.get()), ItemId::from_guid(WOOD), 250)]));
 }
 
 #[test]

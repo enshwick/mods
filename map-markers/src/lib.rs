@@ -119,6 +119,7 @@ fn send_marks(world: World, channel: Channel<Vec<Mark>>) {
             found.extend(
                 world
                     .containers(of)
+                    .unwrap_or_default()
                     .into_iter()
                     .map(|placed| (kind, placed.position)),
             );

@@ -7,7 +7,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use core::time::Duration;
 
 use enshwick::actions::{Actions, Window};
-use enshwick::content::props::PropId;
 use enshwick::content::templates::TemplateId;
 use enshwick::effects::{Effects, Spawn};
 use enshwick::events::{PlayerJoined, WorldLoaded};
@@ -49,13 +48,13 @@ impl Gifts {
     /// `<id>.recipe`, as `NewProp::recipe_cost` names it.
     pub(crate) fn new(
         enemy: Option<TemplateId>,
-        altar: Option<PropId>,
-        chest: Option<PropId>,
+        altar: Option<ItemId>,
+        chest: Option<ItemId>,
     ) -> Self {
         Self {
             enemy,
-            altar: altar.map(|kind| kind.item),
-            chest: chest.map(|chest| chest.item),
+            altar,
+            chest,
             chest_recipe: chest.map(|_| RecipeId::from_guid(crate::CHEST.part("recipe").guid())),
         }
     }
@@ -232,7 +231,7 @@ pub(crate) fn link(load: &mut Load<'_>, texts: Texts, gifts: Gifts, after: Durat
 mod tests {
     use core::f32::consts::{FRAC_PI_2, PI};
 
-    use enshwick::abi::{Header, KnowledgeInfo, PlayerData, PlayerInfo, Status};
+    use enshwick::abi::{KnowledgeInfo, PlayerData, PlayerInfo, Status};
     use enshwick::content::{EngineFacts, Guid};
     use enshwick::knowledge::KnowledgeId;
     use enshwick::resources::{Field, Kind, Type, fnv1a32};
@@ -247,12 +246,8 @@ mod tests {
     const STEP: Duration = Duration::from_millis(100);
 
     /// A prop the content added, with its item `item`.
-    fn prop(item: u8) -> PropId {
-        PropId {
-            item: ItemId(item.into()),
-            template: TemplateId::new(Guid([item + 1; 16])),
-            crafting_prop: None,
-        }
+    fn prop(item: u8) -> ItemId {
+        ItemId(item.into())
     }
 
     /// The join feature alone, every part on, the enemy without delay.
@@ -332,32 +327,30 @@ mod tests {
     }
 
     fn join(loader: &Installed, entity: Entity, key: PlayerKey) {
-        let _handled = loader.raise::<PlayerJoined>(&PlayerData {
-            header: Header::of::<PlayerData>(),
+        let _handled = loader.raise::<PlayerJoined>(&enshwick::abi::headed!(PlayerData {
             slot: 0,
             entity,
             key,
-        });
+        }));
     }
 
     #[test]
     fn the_enemy_comes_once_a_hosted_game_ten_metres_ahead_of_its_first_player_facing_them() {
-        let (ann, key) = (Entity(5), PlayerKey::new(7));
+        let (ann, key) = (Entity::from_engine(5), PlayerKey::new(7));
         let host = FakeHost::new().world().inventory_requests();
         let current = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
         let typed = fnv1a32(keen("ecs::CurrentTransform").as_bytes());
         let loader = host
             .types(transform_types())
             .type_hash("ecs::CurrentTransform", typed)
-            .player(PlayerInfo {
-                header: Header::of::<PlayerInfo>(),
+            .player(enshwick::abi::headed!(PlayerInfo {
                 slot: 0,
                 entity: ann,
                 key,
                 permissions: 0,
                 name_len: 0,
                 name: [0; PlayerInfo::NAME_MAX],
-            })
+            }))
             .component(ann, current, &standing([40, 12, -3], FRAC_PI_2))
             .component(ann, typed, &standing([40, 12, -3], FRAC_PI_2))
             .install();
@@ -384,20 +377,19 @@ mod tests {
         loader.set_knowledge(
             &[(
                 Some(ann),
-                KnowledgeInfo {
-                    header: Header::of::<KnowledgeInfo>(),
+                enshwick::abi::headed!(KnowledgeInfo {
                     id: recipe,
                     kind: KnowledgeInfo::FLAGS,
                     scope: KnowledgeInfo::PLAYER,
                     reserved: 0,
                     value: 0,
                     flags: 0,
-                },
+                }),
             )],
             &[],
         );
 
-        join(&loader, Entity(6), PlayerKey::new(8));
+        join(&loader, Entity::from_engine(6), PlayerKey::new(8));
         let _ran = loader.tick(STEP);
         assert!(loader.spawns().is_empty(), "the first player left");
         join(&loader, ann, key);
@@ -434,22 +426,21 @@ mod tests {
         let taught: Vec<_> = taught.iter().map(|&(who, id, ..)| (who, id)).collect();
         assert_eq!(
             taught,
-            [Entity(6), ann, ann, ann].map(|who| (Some(who), recipe)),
+            [Entity::from_engine(6), ann, ann, ann].map(|who| (Some(who), recipe)),
             "the chest's recipe at each join"
         );
     }
 
     /// Ann, whose client holds back its hello, as the world lists her.
     fn ann_info() -> PlayerInfo {
-        let mut info = PlayerInfo {
-            header: Header::of::<PlayerInfo>(),
+        let mut info = enshwick::abi::headed!(PlayerInfo {
             slot: 0,
-            entity: Entity(5),
+            entity: Entity::from_engine(5),
             key: PlayerKey::new(7),
             permissions: 0,
             name_len: 3,
             name: [0; PlayerInfo::NAME_MAX],
-        };
+        });
         info.name[..3].copy_from_slice(b"Ann");
         info
     }

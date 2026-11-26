@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
 use enshwick::chat::{ChatKind, ChatLine};
 use enshwick::config::{Config as _, Schema};
-use enshwick::game_settings::{GameSettings, Settings as Game};
+use enshwick::game_settings::{Settings as Game, SettingsRead};
 use enshwick::weather::Forecast;
 use enshwick::{Off, Relock as _, WorldError};
 
@@ -336,9 +336,18 @@ fn save(tools: &Tools, request: &Request<'_>) -> Outcome {
 
 /// The world, its last save and its game settings, one per line.
 fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
-    let Some((settings, preset)) = tools.game_settings.as_ref().and_then(GameSettings::read) else {
+    let Some(game_settings) = tools.game_settings.as_ref() else {
         return Outcome::refused(request.say(texts::REPLY_WORLD_NONE, &[]));
     };
+    // The game settings' read, not a std lock.
+    // ast-grep-ignore: lock-through-relock
+    let read = match game_settings.read() {
+        Ok(read) => read,
+        Err(why) => return Tools::failed(request, ids::WORLD, &why),
+    };
+    let SettingsRead {
+        settings, preset, ..
+    } = read;
     let saved = tools.world.save_info().map_or_else(
         || request.say(texts::REPLY_WORLD_UNSAVED, &[]),
         |info| {

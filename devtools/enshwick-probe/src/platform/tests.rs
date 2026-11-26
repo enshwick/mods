@@ -198,7 +198,11 @@ fn placing() -> Installed {
     let transform = host
         .hash(enshwick::test::facts::CURRENT_TRANSFORM.id())
         .unwrap();
-    let host = host.placed(transform, enshwick::Entity(40), [50.0, 40.0, 50.0]);
+    let host = host.placed(
+        transform,
+        enshwick::Entity::from_engine(40),
+        [50.0, 40.0, 50.0],
+    );
     let (loader, checks) = started(host);
     loader.set_terrain(&[]);
     checks.writes.run();
@@ -344,11 +348,11 @@ fn a_missing_world_turns_off_only_the_checks_that_need_it() {
 
 #[test]
 fn the_map_is_read_again_while_the_loader_reads_the_scene() {
-    let frame = MapFrameInfo {
+    let frame = enshwick::abi::headed!(MapFrameInfo {
         size: [10240.0; 2],
         metres_per_cell: 8.0,
         ..MapFrameInfo::EMPTY
-    };
+    });
     let (loader, checks) = started(FakeHost::new().world().map_frame(frame));
     let map = checks.map.unwrap();
     // The loader answers a world's first read of the map that it still

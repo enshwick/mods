@@ -99,7 +99,11 @@ fn clear(tools: &Tools, request: &Request<'_>) -> Outcome {
         return no_player(request);
     };
     let values = [(texts::value::NAME, name.as_str())];
-    let ops = clear_ops(&inventories.slots(player.entity));
+    let slots = match inventories.slots(player.entity) {
+        Ok(slots) => slots,
+        Err(why) => return Tools::failed(request, ids::CLEAR, &why),
+    };
+    let ops = clear_ops(&slots);
     if ops.is_empty() {
         return Outcome::refused(request.say(texts::REPLY_NOTHING_CARRIED, &values));
     }
@@ -148,7 +152,11 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
     if from.key == target.key {
         return Outcome::refused(request.say(texts::REPLY_COPY_SELF, &values));
     }
-    let ops = copy_ops(&inventories.slots(from.entity), target.entity);
+    let slots = match inventories.slots(from.entity) {
+        Ok(slots) => slots,
+        Err(why) => return Tools::failed(request, ids::COPY, &why),
+    };
+    let ops = copy_ops(&slots, target.entity);
     if ops.is_empty() {
         return Outcome::refused(request.say(texts::REPLY_NOTHING_CARRIED, &values));
     }
@@ -263,18 +271,18 @@ mod tests {
     use super::*;
 
     fn slot(index: u8, item: u32, count: u32) -> Slot {
-        Slot {
-            at: SlotRef::new(Entity(9), index),
-            category: InventoryCategory::GENERIC,
-            item: ItemId::new(item),
+        Slot::new(
+            SlotRef::new(Entity::from_engine(9), index),
+            InventoryCategory::GENERIC,
+            ItemId::new(item),
             count,
-            pide: None,
-        }
+            None,
+        )
     }
 
     fn give(item: u32, count: u32) -> Op {
         Op::Give {
-            to: Entity(2),
+            to: Entity::from_engine(2),
             item: ItemId::new(item),
             count,
             fill: None,
@@ -293,42 +301,44 @@ mod tests {
     #[test]
     fn copying_gives_each_stack_s_item_and_count_to_the_other_player() {
         let slots = [slot(0, 7, 3), slot(1, 7, 0), slot(2, 8, 1)];
-        assert_eq!(copy_ops(&slots, Entity(2)), [give(7, 3), give(8, 1)]);
+        assert_eq!(
+            copy_ops(&slots, Entity::from_engine(2)),
+            [give(7, 3), give(8, 1)]
+        );
     }
 
     #[test]
     fn copying_leaves_out_the_look_and_currency_slots_and_takes_what_is_worn() {
-        let in_category = |index, category| Slot {
-            category,
-            ..slot(index, 7, 1)
+        let in_category = |index, category| {
+            let mut slot = slot(index, 7, 1);
+            slot.category = category;
+            slot
         };
         let slots = [
             in_category(0, InventoryCategory::CUSTOMIZATION),
             in_category(1, InventoryCategory::CURRENCY),
             in_category(2, InventoryCategory::EQUIPMENT),
         ];
-        assert_eq!(copy_ops(&slots, Entity(2)), [give(7, 1)]);
+        assert_eq!(copy_ops(&slots, Entity::from_engine(2)), [give(7, 1)]);
         assert_eq!(clear_ops(&slots).len(), 3, "a clear takes every slot");
     }
 
     #[test]
     fn what_stayed_out_is_every_operation_s_rest_or_all_of_a_request_turned_down() {
-        let ops = [give(7, 30), Op::DestroySlot(SlotRef::new(Entity(9), 0))];
+        let ops = [
+            give(7, 30),
+            Op::DestroySlot(SlotRef::new(Entity::from_engine(9), 0)),
+        ];
         assert_eq!(asked(&ops), 30);
-        let rest = |remaining| OpResult {
-            error: None,
-            remaining,
+        let rest = |remaining| {
+            let mut op = OpResult::default();
+            op.remaining = remaining;
+            op
         };
-        let committed = Given {
-            done: Done::Committed,
-            ops: vec![rest(3), rest(4)],
-        };
+        let committed = Given::new(Done::Committed, vec![rest(3), rest(4)]);
         assert_eq!(shortfall(&committed, 30), 7);
         assert_eq!(shortfall(&committed, 5), 5, "never more than asked");
-        let turned_down = Given {
-            done: Done::RolledBack,
-            ops: Vec::new(),
-        };
+        let turned_down = Given::new(Done::RolledBack, Vec::new());
         assert_eq!(shortfall(&turned_down, 30), 30);
     }
 }

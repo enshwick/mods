@@ -4,7 +4,7 @@
 
 use std::fmt::Write as _;
 
-use enshwick::abi::{BuildingData, Header};
+use enshwick::abi::BuildingData;
 use enshwick::console;
 use enshwick::events::{BuildingPlaced, BuildingRemoved, WorldLoaded};
 use enshwick::voxels::{EditSource, Voxel, VoxelChange, VoxelMaterial, VoxelPos};
@@ -254,7 +254,7 @@ fn a_player_goes_to_the_waypoint_the_caller_set_on_the_map() {
     );
     let moved = loader.teleports();
     assert_eq!(moved.len(), 1);
-    assert_eq!(moved[0].entity, Entity(11));
+    assert_eq!(moved[0].entity, Entity::from_engine(11));
     assert_eq!(
         run(&loader, &eve, "mark", "p0000000000000002"),
         "0Set a waypoint on your map first."
@@ -268,16 +268,15 @@ fn a_player_goes_to_the_waypoint_the_caller_set_on_the_map() {
 
 /// A building event by Bob, who stands at 0, 20, 7.
 fn building(kind: u8, position: [f64; 3]) -> BuildingData {
-    BuildingData {
-        header: Header::of::<BuildingData>(),
-        entity: Entity(900),
+    enshwick::abi::headed!(BuildingData {
+        entity: Entity::from_engine(900),
         character: bob().entity,
         item: ItemId::new(0),
         kind,
         replay: 0,
         template: enshwick::content::Guid([0; 16]),
         position,
-    }
+    })
 }
 
 /// Bob digs out the voxel at `metres`.

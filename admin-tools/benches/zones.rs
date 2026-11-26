@@ -6,7 +6,7 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use enshwick::abi::{BuildCheck, Header};
+use enshwick::abi::BuildCheck;
 use enshwick::{Entity, ItemId};
 
 #[path = "../tests/actions/game.rs"]
@@ -20,14 +20,13 @@ mod game;
 
 /// Bob's placement at `at` metres, as the cursor check hands it over.
 fn check(at: [f64; 3]) -> BuildCheck {
-    BuildCheck {
-        header: Header::of::<BuildCheck>(),
-        character: Entity(11),
+    enshwick::abi::headed!(BuildCheck {
+        character: Entity::from_engine(11),
         item: ItemId::new(7),
         position: at,
         reason: core::ptr::null_mut(),
         account: enshwick::PlayerKey::new(2),
-    }
+    })
 }
 
 fn filter(c: &mut Criterion) {
@@ -51,11 +50,11 @@ fn filter(c: &mut Criterion) {
     c.bench_function("build check, 64 zones, allowed", |b| {
         b.iter(|| loader.build(black_box(&open)));
     });
-    let builder = BuildCheck {
-        character: Entity(10),
+    let builder = enshwick::abi::headed!(BuildCheck {
+        character: Entity::from_engine(10),
         account: enshwick::PlayerKey::new(1),
         ..inside
-    };
+    });
     assert!(loader.build(&builder).is_ok());
     c.bench_function("build check, 64 zones, zone builder by account", |b| {
         b.iter(|| loader.build(black_box(&builder)));

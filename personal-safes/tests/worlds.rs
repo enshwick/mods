@@ -13,6 +13,11 @@ mod tests {
     use enshwick_personal_safes::access::snapshots;
     use enshwick_personal_safes::content;
 
+    /// An entity of the fake world by its engine id.
+    const fn entity(id: u32) -> Entity {
+        Entity::from_engine(id)
+    }
+
     /// A loader that knows the item and recipe layouts the Safe needs.
     fn host() -> FakeHost {
         bare()
@@ -116,7 +121,7 @@ mod tests {
 
     #[test]
     fn a_removed_safe_keeps_its_owner_on_disk_until_the_world_saves() {
-        use enshwick::abi::{BuildingData, Header};
+        use enshwick::abi::BuildingData;
         use enshwick::events::{BuildingPlaced, BuildingRemoved, WorldSaved};
 
         let dir = std::env::temp_dir().join(format!(
@@ -148,19 +153,18 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         assert_eq!(
-            snapshots().seen(Entity(900), (4, 0, 4)),
+            snapshots().seen(entity(900), (4, 0, 4)),
             Some((PlayerKey::new(0xff), (4, 0, 4)))
         );
-        let removed = BuildingData {
-            header: Header::of::<BuildingData>(),
-            entity: Entity(900),
-            character: Entity(10),
+        let removed = enshwick::abi::headed!(BuildingData {
+            entity: entity(900),
+            character: entity(10),
             item: ItemId::new(0),
             kind: BuildingData::PICKED_UP,
             replay: 0,
             template: Guid([0; 16]),
             position: [0.0; 3],
-        };
+        });
         assert!(loader.raise::<BuildingRemoved>(&removed) >= 1);
         assert!(snapshots().owners.load().is_empty(), "gone from the checks");
         assert!(
@@ -170,13 +174,13 @@ mod tests {
             "kept on disk while the world has not saved"
         );
         // Placed again elsewhere, as when a Safe moves: written at once.
-        let placed = BuildingData {
+        let placed = enshwick::abi::headed!(BuildingData {
             kind: BuildingData::PLACED,
-            entity: Entity(901),
+            entity: entity(901),
             item: ItemId::from_guid(content::SAFE.guid()),
             position: [10.0, 0.0, 10.0],
             ..removed
-        };
+        });
         let write = std::fs::metadata(&file).unwrap().modified().unwrap();
         assert!(loader.raise::<BuildingPlaced>(&placed) >= 1);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -223,8 +227,8 @@ mod tests {
             hash(&host, facts::USED_ITEM),
         );
         let loader = host
-            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
-            .component(Entity(700), used, &item)
+            .placed(setup, entity(700), [20.0, 1.0, 20.0])
+            .component(entity(700), used, &item)
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -254,10 +258,10 @@ admins_can_open = true
         snapshots()
             .players
             .store(std::sync::Arc::new(rustc_hash::FxHashMap::from_iter([(
-                Entity(10),
+                entity(10),
                 stranger,
             )])));
-        let stock = Interaction::new(Kind::Stock, Entity(10), Entity(700));
+        let stock = Interaction::new(Kind::Stock, entity(10), entity(700));
         assert!(
             enshwick_personal_safes::access::filter(&stock),
             "not seen yet"
@@ -345,16 +349,16 @@ admins_can_open = true
             },
         );
         snapshots().players.store(Arc::new(FxHashMap::from_iter([
-            (Entity(10), owner),
-            (Entity(12), stranger),
+            (entity(10), owner),
+            (entity(12), stranger),
         ])));
-        snapshots().placed(Entity(700), (40, 2, 40), owner.key, "Ann");
+        snapshots().placed(entity(700), (40, 2, 40), owner.key, "Ann");
         assert!(
-            snapshots().refused_seen(Entity(700), Entity(12)),
+            snapshots().refused_seen(entity(700), entity(12)),
             "vanilla Safes"
         );
-        assert!(snapshots().may_manage((40, 2, 40), owner, Entity(10)));
-        assert!(!snapshots().may_manage((40, 2, 40), stranger, Entity(12)));
+        assert!(snapshots().may_manage((40, 2, 40), owner, entity(10)));
+        assert!(!snapshots().may_manage((40, 2, 40), stranger, entity(12)));
         assert!(loader.extend_point(|access: &Access, may: &bool| {
             match access.action {
                 SafeAction::USE if access.player == PlayerKey::new(3) => Verdict::Set(true),
@@ -363,51 +367,50 @@ admins_can_open = true
             }
         }));
         assert!(
-            !snapshots().refused_seen(Entity(700), Entity(12)),
+            !snapshots().refused_seen(entity(700), entity(12)),
             "the link lets them in"
         );
         assert!(
             !snapshots().may(
                 owner.key,
                 (40, 2, 40),
-                Entity(700),
-                Entity(10),
+                entity(700),
+                entity(10),
                 Action::Remove
             ),
             "the link refuses even the owner"
         );
-        assert!(snapshots().may(owner.key, (40, 2, 40), Entity(700), Entity(10), Action::Use));
+        assert!(snapshots().may(owner.key, (40, 2, 40), entity(700), entity(10), Action::Use));
         assert!(
-            !snapshots().may_manage((40, 2, 40), owner, Entity(10)),
+            !snapshots().may_manage((40, 2, 40), owner, entity(10)),
             "the access action hears the refusal too"
         );
         assert!(
-            snapshots().refused_seen(Entity(700), Entity(14)),
+            snapshots().refused_seen(entity(700), entity(14)),
             "a player not registered yet stays refused"
         );
-        assert!(snapshots().removed(Entity(700)).is_some());
+        assert!(snapshots().removed(entity(700)).is_some());
         assert!(loader.faults().is_empty());
         let _gone = std::fs::remove_dir_all(&dir);
     }
 
     fn player(entity: u32, key: u64, name: &str) -> enshwick::abi::PlayerInfo {
-        use enshwick::abi::{Header, PlayerInfo};
+        use enshwick::abi::PlayerInfo;
         let mut bytes = [0u8; PlayerInfo::NAME_MAX];
         bytes[..name.len()].copy_from_slice(name.as_bytes());
-        PlayerInfo {
-            header: Header::of::<PlayerInfo>(),
+        enshwick::abi::headed!(PlayerInfo {
             slot: entity,
-            entity: Entity(entity),
+            entity: Entity::from_engine(entity),
             key: PlayerKey::new(key),
             permissions: PlayerInfo::CAN_ACCESS_INVENTORIES,
             name_len: u32::try_from(name.len()).unwrap(),
             name: bytes,
-        }
+        })
     }
 
     #[test]
     fn each_safe_names_its_owner_in_the_language_of_the_game_that_placed_it() {
-        use enshwick::abi::{BuildingData, Header};
+        use enshwick::abi::BuildingData;
         use enshwick::events::BuildingPlaced;
         use enshwick::i18n::Language;
 
@@ -439,16 +442,15 @@ admins_can_open = true
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         for (placer, safe, x) in [(10, 800, 10.0), (11, 801, 20.0), (12, 802, 30.0)] {
-            let placed = BuildingData {
-                header: Header::of::<BuildingData>(),
-                entity: Entity(safe),
-                character: Entity(placer),
+            let placed = enshwick::abi::headed!(BuildingData {
+                entity: entity(safe),
+                character: entity(placer),
                 item: ItemId::from_guid(content::SAFE.guid()),
                 kind: BuildingData::PLACED,
                 replay: 0,
                 template: Guid([0; 16]),
                 position: [x, 0.0, 0.0],
-            };
+            });
             assert!(loader.raise::<BuildingPlaced>(&placed) >= 1);
         }
         assert_eq!(
@@ -484,10 +486,10 @@ admins_can_open = true
             hash(&host, facts::USED_ITEM),
         );
         let loader = host
-            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
-            .component(Entity(700), used, &item)
-            .placed(setup, Entity(701), [30.0, 1.0, 30.0])
-            .component(Entity(701), used, &item)
+            .placed(setup, entity(700), [20.0, 1.0, 20.0])
+            .component(entity(700), used, &item)
+            .placed(setup, entity(701), [30.0, 1.0, 30.0])
+            .component(entity(701), used, &item)
             .player(player(10, 1, "Ann"))
             .player_language(PlayerKey::new(1), Language::UK_UA)
             .settings("cost_multiplier = 2\nadmins_can_open = true\n")
@@ -550,9 +552,9 @@ admins_can_open = true
             .player(ann)
             .player(bob)
             .player(cat)
-            .component(Entity(10), transform, &places[0])
-            .component(Entity(11), transform, &places[1])
-            .component(Entity(12), transform, &places[2])
+            .component(entity(10), transform, &places[0])
+            .component(entity(11), transform, &places[1])
+            .component(entity(12), transform, &places[2])
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -571,8 +573,8 @@ admins_can_open = true
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
-        snapshots().placed(Entity(701), (42, 0, 0), PlayerKey::new(2), "Bob");
+        snapshots().placed(entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(entity(701), (42, 0, 0), PlayerKey::new(2), "Bob");
         let run = |who, id, args: &str| {
             let reply = loader
                 .ask_actions(ActionCall::RUN, who, 0, id, args)
@@ -652,9 +654,9 @@ admins_can_open = true
             .player(root)
             .player(bob)
             .player(cat)
-            .component(Entity(10), transform, &places[0])
-            .component(Entity(11), transform, &places[1])
-            .component(Entity(12), transform, &places[2])
+            .component(entity(10), transform, &places[0])
+            .component(entity(11), transform, &places[1])
+            .component(entity(12), transform, &places[2])
             .settings(
                 "cost_multiplier = 2
 admins_can_open = true
@@ -674,8 +676,8 @@ admins_can_open = true
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
         // Bob's Safe is nearer, the administrator's own a little farther.
-        snapshots().placed(Entity(700), (1, 0, 0), PlayerKey::new(2), "Bob");
-        snapshots().placed(Entity(701), (6, 0, 0), PlayerKey::new(1), "Root");
+        snapshots().placed(entity(700), (1, 0, 0), PlayerKey::new(2), "Bob");
+        snapshots().placed(entity(701), (6, 0, 0), PlayerKey::new(1), "Root");
 
         let ran = loader
             .ask_actions(ActionCall::RUN, &root, 0, "access", "p0000000000000003	b1")
@@ -761,8 +763,8 @@ admins_can_open = true
             hash(&host, facts::USED_ITEM),
         );
         let loader = host
-            .placed(setup, Entity(700), [20.0, 1.0, 20.0])
-            .component(Entity(700), used, &safe.get().to_le_bytes())
+            .placed(setup, entity(700), [20.0, 1.0, 20.0])
+            .component(entity(700), used, &safe.get().to_le_bytes())
             .settings("cost_multiplier = 2\nadmins_can_open = true\n")
             .data_dir(dir.join("worlds/world0-dd").to_str().unwrap())
             .world_key("world0-dd")
@@ -780,20 +782,20 @@ admins_can_open = true
         snapshots()
             .players
             .store(std::sync::Arc::new(rustc_hash::FxHashMap::from_iter([(
-                Entity(10),
+                entity(10),
                 Seen {
                     key: PlayerKey::new(3),
                     admin: false,
                 },
             )])));
-        let open = Interaction::new(Kind::Open, Entity(10), Entity(900))
+        let open = Interaction::new(Kind::Open, entity(10), entity(900))
             .with_item(safe)
             .with_position([20.0, 1.0, 20.0]);
         assert!(
             !enshwick_personal_safes::access::filter(&open),
             "a Safe whose owner is unknown stays shut"
         );
-        let stock = Interaction::new(Kind::Stock, Entity(10), Entity(700));
+        let stock = Interaction::new(Kind::Stock, entity(10), entity(700));
         assert!(
             enshwick_personal_safes::access::filter(&stock),
             "lent until the sweep has seen the Safe"

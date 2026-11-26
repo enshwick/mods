@@ -82,7 +82,7 @@ mod tests {
     use std::cell::Cell;
     use std::time::Duration;
 
-    use enshwick::abi::{Header, PlayerInfo, Status};
+    use enshwick::abi::{PlayerInfo, Status};
     use enshwick::events::{SettingsReplaced, WorldLoaded, WorldSaved};
     use enshwick::test::{FakeHost, Installed};
     use enshwick::{Entity, Load, Mod, Off, PlayerKey};
@@ -128,20 +128,19 @@ mod tests {
     );
 
     const ANN: PlayerKey = PlayerKey::new(7);
-    const ANN_ENTITY: Entity = Entity(10);
+    const ANN_ENTITY: Entity = Entity::from_engine(10);
 
     fn ann() -> PlayerInfo {
         let mut name = [0u8; PlayerInfo::NAME_MAX];
         name[..3].copy_from_slice(b"Ann");
-        PlayerInfo {
-            header: Header::of::<PlayerInfo>(),
+        enshwick::abi::headed!(PlayerInfo {
             slot: 0,
             entity: ANN_ENTITY,
             key: ANN,
             permissions: 0,
             name_len: 3,
             name,
-        }
+        })
     }
 
     /// Starts the runner over `list`, the shipped scenarios for `None`, with
@@ -380,14 +379,13 @@ mod tests {
         assert!(loader.saves() > 0, "{:#?}", loader.logs());
         let _handled = loader.raise::<enshwick::events::WorldSaving>(&());
         run_for(&loader, Duration::from_millis(200));
-        loader.set_save_info(Some(enshwick::abi::SaveInfo {
-            header: Header::of::<enshwick::abi::SaveInfo>(),
+        loader.set_save_info(Some(enshwick::abi::headed!(enshwick::abi::SaveInfo {
             world: enshwick::content::Guid([1; 16]),
             saved_at: 60,
             size: 10,
             backups: 0,
             reserved: 0,
-        }));
+        })));
         let _handled = loader.raise::<WorldSaved>(&());
         run_for(&loader, Duration::from_millis(200));
         assert_logged(&loader, "scenario saves: step 3");
@@ -421,15 +419,14 @@ mod tests {
         use enshwick::abi::ItemAction;
 
         let loader = start(Some(&[("t", HEARS_AN_ITEM_ACTION)]), "t");
-        let call = ItemAction {
-            header: Header::of::<ItemAction>(),
+        let call = enshwick::abi::headed!(ItemAction {
             kind: ItemAction::CONSUME,
             character: ANN_ENTITY,
             item: enshwick::ItemId::new(0x5e01),
             count: 1,
-            inventory: Entity(2),
+            inventory: Entity::from_engine(2),
             slot: 0,
-        };
+        });
         assert!(loader.item_action(&call));
         run_for(&loader, Duration::from_millis(200));
         assert_logged(&loader, "scenario t: PASS, 1 steps");
@@ -464,14 +461,15 @@ mod tests {
         use enshwick::knowledge::KnowledgeId;
 
         let quest = KnowledgeId::new(42);
-        let info = |value| KnowledgeInfo {
-            header: Header::of::<KnowledgeInfo>(),
-            id: quest,
-            kind: KnowledgeInfo::BOOL,
-            scope: KnowledgeInfo::PLAYER,
-            reserved: 0,
-            value,
-            flags: 0,
+        let info = |value| {
+            enshwick::abi::headed!(KnowledgeInfo {
+                id: quest,
+                kind: KnowledgeInfo::BOOL,
+                scope: KnowledgeInfo::PLAYER,
+                reserved: 0,
+                value,
+                flags: 0,
+            })
         };
         let loader = FakeHost::new()
             .world()

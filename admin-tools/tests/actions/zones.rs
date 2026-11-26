@@ -2,7 +2,7 @@
 //! zone for every player the world's rule leaves out, the zones outlive a
 //! restart, and only administrators change them.
 
-use enshwick::abi::{BuildCheck, Header, PlayerData, PlayerInfo};
+use enshwick::abi::{BuildCheck, PlayerData, PlayerInfo};
 use enshwick::events::{PlayerJoined, SettingsReplaced, ShutdownStarted};
 use enshwick::{Entity, ItemId, PlayerKey};
 
@@ -18,14 +18,13 @@ fn build(
     player: u32,
     at: [f64; 3],
 ) -> Result<(), Option<String>> {
-    loader.build(&BuildCheck {
-        header: Header::of::<BuildCheck>(),
-        character: Entity(player),
+    loader.build(&enshwick::abi::headed!(BuildCheck {
+        character: Entity::from_engine(player),
         item: ItemId::new(7),
         position: at,
         reason: core::ptr::null_mut(),
         account: PlayerKey::default(),
-    })
+    }))
 }
 
 /// Ann's and Bob's characters.
@@ -235,8 +234,8 @@ fn a_respawned_zone_builder_builds_at_once_and_a_respawned_bob_is_refused() {
     let dir = scratch("zone-respawn");
     let loader = server("", &dir);
     assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
-    assert!(loader.respawn(ann().key, Entity(40)));
-    assert!(loader.respawn(BOB_KEY, Entity(41)));
+    assert!(loader.respawn(ann().key, Entity::from_engine(40)));
+    assert!(loader.respawn(BOB_KEY, Entity::from_engine(41)));
     assert_eq!(build(&loader, 40, [42.0, 12.0, -3.0]), Ok(()));
     assert_eq!(
         build(&loader, 41, [42.0, 12.0, -3.0]),
@@ -289,18 +288,17 @@ fn a_rejoin_inside_the_zone_takes_the_rights_again_and_a_character_with_no_place
     assert!(loader.drive_until(DRIVE, || notices() == 1));
     // The platform ends a change as its player leaves, so the mod takes the
     // rights again for the player who joins back in the zone.
-    let joined = PlayerData {
-        header: Header::of::<PlayerData>(),
+    let joined = enshwick::abi::headed!(PlayerData {
         slot: BOB,
-        entity: Entity(BOB),
+        entity: Entity::from_engine(BOB),
         key: BOB_KEY,
-    };
+    });
     assert!(loader.raise::<PlayerJoined>(&joined) >= 1);
     assert!(loader.drive_until(DRIVE, || notices() == 2));
     assert_eq!(loader.permission_change(BOB_KEY), (BREAKING, 0));
     // A new character with no place yet, as after a respawn at an altar:
     // what the zones took stays until the place reads.
-    assert!(loader.respawn(BOB_KEY, Entity(41)));
+    assert!(loader.respawn(BOB_KEY, Entity::from_engine(41)));
     for _ in 0..3 {
         let _ran = loader.tick(std::time::Duration::from_secs(1));
     }

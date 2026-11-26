@@ -290,20 +290,30 @@ pub(crate) fn link_server(load: &mut Load<'_>, world: World) -> Result<(), Off> 
 
 fn server_sweep(world: World, references: &[(&'static str, ComponentType, usize)]) {
     let players = world.players();
-    let all = world.entities(world.transform_type());
+    let all = match world.entities(world.transform_type()) {
+        Ok(all) => all,
+        Err(error) => {
+            enshwick::warn_once!("server sweep off: {error}");
+            return;
+        }
+    };
     if players.is_empty() {
         // Once, so a server without players shows the sweep works.
         if let Some(first) = all.first()
             && !sweeps().server_empty.swap(true, Ordering::Relaxed)
         {
-            let who = format!("no players; around entity {}", id(first.entity.0));
+            let who = format!("no players; around entity {}", id(first.entity.get()));
             server_around(world, references, &all, &who, first.position);
         }
         return;
     }
     for player in players {
         if let Some(at) = world.position(player.entity) {
-            let who = format!("player {:?} entity {}", player.name, id(player.entity.0));
+            let who = format!(
+                "player {:?} entity {}",
+                player.name,
+                id(player.entity.get())
+            );
             server_around(world, references, &all, &who, at);
         }
     }
@@ -337,14 +347,14 @@ fn server_around(
                 let data = world.component(entity, ty)?;
                 let target = u32_at(data.addr() + offset)?;
                 let names = world
-                    .template(Entity(target))
+                    .template(Entity::from_engine(target))
                     .map_or_else(|| "not here".to_owned(), |t| guid(&t.0));
                 Some(format!("{name}={} ({names})", id(target)))
             })
             .collect();
         enshwick::info!(
             "R11 server entity {} template {} at {} d={distance:.1}{}",
-            id(entity.0),
+            id(entity.get()),
             world
                 .template(entity)
                 .map_or_else(|| "?".to_owned(), |t| guid(&t.0)),

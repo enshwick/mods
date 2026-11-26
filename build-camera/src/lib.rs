@@ -85,7 +85,7 @@ enshwick::declare_mod!(BuildCamera);
 
 #[cfg(test)]
 mod tests {
-    use enshwick::abi::{Header, SkillCheck as RawCheck, SkillNode, Status};
+    use enshwick::abi::{SkillCheck as RawCheck, SkillNode, Status};
     use enshwick::config::Config as _;
     use enshwick::events;
 
@@ -129,13 +129,11 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK);
         let ask = |node, gate| {
-            loader.skill(&RawCheck {
-                header: Header::of::<RawCheck>(),
+            loader.skill(&enshwick::abi::headed!(RawCheck {
                 node,
                 gate,
                 unlocked: 0,
-                reserved: [0; 3],
-            })
+            }))
         };
 
         assert_eq!(ask(NODE, RawCheck::FLY_MODE), RawCheck::UNLOCKED);
@@ -182,13 +180,11 @@ mod tests {
         let faults = loader.faults();
         assert_eq!(faults.len(), 1, "{faults:?}");
         assert!(faults[0].contains("skill.airborne_architect"), "{faults:?}");
-        let answer = loader.skill(&RawCheck {
-            header: Header::of::<RawCheck>(),
+        let answer = loader.skill(&enshwick::abi::headed!(RawCheck {
             node: NODE,
             gate: RawCheck::FLY_MODE,
             unlocked: 0,
-            reserved: [0; 3],
-        });
+        }));
         assert_eq!(answer, RawCheck::VANILLA);
     }
 }

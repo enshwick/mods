@@ -31,7 +31,7 @@ impl ContainerChecks {
             if interaction.kind == Kind::Move {
                 enshwick::info!(
                     "interaction move by {}: {:?}",
-                    interaction.player.0,
+                    interaction.player.get(),
                     interaction.moved
                 );
             }
@@ -62,8 +62,11 @@ impl ContainerChecks {
             return;
         };
         match self.inventories.show_pickup(player.entity, self.chest, 1) {
-            Ok(()) => pass(&format!("show pickup to player {}", player.entity.0)),
-            Err(why) => fail(&format!("show pickup to player {}: {why}", player.entity.0)),
+            Ok(()) => pass(&format!("show pickup to player {}", player.entity.get())),
+            Err(why) => fail(&format!(
+                "show pickup to player {}: {why}",
+                player.entity.get()
+            )),
         }
     }
 }

@@ -32,7 +32,13 @@ impl BuffChecks {
     }
 
     pub(crate) fn run(self) {
-        let types = self.buffs.types();
+        let types = match self.buffs.types() {
+            Ok(types) => types,
+            Err(why) => {
+                enshwick::warn!("FAIL buff types: {why}");
+                return;
+            }
+        };
         if types.is_empty() {
             enshwick::warn!("FAIL buff types: none");
             return;
@@ -81,12 +87,11 @@ impl BuffChecks {
             }
         }
         let id = ty.buff_type_id;
-        self.scheduler.after(SETTLE, move || {
-            if self.buffs.has(holder, id) {
-                enshwick::warn!("FAIL buff {id:?} still on {holder:?} after removal");
-            } else {
-                enshwick::info!("PASS buff {id:?} removed from {holder:?}");
-            }
-        });
+        self.scheduler
+            .after(SETTLE, move || match self.buffs.has(holder, id) {
+                Ok(false) => enshwick::info!("PASS buff {id:?} removed from {holder:?}"),
+                Ok(true) => enshwick::warn!("FAIL buff {id:?} still on {holder:?} after removal"),
+                Err(why) => enshwick::warn!("FAIL buff {id:?} removal reads: {why}"),
+            });
     }
 }

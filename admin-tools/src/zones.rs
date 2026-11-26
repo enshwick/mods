@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use enshwick::actions::{Action, Arg, Outcome, Request, Value};
-use enshwick::vetoes::{BuildVerdict, Placement};
+use enshwick::vetoes::{Placement, Verdict};
 use enshwick::world::{Player, PlayerPermissions};
 use enshwick::{Entity, Load, Off, PlayerKey, Relock as _};
 use serde::{Deserialize, Serialize};
@@ -303,9 +303,9 @@ pub(crate) fn add(tools: &Arc<Tools>, load: &mut Load<'_>) -> Result<(), Off> {
         if !guarded.iter().any(|shape| shape.holds(placement.position))
             || filtered.zone_builders.load().admit(placement)
         {
-            return BuildVerdict::Allow;
+            return Verdict::Allow;
         }
-        BuildVerdict::refuse_because(texts::NOTICE_ZONE)
+        Verdict::refuse_because(texts::NOTICE_ZONE)
     });
     if let Err(why) = filter {
         enshwick::warn!("protected zones are off: {why}");
@@ -744,20 +744,23 @@ mod tests {
 
     #[test]
     fn a_builder_is_admitted_by_account_and_without_one_by_character() {
-        let builders = Builders(vec![(PlayerKey::new(7), Entity(10))]);
+        let builders = Builders(vec![(PlayerKey::new(7), Entity::from_engine(10))]);
         assert!(
-            builders.admits(Entity(40), Some(PlayerKey::new(7))),
+            builders.admits(Entity::from_engine(40), Some(PlayerKey::new(7))),
             "respawned"
         );
         assert!(
-            !builders.admits(Entity(10), Some(PlayerKey::new(8))),
+            !builders.admits(Entity::from_engine(10), Some(PlayerKey::new(8))),
             "another account"
         );
         assert!(
-            builders.admits(Entity(10), None),
+            builders.admits(Entity::from_engine(10), None),
             "a loader that copies no slots"
         );
-        assert!(!builders.admits(Entity(40), None), "unknown character");
+        assert!(
+            !builders.admits(Entity::from_engine(40), None),
+            "unknown character"
+        );
     }
 
     #[test]

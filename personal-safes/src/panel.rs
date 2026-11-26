@@ -227,7 +227,7 @@ impl Hosts {
     /// Notes `host`, the open screen's host in a frame (`None` for none),
     /// and returns how often the host changed so far.
     fn see(&self, host: Option<Entity>) -> u64 {
-        let host = host.map_or(0, |e| e.0);
+        let host = host.map_or(0, Entity::get);
         if self.last.swap(host, Ordering::Relaxed) == host {
             self.changes.load(Ordering::Relaxed)
         } else {
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn a_chest_counts_as_reopened_when_its_screen_closed_or_another_opened() {
         let hosts = Hosts::default();
-        let chest = Some(Entity(512));
+        let chest = Some(Entity::from_engine(512));
         let first = hosts.see(chest);
         assert_eq!(
             hosts.see(chest),
@@ -416,7 +416,11 @@ mod tests {
         let _closed = hosts.see(None);
         let again = hosts.see(chest);
         assert_ne!(again, first, "closed and opened again");
-        assert_ne!(hosts.see(Some(Entity(513))), again, "another chest");
+        assert_ne!(
+            hosts.see(Some(Entity::from_engine(513))),
+            again,
+            "another chest"
+        );
     }
 
     #[test]

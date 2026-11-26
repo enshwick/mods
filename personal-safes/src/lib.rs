@@ -389,8 +389,8 @@ fn placed_safe(world: World, phrases: &Texts, placed: &BuildingData) {
             language(),
             &[(texts::value::OWNER, &name)],
         );
-        if !world.set_label(placed.entity, &label) {
-            enshwick::warn!("Safe {} not labelled", placed.entity);
+        if let Err(error) = world.set_label(placed.entity, &label) {
+            enshwick::warn!("Safe {} not labelled: {error}", placed.entity);
         }
     }
     enshwick::info!(
@@ -437,7 +437,10 @@ fn may_rename(world: World, rename: &Rename) -> bool {
 /// looked at would otherwise lend its stock to anyone crafting nearby.
 fn learn_safes(world: World) {
     let known = snapshots().safes.load();
-    for placed in world.containers(ContainerKinds::default()) {
+    for placed in world
+        .containers(ContainerKinds::default())
+        .unwrap_or_default()
+    {
         if known.contains_key(&placed.entity)
             || !world.used_item(placed.entity).is_some_and(content::is_safe)
         {
@@ -491,7 +494,7 @@ fn label_seen(
                 world.language_of(owner),
                 &[(texts::value::OWNER, &name)],
             );
-            if world.set_label(entity, &label) {
+            if world.set_label(entity, &label).is_ok() {
                 done.insert(entity);
             }
         }

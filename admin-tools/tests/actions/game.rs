@@ -36,7 +36,7 @@ pub(crate) const BACKPACK: u32 = 0x5001;
 pub(crate) const LOOKS: u32 = 0x5002;
 
 /// Where Ann set her map waypoint, in metres; Bob set none.
-pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, -80.0];
+pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, 80.0];
 
 /// The world's map: 10 240 metres a side around the origin, in cells of 8
 /// metres.
@@ -214,17 +214,32 @@ fn waypoint(host: &FakeHost) -> (u32, Vec<u8>) {
 /// [`server`] on a game build whose inventories do not resolve, so the
 /// mod declares no action on what players carry.
 pub(crate) fn without_inventories(settings: &str, dir: &Path) -> Game {
-    world(settings, dir, &[], false, false)
+    world(settings, dir, &[], false, Build::NoInventories)
+}
+
+/// [`server`] on a game build whose table lacks the world's reads, so
+/// every inventory read fails while the actions stay declared.
+pub(crate) fn without_world_reads(settings: &str, dir: &Path) -> Game {
+    world(settings, dir, &[], false, Build::NoWorldReads)
 }
 
 /// [`server_with`] on a dedicated server, or in a game a player hosts
 /// when `hosted`.
 pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Game {
-    world(settings, dir, more, hosted, true)
+    world(settings, dir, more, hosted, Build::Full)
 }
 
-/// [`game`], with the game's inventories only when `inventory`.
-fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventory: bool) -> Game {
+/// What the test's game build lacks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Build {
+    Full,
+    NoInventories,
+    NoWorldReads,
+}
+
+/// [`game`] on `build`.
+fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, build: Build) -> Game {
+    let inventory = build != Build::NoInventories;
     let settings = on_loopback(settings);
     let host = if hosted {
         FakeHost::new()
@@ -299,7 +314,7 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     }
     let (waypoint, marked) = waypoint(&host);
     host = host.component(ann().entity, waypoint, &marked);
-    for (who, place) in [(ann(), [40, 12, -3]), (bob(), [0, 20, 7])] {
+    for (who, place) in [(ann(), [40, 12, 3]), (bob(), [0, 20, 7])] {
         host = host
             .player(who)
             .template(who.entity, Guid([7; 16]))
@@ -309,7 +324,14 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, inventor
     for who in more {
         host = host.player(*who);
     }
-    let loader = host.install();
+    if build == Build::NoWorldReads {
+        host = host.without_world_reads();
+    }
+    start(host.install())
+}
+
+/// Starts the mod on `loader` and loads its world, its clock and weather set.
+fn start(loader: Installed) -> Game {
     // Transactions need a world with terrain.
     loader.set_terrain(&[]);
     // SAFETY: the exports of the mod under test.

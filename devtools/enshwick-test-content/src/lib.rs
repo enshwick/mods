@@ -235,11 +235,7 @@ impl Mod for TestContent {
         join::link(
             load,
             texts,
-            join::Gifts::new(
-                enemy,
-                altar.map(|kind| kind.item),
-                chest.map(|chest| chest.item),
-            ),
+            join::Gifts::new(enemy, altar, chest),
             join::ENEMY_AFTER,
         );
         Ok(Self)

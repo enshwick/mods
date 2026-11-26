@@ -9,7 +9,7 @@ use enshwick::abi::{
 
 use super::game::{
     BACKPACK, CHEST, DRIVE, GLIDER, Game, LOOKS, WOOD, ann, bob, file_until, near, run, said,
-    scratch, server,
+    scratch, server, without_world_reads,
 };
 
 /// The gives the mod submitted so far: each one's inventory, item and count.
@@ -465,6 +465,26 @@ fn clear_and_copy_refuse_an_empty_inventory_and_copy_refuses_one_player_twice() 
         "0Name two different players."
     );
     assert!(run(&loader, &bob(), "clear", "p0000000000000002").starts_with('0'));
+    assert!(loader.inventory_requests().is_empty());
+}
+
+#[test]
+fn clear_and_copy_say_why_when_the_game_cannot_read_what_a_player_carries() {
+    let dir = scratch("clear-unread");
+    let loader = without_world_reads("", &dir);
+    assert_eq!(
+        run(&loader, &ann(), "clear", "p0000000000000001"),
+        "0Ann: nothing changed: not available here, or on this loader or game build."
+    );
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "copy",
+            "p0000000000000001\tp0000000000000002"
+        ),
+        "0Ann: nothing changed: not available here, or on this loader or game build."
+    );
     assert!(loader.inventory_requests().is_empty());
 }
 

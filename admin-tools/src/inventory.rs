@@ -101,7 +101,7 @@ fn clear(tools: &Tools, request: &Request<'_>) -> Outcome {
     let values = [(texts::value::NAME, name.as_str())];
     let slots = match inventories.slots(player.entity) {
         Ok(slots) => slots,
-        Err(why) => return Tools::failed(request, ids::CLEAR, &why),
+        Err(why) => return Tools::failed(request, name, &why),
     };
     let ops = clear_ops(&slots);
     if ops.is_empty() {
@@ -154,7 +154,7 @@ fn copy(tools: &Tools, request: &Request<'_>) -> Outcome {
     }
     let slots = match inventories.slots(from.entity) {
         Ok(slots) => slots,
-        Err(why) => return Tools::failed(request, ids::COPY, &why),
+        Err(why) => return Tools::failed(request, name, &why),
     };
     let ops = copy_ops(&slots, target.entity);
     if ops.is_empty() {

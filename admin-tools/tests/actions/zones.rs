@@ -37,15 +37,15 @@ fn a_zone_refuses_bob_inside_it_and_lets_him_build_outside_while_ann_builds_anyw
     let loader = server("", &dir);
     assert_eq!(
         run(&loader, &ann(), "zone", "tmarket\tn10"),
-        "1Only zone builders may build, dig or break within 10 m of 40, -3, in the zone market."
+        "1Only zone builders may build, dig or break within 10 m of 40, 3, in the zone market."
     );
     assert_eq!(
-        build(&loader, BOB, [42.0, 500.0, -3.0]),
+        build(&loader, BOB, [42.0, 500.0, 3.0]),
         Err(Some(REFUSED.to_owned())),
         "every height of a circle"
     );
-    assert_eq!(build(&loader, BOB, [55.0, 12.0, -3.0]), Ok(()));
-    assert_eq!(build(&loader, ANN, [42.0, 12.0, -3.0]), Ok(()));
+    assert_eq!(build(&loader, BOB, [55.0, 12.0, 3.0]), Ok(()));
+    assert_eq!(build(&loader, ANN, [42.0, 12.0, 3.0]), Ok(()));
 }
 
 #[test]
@@ -53,8 +53,8 @@ fn the_host_s_own_prediction_lets_her_build_in_a_zone_with_a_character_no_server
     let dir = scratch("zone-hosted");
     let loader = hosted("", &dir);
     assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
-    assert_eq!(build(&loader, 40, [42.0, 12.0, -3.0]), Ok(()));
-    assert!(build(&loader, BOB, [42.0, 12.0, -3.0]).is_err());
+    assert_eq!(build(&loader, 40, [42.0, 12.0, 3.0]), Ok(()));
+    assert!(build(&loader, BOB, [42.0, 12.0, 3.0]).is_err());
 }
 
 #[test]
@@ -63,10 +63,10 @@ fn a_box_refuses_only_what_lies_inside_it_at_its_height() {
     let loader = server("", &dir);
     assert_eq!(
         run(&loader, &ann(), "zonebox", "thall\tn10\tn4\tn6"),
-        "1Only zone builders may build, dig or break in the zone hall: 10 × 4 × 6 m around 40, 12, -3."
+        "1Only zone builders may build, dig or break in the zone hall: 10 × 4 × 6 m around 40, 12, 3."
     );
-    assert!(build(&loader, BOB, [44.0, 13.0, -1.0]).is_err());
-    assert_eq!(build(&loader, BOB, [44.0, 15.0, -1.0]), Ok(()), "above it");
+    assert!(build(&loader, BOB, [44.0, 13.0, 5.0]).is_err());
+    assert_eq!(build(&loader, BOB, [44.0, 15.0, 5.0]), Ok(()), "above it");
 }
 
 #[test]
@@ -82,14 +82,14 @@ fn a_zone_switched_off_or_removed_lets_everyone_build_and_a_name_is_taken_once()
         run(&loader, &ann(), "zoneswitch", "tMARKET\tb0"),
         "1The zone market is off: it stops nothing until it is switched on."
     );
-    assert_eq!(build(&loader, BOB, [40.0, 12.0, -3.0]), Ok(()));
+    assert_eq!(build(&loader, BOB, [40.0, 12.0, 3.0]), Ok(()));
     assert!(run(&loader, &ann(), "zoneswitch", "tmarket\tb1").starts_with('1'));
-    assert!(build(&loader, BOB, [40.0, 12.0, -3.0]).is_err());
+    assert!(build(&loader, BOB, [40.0, 12.0, 3.0]).is_err());
     assert_eq!(
         run(&loader, &ann(), "unzone", "tmarket"),
         "1The zone market is removed."
     );
-    assert_eq!(build(&loader, BOB, [40.0, 12.0, -3.0]), Ok(()));
+    assert_eq!(build(&loader, BOB, [40.0, 12.0, 3.0]), Ok(()));
     assert_eq!(
         run(&loader, &ann(), "unzone", "tmarket"),
         "0No zone is named market."
@@ -111,8 +111,8 @@ fn the_zones_list_each_zone_with_its_state_and_place() {
         enshwick::console::run("adm zones").as_deref(),
         Ok(concat!(
             "Admin Tools: 2 zones\n",
-            "market (on): 10 m around 40, -3; stops building, breaking\n",
-            "hall (off): 10 × 4 × 6 m around 40, 12, -3; stops building, breaking"
+            "market (on): 10 m around 40, 3; stops building, breaking\n",
+            "hall (off): 10 × 4 × 6 m around 40, 12, 3; stops building, breaking"
         ))
     );
 }
@@ -127,7 +127,7 @@ fn zones_are_written_at_once_and_guard_the_world_after_a_restart() {
         assert!(kept.contains("kind = \"circle\""), "{kept}");
     }
     let loader = server("", &dir);
-    assert!(build(&loader, BOB, [40.0, 12.0, -3.0]).is_err());
+    assert!(build(&loader, BOB, [40.0, 12.0, 3.0]).is_err());
 }
 
 #[test]
@@ -151,10 +151,10 @@ fn the_zone_builders_rule_lets_others_build_and_bob_may_not_make_a_zone() {
     assert!(run(&loader, &bob(), "zone", "tmine\tn10").starts_with('0'));
     loader.set_settings("settings", "zone_builders = \"everyone\"\n");
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-    assert!(loader.drive_until(DRIVE, || build(&loader, BOB, [40.0, 12.0, -3.0]).is_ok()));
+    assert!(loader.drive_until(DRIVE, || build(&loader, BOB, [40.0, 12.0, 3.0]).is_ok()));
     loader.set_settings("settings", "zone_builders = \"nobody\"\n");
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-    assert!(loader.drive_until(DRIVE, || build(&loader, ANN, [40.0, 12.0, -3.0]).is_err()));
+    assert!(loader.drive_until(DRIVE, || build(&loader, ANN, [40.0, 12.0, 3.0]).is_err()));
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn a_zone_set_to_stop_only_chests_lets_bob_build_and_takes_only_chests() {
         loader.drive_until(DRIVE, || loader.permission_change(BOB_KEY)
             == (PlayerInfo::CAN_ACCESS_INVENTORIES, 0))
     );
-    assert_eq!(build(&loader, BOB, [42.0, 12.0, -3.0]), Ok(()));
+    assert_eq!(build(&loader, BOB, [42.0, 12.0, 3.0]), Ok(()));
     assert!(run(&loader, &bob(), "zonerules", "tmarket\tb1\tb1\tb1").starts_with('0'));
 }
 
@@ -236,9 +236,9 @@ fn a_respawned_zone_builder_builds_at_once_and_a_respawned_bob_is_refused() {
     assert!(run(&loader, &ann(), "zone", "tmarket\tn10").starts_with('1'));
     assert!(loader.respawn(ann().key, Entity::from_engine(40)));
     assert!(loader.respawn(BOB_KEY, Entity::from_engine(41)));
-    assert_eq!(build(&loader, 40, [42.0, 12.0, -3.0]), Ok(()));
+    assert_eq!(build(&loader, 40, [42.0, 12.0, 3.0]), Ok(()));
     assert_eq!(
-        build(&loader, 41, [42.0, 12.0, -3.0]),
+        build(&loader, 41, [42.0, 12.0, 3.0]),
         Err(Some(REFUSED.to_owned()))
     );
 }

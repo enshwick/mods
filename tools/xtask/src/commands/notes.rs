@@ -623,8 +623,14 @@ fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
             "{package}: its changes say built for Enshwick {named}, but it builds on {loader}; name v{named} in [workspace.metadata.release] to release it on that loader, or correct the line"
         ));
     }
+    // From 1.0 a release keeps the API and ABI of its major, so only an alpha warns.
+    let warning = if version.contains('-') {
+        format!("{ALPHA_WARNING}\n")
+    } else {
+        String::new()
+    };
     let text = format!(
-        "{ALPHA_WARNING}\nBuilt for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
+        "{warning}Built for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
     );
     let length = text.chars().count();
     if length > MAX_BODY {
@@ -927,6 +933,13 @@ mod tests {
         ));
         assert!(text.contains("`enshwick-game-rates.zip`"));
         assert!(text.ends_with("## What's new\n\n- More loot.\n"));
+    }
+
+    #[test]
+    fn notes_built_for_a_loader_release_carry_no_alpha_warning() {
+        let text = notes("enshwick-game-rates", "v1.0.0", "- More loot.").unwrap();
+        assert!(text.starts_with("Built for Enshwick 1.0.0. Extract"));
+        assert!(!text.contains("alpha"));
     }
 
     #[test]

@@ -29,11 +29,11 @@ loader = "v1.0.0-alpha.17"
 
 [workspace.dependencies]
 # The platform from git, at a commit of its main branch.
-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "37632c61fbaeb1bd0dbe90610f8e33786bba7756" }
-enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "37632c61fbaeb1bd0dbe90610f8e33786bba7756" }
-enshwick-luau = { git = "https://github.com/enshwick/enshwick", rev = "37632c61fbaeb1bd0dbe90610f8e33786bba7756" }
+enshwick = { git = "https://github.com/enshwick/enshwick", rev = "53af8702db3baecc7a09029c1647ca211af30226" }
+enshwick-gamedata = { git = "https://github.com/enshwick/enshwick", rev = "53af8702db3baecc7a09029c1647ca211af30226" }
+enshwick-luau = { git = "https://github.com/enshwick/enshwick", rev = "53af8702db3baecc7a09029c1647ca211af30226" }
 # The crate rules and changelog reader the tasks share with the platform's.
-cargo-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "37632c61fbaeb1bd0dbe90610f8e33786bba7756", default-features = false }
+cargo-enshwick = { git = "https://github.com/enshwick/enshwick", rev = "53af8702db3baecc7a09029c1647ca211af30226", default-features = false }
 
 # What more than one package takes, each at one version; a member adds the
 # features it needs.

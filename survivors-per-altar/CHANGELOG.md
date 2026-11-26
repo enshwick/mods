@@ -8,8 +8,8 @@ Each entry says what players notice; a release's notes show its section.
 
 ### Changed
 
-- Survivors per Altar needs an Enshwick with the stable ABI 1.0, which
-  Enshwick 1.0 brings, and does not start on an alpha of Enshwick.
+- Survivors per Altar needs an Enshwick with the stable ABI 1.0;
+  Enshwick 1.0.0-alpha.17 and older do not load it.
 
 ## [0.1.1] - 2026-11-07
 

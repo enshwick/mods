@@ -25,8 +25,8 @@ Each entry says what players notice; a release's notes show its section.
 - Typed commands take the game's template and item debug names in any
   case, an exact match first. A name that several templates or items share
   lists up to eight of their GUIDs to pick from.
-- Admin Tools needs an Enshwick with the stable ABI 1.0, which
-  Enshwick 1.0 brings, and does not start on an alpha of Enshwick.
+- Admin Tools needs an Enshwick with the stable ABI 1.0;
+  Enshwick 1.0.0-alpha.17 and older do not load it.
 
 ### Fixed
 

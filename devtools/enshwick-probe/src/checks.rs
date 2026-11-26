@@ -461,8 +461,8 @@ impl Checks {
         enshwick::info!(
             "shroud of entity {}: {:?}, in it {:?}; skills {:?}",
             entity,
-            world.shroud_time(entity),
-            world.in_shroud(entity),
+            world.fog_resistance(entity),
+            world.in_fog(entity),
             world.skills(entity)
         );
         let vitals = world.vitals(entity);

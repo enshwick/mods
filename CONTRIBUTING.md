@@ -64,24 +64,23 @@ revert branch merges, so the fix goes first.
 Every mod has its own version. release-plz, configured in
 `release-plz.toml`, versions each mod from the commits that touch its folder
 and tags it `<package>-v<version>`, such as `enshwick-area-loot-v0.2.0`.
-Until 1.0 each release is an alpha: a GitHub prerelease built on a loader
-alpha.
+Each release is a GitHub release built on a loader release.
 
 `main` builds on the platform's `main`, pinned to a full commit that
-Renovate moves. Only a release builds on a loader alpha: `release` pins the
+Renovate moves. Only a release builds on a loader release: `release` pins the
 platform to it in its own job and tags that commit, which no branch holds,
 so no pin ever waits on `main` for a release and Renovate never undoes one.
 
 Each mod's `CHANGELOG.md` is written by hand for players; release-plz never
 writes it. A change players notice adds a line under `## [Unreleased]`.
 
-A release goes in two steps, both run with `loader` set to the loader alpha
-the mods are built for, such as `v1.0.0-alpha.14`:
+A release goes in two steps, both run with `loader` set to the loader release
+the mods are built for, such as `v1.0.0`:
 
 1. Run `release-pr`. A mod of the release set whose released version was
    built for another loader and that has nothing under `## [Unreleased]`
-   first gets the line `- Built for Enshwick 1.0.0-alpha.14.` there
-   (`cargo xtask built-for v1.0.0-alpha.14`), so its folder changes and
+   first gets the line `- Built for Enshwick 1.0.0.` there
+   (`cargo xtask built-for v1.0.0`), so its folder changes and
    release-plz bumps it as well: release-plz does not count a changed git
    commit of a dependency as a change. A mod whose version has no tag yet
    is left alone, and naming the loader a mod was released on drops its
@@ -105,12 +104,12 @@ the mods are built for, such as `v1.0.0-alpha.14`:
    release-plz opens no pull request for it: set its version and close its
    section in an ordinary pull request.
 2. Run `release` on `main` with the same `loader`; another one is refused.
-   It pins the platform to that loader (`cargo xtask pin v1.0.0-alpha.14`,
+   It pins the platform to that loader (`cargo xtask pin v1.0.0`,
    the commit of that release in the root `Cargo.toml` and `Cargo.lock`),
    checks that the pinned workspace builds, commits the pin on top of
    `main` on no branch, and tags that commit.
 
-`release-plz.yml` runs by hand, each time for the loader alpha in `loader`:
+`release-plz.yml` runs by hand, each time for the loader release in `loader`:
 
 - `build`, from any branch, names and pins that loader as `release-pr` and
   `release` would, does what a release would and publishes nothing: it writes the notes of every mod of the release set whose

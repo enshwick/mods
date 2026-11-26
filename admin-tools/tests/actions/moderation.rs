@@ -250,7 +250,7 @@ fn a_player_goes_to_the_waypoint_the_caller_set_on_the_map() {
     let loader = server_with("", &dir, &[eve]);
     assert_eq!(
         run(&loader, &ann(), "mark", "p0000000000000002"),
-        "1Bob is on the way to 300, 25, -80."
+        "1Bob is on the way to 300, 25, 80."
     );
     let moved = loader.teleports();
     assert_eq!(moved.len(), 1);

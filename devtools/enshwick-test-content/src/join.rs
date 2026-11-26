@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use core::time::Duration;
 
 use enshwick::actions::{Actions, Window};
+use enshwick::content::props::PropId;
 use enshwick::content::templates::TemplateId;
 use enshwick::effects::{Effects, Spawn};
 use enshwick::events::{PlayerJoined, WorldLoaded};
@@ -17,7 +18,7 @@ use enshwick::schedule::Scheduler;
 use enshwick::typed::ComponentType;
 use enshwick::typed::ecs::CurrentTransform;
 use enshwick::world::World;
-use enshwick::{Entity, ItemId, Load, Off, PlayerKey, RecipeId};
+use enshwick::{Entity, Load, Off, PlayerKey, RecipeId};
 
 /// The features' names on the Mods screen.
 pub(crate) const GIFTS: &str = "gifts at join";
@@ -38,8 +39,8 @@ const ENEMY_LIFT: f64 = 2.0;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Gifts {
     enemy: Option<TemplateId>,
-    altar: Option<ItemId>,
-    chest: Option<ItemId>,
+    altar: Option<PropId>,
+    chest: Option<PropId>,
     chest_recipe: Option<RecipeId>,
 }
 
@@ -48,8 +49,8 @@ impl Gifts {
     /// `<id>.recipe`, as `NewProp::recipe_cost` names it.
     pub(crate) fn new(
         enemy: Option<TemplateId>,
-        altar: Option<ItemId>,
-        chest: Option<ItemId>,
+        altar: Option<PropId>,
+        chest: Option<PropId>,
     ) -> Self {
         Self {
             enemy,
@@ -63,9 +64,9 @@ impl Gifts {
 /// Gives `player` the altar and the chest, and teaches them the chest's
 /// recipe.
 fn welcome(inventories: &Inventories, knowledge: &Knowledge, player: Entity, gifts: Gifts) {
-    for (what, item) in [("altar", gifts.altar), ("chest", gifts.chest)] {
-        if let Some(item) = item {
-            let _ticket = inventories.give(player, item, 1, move |outcome| {
+    for (what, prop) in [("altar", gifts.altar), ("chest", gifts.chest)] {
+        if let Some(prop) = prop {
+            let _ticket = inventories.give(player, prop.item, 1, move |outcome| {
                 enshwick::info!("{what} given to {player}: {:?}", outcome.done);
             });
         }
@@ -236,7 +237,7 @@ mod tests {
     use enshwick::knowledge::KnowledgeId;
     use enshwick::resources::{Field, Kind, Type, fnv1a32};
     use enshwick::test::{FakeHost, Installed, facts};
-    use enshwick::{Mod, PlayerKey};
+    use enshwick::{ItemId, Mod, PlayerKey};
 
     use super::*;
 
@@ -246,8 +247,8 @@ mod tests {
     const STEP: Duration = Duration::from_millis(100);
 
     /// A prop the content added, with its item `item`.
-    fn prop(item: u8) -> ItemId {
-        ItemId(item.into())
+    fn prop(item: u8) -> PropId {
+        PropId::new(ItemId::new(item.into()), TemplateId::new(Guid([item; 16])))
     }
 
     /// The join feature alone, every part on, the enemy without delay.

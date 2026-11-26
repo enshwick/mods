@@ -597,7 +597,7 @@ fn a_zone_s_buttons_switch_it_the_other_way_and_remove_it() {
     assert_eq!(
         rows(&zones),
         [(
-            "market (on): 10 m around 40, -3; stops building, breaking".to_owned(),
+            "market (on): 10 m around 40, 3; stops building, breaking".to_owned(),
             vec!["Off".to_owned(), "Remove".to_owned()]
         )]
     );

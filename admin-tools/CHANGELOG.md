@@ -44,9 +44,10 @@ Each entry says what players notice; a release's notes show its section.
   logging in meanwhile gets an answer instead of a dropped connection. Tools
   logged in with the old password are closed at once, and failed logins are
   forgotten, as when the console opened again.
-- Clearing or copying an inventory, and the world's summary, tell the admin
-  why when the game cannot read the inventory or the game settings, instead
-  of answering that the player carries nothing or that no world is loaded.
+- Clearing or copying an inventory tells the admin why, naming the player,
+  when the game cannot read the inventory, and the world's summary tells why
+  when the game cannot read the game settings, instead of answering that the
+  player carries nothing or that no world is loaded.
 
 ## [0.2.0] - 2026-11-15
 

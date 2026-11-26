@@ -281,9 +281,19 @@ fn teleports_go_to_bring_and_send_players_and_the_console_has_no_character() {
             &loader,
             &ann(),
             "place",
+            "p0000000000000002\tn100\tn50\tn20"
+        ),
+        "1Bob is on the way to 100, 50, 20."
+    );
+    assert_eq!(
+        run(
+            &loader,
+            &ann(),
+            "place",
             "p0000000000000002\tn100\tn50\tn-20"
         ),
-        "1Bob is on the way to 100, 50, -20."
+        "0Bob: nothing changed: outside the world.",
+        "the world's box starts at 0 m"
     );
     let moved: Vec<_> = loader
         .teleports()

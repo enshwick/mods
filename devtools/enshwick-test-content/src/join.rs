@@ -64,8 +64,8 @@ impl Gifts {
 /// Gives `player` the altar and the chest, and teaches them the chest's
 /// recipe.
 fn welcome(inventories: &Inventories, knowledge: &Knowledge, player: Entity, gifts: Gifts) {
-    for (what, item) in [("altar", gifts.altar), ("chest", gifts.chest)] {
-        if let Some(prop) = item {
+    for (what, prop) in [("altar", gifts.altar), ("chest", gifts.chest)] {
+        if let Some(prop) = prop {
             let _ticket = inventories.give(player, prop.item, 1, move |outcome| {
                 enshwick::info!("{what} given to {player}: {:?}", outcome.done);
             });

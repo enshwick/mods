@@ -38,10 +38,10 @@ pub(crate) const LOOKS: u32 = 0x5002;
 /// Where Ann set her map waypoint, in metres; Bob set none.
 pub(crate) const WAYPOINT: [f64; 3] = [300.0, 25.0, 80.0];
 
-/// The world's map: 10 240 metres a side around the origin, in cells of 8
-/// metres.
+/// The world's map: the fake world's 10 240 metres a side from the origin,
+/// in cells of 8 metres.
 pub(crate) const MAP: MapFrameInfo = enshwick::abi::headed!(MapFrameInfo {
-    origin: [-5120.0; 2],
+    origin: [0.0; 2],
     size: [10240.0; 2],
     metres_per_cell: 8.0,
     ..MapFrameInfo::EMPTY

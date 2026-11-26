@@ -279,11 +279,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Runs no code of the repository: it sums, attests and uploads the files
-  # `assets` built.
+  # Runs no code of the repository. One mod's failed build must not keep the
+  # others' files off their releases: that mod's leg fails at its download.
   attach:
     needs: [release-plz, assets]
-    if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
+    if: ${{ !cancelled() && inputs.command == 'release' && needs.release-plz.result == 'success' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]' }}
     strategy:
       fail-fast: false
       matrix:

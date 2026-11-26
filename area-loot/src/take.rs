@@ -354,9 +354,9 @@ mod tests {
 
         assert!(
             eligible(
-                Entity::from_engine(1),
-                Entity::from_engine(2),
-                Entity::from_engine(3),
+                Entity::from_raw(1).unwrap(),
+                Entity::from_raw(2).unwrap(),
+                Entity::from_raw(3).unwrap(),
                 4.0
             ),
             "before init"
@@ -380,9 +380,9 @@ mod tests {
         // As in the game, the loader runs no point of a mod that is off, so
         // every container stays as the mod's default leaves it.
         assert!(eligible(
-            Entity::from_engine(1),
-            Entity::from_engine(2),
-            Entity::from_engine(3),
+            Entity::from_raw(1).unwrap(),
+            Entity::from_raw(2).unwrap(),
+            Entity::from_raw(3).unwrap(),
             6.0
         ));
     }

@@ -128,7 +128,7 @@ mod tests {
     );
 
     const ANN: PlayerKey = PlayerKey::new(7);
-    const ANN_ENTITY: Entity = Entity::from_engine(10);
+    const ANN_ENTITY: Entity = Entity::from_raw(10).unwrap();
 
     fn ann() -> PlayerInfo {
         let mut name = [0u8; PlayerInfo::NAME_MAX];
@@ -424,7 +424,7 @@ mod tests {
             character: ANN_ENTITY,
             item: enshwick::ItemId::new(0x5e01),
             count: 1,
-            inventory: Entity::from_engine(2),
+            inventory: Entity::from_raw(2).unwrap(),
             slot: 0,
         });
         assert!(loader.item_action(&call));

@@ -351,7 +351,7 @@ mod tests {
         let listed = |entity, tilted, levels: Vec<CellBox>| {
             let level = u8::try_from(levels.len()).unwrap_or(u8::MAX);
             enshwick::altars::Altar::new(
-                Entity::from_engine(entity),
+                Entity::from_raw(entity).unwrap(),
                 level,
                 tilted,
                 [0.0; 3],

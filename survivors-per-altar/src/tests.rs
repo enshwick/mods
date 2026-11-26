@@ -21,15 +21,20 @@ fn lookup(
 ) -> Answer {
     let beds: Vec<(Entity, Entity)> = beds
         .iter()
-        .map(|&(survivor, bed)| (Entity::from_engine(survivor), Entity::from_engine(bed)))
+        .map(|&(survivor, bed)| {
+            (
+                Entity::from_raw(survivor).unwrap(),
+                Entity::from_raw(bed).unwrap(),
+            )
+        })
         .collect();
-    let some = |entity| (entity != 0).then_some(Entity::from_engine(entity));
+    let some = Entity::from_raw;
     loader.survivor_lookup(survivor, some(vanilla), purpose, some(entity), cell, &beds)
 }
 
 /// The answer that names entity `entity`.
 const fn found(entity: u32) -> Answer {
-    Answer::Entity(Entity::from_engine(entity))
+    Answer::Entity(Entity::from_raw(entity).unwrap())
 }
 
 /// A loader that knows the item layout the copy staffs need, with
@@ -162,7 +167,7 @@ fn copies_answer_the_game_per_altar() {
     let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity::from_engine(entity);
+        info.entity = Entity::from_raw(entity).unwrap();
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -214,8 +219,8 @@ fn copies_answer_the_game_per_altar() {
     );
     let check = enshwick::abi::headed!(BedCheck {
         npc_id: SURVIVOR,
-        entity: Entity::from_engine(10),
-        bed_id: Entity::from_engine(50),
+        entity: Entity::from_raw(10).unwrap(),
+        bed_id: Entity::from_raw(50).unwrap(),
         home: [10, 0, 10],
         bed_at: [150, 0, 10],
     });
@@ -239,7 +244,7 @@ fn a_world_with_per_altar_off_answers_as_vanilla() {
     let _loaded = loader.raise::<SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity::from_engine(entity);
+        info.entity = Entity::from_raw(entity).unwrap();
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -271,8 +276,8 @@ copy_staff_locked_chest_chance = 0.0
     );
     let check = enshwick::abi::headed!(BedCheck {
         npc_id: SURVIVOR,
-        entity: Entity::from_engine(10),
-        bed_id: Entity::from_engine(50),
+        entity: Entity::from_raw(10).unwrap(),
+        bed_id: Entity::from_raw(50).unwrap(),
         home: [10, 0, 10],
         bed_at: [150, 0, 10],
     });
@@ -358,11 +363,15 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
         host = markers
             .iter()
             .fold(
-                host.placed(setup_type, Entity::from_engine(root), [0.0; 3]),
-                |host, &marker| host.component(Entity::from_engine(root), marker, &[]),
+                host.placed(setup_type, Entity::from_raw(root).unwrap(), [0.0; 3]),
+                |host, &marker| host.component(Entity::from_raw(root).unwrap(), marker, &[]),
             )
-            .component(Entity::from_engine(root), setup_type, &links)
-            .component(Entity::from_engine(inventory), inventory_type, &stacks);
+            .component(Entity::from_raw(root).unwrap(), setup_type, &links)
+            .component(
+                Entity::from_raw(inventory).unwrap(),
+                inventory_type,
+                &stacks,
+            );
     }
     let loader = host.install();
     // SAFETY: the exports of `declare_mod!` above.
@@ -443,7 +452,7 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
     let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity::from_engine(entity);
+        info.entity = Entity::from_raw(entity).unwrap();
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -467,7 +476,6 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
         template: smith.template(),
         target: [130, 0, 10],
         slot: 0,
-        pide: Entity::from_engine(0),
         meter: [0; 2],
         consumed: 0,
     });
@@ -513,7 +521,7 @@ vanilla_staff_places_copies = true
     let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity::from_engine(entity);
+        info.entity = Entity::from_raw(entity).unwrap();
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -542,7 +550,6 @@ vanilla_staff_places_copies = true
             template: smith.template(),
             target: [x, 0, 10],
             slot: 0,
-            pide: Entity::from_engine(0),
             meter: [0; 2],
             consumed: 0,
         })
@@ -588,7 +595,7 @@ copy_staff_locked_chest_chance = 0.0
     );
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity::from_engine(entity);
+        info.entity = Entity::from_raw(entity).unwrap();
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -622,7 +629,6 @@ copy_staff_locked_chest_chance = 0.0
             template: smith.template(),
             target: [130, 0, 10],
             slot: 0,
-            pide: Entity::from_engine(0),
             meter: [current, 3],
             consumed: 0,
         })

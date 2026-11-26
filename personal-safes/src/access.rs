@@ -350,6 +350,9 @@ impl Access {
             .load()
             .iter()
             .find_map(|(&entity, &(_, kept))| (kept == at).then_some(entity))
+            // The point's `safe` is the engine's 0 while the chest is not in the world: a
+            // language-neutral schema has no `Option`, and no public Entity names 0.
+            // ast-grep-ignore: entities-through-public-calls
             .unwrap_or(Entity::NONE);
         let admins_open = self.admins_open.load(Ordering::Relaxed);
         decide(
@@ -659,31 +662,49 @@ mod tests {
     fn owners_friends_and_admins_through_the_snapshots() {
         let access = Access::new();
         access.players.store(Arc::new(FxHashMap::from_iter([
-            (Entity::from_engine(10), OWNER),
-            (Entity::from_engine(11), FRIEND),
-            (Entity::from_engine(12), STRANGER),
-            (Entity::from_engine(13), ADMIN),
+            (Entity::from_raw(10).unwrap(), OWNER),
+            (Entity::from_raw(11).unwrap(), FRIEND),
+            (Entity::from_raw(12).unwrap(), STRANGER),
+            (Entity::from_raw(13).unwrap(), ADMIN),
         ])));
-        access.placed(Entity::from_engine(500), (0, 0, 0), OWNER.key, "Ann");
+        access.placed(Entity::from_raw(500).unwrap(), (0, 0, 0), OWNER.key, "Ann");
         assert_eq!(
             access.change((0, 0, 0), |safe| safe.allow(FRIEND.key, "Bob")),
             Some(AllowOutcome::Allowed)
         );
-        assert!(!access.refused_seen(Entity::from_engine(500), Entity::from_engine(10)));
-        assert!(!access.refused_seen(Entity::from_engine(500), Entity::from_engine(11)));
-        assert!(access.refused_seen(Entity::from_engine(500), Entity::from_engine(12)));
-        assert!(!access.refused_seen(Entity::from_engine(500), Entity::from_engine(13)));
+        assert!(!access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(10).unwrap()
+        ));
+        assert!(!access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(11).unwrap()
+        ));
+        assert!(access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(12).unwrap()
+        ));
+        assert!(!access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(13).unwrap()
+        ));
         assert!(!access.may(
             OWNER.key,
             (0, 0, 0),
-            Entity::from_engine(500),
-            Entity::from_engine(11),
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(11).unwrap(),
             Action::Remove
         ));
         access.admins_open.store(false, Ordering::Relaxed);
-        assert!(access.refused_seen(Entity::from_engine(500), Entity::from_engine(13)));
-        assert!(access.removed(Entity::from_engine(500)).is_some());
-        assert!(!access.refused_seen(Entity::from_engine(500), Entity::from_engine(12)));
+        assert!(access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(13).unwrap()
+        ));
+        assert!(access.removed(Entity::from_raw(500).unwrap()).is_some());
+        assert!(!access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(12).unwrap()
+        ));
         assert!(access.owners.load().is_empty());
         assert_eq!(access.change((0, 0, 0), |_| ()), None);
     }
@@ -692,34 +713,43 @@ mod tests {
     fn a_player_who_joined_since_the_snapshot_waits_for_it() {
         let access = Access::new();
         access.players.store(Arc::new(FxHashMap::from_iter([(
-            Entity::from_engine(10),
+            Entity::from_raw(10).unwrap(),
             OWNER,
         )])));
-        access.placed(Entity::from_engine(500), (0, 0, 0), OWNER.key, "Ann");
+        access.placed(Entity::from_raw(500).unwrap(), (0, 0, 0), OWNER.key, "Ann");
         assert!(!access.unregistered.load(Ordering::Relaxed));
         assert!(
-            access.refused_seen(Entity::from_engine(500), Entity::from_engine(14)),
+            access.refused_seen(
+                Entity::from_raw(500).unwrap(),
+                Entity::from_raw(14).unwrap()
+            ),
             "unknown character"
         );
         assert!(access.unregistered.swap(false, Ordering::Relaxed));
-        assert!(!access.refused_seen(Entity::from_engine(500), Entity::from_engine(10)));
+        assert!(!access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(10).unwrap()
+        ));
         assert!(!access.unregistered.load(Ordering::Relaxed));
         access.players.rcu(|players| {
             let mut players = FxHashMap::clone(players);
-            players.insert(Entity::from_engine(14), OWNER);
+            players.insert(Entity::from_raw(14).unwrap(), OWNER);
             players
         });
-        assert!(!access.refused_seen(Entity::from_engine(500), Entity::from_engine(14)));
+        assert!(!access.refused_seen(
+            Entity::from_raw(500).unwrap(),
+            Entity::from_raw(14).unwrap()
+        ));
     }
 
     #[test]
     fn the_safe_a_player_opened_comes_before_their_own_nearer_one() {
         let access = Access::new();
-        access.placed(Entity::from_engine(500), (0, 0, 0), ADMIN.key, "Root");
-        access.placed(Entity::from_engine(501), (4, 0, 0), OWNER.key, "Ann");
+        access.placed(Entity::from_raw(500).unwrap(), (0, 0, 0), ADMIN.key, "Root");
+        access.placed(Entity::from_raw(501).unwrap(), (4, 0, 0), OWNER.key, "Ann");
         let at_hand = || {
             access
-                .nearest_managed(ADMIN, Entity::from_engine(13), [0.0; 3], 4.0)
+                .nearest_managed(ADMIN, Entity::from_raw(13).unwrap(), [0.0; 3], 4.0)
                 .map(|(at, _)| at)
         };
         assert_eq!(at_hand(), Some((0, 0, 0)), "own first");
@@ -736,13 +766,16 @@ mod tests {
     #[test]
     fn interactions_follow_the_rules_of_a_safe() {
         snapshots().players.store(Arc::new(FxHashMap::from_iter([
-            (Entity::from_engine(10), OWNER),
-            (Entity::from_engine(12), STRANGER),
+            (Entity::from_raw(10).unwrap(), OWNER),
+            (Entity::from_raw(12).unwrap(), STRANGER),
         ])));
         let at = centre((40, 2, 40));
         let ask = |kind, player, item: Option<ItemId>| {
-            let call =
-                Interaction::new(kind, Entity::from_engine(player), Entity::from_engine(700));
+            let call = Interaction::new(
+                kind,
+                Entity::from_raw(player).unwrap(),
+                Entity::from_raw(700).unwrap(),
+            );
             filter(&match item {
                 Some(item) => call.with_item(item).with_position(at),
                 None => call,
@@ -752,7 +785,12 @@ mod tests {
         let safe = Some(safe_item);
         // Unknown and not seen yet: open to all.
         assert!(ask(Kind::Open, 12, None));
-        snapshots().placed(Entity::from_engine(700), (40, 2, 40), OWNER.key, "Ann");
+        snapshots().placed(
+            Entity::from_raw(700).unwrap(),
+            (40, 2, 40),
+            OWNER.key,
+            "Ann",
+        );
         assert!(ask(Kind::Open, 10, safe));
         assert!(!ask(Kind::Open, 12, safe));
         assert!(!ask(Kind::Move, 12, None), "known from the session");
@@ -766,10 +804,7 @@ mod tests {
             Transfer::RefillStacks,
         ] {
             let moved = |player| {
-                let (character, chest) = (
-                    Some(Entity::from_engine(player)),
-                    Some(Entity::from_engine(700)),
-                );
+                let (character, chest) = (Entity::from_raw(player), Entity::from_raw(700));
                 let (from, to) = match transfer {
                     Transfer::TakeAll | Transfer::RefillStacks => (chest, character),
                     _ => (character, chest),
@@ -777,8 +812,8 @@ mod tests {
                 filter(
                     &Interaction::new(
                         Kind::Move,
-                        Entity::from_engine(player),
-                        Entity::from_engine(700),
+                        Entity::from_raw(player).unwrap(),
+                        Entity::from_raw(700).unwrap(),
                     )
                     .with_item(safe_item)
                     .with_position(at)
@@ -788,7 +823,11 @@ mod tests {
             assert!(!moved(12), "{transfer:?} by a stranger");
             assert!(moved(10), "{transfer:?} by the owner");
         }
-        assert!(snapshots().removed(Entity::from_engine(700)).is_some());
+        assert!(
+            snapshots()
+                .removed(Entity::from_raw(700).unwrap())
+                .is_some()
+        );
         assert!(
             ask(Kind::Upgrade, 10, Some(ItemId::new(1))),
             "another piece upgrades"

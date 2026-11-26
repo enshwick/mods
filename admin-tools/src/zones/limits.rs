@@ -210,7 +210,7 @@ mod tests {
     fn the_zone_builders_rule_counts_what_a_zone_took_from_the_group() {
         let base = PlayerPermissions::CanEditBase;
         let player = Player::new(
-            Entity::from_engine(11),
+            Entity::from_raw(11).unwrap(),
             1,
             PlayerKey::new(2),
             0,

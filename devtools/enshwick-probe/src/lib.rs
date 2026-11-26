@@ -235,14 +235,20 @@ fn rename_allowed(text: &str) -> bool {
     text != REFUSED_NAME
 }
 
-/// An id from a number argument, which the platform kept within its range.
+//// The entity a number argument names, which the platform kept within its
+/// range; `None` for 0, the engine's no entity.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "the argument's range is within u32"
 )]
-const fn id(value: f64) -> u32 {
-    value as u32
+const fn entity_of(value: f64) -> Option<Entity> {
+    Entity::from_raw(value as u32)
+}
+
+/// The answer to an action that names entity 0.
+fn no_entity() -> Outcome {
+    Outcome::refused("0 is no entity")
 }
 
 /// The keys of the actions, as action and default key: Shift with F2 to F6
@@ -302,7 +308,8 @@ fn actions(
     actions.add(
         admin("vitals", "An entity's vitals").arg(entity()),
         move |request| match request.args {
-            [Value::Number(n)] => Outcome::done(vitals.vitals_of(Entity::from_engine(id(*n)))),
+            [Value::Number(n)] => entity_of(*n)
+                .map_or_else(no_entity, |entity| Outcome::done(vitals.vitals_of(entity))),
             _ => Outcome::refused(""),
         },
     )?;
@@ -310,7 +317,9 @@ fn actions(
     actions.add(
         admin("destroy", "Destroy an entity").arg(entity()),
         move |request| match request.args {
-            [Value::Number(n)] => Outcome::done(destroying.destroy(Entity::from_engine(id(*n)))),
+            [Value::Number(n)] => entity_of(*n).map_or_else(no_entity, |entity| {
+                Outcome::done(destroying.destroy(entity))
+            }),
             _ => Outcome::refused(""),
         },
     )?;
@@ -318,7 +327,9 @@ fn actions(
     actions.add(
         admin("spawn", "Spawn a copy of an entity").arg(entity()),
         move |request| match request.args {
-            [Value::Number(n)] => Outcome::done(spawning.spawn_copy(Entity::from_engine(id(*n)))),
+            [Value::Number(n)] => entity_of(*n).map_or_else(no_entity, |entity| {
+                Outcome::done(spawning.spawn_copy(entity))
+            }),
             _ => Outcome::refused(""),
         },
     )?;

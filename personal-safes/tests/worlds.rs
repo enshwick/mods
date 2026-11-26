@@ -15,7 +15,7 @@ mod tests {
 
     /// An entity of the fake world by its engine id.
     const fn entity(id: u32) -> Entity {
-        Entity::from_engine(id)
+        Entity::from_raw(id).unwrap()
     }
 
     /// A loader that knows the item and recipe layouts the Safe needs.
@@ -400,7 +400,7 @@ admins_can_open = true
         bytes[..name.len()].copy_from_slice(name.as_bytes());
         enshwick::abi::headed!(PlayerInfo {
             slot: entity,
-            entity: Entity::from_engine(entity),
+            entity: Entity::from_raw(entity).unwrap(),
             key: PlayerKey::new(key),
             permissions: PlayerInfo::CAN_ACCESS_INVENTORIES,
             name_len: u32::try_from(name.len()).unwrap(),

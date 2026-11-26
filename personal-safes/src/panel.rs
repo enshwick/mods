@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn a_chest_counts_as_reopened_when_its_screen_closed_or_another_opened() {
         let hosts = Hosts::default();
-        let chest = Some(Entity::from_engine(512));
+        let chest = Entity::from_raw(512);
         let first = hosts.see(chest);
         assert_eq!(
             hosts.see(chest),
@@ -416,11 +416,7 @@ mod tests {
         let _closed = hosts.see(None);
         let again = hosts.see(chest);
         assert_ne!(again, first, "closed and opened again");
-        assert_ne!(
-            hosts.see(Some(Entity::from_engine(513))),
-            again,
-            "another chest"
-        );
+        assert_ne!(hosts.see(Entity::from_raw(513)), again, "another chest");
     }
 
     #[test]

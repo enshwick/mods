@@ -733,7 +733,7 @@ mod tests {
     fn every_page_lists_every_action_in_the_help_s_order_with_its_default_rule() {
         let rules = Settings::default().rights.rules();
         let guest = enshwick::world::Player::new(
-            Entity::from_engine(2),
+            Entity::from_raw(2).unwrap(),
             0,
             PlayerKey::new(9),
             0,

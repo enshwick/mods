@@ -1,0 +1,15 @@
+id: entities-through-public-calls
+valid:
+  - "fn f() -> Option<Entity> { Entity::from_raw(7) }"
+  - "fn f() -> Entity { Entity::from_raw(7).unwrap() }"
+  - "// Entity::from_engine(0) in a plain comment."
+invalid:
+  - "fn f() -> Entity { Entity::from_engine(7) }"
+  - "fn f() -> Entity { enshwick::Entity::from_engine(7) }"
+  - "fn f(safe: Option<Entity>) -> Entity { safe.unwrap_or(Entity::NONE) }"
+  - "fn f(e: Entity) -> bool { e == enshwick::Entity::NONE }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        const CHEST: Entity = Entity::from_engine(10);
+    }

@@ -279,14 +279,14 @@ mod tests {
         assert_eq!(shared().high_water.load(Ordering::Relaxed), 30);
         let mut rows = [
             Experience {
-                entity: enshwick::Entity::from_engine(1),
+                entity: enshwick::Entity::from_raw(1).unwrap(),
                 level: 1,
                 progress: 0,
                 need: 100,
                 gained: 40,
             },
             Experience {
-                entity: enshwick::Entity::from_engine(2),
+                entity: enshwick::Entity::from_raw(2).unwrap(),
                 level: 1,
                 progress: 0,
                 need: 100,
@@ -361,7 +361,7 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, enshwick::abi::Status::OK);
         let row = |entity, progress, gained| Experience {
-            entity: enshwick::Entity::from_engine(entity),
+            entity: enshwick::Entity::from_raw(entity).unwrap(),
             level: 1,
             progress,
             need: 1000,

@@ -1,0 +1,22 @@
+id: entities-through-public-calls
+language: rust
+severity: error
+message: build an `Entity` with `Entity::from_raw`, never the hidden `Entity::from_engine` or `Entity::NONE`
+note: >-
+  The platform hides these items for the layers that carry the engine's
+  value through; a hidden item can change in any release without a semver
+  signal. `Entity::from_raw(n)` gives `None` for the engine's 0. A developer
+  tool may name the engine's 0 and says why beside it; a mod that must
+  write 0 into a point's field says why and ignores the rule there.
+ignores:
+  - "devtools/**"
+  - "tools/**"
+  # These move to `Entity::from_raw` in a change of their own; then these lines go.
+  - "admin-tools/src/inventory.rs"
+  - "admin-tools/tests/actions/**"
+rule:
+  any:
+    - pattern: Entity::from_engine($$$ARGS)
+    - pattern: $PATH::Entity::from_engine($$$ARGS)
+    - pattern: Entity::NONE
+    - pattern: $PATH::Entity::NONE

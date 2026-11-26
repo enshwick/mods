@@ -611,7 +611,7 @@ mod tests {
 
     fn player(key: u64, permissions: u32) -> Player {
         Player::new(
-            Entity::from_engine(2),
+            Entity::from_raw(2).unwrap(),
             0,
             PlayerKey::new(key),
             permissions,

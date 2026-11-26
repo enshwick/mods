@@ -231,7 +231,7 @@ mod tests {
     }
 
     fn placed(entity: u32, x: f64) -> Placed {
-        Placed::new(Entity::from_engine(entity), [x, 0.0, 0.0])
+        Placed::new(Entity::from_raw(entity).unwrap(), [x, 0.0, 0.0])
     }
 
     #[test]
@@ -246,13 +246,13 @@ mod tests {
 
     #[test]
     fn a_label_the_game_refused_is_not_reported_as_marked() {
-        assert!(marked(Entity::from_engine(7), true).is_done());
-        assert!(!marked(Entity::from_engine(7), false).is_done());
+        assert!(marked(Entity::from_raw(7).unwrap(), true).is_done());
+        assert!(!marked(Entity::from_raw(7).unwrap(), false).is_done());
     }
 
     #[test]
     fn a_spawn_that_half_failed_says_which_chest_stands() {
-        let (kept, unsaved) = (Entity::from_engine(1), Entity::from_engine(2));
+        let (kept, unsaved) = (Entity::from_raw(1).unwrap(), Entity::from_raw(2).unwrap());
         assert_eq!(
             spawn_outcome(Some(kept), Some(unsaved)),
             Outcome::done("Kept 1 and Unsaved 2 spawned")

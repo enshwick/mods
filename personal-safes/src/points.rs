@@ -41,7 +41,7 @@ pub struct Access {
     pub owner: PlayerKey,
     /// The player's character.
     pub character: Entity,
-    /// The Safe; [`Entity`] of the chest itself.
+    /// The Safe's chest; the engine's 0 while the chest is not in the world.
     pub safe: Entity,
     /// What the player tries.
     pub action: SafeAction,

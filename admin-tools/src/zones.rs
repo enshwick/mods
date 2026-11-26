@@ -744,21 +744,21 @@ mod tests {
 
     #[test]
     fn a_builder_is_admitted_by_account_and_without_one_by_character() {
-        let builders = Builders(vec![(PlayerKey::new(7), Entity::from_engine(10))]);
+        let builders = Builders(vec![(PlayerKey::new(7), Entity::from_raw(10).unwrap())]);
         assert!(
-            builders.admits(Entity::from_engine(40), Some(PlayerKey::new(7))),
+            builders.admits(Entity::from_raw(40).unwrap(), Some(PlayerKey::new(7))),
             "respawned"
         );
         assert!(
-            !builders.admits(Entity::from_engine(10), Some(PlayerKey::new(8))),
+            !builders.admits(Entity::from_raw(10).unwrap(), Some(PlayerKey::new(8))),
             "another account"
         );
         assert!(
-            builders.admits(Entity::from_engine(10), None),
+            builders.admits(Entity::from_raw(10).unwrap(), None),
             "a loader that copies no slots"
         );
         assert!(
-            !builders.admits(Entity::from_engine(40), None),
+            !builders.admits(Entity::from_raw(40).unwrap(), None),
             "unknown character"
         );
     }

@@ -22,7 +22,7 @@ fn start(host: FakeHost) -> enshwick::test::Installed {
 fn player(entity: u32, key: u64) -> PlayerInfo {
     enshwick::abi::headed!(PlayerInfo {
         slot: entity,
-        entity: Entity::from_engine(entity),
+        entity: Entity::from_raw(entity).unwrap(),
         key: PlayerKey::new(key),
         permissions: 0,
         name_len: 0,
@@ -57,11 +57,11 @@ fn server(holders: &[(Fact, f64)]) -> FakeHost {
     let mut host = host
         .player(player(10, 1))
         .player(player(11, 2))
-        .component(Entity::from_engine(10), transform, &here)
-        .component(Entity::from_engine(11), transform, &here)
+        .component(Entity::from_raw(10).unwrap(), transform, &here)
+        .component(Entity::from_raw(11).unwrap(), transform, &here)
         .net_peer(Peer::Player(PlayerKey::new(1)));
     for (i, (marker, x)) in markers.into_iter().enumerate() {
-        let entity = Entity::from_engine(100 + u32::try_from(i).unwrap());
+        let entity = Entity::from_raw(100 + u32::try_from(i).unwrap()).unwrap();
         host = host
             .placed(setup, entity, [x, 0.0, 0.0])
             .component(entity, marker, &[]);
@@ -253,8 +253,8 @@ fn a_server_with_no_player_running_the_mod_sends_nothing() {
     let (setup, loot) = (hash(facts::INVENTORY_SETUP), hash(facts::LOOT_FILL));
     let loader = start(
         host.player(player(10, 1))
-            .placed(setup, Entity::from_engine(100), [1.0, 0.0, 0.0])
-            .component(Entity::from_engine(100), loot, &[]),
+            .placed(setup, Entity::from_raw(100).unwrap(), [1.0, 0.0, 0.0])
+            .component(Entity::from_raw(100).unwrap(), loot, &[]),
     );
     assert_eq!(loader.tick(EVERY), 1);
     assert!(sent(&loader).is_empty());
@@ -267,7 +267,7 @@ fn a_server_that_cannot_list_containers_says_why_in_the_log() {
     let here = at(&host, 0.0);
     let loader = start(
         host.player(player(10, 1))
-            .component(Entity::from_engine(10), transform, &here)
+            .component(Entity::from_raw(10).unwrap(), transform, &here)
             .net_peer(Peer::Player(PlayerKey::new(1))),
     );
     assert_eq!(loader.tick(EVERY), 1);

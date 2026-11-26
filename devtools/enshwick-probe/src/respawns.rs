@@ -74,9 +74,9 @@ mod tests {
 
     use super::RespawnPoints;
 
-    const CHARACTER: Entity = Entity::from_engine(10);
-    const ALTAR: Entity = Entity::from_engine(40);
-    const SPIRE: Entity = Entity::from_engine(41);
+    const CHARACTER: Entity = Entity::from_raw(10).unwrap();
+    const ALTAR: Entity = Entity::from_raw(40).unwrap();
+    const SPIRE: Entity = Entity::from_raw(41).unwrap();
 
     thread_local! {
         /// The world of this test's mod: init runs on the test's thread, and
@@ -151,7 +151,7 @@ mod tests {
     fn a_point_that_no_longer_reads_is_forgotten() {
         let (_loader, points, mut player) = started();
         assert!(points.show(&player).is_done());
-        player.entity = Entity::from_engine(9);
+        player.entity = Entity::from_raw(9).unwrap();
         assert!(
             points.show(&player).is_done(),
             "no point is an answer, not a refusal"

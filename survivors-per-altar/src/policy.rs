@@ -664,11 +664,11 @@ mod tests {
         let t0 = Instant::now();
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 10, [10, 0, 10], t0),
-            Answer::Entity(Entity::from_engine(10))
+            Answer::Entity(Entity::from_raw(10).unwrap())
         );
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], t0),
-            Answer::Entity(Entity::from_engine(11))
+            Answer::Entity(Entity::from_raw(11).unwrap())
         );
         // Right after a load only one altar is listed yet: the copy at the
         // other one waits for its zone.
@@ -678,7 +678,7 @@ mod tests {
         let soon = t0 + Duration::from_secs(1);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], soon),
-            Answer::Entity(Entity::from_engine(11)),
+            Answer::Entity(Entity::from_raw(11).unwrap()),
             "kept while the altars arrive"
         );
         shared.copies.set_altars([
@@ -688,7 +688,7 @@ mod tests {
         let later = t0 + OUTSIDE_GRACE + Duration::from_secs(1);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], later),
-            Answer::Entity(Entity::from_engine(11)),
+            Answer::Entity(Entity::from_raw(11).unwrap()),
             "filed at its altar once it is listed"
         );
         assert!(shared.outside.is_empty());
@@ -698,12 +698,12 @@ mod tests {
             .set_altars([(1, Zone::new([0, 0, 0], [80, 80, 80]))]);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], later),
-            Answer::Entity(Entity::from_engine(11))
+            Answer::Entity(Entity::from_raw(11).unwrap())
         );
         let gone = later + OUTSIDE_GRACE;
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], gone),
-            Answer::Entity(Entity::from_engine(10)),
+            Answer::Entity(Entity::from_raw(10).unwrap()),
             "the original keeps the survivor"
         );
         assert_eq!(shared.copies.copy_count(SMITH), 1);
@@ -721,18 +721,18 @@ mod tests {
         set_altars(&mut shared, t0, [one]);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 10, [10, 0, 10], t0),
-            Answer::Entity(Entity::from_engine(10))
+            Answer::Entity(Entity::from_raw(10).unwrap())
         );
         let soon = t0 + Duration::from_secs(1);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [75, 0, 10], soon),
-            Answer::Entity(Entity::from_engine(11)),
+            Answer::Entity(Entity::from_raw(11).unwrap()),
             "kept while the altars arrive"
         );
         set_altars(&mut shared, soon, [one, two]);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [75, 0, 10], soon),
-            Answer::Entity(Entity::from_engine(11))
+            Answer::Entity(Entity::from_raw(11).unwrap())
         );
         assert_eq!(
             shared.copies.slot(SMITH, 2),
@@ -744,7 +744,7 @@ mod tests {
         let later = t0 + OUTSIDE_GRACE;
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 12, [100, 0, 10], later),
-            Answer::Entity(Entity::from_engine(11))
+            Answer::Entity(Entity::from_raw(11).unwrap())
         );
     }
 
@@ -788,7 +788,7 @@ mod tests {
     #[test]
     fn the_engine_s_no_entity_answers_nobody_and_any_other_names_its_entity() {
         assert_eq!(named(0), Answer::Nobody);
-        assert_eq!(named(11), Answer::Entity(Entity::from_engine(11)));
+        assert_eq!(named(11), Answer::Entity(Entity::from_raw(11).unwrap()));
         assert_eq!(entity_or_nobody(Some(0)), Answer::Nobody);
         assert_eq!(entity_or_nobody(None), Answer::Nobody);
     }
@@ -809,7 +809,7 @@ mod tests {
             )
         };
         assert_eq!(status, enshwick::abi::Status::OK, "{:?}", loader.logs());
-        let slot = SlotRef::new(Entity::from_engine(9), 0);
+        let slot = SlotRef::new(Entity::from_raw(9).unwrap(), 0);
         assert_eq!(root_of(Ok(None), slot), None);
         assert!(
             !loader
@@ -831,8 +831,8 @@ mod tests {
     #[test]
     fn an_owed_charge_is_spent_once_even_when_the_game_stops_first() {
         let mut spent = Vec::new();
-        owe(Entity::from_engine(4), 1);
-        owe(Entity::from_engine(5), 2);
+        owe(Entity::from_raw(4).unwrap(), 1);
+        owe(Entity::from_raw(5).unwrap(), 2);
         // The game stops before the step's tasks run: the stop spends them.
         settle_spends(|staff, cost| spent.push((staff.get(), cost)));
         assert_eq!(spent, [(4, 1), (5, 2)]);

@@ -118,8 +118,9 @@ the mods are built for, such as `v1.0.0-alpha.14`:
   are refused, and shows both in the run's summary.
 - `release-pr` opens the release pull request for the mods of the release
   set that changed and closes their changelogs with `cargo xtask close`.
-- `release` makes one prerelease for each mod of the release set whose
-  version has no finished release yet, with the notes of `cargo xtask notes`. A job per released mod
+- `release` makes one release for each mod of the release set whose
+  version has no finished release yet, a prerelease when the loader is an
+  alpha, with the notes of `cargo xtask notes`. A job per released mod
   then builds only that mod from its tag and attaches its zip, PDB, SBOM,
   `SHA256SUMS` and build provenance, and the loader release's own
   `cargo-enshwick`, checked against its build provenance, reads each

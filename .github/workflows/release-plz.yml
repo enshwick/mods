@@ -16,7 +16,8 @@
 # not ready or the pinned tree does not build, then commits the pin on top
 # of main, on no branch,
 # and release-plz tags that commit for each new version
-# `<package>-v<version>`; each such mod gets its prerelease with the notes
+# `<package>-v<version>`; each such mod gets its release, a prerelease on a
+# loader alpha, with the notes
 # of `cargo xtask notes`, also when release-plz tagged it and stopped, so
 # running `release` again finishes a run that stopped partway; one job per
 # released mod builds only that mod from its tag and attaches its zip, PDB,
@@ -167,13 +168,17 @@ jobs:
           list="$notes/releases.json"
           mkdir -p "$notes"
           [ -f "$list" ] || echo '[]' > "$list"
-          jq -r '.[] | [.tag, .package_name, .title] | @tsv' "$list" | while IFS=$'\t' read -r tag package title; do
+          jq -r '.[] | [.tag, .package_name, .title, .prerelease] | @tsv' "$list" | while IFS=$'\t' read -r tag package title prerelease; do
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
               gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes/$package.md"
               continue
             fi
+            kind=
+            if [ "$prerelease" = true ]; then
+              kind=--prerelease
+            fi
             for attempt in 1 2 3 4 5; do
-              if gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+              if gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag ${kind:+"$kind"} \
                 --title "$title" --notes-file "$notes/$package.md"; then
                 break
               fi

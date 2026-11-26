@@ -456,13 +456,13 @@ impl Checks {
     }
 
     /// Compares `entity`'s vitals with the health the server replicates,
-    /// and logs its time in the shroud.
+    /// and logs its fog resistance.
     fn compare(world: World, network_health: ComponentType, entity: Entity) {
         enshwick::info!(
-            "shroud of entity {}: {:?}, in it {:?}; skills {:?}",
+            "fog resistance of entity {}: {:?}, in fog {:?}; skills {:?}",
             entity,
-            world.shroud_time(entity),
-            world.in_shroud(entity),
+            world.fog_resistance(entity),
+            world.in_fog(entity),
             world.skills(entity)
         );
         let vitals = world.vitals(entity);

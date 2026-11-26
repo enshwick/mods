@@ -13,6 +13,8 @@ Each entry says what players notice; a release's notes show its section.
   game hosted from the game itself. The `label_language` setting is
   gone; the loader removes it from a world's settings file when the world
   loads.
+- Personal Safes needs an Enshwick with the stable ABI 1.0;
+  Enshwick 1.0.0-alpha.17 and older do not load it.
 
 ### Fixed
 

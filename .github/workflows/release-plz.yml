@@ -20,8 +20,9 @@
 # loader alpha, with the notes
 # of `cargo xtask notes`, also when release-plz tagged it and stopped, so
 # running `release` again finishes a run that stopped partway; one job per
-# released mod builds only that mod from its tag and attaches its zip, PDB,
-# SBOM, their sums and a build provenance attestation of each, which
+# released mod builds only that mod from its tag with read permission only,
+# and another attaches its zip, PDB, SBOM, their sums and a build
+# provenance attestation of each, which
 # players check with `gh attestation verify <file> --owner enshwick`. On
 # Windows each attached DLL must report the version of its tag, read by the
 # loader release's own cargo-enshwick, and the docs site builds again for
@@ -230,6 +231,8 @@ jobs:
           fi
           gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
 
+  # The build runs the mod's code, so it may only read; `attach` attests
+  # and uploads what it built.
   assets:
     needs: release-plz
     if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
@@ -241,16 +244,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    env:
-      TAG: ${{ matrix.release.tag }}
-      PACKAGE: ${{ matrix.release.package_name }}
-      # The files the build writes, as `cargo xtask notes` lists them, and the
-      # file summing them; a finished release has all of them.
-      FILES: ${{ join(matrix.release.files, ' ') }}
-      SUMS: ${{ matrix.release.sums }}
+      contents: read
     steps:
       - name: Where the files go
         run: echo "OUT=$RUNNER_TEMP/release" >> "$GITHUB_ENV" # zizmor: ignore[github-env] a fixed path
@@ -277,6 +271,41 @@ jobs:
         with:
           packages: ${{ matrix.release.package_name }}
           out: ${{ env.OUT }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: files-${{ matrix.release.package_name }}
+          path: ${{ env.OUT }}/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # Runs no code of the repository: it sums, attests and uploads the files
+  # `assets` built.
+  attach:
+    needs: [release-plz, assets]
+    if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJSON(needs.release-plz.outputs.releases) }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      OUT: ${{ github.workspace }}/release
+      TAG: ${{ matrix.release.tag }}
+      # The files the build writes, as `cargo xtask notes` lists them, and the
+      # file summing them; a finished release has all of them.
+      FILES: ${{ join(matrix.release.files, ' ') }}
+      SUMS: ${{ matrix.release.sums }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: files-${{ matrix.release.package_name }}
+          path: ${{ env.OUT }}
 
       - name: Sums
         working-directory: ${{ env.OUT }}
@@ -309,7 +338,7 @@ jobs:
   # The DLL attached to each release reports its tag's version, read through
   # its manifest as the loader reads it, which needs Windows.
   version:
-    needs: [release-plz, assets]
+    needs: [release-plz, attach]
     if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
     strategy:
       fail-fast: false
@@ -353,7 +382,7 @@ jobs:
   # The site links each mod's newest release, read when it builds. It builds
   # on Cloudflare Workers Builds, whose deploy hook builds its main again.
   site:
-    needs: [release-plz, assets]
+    needs: [release-plz, attach]
     if: inputs.command == 'release' && needs.release-plz.outputs.releases != '' && needs.release-plz.outputs.releases != '[]'
     runs-on: ubuntu-26.04
     timeout-minutes: 5

@@ -260,6 +260,25 @@ fn a_server_with_no_player_running_the_mod_sends_nothing() {
     assert!(sent(&loader).is_empty());
 }
 
+#[test]
+fn a_server_that_cannot_list_containers_says_why_in_the_log() {
+    let host = FakeHost::new().world().inventory();
+    let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
+    let here = at(&host, 0.0);
+    let loader = start(
+        host.player(player(10, 1))
+            .component(Entity::from_engine(10), transform, &here)
+            .net_peer(Peer::Player(PlayerKey::new(1))),
+    );
+    assert_eq!(loader.tick(EVERY), 1);
+    let logs = loader.logs();
+    assert!(
+        logs.iter()
+            .any(|(_, line)| line.starts_with("no marks sent: containers not listed: ")),
+        "{logs:?}"
+    );
+}
+
 fn chest_at(x: f32) -> Mark {
     Mark {
         kind: Kind::Chest,

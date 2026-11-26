@@ -85,6 +85,8 @@ fn set_cost(cost: u32) {
 
 /// The name of the owners' store of each world.
 const OWNERS: &str = "owners";
+/// How often the world's Safes are learned and labelled.
+const LEARN_EVERY: Duration = Duration::from_secs(2);
 
 /// The owners as stored: one record per Safe.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -437,10 +439,14 @@ fn may_rename(world: World, rename: &Rename) -> bool {
 /// looked at would otherwise lend its stock to anyone crafting nearby.
 fn learn_safes(world: World) {
     let known = snapshots().safes.load();
-    for placed in world
-        .containers(ContainerKinds::default())
-        .unwrap_or_default()
-    {
+    let placed = match world.containers(ContainerKinds::default()) {
+        Ok(placed) => placed,
+        Err(error) => {
+            enshwick::warn_every!(LEARN_EVERY * 30, "Safes not learned: {error}");
+            return;
+        }
+    };
+    for placed in placed {
         if known.contains_key(&placed.entity)
             || !world.used_item(placed.entity).is_some_and(content::is_safe)
         {
@@ -461,7 +467,7 @@ fn label_seen(
     store: &'static WorldStore<Owners>,
 ) -> Result<(), Off> {
     let mut done: FxHashSet<Entity> = FxHashSet::default();
-    load.scheduler()?.every(Duration::from_secs(2), move || {
+    load.scheduler()?.every(LEARN_EVERY, move || {
         learn_safes(world);
         let safes = snapshots().safes.load();
         let mut learned = false;
@@ -636,6 +642,30 @@ mod tests {
             "the world's cost: rebuilt"
         );
         assert!(loader.faults().is_empty());
+    }
+
+    #[test]
+    fn a_world_that_cannot_list_containers_says_why_no_safe_is_learned() {
+        use enshwick::abi::Status;
+
+        let loader = enshwick::test::FakeHost::new()
+            .world()
+            .items()
+            .recipes()
+            .workshops()
+            .vanilla_items(&[(enshwick::content::Guid([9; 16]), content::CHEST)])
+            .install();
+        // SAFETY: the exports of `declare_mod!` above.
+        let status =
+            unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
+        assert_eq!(status, Status::OK, "{:?}", loader.logs());
+        assert!(loader.tick(LEARN_EVERY) >= 1);
+        let logs = loader.logs();
+        assert!(
+            logs.iter()
+                .any(|(_, line)| line.starts_with("Safes not learned: ")),
+            "{logs:?}"
+        );
     }
 
     #[test]

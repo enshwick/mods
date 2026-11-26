@@ -152,27 +152,11 @@ impl Checks {
         self.writes();
         self.effects();
         self.spawns();
-        let now: Vec<(u32, u64)> =
-            listed("entities", self.world.entities(self.world.transform_type()))
-                .iter()
-                .take(ID_SAMPLE)
-                .filter_map(|placed| {
-                    let template = self.world.template(placed.entity)?;
-                    let head = u64::from_le_bytes(template.0[..8].try_into().ok()?);
-                    Some((placed.entity.get(), head))
-                })
-                .collect();
-        match self.store.update(|visits| {
-            visits.checks += 1;
-            let before = std::mem::replace(&mut visits.seen, now.clone());
-            (visits.checks, before)
-        }) {
-            Some((n, before)) if self.store.key() == key => {
-                pass(&format!("world store open, check {n} of this world"));
-                ids_across_loads(&before, &now);
-                self.entity_data(n, &before, &now);
-            }
-            _ => fail("world store: not open for the running world"),
+        match self.world.entities(self.world.transform_type()) {
+            Ok(placed) => self.visit(key.as_deref(), &placed),
+            Err(why) => fail(&format!(
+                "entities: {why}; the world store keeps the last check's marks"
+            )),
         }
         self.refusals();
         match self.world.save() {
@@ -181,6 +165,32 @@ impl Checks {
                 pass("save asked; WorldSaved should follow");
             }
             Err(why) => fail(&format!("save: {why}")),
+        }
+    }
+
+    /// Records this check's sample of `placed` in the world store of the
+    /// world `key` and compares it with the last check's.
+    fn visit(&self, key: Option<&str>, placed: &[Placed]) {
+        let now: Vec<(u32, u64)> = placed
+            .iter()
+            .take(ID_SAMPLE)
+            .filter_map(|placed| {
+                let template = self.world.template(placed.entity)?;
+                let head = u64::from_le_bytes(template.0[..8].try_into().ok()?);
+                Some((placed.entity.get(), head))
+            })
+            .collect();
+        match self.store.update(|visits| {
+            visits.checks += 1;
+            let before = std::mem::replace(&mut visits.seen, now.clone());
+            (visits.checks, before)
+        }) {
+            Some((n, before)) if self.store.key().as_deref() == key => {
+                pass(&format!("world store open, check {n} of this world"));
+                ids_across_loads(&before, &now);
+                self.entity_data(n, &before, &now);
+            }
+            _ => fail("world store: not open for the running world"),
         }
     }
 

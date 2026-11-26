@@ -293,7 +293,7 @@ fn server_sweep(world: World, references: &[(&'static str, ComponentType, usize)
     let all = match world.entities(world.transform_type()) {
         Ok(all) => all,
         Err(error) => {
-            enshwick::warn_once!("server sweep off: {error}");
+            enshwick::warn_every!(PERIOD * 12, "server sweep skipped: {error}");
             return;
         }
     };
@@ -346,8 +346,8 @@ fn server_around(
             .filter_map(|&(name, ty, offset)| {
                 let data = world.component(entity, ty)?;
                 let target = u32_at(data.addr() + offset)?;
-                let names = world
-                    .template(Entity::from_engine(target))
+                let names = Entity::from_raw(target)
+                    .and_then(|target| world.template(target))
                     .map_or_else(|| "not here".to_owned(), |t| guid(&t.0));
                 Some(format!("{name}={} ({names})", id(target)))
             })

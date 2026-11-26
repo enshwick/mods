@@ -293,34 +293,33 @@ impl Tools {
         });
     }
 
-    /// Ends god mode for each player whose character is no longer the one
-    /// it was given to, so the filter never guards an entity the game gave
-    /// to something else.
-    pub(crate) fn drop_stale_gods(&self) {
+    /// Moves god mode to each player's character as it is now, such as the
+    /// new one a respawn gives, so the filter never guards an entity the
+    /// game gave to something else; the `PlayerLeft` handler ends it.
+    pub(crate) fn follow_gods(&self) {
         let gods = self.gods.load();
         if gods.is_empty() {
             return;
         }
-        // shortcut: god mode ends where it could follow the player to a new
-        // character; follow it once it is known that a respawn makes one.
-        let kept = current(&gods, |key| {
+        let now = current(&gods, |key| {
             self.world.player_by_key(key).map(|player| player.entity)
         });
-        if kept.len() != gods.len() {
-            self.gods.store(Arc::new(kept));
+        if now != **gods {
+            // A `set_god` since the load wins; the next tick follows again.
+            self.gods.compare_and_swap(&gods, Arc::new(now));
         }
     }
 }
 
-/// The pairs of `gods` whose player still has the character god mode was
-/// given to, as `character` finds it now.
+/// Each player of `gods` with their character as `character` finds it now;
+/// one it does not find, as between death and respawn may happen, keeps
+/// the character it had.
 fn current(
     gods: &[(PlayerKey, Entity)],
     character: impl Fn(PlayerKey) -> Option<Entity>,
 ) -> Vec<(PlayerKey, Entity)> {
     gods.iter()
-        .copied()
-        .filter(|(key, entity)| character(*key) == Some(*entity))
+        .map(|&(key, had)| (key, character(key).unwrap_or(had)))
         .collect()
 }
 
@@ -329,7 +328,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn god_mode_ends_for_a_player_whose_character_changed_or_who_is_gone() {
+    fn god_mode_follows_a_player_to_a_new_character_and_waits_while_none_is_found() {
         let (ann, bob, cid) = (PlayerKey::new(1), PlayerKey::new(2), PlayerKey::new(3));
         let gods = [(ann, Entity(10)), (bob, Entity(11)), (cid, Entity(12))];
         let now = |key| match key {
@@ -337,6 +336,9 @@ mod tests {
             key if key == bob => Some(Entity(40)),
             _ => None,
         };
-        assert_eq!(current(&gods, now), [(ann, Entity(10))]);
+        assert_eq!(
+            current(&gods, now),
+            [(ann, Entity(10)), (bob, Entity(40)), (cid, Entity(12))]
+        );
     }
 }

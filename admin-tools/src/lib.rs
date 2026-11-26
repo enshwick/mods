@@ -280,7 +280,7 @@ impl Tools {
         let ticks = Arc::clone(self);
         load.on_tick(TICK, move |tick| {
             ticks.tick(tick.elapsed());
-            ticks.drop_stale_gods();
+            ticks.follow_gods();
             ticks.follow_zones();
         })?;
         Ok(())

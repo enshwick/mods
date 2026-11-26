@@ -17,12 +17,12 @@
 
 use std::collections::BTreeMap;
 
-use super::Box3;
 use super::flow::{INFINITE, Network};
+use enshwick::altars::CellBox;
 
 /// One altar level within a cluster.
 struct Element {
-    zone: Box3,
+    zone: CellBox,
     /// Twice the area this level adds over the level below.
     weight: i128,
     /// The altar's first level: every nonempty group contains one.
@@ -31,7 +31,7 @@ struct Element {
 
 /// The least growth for a cluster, given each member's zones from level 1
 /// up to its current level.
-pub(crate) fn growth(chains: &[&[Box3]]) -> i64 {
+pub(crate) fn growth(chains: &[&[CellBox]]) -> i64 {
     let mut elements = Vec::new();
     for chain in chains {
         let mut below = 0;
@@ -39,7 +39,7 @@ pub(crate) fn growth(chains: &[&[Box3]]) -> i64 {
             let area = zone.footprint_area();
             elements.push(Element {
                 zone: *zone,
-                weight: 2 * (area - below),
+                weight: 2 * i128::from(area - below),
                 first: below == 0,
             });
             below = area;
@@ -82,7 +82,7 @@ fn fits(elements: &[Element], k: i64) -> bool {
 /// Adds the area of the cells covered by the elements' zones grown by `k`,
 /// keyed by the set of elements covering them.
 fn cover(elements: &[Element], k: i64, cells: &mut BTreeMap<Vec<usize>, i128>) {
-    let zones: Vec<Box3> = elements.iter().map(|e| e.zone.grown(k)).collect();
+    let zones: Vec<CellBox> = elements.iter().map(|e| e.zone.grown(k)).collect();
     let mut xs: Vec<i64> = zones.iter().flat_map(|z| [z.min[0], z.max[0]]).collect();
     let mut zs: Vec<i64> = zones.iter().flat_map(|z| [z.min[2], z.max[2]]).collect();
     for edges in [&mut xs, &mut zs] {

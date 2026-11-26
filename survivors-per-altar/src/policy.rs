@@ -24,7 +24,7 @@ use enshwick::state::ModLocal;
 use enshwick::survivors::{
     Answer, BedCheck, Lookup, NpcId, Purpose, Summon, SummonVerdict, WorkshopSurvivor,
 };
-use enshwick::{Entity, ItemId, Load, Off};
+use enshwick::{Entity, ItemId, Load, Off, WorldError};
 
 use crate::Charges;
 use enshwick::altars::CellBox as Zone;
@@ -255,7 +255,7 @@ fn read_altars(altars: Altars) {
             now,
             list.iter()
                 .filter(|altar| !altar.zone.is_empty())
-                .map(|altar| (u64::from(altar.entity.0), altar.zone)),
+                .map(|altar| (u64::from(altar.entity.get()), altar.zone)),
         );
     });
 }
@@ -281,7 +281,7 @@ fn settling(shared: &Shared, now: Instant) -> bool {
 /// The uniqueness pass, which files copies.
 fn answer(shared: &mut Shared, lookup: &Lookup) -> Answer {
     let npc = lookup.survivor;
-    let found = lookup.vanilla.map_or(0, |e| e.0);
+    let found = lookup.vanilla.map_or(0, Entity::get);
     match lookup.purpose {
         Purpose::Uniqueness { entity, home } => {
             let now = Instant::now();
@@ -289,7 +289,7 @@ fn answer(shared: &mut Shared, lookup: &Lookup) -> Answer {
             if now.duration_since(shared.swept) >= SWEEP {
                 sweep(shared, now);
             }
-            file_copy(shared, npc, found, entity.0, home, now)
+            file_copy(shared, npc, found, entity.get(), home, now)
         }
         _ => answer_reading(shared, lookup),
     }
@@ -311,7 +311,7 @@ fn note_pass(shared: &mut Shared, now: Instant) {
 /// Every other lookup, which only reads.
 fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
     let npc = lookup.survivor;
-    let found = lookup.vanilla.map_or(0, |e| e.0);
+    let found = lookup.vanilla.map_or(0, Entity::get);
     match lookup.purpose {
         Purpose::Cursor => {
             let hosting = enshwick::host().is_some_and(|host| host.hosting());
@@ -323,7 +323,7 @@ fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
                 return plan.answer;
             }
             if let Some(copy) = shared.copies.for_spawn(npc, target, found) {
-                return Answer::Entity(Entity(copy));
+                return named(copy);
             }
             enshwick::info!("survivor {npc:#010x}: a new copy at {target:?}");
             Answer::Nobody
@@ -333,7 +333,7 @@ fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
             None => Answer::Vanilla,
             Some(altar) => entity_or_nobody(shared.copies.slot(npc, altar)),
         },
-        Purpose::Roaming { at, .. } => Answer::Entity(Entity(shared.copies.at(npc, at, found))),
+        Purpose::Roaming { at, .. } => named(shared.copies.at(npc, at, found)),
         Purpose::AssignBed { bed, bed_at } => {
             let answer = shared
                 .copies
@@ -351,7 +351,7 @@ fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
                 .copies
                 .copies_of(npc)
                 .map(|(e, _)| e)
-                .find(|&e| lookup.bed_of(Entity(e)) == Some(bed));
+                .find(|&e| Entity::from_raw(e).and_then(|e| lookup.bed_of(e)) == Some(bed));
             entity_or_nobody(sleeper)
         }
         _ => Answer::Nobody,
@@ -359,7 +359,13 @@ fn answer_reading(shared: &Shared, lookup: &Lookup) -> Answer {
 }
 
 fn entity_or_nobody(entity: Option<u32>) -> Answer {
-    entity.map_or(Answer::Nobody, |e| Answer::Entity(Entity(e)))
+    entity.map_or(Answer::Nobody, named)
+}
+
+/// The answer that names `entity`; the engine's 0 names nobody, which the
+/// loader hands the game as the same 0.
+fn named(entity: u32) -> Answer {
+    Entity::from_raw(entity).map_or(Answer::Nobody, Answer::Entity)
 }
 
 fn file_copy(
@@ -390,7 +396,7 @@ fn file_copy(
             shared.outside.remove(&me);
             shared.copies.forget(me);
             enshwick::info!("survivor {npc:#010x}: copy {me} outside every zone removed");
-            Answer::Entity(Entity(original))
+            named(original)
         }
         Verdict::Keep => keep(found, me),
         // Kept unfiled: the next pass files it once its altar is listed.
@@ -398,7 +404,7 @@ fn file_copy(
         Verdict::Remove => {
             let holder = shared.copies.at(npc, home, original);
             enshwick::info!("survivor {npc:#010x}: copy {me} removed, {holder} keeps the slot");
-            Answer::Entity(Entity(if holder == me { original } else { holder }))
+            named(if holder == me { original } else { holder })
         }
     }
 }
@@ -409,7 +415,7 @@ fn keep(found: u32, me: u32) -> Answer {
     if found == 0 {
         Answer::Nobody
     } else {
-        Answer::Entity(Entity(me))
+        named(me)
     }
 }
 
@@ -456,7 +462,7 @@ fn renew_spent(
     charges: Charges,
     cost: u16,
 ) {
-    let Some(root) = inventories.read().root(slot) else {
+    let Some(root) = root_of(inventories.read().root(slot), slot) else {
         return;
     };
     let renew = Op::Renew {
@@ -469,6 +475,15 @@ fn renew_spent(
     inventories.submit(&Batch::new().with(renew), |outcome| {
         enshwick::info!("copy staff renewed after a use: {:?}", outcome.done);
     });
+}
+
+/// The holder of a used staff's `slot` as `read` found it; a failed read
+/// logs why the staff is not renewed.
+fn root_of(read: Result<Option<Entity>, WorldError>, slot: SlotRef) -> Option<Entity> {
+    read.unwrap_or_else(|why| {
+        enshwick::warn!("copy staff in {slot:?}: not renewed after a use: {why}");
+        None
+    })
 }
 
 /// Whether placing a copy that costs `cost` charges takes the whole staff:
@@ -516,7 +531,7 @@ fn judge(shared: &Shared, summon: &Summon, staffs: Staffs) -> SummonVerdict {
                     );
                     return SummonVerdict::Refuse;
                 }
-                CopyStaff::Move(copy) => (Answer::Entity(Entity(copy)), false),
+                CopyStaff::Move(copy) => (named(copy), false),
                 CopyStaff::Place => (Answer::Nobody, true),
             };
         let cost = if places {
@@ -582,7 +597,7 @@ fn judge_own_staff(
         let answer = if original == 0 {
             Answer::Vanilla
         } else {
-            Answer::Entity(Entity(original))
+            named(original)
         };
         PLAN.with(|plan| {
             plan.set(Some(Plan {
@@ -649,11 +664,11 @@ mod tests {
         let t0 = Instant::now();
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 10, [10, 0, 10], t0),
-            Answer::Entity(Entity(10))
+            Answer::Entity(Entity::from_engine(10))
         );
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], t0),
-            Answer::Entity(Entity(11))
+            Answer::Entity(Entity::from_engine(11))
         );
         // Right after a load only one altar is listed yet: the copy at the
         // other one waits for its zone.
@@ -663,7 +678,7 @@ mod tests {
         let soon = t0 + Duration::from_secs(1);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], soon),
-            Answer::Entity(Entity(11)),
+            Answer::Entity(Entity::from_engine(11)),
             "kept while the altars arrive"
         );
         shared.copies.set_altars([
@@ -673,7 +688,7 @@ mod tests {
         let later = t0 + OUTSIDE_GRACE + Duration::from_secs(1);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], later),
-            Answer::Entity(Entity(11)),
+            Answer::Entity(Entity::from_engine(11)),
             "filed at its altar once it is listed"
         );
         assert!(shared.outside.is_empty());
@@ -683,12 +698,12 @@ mod tests {
             .set_altars([(1, Zone::new([0, 0, 0], [80, 80, 80]))]);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], later),
-            Answer::Entity(Entity(11))
+            Answer::Entity(Entity::from_engine(11))
         );
         let gone = later + OUTSIDE_GRACE;
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [120, 0, 10], gone),
-            Answer::Entity(Entity(10)),
+            Answer::Entity(Entity::from_engine(10)),
             "the original keeps the survivor"
         );
         assert_eq!(shared.copies.copy_count(SMITH), 1);
@@ -706,18 +721,18 @@ mod tests {
         set_altars(&mut shared, t0, [one]);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 10, [10, 0, 10], t0),
-            Answer::Entity(Entity(10))
+            Answer::Entity(Entity::from_engine(10))
         );
         let soon = t0 + Duration::from_secs(1);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [75, 0, 10], soon),
-            Answer::Entity(Entity(11)),
+            Answer::Entity(Entity::from_engine(11)),
             "kept while the altars arrive"
         );
         set_altars(&mut shared, soon, [one, two]);
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 11, [75, 0, 10], soon),
-            Answer::Entity(Entity(11))
+            Answer::Entity(Entity::from_engine(11))
         );
         assert_eq!(
             shared.copies.slot(SMITH, 2),
@@ -729,7 +744,7 @@ mod tests {
         let later = t0 + OUTSIDE_GRACE;
         assert_eq!(
             file_copy(&mut shared, SMITH, 10, 12, [100, 0, 10], later),
-            Answer::Entity(Entity(11))
+            Answer::Entity(Entity::from_engine(11))
         );
     }
 
@@ -771,15 +786,58 @@ mod tests {
     }
 
     #[test]
+    fn the_engine_s_no_entity_answers_nobody_and_any_other_names_its_entity() {
+        assert_eq!(named(0), Answer::Nobody);
+        assert_eq!(named(11), Answer::Entity(Entity::from_engine(11)));
+        assert_eq!(entity_or_nobody(Some(0)), Answer::Nobody);
+        assert_eq!(entity_or_nobody(None), Answer::Nobody);
+    }
+
+    #[test]
+    fn a_failed_read_of_a_used_staff_s_holder_says_why_it_is_not_renewed() {
+        let loader = enshwick::test::FakeHost::new()
+            .world()
+            .items()
+            .meters()
+            .install();
+        // SAFETY: the exports of this crate's `declare_mod!`.
+        let status = unsafe {
+            loader.start(
+                crate::enshwick_mod_query,
+                crate::enshwick_mod_init,
+                crate::enshwick_mod_ready,
+            )
+        };
+        assert_eq!(status, enshwick::abi::Status::OK, "{:?}", loader.logs());
+        let slot = SlotRef::new(Entity::from_engine(9), 0);
+        assert_eq!(root_of(Ok(None), slot), None);
+        assert!(
+            !loader
+                .logs()
+                .iter()
+                .any(|(_, line)| line.contains("not renewed")),
+            "a staff with no holder is skipped quietly"
+        );
+        assert_eq!(root_of(Err(WorldError::WrongThread), slot), None);
+        let logs = loader.logs();
+        assert!(
+            logs.iter()
+                .any(|(_, line)| line.starts_with("copy staff in ")
+                    && line.contains("not renewed after a use: ")),
+            "{logs:?}"
+        );
+    }
+
+    #[test]
     fn an_owed_charge_is_spent_once_even_when_the_game_stops_first() {
         let mut spent = Vec::new();
-        owe(Entity(4), 1);
-        owe(Entity(5), 2);
+        owe(Entity::from_engine(4), 1);
+        owe(Entity::from_engine(5), 2);
         // The game stops before the step's tasks run: the stop spends them.
-        settle_spends(|staff, cost| spent.push((staff.0, cost)));
+        settle_spends(|staff, cost| spent.push((staff.get(), cost)));
         assert_eq!(spent, [(4, 1), (5, 2)]);
         // The task queued after the use finds nothing left to spend.
-        settle_spends(|staff, cost| spent.push((staff.0, cost)));
+        settle_spends(|staff, cost| spent.push((staff.get(), cost)));
         assert_eq!(spent, [(4, 1), (5, 2)]);
     }
 }

@@ -301,7 +301,7 @@ mod tests {
         let chest = Guid::named("test:chest");
         let settings = format!("chest_template = \"{chest}\"\n");
         let (_, loader) = start_on(on(Side::CLIENT), settings.as_bytes());
-        loader.host_screen(Some(enshwick::Entity(512)));
+        loader.host_screen(Some(enshwick::Entity::from_engine(512)));
         // A Safe is made from the vanilla chest's template, not its item's.
         loader.read_screen_host(Guid::named("enshwick.personal-safes:safe"), [0.0; 3]);
         assert!(loader.draw_screen(HudScreenType::StorageChest).is_empty());
@@ -335,20 +335,21 @@ mod tests {
 
     #[test]
     fn a_placement_within_5_m_of_an_altar_is_refused_with_the_reason() {
-        use enshwick::abi::{AltarInfo, BuildCheck, Header};
+        use enshwick::abi::{AltarInfo, BuildCheck};
 
         let (_, loader) = start(Side::SERVER, false);
         let mut altar = AltarInfo::EMPTY;
-        altar.entity = enshwick::Entity(1);
+        altar.entity = enshwick::Entity::from_engine(1);
         altar.position = [10.0, 0.0, 0.0];
         loader.set_altars(&[altar]);
-        let at = |x: f64| BuildCheck {
-            header: Header::of::<BuildCheck>(),
-            character: enshwick::Entity(2),
-            item: enshwick::ItemId::new(7),
-            position: [x, 0.0, 0.0],
-            reason: core::ptr::null_mut(),
-            account: enshwick::PlayerKey::default(),
+        let at = |x: f64| {
+            enshwick::abi::headed!(BuildCheck {
+                character: enshwick::Entity::from_engine(2),
+                item: enshwick::ItemId::new(7),
+                position: [x, 0.0, 0.0],
+                reason: core::ptr::null_mut(),
+                account: enshwick::PlayerKey::default(),
+            })
         };
         assert_eq!(
             loader.build(&at(14.9)),

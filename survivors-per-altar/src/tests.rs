@@ -21,15 +21,15 @@ fn lookup(
 ) -> Answer {
     let beds: Vec<(Entity, Entity)> = beds
         .iter()
-        .map(|&(survivor, bed)| (Entity(survivor), Entity(bed)))
+        .map(|&(survivor, bed)| (Entity::from_engine(survivor), Entity::from_engine(bed)))
         .collect();
-    let some = |entity| (entity != 0).then_some(Entity(entity));
+    let some = |entity| (entity != 0).then_some(Entity::from_engine(entity));
     loader.survivor_lookup(survivor, some(vanilla), purpose, some(entity), cell, &beds)
 }
 
 /// The answer that names entity `entity`.
 const fn found(entity: u32) -> Answer {
-    Answer::Entity(Entity(entity))
+    Answer::Entity(Entity::from_engine(entity))
 }
 
 /// A loader that knows the item layout the copy staffs need, with
@@ -152,7 +152,7 @@ fn chances_stay_within_zero_to_one() {
 
 #[test]
 fn copies_answer_the_game_per_altar() {
-    use enshwick::abi::{AltarInfo, BedCheck, Bounds, Header, Status, SurvivorLookup};
+    use enshwick::abi::{AltarInfo, BedCheck, Bounds, Status, SurvivorLookup};
 
     let loader = host().install();
     // SAFETY: the exports of `declare_mod!` above.
@@ -162,7 +162,7 @@ fn copies_answer_the_game_per_altar() {
     let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity(entity);
+        info.entity = Entity::from_engine(entity);
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -212,14 +212,13 @@ fn copies_answer_the_game_per_altar() {
         ask(10, SurvivorLookup::CURSOR, 0, [0; 3], &[]),
         Answer::Nobody
     );
-    let check = BedCheck {
-        header: Header::of::<BedCheck>(),
+    let check = enshwick::abi::headed!(BedCheck {
         npc_id: SURVIVOR,
-        entity: Entity(10),
-        bed_id: Entity(50),
+        entity: Entity::from_engine(10),
+        bed_id: Entity::from_engine(50),
         home: [10, 0, 10],
         bed_at: [150, 0, 10],
-    };
+    });
     assert!(
         !loader.survivor_bed_check(&check),
         "a bed at another altar is cleared"
@@ -229,7 +228,7 @@ fn copies_answer_the_game_per_altar() {
 
 #[test]
 fn a_world_with_per_altar_off_answers_as_vanilla() {
-    use enshwick::abi::{AltarInfo, BedCheck, Bounds, Header, Status, SurvivorLookup};
+    use enshwick::abi::{AltarInfo, BedCheck, Bounds, Status, SurvivorLookup};
     use enshwick::events::SettingsReplaced;
 
     let loader = host().install();
@@ -240,7 +239,7 @@ fn a_world_with_per_altar_off_answers_as_vanilla() {
     let _loaded = loader.raise::<SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity(entity);
+        info.entity = Entity::from_engine(entity);
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -270,14 +269,13 @@ copy_staff_locked_chest_chance = 0.0
         Answer::Vanilla,
         "the world's per_altar is off: the game's own answer"
     );
-    let check = BedCheck {
-        header: Header::of::<BedCheck>(),
+    let check = enshwick::abi::headed!(BedCheck {
         npc_id: SURVIVOR,
-        entity: Entity(10),
-        bed_id: Entity(50),
+        entity: Entity::from_engine(10),
+        bed_id: Entity::from_engine(50),
         home: [10, 0, 10],
         bed_at: [150, 0, 10],
-    };
+    });
     assert!(loader.survivor_bed_check(&check), "vanilla keeps the bed");
     assert!(loader.faults().is_empty());
 }
@@ -360,11 +358,11 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
         host = markers
             .iter()
             .fold(
-                host.placed(setup_type, Entity(root), [0.0; 3]),
-                |host, &marker| host.component(Entity(root), marker, &[]),
+                host.placed(setup_type, Entity::from_engine(root), [0.0; 3]),
+                |host, &marker| host.component(Entity::from_engine(root), marker, &[]),
             )
-            .component(Entity(root), setup_type, &links)
-            .component(Entity(inventory), inventory_type, &stacks);
+            .component(Entity::from_engine(root), setup_type, &links)
+            .component(Entity::from_engine(inventory), inventory_type, &stacks);
     }
     let loader = host.install();
     // SAFETY: the exports of `declare_mod!` above.
@@ -378,7 +376,7 @@ fn old_staffs_are_renewed_in_built_and_loot_chests_but_not_in_drops() {
         .iter()
         .flat_map(|request| request.ops.iter())
         .filter(|op| op.kind == InventoryOp::RENEW)
-        .map(|op| u64::from(op.target.0))
+        .map(|op| u64::from(op.target.get()))
         .collect();
     renewed.sort_unstable();
     let inventories = [BUILT + 100, LOOT + 100].map(u64::from);
@@ -434,7 +432,7 @@ copy_staff_locked_chest_chance = 0.0
 
 #[test]
 fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
-    use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
+    use enshwick::abi::{AltarInfo, Bounds, Status, Summon, SurvivorLookup};
     use enshwick::survivors::WORKSHOP_SURVIVORS;
 
     let loader = host().install();
@@ -445,7 +443,7 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
     let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity(entity);
+        info.entity = Entity::from_engine(entity);
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -463,18 +461,16 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
     assert_eq!(ask(unique, 11, [120, 0, 10]), found(11));
     assert_eq!(ask(unique, 12, [220, 0, 10]), found(12));
     // The survivor's own staff aimed at altar 2.
-    let summon = Summon {
-        header: Header::of::<Summon>(),
+    let summon = enshwick::abi::headed!(Summon {
         item: ItemId::from_guid(smith.staff()),
         ammo: ItemId::new(0),
         template: smith.template(),
         target: [130, 0, 10],
         slot: 0,
-        pide: Entity(0),
+        pide: Entity::from_engine(0),
         meter: [0; 2],
         consumed: 0,
-        reserved: [0; 3],
-    };
+    });
     assert_eq!(loader.summon(&summon), 0, "allowed, nothing taken");
     assert_eq!(
         ask(SurvivorLookup::SPAWN, 0, [130, 0, 10]),
@@ -496,7 +492,7 @@ fn the_survivor_s_own_staff_moves_the_original_and_its_copy_gives_way() {
 #[test]
 fn the_survivor_s_own_staff_placing_copies_keeps_the_copy_limit() {
     use crate::points::CopyLimit;
-    use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
+    use enshwick::abi::{AltarInfo, Bounds, Status, Summon, SurvivorLookup};
     use enshwick::points::Verdict;
     use enshwick::survivors::WORKSHOP_SURVIVORS;
 
@@ -517,7 +513,7 @@ vanilla_staff_places_copies = true
     let _loaded = loader.raise::<enshwick::events::SettingsReplaced>(&());
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity(entity);
+        info.entity = Entity::from_engine(entity);
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -539,17 +535,17 @@ vanilla_staff_places_copies = true
         lookup(&loader, survivor, 10, unique, 11, [10, 0, 10], &[]),
         found(11)
     );
-    let summon = |x| Summon {
-        header: Header::of::<Summon>(),
-        item: ItemId::from_guid(smith.staff()),
-        ammo: ItemId::new(0),
-        template: smith.template(),
-        target: [x, 0, 10],
-        slot: 0,
-        pide: Entity(0),
-        meter: [0; 2],
-        consumed: 0,
-        reserved: [0; 3],
+    let summon = |x| {
+        enshwick::abi::headed!(Summon {
+            item: ItemId::from_guid(smith.staff()),
+            ammo: ItemId::new(0),
+            template: smith.template(),
+            target: [x, 0, 10],
+            slot: 0,
+            pide: Entity::from_engine(0),
+            meter: [0; 2],
+            consumed: 0,
+        })
     };
     assert_eq!(
         loader.summon(&summon(130)),
@@ -565,7 +561,7 @@ vanilla_staff_places_copies = true
 #[test]
 fn other_mods_set_the_copy_limit_and_the_charge_cost() {
     use crate::points::{ChargeCost, CopyLimit};
-    use enshwick::abi::{AltarInfo, Bounds, Header, Status, Summon, SurvivorLookup};
+    use enshwick::abi::{AltarInfo, Bounds, Status, Summon, SurvivorLookup};
     use enshwick::points::Verdict;
     use enshwick::survivors::WORKSHOP_SURVIVORS;
 
@@ -592,7 +588,7 @@ copy_staff_locked_chest_chance = 0.0
     );
     let altar = |entity, x| {
         let mut info = AltarInfo::EMPTY;
-        info.entity = Entity(entity);
+        info.entity = Entity::from_engine(entity);
         info.zone = Bounds {
             min: [x, 0, 0],
             max: [x + 80, 80, 80],
@@ -619,17 +615,17 @@ copy_staff_locked_chest_chance = 0.0
     else {
         panic!("no copy staff of the first survivor");
     };
-    let summon = |current| Summon {
-        header: Header::of::<Summon>(),
-        item: staff.item(),
-        ammo: ItemId::new(0),
-        template: smith.template(),
-        target: [130, 0, 10],
-        slot: 0,
-        pide: Entity(0),
-        meter: [current, 3],
-        consumed: 0,
-        reserved: [0; 3],
+    let summon = |current| {
+        enshwick::abi::headed!(Summon {
+            item: staff.item(),
+            ammo: ItemId::new(0),
+            template: smith.template(),
+            target: [130, 0, 10],
+            slot: 0,
+            pide: Entity::from_engine(0),
+            meter: [current, 3],
+            consumed: 0,
+        })
     };
     assert_eq!(loader.summon(&summon(3)), 0, "a new copy, one charge");
     assert!(loader.extend_point(|cost: &ChargeCost, _: &u16| {

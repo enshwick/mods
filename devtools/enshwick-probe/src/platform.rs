@@ -418,10 +418,10 @@ impl PlatformChecks {
     }
 
     fn world(&self, world: World) {
-        let Some((entity, at)) = world
-            .entities(world.transform_type())
-            .first()
-            .map(|placed| (placed.entity, placed.position))
+        let Some((entity, at)) =
+            crate::checks::listed("entities", world.entities(world.transform_type()))
+                .first()
+                .map(|placed| (placed.entity, placed.position))
         else {
             enshwick::info!("SKIP world reads: no placed entity");
             return;
@@ -446,7 +446,7 @@ impl PlatformChecks {
     /// a name the entity already had.
     fn label_own_copy(&self, world: World, entity: enshwick::Entity, at: [f64; 3]) {
         let Some(template) = world.template(entity) else {
-            enshwick::info!("SKIP label: entity {} has no template", entity.0);
+            enshwick::info!("SKIP label: entity {} has no template", entity.get());
             return;
         };
         let copy = match self.effects.spawn(template, at, Spawn::new().do_not_save()) {
@@ -458,13 +458,15 @@ impl PlatformChecks {
         };
         // A spawned entity joins the world with the game's next steps.
         self.scheduler.after(SPAWN_WAIT, move || {
-            if world.set_label(copy, "probe") && world.set_label(copy, "") {
-                pass(&format!("label set on entity {} and removed", copy.0));
-            } else {
-                fail(&format!("label on entity {}: refused", copy.0));
+            match world
+                .set_label(copy, "probe")
+                .and_then(|()| world.set_label(copy, ""))
+            {
+                Ok(()) => pass(&format!("label set on entity {} and removed", copy.get())),
+                Err(why) => fail(&format!("label on entity {}: {why}", copy.get())),
             }
             if let Err(why) = world.destroy(copy) {
-                fail(&format!("label: destroy of entity {}: {why}", copy.0));
+                fail(&format!("label: destroy of entity {}: {why}", copy.get()));
             }
         });
     }

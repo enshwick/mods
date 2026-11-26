@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use enshwick::abi::{ActionCall, Header, PlayerInfo, Side, Status, UiExtension};
+    use enshwick::abi::{ActionCall, PlayerInfo, Side, Status, UiExtension};
     use enshwick::actions::ActionTarget;
     use enshwick::content::{EngineFacts, Guid};
     use enshwick::events::WorldLoaded;
@@ -16,6 +16,11 @@ mod tests {
     use enshwick_personal_safes::access::snapshots;
     use enshwick_personal_safes::content;
     use enshwick_personal_safes::panel::{Listed, Shown};
+
+    /// An entity of the fake world by its engine id.
+    const fn entity(id: u32) -> Entity {
+        Entity::from_engine(id)
+    }
 
     /// The panel's channel as the loader names it.
     const CHANNEL: &str = "panel@1";
@@ -49,15 +54,14 @@ mod tests {
     fn player(entity: u32, key: u64, name: &str) -> PlayerInfo {
         let mut bytes = [0u8; PlayerInfo::NAME_MAX];
         bytes[..name.len()].copy_from_slice(name.as_bytes());
-        PlayerInfo {
-            header: Header::of::<PlayerInfo>(),
+        enshwick::abi::headed!(PlayerInfo {
             slot: entity,
-            entity: Entity(entity),
+            entity: Entity::from_engine(entity),
             key: PlayerKey::new(key),
             permissions: PlayerInfo::CAN_ACCESS_INVENTORIES,
             name_len: u32::try_from(name.len()).unwrap(),
             name: bytes,
-        }
+        })
     }
 
     /// The accepted interaction of `character` with `chest`, as `host`
@@ -115,7 +119,7 @@ mod tests {
         let loader = host
             .player(ann)
             .player(cat)
-            .component(Entity(10), transform, &here)
+            .component(entity(10), transform, &here)
             .net_peer(Peer::Player(PlayerKey::new(1)))
             .net_peer(Peer::Player(PlayerKey::new(3)))
             .data_dir(dir.join("worlds/world0-pp").to_str().unwrap())
@@ -131,7 +135,7 @@ mod tests {
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
 
         assert_eq!(
             loader.features(),
@@ -209,7 +213,7 @@ mod tests {
         let loader = host
             .player(player(10, 1, "Ann"))
             .player(player(12, 3, "Cat"))
-            .component(Entity(10), transform, &here)
+            .component(entity(10), transform, &here)
             .net_peer(Peer::Player(PlayerKey::new(1)))
             .data_dir(dir.join("worlds/world0-pp").to_str().unwrap())
             .world_key("world0-pp")
@@ -224,9 +228,9 @@ mod tests {
         };
         assert_eq!(status, Status::OK, "{:?}", loader.logs());
         assert_eq!(loader.raise::<WorldLoaded>(&()), 2, "the store and the mod");
-        snapshots().placed(Entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
-        snapshots().placed(Entity(701), (12, 0, 0), PlayerKey::new(1), "Ann");
-        snapshots().placed(Entity(702), (0, 0, 12), PlayerKey::new(2), "Bob");
+        snapshots().placed(entity(700), (2, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(entity(701), (12, 0, 0), PlayerKey::new(1), "Ann");
+        snapshots().placed(entity(702), (0, 0, 12), PlayerKey::new(2), "Bob");
         (loader, opened, dir)
     }
 
@@ -303,8 +307,8 @@ mod tests {
             Some((2, 0, 0)),
             "and hears the open Safe's list at once"
         );
-        assert!(snapshots().removed(Entity(700)).is_some());
-        snapshots().placed(Entity(703), (2, 0, 0), PlayerKey::new(1), "Ann");
+        assert!(snapshots().removed(entity(700)).is_some());
+        snapshots().placed(entity(703), (2, 0, 0), PlayerKey::new(1), "Ann");
         let ran = loader
             .ask_action_at(&ann, 0, "access", cat_on, near)
             .unwrap();
@@ -469,7 +473,7 @@ mod tests {
         assert!(!loader.draw_screen(HudScreenType::StorageChest).is_empty());
         // Closed and another chest opened within the grace, its Nothing still
         // on the way.
-        reopen(&loader, Entity(CHEST.0 + 1));
+        reopen(&loader, entity(CHEST.get() + 1));
         assert!(
             loader.draw_screen(HudScreenType::StorageChest).is_empty(),
             "the Safe's list was for the chest closed before"
@@ -483,7 +487,7 @@ mod tests {
     }
 
     /// The chest the tests open, an entity of the client's world.
-    const CHEST: Entity = Entity(512);
+    const CHEST: Entity = entity(512);
 
     /// Closes the open chest for a frame, then opens `chest`.
     fn reopen(loader: &enshwick::test::Installed, chest: Entity) {

@@ -732,13 +732,13 @@ mod tests {
     #[test]
     fn every_page_lists_every_action_in_the_help_s_order_with_its_default_rule() {
         let rules = Settings::default().rights.rules();
-        let guest = enshwick::world::Player {
-            entity: Entity(2),
-            slot: 0,
-            key: PlayerKey::new(9),
-            permissions: 0,
-            name: "Guest".into(),
-        };
+        let guest = enshwick::world::Player::new(
+            Entity::from_engine(2),
+            0,
+            PlayerKey::new(9),
+            0,
+            "Guest".into(),
+        );
         let pages = [
             (include_str!("../README.md"), "Everyone", "Admins"),
             (include_str!("../docs/player.md"), "Everyone", "Admins"),

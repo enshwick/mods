@@ -273,19 +273,18 @@ mod tests {
 
     #[test]
     fn each_mark_looks_for_the_values_the_settings_name_at_that_moment() {
-        use enshwick::abi::{ActionCall, Header, PlayerInfo};
+        use enshwick::abi::{ActionCall, PlayerInfo};
 
         let (status, loader) = start(Side::SERVER, "enabled = true\nmark_values = [7, 42]\n");
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        let admin = PlayerInfo {
-            header: Header::of::<PlayerInfo>(),
+        let admin = enshwick::abi::headed!(PlayerInfo {
             slot: 0,
-            entity: enshwick::Entity(2),
+            entity: enshwick::Entity::from_engine(2),
             key: enshwick::PlayerKey::new(1),
             permissions: PlayerInfo::CAN_KICK_BAN,
             name_len: 0,
             name: [0; PlayerInfo::NAME_MAX],
-        };
+        });
         let marked = |values: &str| {
             let reply = loader.ask_actions(ActionCall::RUN, &admin, 0, "mark", "");
             assert!(reply.is_some_and(|r| r.starts_with('1')));

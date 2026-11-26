@@ -165,11 +165,15 @@ pub struct Probe;
 fn living(world: enshwick::world::World) -> Vec<Entity> {
     use enshwick::world::ContainerKinds;
 
-    world
-        .containers(ContainerKinds::CHARACTERS | ContainerKinds::NPCS | ContainerKinds::ANIMALS)
-        .into_iter()
-        .map(|placed| placed.entity)
-        .collect()
+    checks::listed(
+        "containers",
+        world.containers(
+            ContainerKinds::CHARACTERS | ContainerKinds::NPCS | ContainerKinds::ANIMALS,
+        ),
+    )
+    .into_iter()
+    .map(|placed| placed.entity)
+    .collect()
 }
 
 /// Logs every event of kind `E`, or that its fields are missing.
@@ -209,7 +213,7 @@ fn vetoes(load: &mut Load<'_>, settings: &Settings) {
         let allowed = rename_allowed(&rename.text);
         enshwick::info!(
             "PASS rename filter: entity {} to {:?} by {:?}, refused: {}",
-            rename.entity.0,
+            rename.entity.get(),
             rename.text,
             rename.player.as_ref().map(|player| player.entity),
             !allowed
@@ -298,7 +302,7 @@ fn actions(
     actions.add(
         admin("vitals", "An entity's vitals").arg(entity()),
         move |request| match request.args {
-            [Value::Number(n)] => Outcome::done(vitals.vitals_of(Entity(id(*n)))),
+            [Value::Number(n)] => Outcome::done(vitals.vitals_of(Entity::from_engine(id(*n)))),
             _ => Outcome::refused(""),
         },
     )?;
@@ -306,7 +310,7 @@ fn actions(
     actions.add(
         admin("destroy", "Destroy an entity").arg(entity()),
         move |request| match request.args {
-            [Value::Number(n)] => Outcome::done(destroying.destroy(Entity(id(*n)))),
+            [Value::Number(n)] => Outcome::done(destroying.destroy(Entity::from_engine(id(*n)))),
             _ => Outcome::refused(""),
         },
     )?;
@@ -314,7 +318,7 @@ fn actions(
     actions.add(
         admin("spawn", "Spawn a copy of an entity").arg(entity()),
         move |request| match request.args {
-            [Value::Number(n)] => Outcome::done(spawning.spawn_copy(Entity(id(*n)))),
+            [Value::Number(n)] => Outcome::done(spawning.spawn_copy(Entity::from_engine(id(*n)))),
             _ => Outcome::refused(""),
         },
     )?;

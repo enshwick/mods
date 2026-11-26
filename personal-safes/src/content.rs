@@ -26,24 +26,16 @@ pub fn is_safe(item: ItemId) -> bool {
 /// The Safe item, a clone of `chest`.
 #[must_use]
 pub fn item(chest: Guid) -> NewItem {
-    NewItem {
-        name: Some(SAFE_NAME.guid()),
-        description: Some(SAFE_DESCRIPTION.guid()),
-        ..NewItem::new(SAFE, chest)
-    }
+    let mut item = NewItem::new(SAFE, chest);
+    item.name = Some(SAFE_NAME.guid());
+    item.description = Some(SAFE_DESCRIPTION.guid());
+    item
 }
 
 /// The Safe's recipe: `chest`'s, its ingredients times `cost`.
 #[must_use]
 pub const fn recipe(cost: u32, chest: Guid) -> NewRecipe {
-    NewRecipe {
-        id: SAFE_RECIPE,
-        like: chest,
-        output: SAFE.guid(),
-        output_count: 1,
-        cost,
-        workshop: None,
-    }
+    NewRecipe::new(SAFE_RECIPE, chest, SAFE.guid(), 1, cost)
 }
 
 #[cfg(test)]
@@ -82,10 +74,12 @@ mod tests {
 
     #[test]
     fn the_safe_is_a_chest_with_its_own_identity() {
+        const AT_COMPILE_TIME: NewRecipe = recipe(2, Guid([9; 16]));
         let chest = Guid([9; 16]);
         assert_ne!(SAFE.guid(), chest);
         assert_eq!(item(chest).like, chest);
         assert_eq!(recipe(3, chest).like, chest);
+        assert_eq!(AT_COMPILE_TIME.like, chest, "the recipe builds in a const");
         assert_eq!(recipe(3, chest).cost, 3);
         assert_eq!(recipe(3, chest).output, SAFE.guid());
     }

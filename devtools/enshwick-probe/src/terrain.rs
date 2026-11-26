@@ -30,11 +30,10 @@ impl TerrainChecks {
             return;
         };
         enshwick::info!("PASS terrain materials: {}", materials.len());
-        let Some([x, y, z]) = self
-            .world
-            .entities(self.world.transform_type())
-            .first()
-            .map(|placed| placed.position)
+        let Some([x, y, z]) =
+            crate::checks::listed("entities", self.world.entities(self.world.transform_type()))
+                .first()
+                .map(|placed| placed.position)
         else {
             enshwick::info!("SKIP terrain edits: no placed entity to work near");
             return;

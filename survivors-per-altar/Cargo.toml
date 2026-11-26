@@ -22,10 +22,10 @@ name = "Survivors per Altar"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-enshwick = { workspace = true, features = ["unstable"] }
+enshwick = { workspace = true }
 
 [dev-dependencies]
-enshwick = { workspace = true, features = ["test", "unstable"] }
+enshwick = { workspace = true, features = ["test"] }
 toml = { workspace = true, features = ["parse", "display", "serde"] }
 
 [lints]

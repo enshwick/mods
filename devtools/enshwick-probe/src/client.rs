@@ -187,11 +187,11 @@ mod tests {
     #[test]
     fn on_a_hosting_client_the_calls_answer_and_the_command_ends_cancelled() {
         let loader = started(FakeHost::new().side(Side::CLIENT).hosting(true));
-        loader.set_client_snapshot(ClientSnapshot {
+        loader.set_client_snapshot(enshwick::abi::headed!(ClientSnapshot {
             state: ClientSnapshot::FRESH,
             session: 1,
             ..ClientSnapshot::EMPTY
-        });
+        }));
         CHECKS.lock().unwrap().take().unwrap().run();
         for line in [
             "PASS client snapshot: ",

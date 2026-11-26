@@ -3,7 +3,7 @@
 //! the player leaves.
 
 use enshwick::Entity;
-use enshwick::abi::{DamageCheck, Header, KnowledgeInfo, PlayerData};
+use enshwick::abi::{DamageCheck, KnowledgeInfo, PlayerData};
 use enshwick::events::PlayerLeft;
 use enshwick::knowledge::KnowledgeId;
 
@@ -11,16 +11,15 @@ use super::game::{HEALTH, MAP, ann, bob, health, run, scratch, server};
 
 /// A fall that takes `total` health from `target`.
 fn fall(target: Entity, total: f32) -> DamageCheck {
-    DamageCheck {
-        header: Header::of::<DamageCheck>(),
+    enshwick::abi::headed!(DamageCheck {
         cause: DamageCheck::FALL_DAMAGE,
         target,
-        source: Entity(0),
-        attacker: Entity(0),
+        source: Entity::from_engine(0),
+        attacker: Entity::from_engine(0),
         total,
         amount_count: 0,
         amounts: core::ptr::null_mut(),
-    }
+    })
 }
 
 #[test]
@@ -143,12 +142,11 @@ fn god_mode_cancels_damage_to_its_player_only_until_they_leave() {
     );
     assert_eq!(loader.damage(fall(bob.entity, 40.0), &mut []).total, 0.0);
     assert_eq!(loader.damage(fall(ann.entity, 40.0), &mut []).total, 40.0);
-    let left = PlayerData {
-        header: Header::of::<PlayerData>(),
+    let left = enshwick::abi::headed!(PlayerData {
         slot: bob.slot,
         entity: bob.entity,
         key: bob.key,
-    };
+    });
     assert!(loader.raise::<PlayerLeft>(&left) >= 1);
     assert_eq!(loader.damage(fall(bob.entity, 40.0), &mut []).total, 40.0);
 }
@@ -167,15 +165,14 @@ fn god_mode_turns_off_on_request() {
 
 /// A player's knowledge `id` of `kind` at `value`, as Bob holds it.
 fn known(id: u32, kind: u8, value: u32) -> (Option<Entity>, KnowledgeInfo) {
-    let info = KnowledgeInfo {
-        header: Header::of::<KnowledgeInfo>(),
+    let info = enshwick::abi::headed!(KnowledgeInfo {
         id: KnowledgeId::new(id),
         kind,
         scope: KnowledgeInfo::PLAYER,
         reserved: 0,
         value,
         flags: 0,
-    };
+    });
     (Some(bob().entity), info)
 }
 

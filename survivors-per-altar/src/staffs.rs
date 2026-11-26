@@ -109,16 +109,8 @@ fn survivor_name(staff: &Staff, language: Language) -> String {
 /// Adds every copy staff and its texts; a full staff holds `charges`.
 pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<(), Off> {
     load.add_texts(texts, &[(texts::COPY_FULL_CHARGES, FULL_CHARGES)])?;
-    let meter = FuelSetup {
-        template: STAFF_ENTITY,
-        max_fuel_charges: charges,
-        start: charges,
-    };
-    let full = ImpactUiValue {
-        loca_id: FULL_CHARGES.guid(),
-        value: i32::from(charges),
-        value_format: StatFormat::Number,
-    };
+    let meter = FuelSetup::new(STAFF_ENTITY, charges, charges);
+    let full = ImpactUiValue::new(FULL_CHARGES.guid(), i32::from(charges), StatFormat::Number);
     for staff in staffs() {
         let vanilla = staff.survivor.staff();
         for (template_key, tag) in [
@@ -135,19 +127,14 @@ pub(crate) fn add(load: &mut Load<'_>, texts: &Texts, charges: u16) -> Result<()
                 load.add_text(tag, language, &fill(template, &survivor))?;
             }
         }
-        load.add_item(NewItem {
-            name: Some(staff.name.guid()),
-            description: Some(staff.description.guid()),
-            meter: Some(meter),
-            stats: vec![full],
-            icon: Some(Icon {
-                id: staff.icon,
-                like: vanilla,
-                pixels: Pixels::Tint(ICON_TINT),
-            }),
-            debug_name: format!("SurvivorsPerAltar_CopyStaff_{}", staff.key()),
-            ..NewItem::new(staff.copy, vanilla)
-        })?;
+        let mut item = NewItem::new(staff.copy, vanilla);
+        item.name = Some(staff.name.guid());
+        item.description = Some(staff.description.guid());
+        item.meter = Some(meter);
+        item.stats = vec![full];
+        item.icon = Some(Icon::new(staff.icon, vanilla, Pixels::Tint(ICON_TINT)));
+        item.debug_name = format!("SurvivorsPerAltar_CopyStaff_{}", staff.key());
+        load.add_item(item)?;
     }
     Ok(())
 }

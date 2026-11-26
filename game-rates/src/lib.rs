@@ -289,12 +289,11 @@ mod tests {
     use super::*;
 
     fn comfort(value: i32) -> enshwick::abi::Comfort {
-        enshwick::abi::Comfort {
-            header: enshwick::abi::Header::of::<enshwick::abi::Comfort>(),
+        enshwick::abi::headed!(enshwick::abi::Comfort {
             category: 1,
             value,
             position: [0.0; 3],
-        }
+        })
     }
 
     #[test]

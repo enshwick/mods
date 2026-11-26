@@ -112,7 +112,7 @@ fn answers() -> &'static ArcSwap<Vec<Size>> {
 pub(crate) fn resize(zone: &mut AltarZone) {
     let answers = answers().load();
     let Some(size) = answers
-        .binary_search_by_key(&zone.altar.0, |size| size.altar)
+        .binary_search_by_key(&zone.altar.get(), |size| size.altar)
         .ok()
         .and_then(|i| answers.get(i))
     else {
@@ -188,7 +188,7 @@ fn input(altars: Vec<enshwick::altars::Altar>) -> (Input, usize) {
                 .iter()
                 .map(|zone| CellBox::new(zone.min, zone.max))
                 .collect();
-            (altar.entity.0, levels)
+            (altar.entity.get(), levels)
         })
         .collect();
     (input, unleveled)
@@ -348,14 +348,16 @@ mod tests {
     #[test]
     fn altars_without_a_flame_level_are_left_out_and_counted() {
         let cells = CellBox::new([0, 0, 0], [80, 80, 80]);
-        let listed = |entity, tilted, levels: Vec<CellBox>| enshwick::altars::Altar {
-            entity: Entity(entity),
-            level: u8::try_from(levels.len()).unwrap_or(u8::MAX),
-            tilted,
-            position: [0.0; 3],
-            zone: cells,
-            levels,
-            template: None,
+        let listed = |entity, tilted, levels: Vec<CellBox>| {
+            let level = u8::try_from(levels.len()).unwrap_or(u8::MAX);
+            enshwick::altars::Altar::new(
+                Entity::from_engine(entity),
+                level,
+                tilted,
+                [0.0; 3],
+                cells,
+                levels,
+            )
         };
         let (input, unleveled) = input(vec![
             listed(1, false, vec![cells]),

@@ -1,4 +1,4 @@
-use enshwick::abi::{Header, PlayerInfo, Side, Status, UiMarker};
+use enshwick::abi::{PlayerInfo, Side, Status, UiMarker};
 use enshwick::config::Config as _;
 use enshwick::content::EngineFacts as _;
 use enshwick::i18n::{Language, Texts};
@@ -20,15 +20,14 @@ fn start(host: FakeHost) -> enshwick::test::Installed {
 }
 
 fn player(entity: u32, key: u64) -> PlayerInfo {
-    PlayerInfo {
-        header: Header::of::<PlayerInfo>(),
+    enshwick::abi::headed!(PlayerInfo {
         slot: entity,
-        entity: Entity(entity),
+        entity: Entity::from_engine(entity),
         key: PlayerKey::new(key),
         permissions: 0,
         name_len: 0,
         name: [0; PlayerInfo::NAME_MAX],
-    }
+    })
 }
 
 /// A current transform at `x` metres along, laid out as `host` places it.
@@ -58,11 +57,11 @@ fn server(holders: &[(Fact, f64)]) -> FakeHost {
     let mut host = host
         .player(player(10, 1))
         .player(player(11, 2))
-        .component(Entity(10), transform, &here)
-        .component(Entity(11), transform, &here)
+        .component(Entity::from_engine(10), transform, &here)
+        .component(Entity::from_engine(11), transform, &here)
         .net_peer(Peer::Player(PlayerKey::new(1)));
     for (i, (marker, x)) in markers.into_iter().enumerate() {
-        let entity = Entity(100 + u32::try_from(i).unwrap());
+        let entity = Entity::from_engine(100 + u32::try_from(i).unwrap());
         host = host
             .placed(setup, entity, [x, 0.0, 0.0])
             .component(entity, marker, &[]);
@@ -254,11 +253,30 @@ fn a_server_with_no_player_running_the_mod_sends_nothing() {
     let (setup, loot) = (hash(facts::INVENTORY_SETUP), hash(facts::LOOT_FILL));
     let loader = start(
         host.player(player(10, 1))
-            .placed(setup, Entity(100), [1.0, 0.0, 0.0])
-            .component(Entity(100), loot, &[]),
+            .placed(setup, Entity::from_engine(100), [1.0, 0.0, 0.0])
+            .component(Entity::from_engine(100), loot, &[]),
     );
     assert_eq!(loader.tick(EVERY), 1);
     assert!(sent(&loader).is_empty());
+}
+
+#[test]
+fn a_server_that_cannot_list_containers_says_why_in_the_log() {
+    let host = FakeHost::new().world().inventory();
+    let transform = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
+    let here = at(&host, 0.0);
+    let loader = start(
+        host.player(player(10, 1))
+            .component(Entity::from_engine(10), transform, &here)
+            .net_peer(Peer::Player(PlayerKey::new(1))),
+    );
+    assert_eq!(loader.tick(EVERY), 1);
+    let logs = loader.logs();
+    assert!(
+        logs.iter()
+            .any(|(_, line)| line.starts_with("no marks sent: containers not listed: ")),
+        "{logs:?}"
+    );
 }
 
 fn chest_at(x: f32) -> Mark {

@@ -35,7 +35,7 @@ impl AffixChecks {
     pub(crate) fn new(load: &mut Load<'_>) -> Result<Self, Off> {
         let world = load.world()?;
         let mut kinds = Vec::new();
-        for (id, _) in builtin::ALL {
+        for &(id, _) in builtin::ALL {
             kinds.push((id.to_string(), load.open_stat(id)?));
         }
         let lucky = load.define_stat(LUCKY, &StatDef::additive().range(0.0, 100.0))?;
@@ -85,11 +85,9 @@ impl AffixChecks {
         // The API's inventory reader, not a std lock.
         // ast-grep-ignore: lock-through-relock
         let reader = self.inventories.read();
-        let found = self
-            .world
-            .containers(ContainerKinds::ALL)
+        let found = crate::checks::listed("containers", self.world.containers(ContainerKinds::ALL))
             .iter()
-            .flat_map(|placed| reader.slots(placed.entity))
+            .flat_map(|placed| reader.slots(placed.entity).unwrap_or_default())
             .filter_map(|slot| ItemInstance::of(&slot))
             .find(|item| {
                 self.inventories.item_info(item.item).is_some_and(|info| {
@@ -172,8 +170,11 @@ impl AffixChecks {
         // The API's inventory reader, not a std lock.
         // ast-grep-ignore: lock-through-relock
         let reader = self.inventories.read();
-        let worn: Vec<ItemInstance> = reader
-            .slots(player.entity)
+        let slots = match reader.slots(player.entity) {
+            Ok(slots) => slots,
+            Err(why) => return format!("worn items not read: {why}"),
+        };
+        let worn: Vec<ItemInstance> = slots
             .iter()
             .filter(|slot| slot.category == InventoryCategory::EQUIPMENT)
             .filter_map(ItemInstance::of)

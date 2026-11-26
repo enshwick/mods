@@ -43,8 +43,9 @@ fn denied_at(zones: &[(Shape, u32)], at: [f64; 3], margin: f64) -> u32 {
 /// The permissions of `bits`, as the platform takes them.
 fn listed(bits: u32) -> Vec<PlayerPermissions> {
     PlayerPermissions::ALL
-        .into_iter()
+        .iter()
         .filter(|permission| bits & permission.bit() != 0)
+        .copied()
         .collect()
 }
 
@@ -208,13 +209,13 @@ mod tests {
     #[test]
     fn the_zone_builders_rule_counts_what_a_zone_took_from_the_group() {
         let base = PlayerPermissions::CanEditBase;
-        let player = Player {
-            entity: Entity(11),
-            slot: 1,
-            key: PlayerKey::new(2),
-            permissions: 0,
-            name: "Bob".into(),
-        };
+        let player = Player::new(
+            Entity::from_engine(11),
+            1,
+            PlayerKey::new(2),
+            0,
+            "Bob".into(),
+        );
         let rule = Who::Permission(base);
         assert!(!admitted(rule, &player, 0));
         assert!(admitted(rule, &player, base.bit()), "the zone took it");

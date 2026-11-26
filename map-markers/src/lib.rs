@@ -116,12 +116,16 @@ fn send_marks(world: World, channel: Channel<Vec<Mark>>) {
         (Kind::Resource, &wanted.resources, ContainerKinds::PLANTS),
     ] {
         if on.load(Ordering::Relaxed) {
-            found.extend(
-                world
-                    .containers(of)
-                    .into_iter()
-                    .map(|placed| (kind, placed.position)),
-            );
+            match world.containers(of) {
+                Ok(placed) => found.extend(placed.into_iter().map(|p| (kind, p.position))),
+                Err(error) => {
+                    enshwick::warn_every!(
+                        Duration::from_secs(60),
+                        "no marks sent: containers not listed: {error}"
+                    );
+                    return;
+                }
+            }
         }
     }
     let radius = f64::from_bits(wanted.radius.load(Ordering::Relaxed));

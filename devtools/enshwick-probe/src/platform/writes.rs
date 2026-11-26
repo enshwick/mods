@@ -166,11 +166,10 @@ impl Writer {
     /// Places a chest in the air above the first entity, then fills,
     /// empties and undoes it.
     fn place(self) {
-        let Some([x, y, z]) = self
-            .world
-            .entities(self.world.transform_type())
-            .first()
-            .map(|placed| placed.position)
+        let Some([x, y, z]) =
+            crate::checks::listed("entities", self.world.entities(self.world.transform_type()))
+                .first()
+                .map(|placed| placed.position)
         else {
             enshwick::info!("SKIP transaction: no placed entity");
             return;
@@ -205,12 +204,12 @@ impl Writer {
                 let status = settled.status.map_or_else(String::new, |s| format!("{s:?}"));
                 pass(&format!(
                     "transaction status {status}, its entities name chest {} where it was placed",
-                    chest.0
+                    chest.get()
                 ));
             } else {
                 fail(&format!(
                     "transaction entities name {} at {found:?}, not the chest placed at {spot:?}",
-                    chest.0
+                    chest.get()
                 ));
             }
             if let Some(inventories) = self.inventories {
@@ -256,9 +255,9 @@ impl Writer {
             let _ticket = inventories.submit(&take_one, move |took| {
                 let (took, left) = (took.is_committed(), inventories.count(chest, self.chest_item));
                 let line = format!(
-                    "inventory submit: give hidden in the UI committed {gave}, chest held {held}; take committed {took}, chest holds {left}"
+                    "inventory submit: give hidden in the UI committed {gave}, chest held {held:?}; take committed {took}, chest holds {left:?}"
                 );
-                if gave && held == 1 && took && left == 0 {
+                if gave && held == Ok(1) && took && left == Ok(0) {
                     pass(&line);
                 } else {
                     fail(&line);
@@ -285,7 +284,7 @@ impl Writer {
                     None => pass("transaction undo: status Undone, the chest gone"),
                     Some(at) => fail(&format!(
                         "transaction undo: status Undone, but chest {} still stands at {at:?}",
-                        chest.0
+                        chest.get()
                     )),
                 },
                 Some(false) => fail(&format!(

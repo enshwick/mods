@@ -94,7 +94,7 @@ impl SaveChecks {
 
 #[cfg(test)]
 mod tests {
-    use enshwick::abi::{Header, Side, Status};
+    use enshwick::abi::{Side, Status};
     use enshwick::{Load, Mod, Off};
 
     use super::*;
@@ -132,14 +132,13 @@ mod tests {
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
-        loader.set_save_info(Some(enshwick::abi::SaveInfo {
-            header: Header::of::<enshwick::abi::SaveInfo>(),
+        loader.set_save_info(Some(enshwick::abi::headed!(enshwick::abi::SaveInfo {
             world: Guid([1; 16]),
             saved_at: 60,
             size: 10,
             backups: 0,
             reserved: 0,
-        }));
+        })));
         for _ in 0..2 {
             let _handled = loader.raise::<WorldSaving>(&());
             let _handled = loader.raise::<WorldSaved>(&());

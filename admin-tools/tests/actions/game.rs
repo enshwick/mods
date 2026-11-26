@@ -109,7 +109,7 @@ pub(crate) fn health(current: i32, max: i32) -> Vec<u8> {
 pub(crate) fn player(entity: u32, key: u64, name: &str, permissions: u32) -> PlayerInfo {
     let mut info = enshwick::abi::headed!(PlayerInfo {
         slot: entity,
-        entity: Entity::from_engine(entity),
+        entity: Entity::from_raw(entity).unwrap(),
         key: PlayerKey::new(key),
         permissions,
         name_len: u32::try_from(name.len()).unwrap(),
@@ -309,8 +309,8 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, build: B
         let looks = stacks(&host, &[(GLIDER, 1)]);
         host = host
             .component(ann().entity, setup, &links)
-            .component(Entity::from_engine(BACKPACK), inventory, &backpack)
-            .component(Entity::from_engine(LOOKS), inventory, &looks);
+            .component(Entity::from_raw(BACKPACK).unwrap(), inventory, &backpack)
+            .component(Entity::from_raw(LOOKS).unwrap(), inventory, &looks);
     }
     let (waypoint, marked) = waypoint(&host);
     host = host.component(ann().entity, waypoint, &marked);

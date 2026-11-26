@@ -11,9 +11,6 @@ note: >-
 ignores:
   - "devtools/**"
   - "tools/**"
-  # These move to `Entity::from_raw` in a change of their own; then these lines go.
-  - "admin-tools/src/inventory.rs"
-  - "admin-tools/tests/actions/**"
 rule:
   any:
     - pattern: Entity::from_engine($$$ARGS)

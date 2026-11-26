@@ -14,8 +14,6 @@ fn fall(target: Entity, total: f32) -> DamageCheck {
     enshwick::abi::headed!(DamageCheck {
         cause: DamageCheck::FALL_DAMAGE,
         target,
-        source: Entity::from_engine(0),
-        attacker: Entity::from_engine(0),
         total,
         amount_count: 0,
         amounts: core::ptr::null_mut(),

@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn the_enemy_comes_once_a_hosted_game_ten_metres_ahead_of_its_first_player_facing_them() {
-        let (ann, key) = (Entity::from_engine(5), PlayerKey::new(7));
+        let (ann, key) = (Entity::from_raw(5).unwrap(), PlayerKey::new(7));
         let host = FakeHost::new().world().inventory_requests();
         let current = host.hash(facts::CURRENT_TRANSFORM.id()).unwrap();
         let typed = fnv1a32(keen("ecs::CurrentTransform").as_bytes());
@@ -390,7 +390,7 @@ mod tests {
             &[],
         );
 
-        join(&loader, Entity::from_engine(6), PlayerKey::new(8));
+        join(&loader, Entity::from_raw(6).unwrap(), PlayerKey::new(8));
         let _ran = loader.tick(STEP);
         assert!(loader.spawns().is_empty(), "the first player left");
         join(&loader, ann, key);
@@ -427,7 +427,7 @@ mod tests {
         let taught: Vec<_> = taught.iter().map(|&(who, id, ..)| (who, id)).collect();
         assert_eq!(
             taught,
-            [Entity::from_engine(6), ann, ann, ann].map(|who| (Some(who), recipe)),
+            [Entity::from_raw(6).unwrap(), ann, ann, ann].map(|who| (Some(who), recipe)),
             "the chest's recipe at each join"
         );
     }
@@ -436,7 +436,7 @@ mod tests {
     fn ann_info() -> PlayerInfo {
         let mut info = enshwick::abi::headed!(PlayerInfo {
             slot: 0,
-            entity: Entity::from_engine(5),
+            entity: Entity::from_raw(5).unwrap(),
             key: PlayerKey::new(7),
             permissions: 0,
             name_len: 3,

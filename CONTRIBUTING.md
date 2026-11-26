@@ -118,8 +118,9 @@ the mods are built for, such as `v1.0.0-alpha.14`:
   are refused, and shows both in the run's summary.
 - `release-pr` opens the release pull request for the mods of the release
   set that changed and closes their changelogs with `cargo xtask close`.
-- `release` makes one prerelease for each mod of the release set whose
-  version has no finished release yet, with the notes of `cargo xtask notes`. A job per released mod
+- `release` makes one release for each mod of the release set whose
+  version has no finished release yet, a prerelease when the loader is an
+  alpha, with the notes of `cargo xtask notes`. A job per released mod
   then builds only that mod from its tag and attaches its zip, PDB, SBOM,
   `SHA256SUMS` and build provenance, and the loader release's own
   `cargo-enshwick`, checked against its build provenance, reads each
@@ -129,7 +130,8 @@ the mods are built for, such as `v1.0.0-alpha.14`:
   files counts as not released yet, and its notes come from its tag.
 
 `cargo xtask notes` opens each mod's notes with the alpha warning in
-English, names the loader alpha and gives the mod's section of its version.
+English when the loader is an alpha, names the loader release and gives the
+mod's section of its version.
 It refuses a mod still at its placeholder version (`0.0.0-dev`), a mod with
 changes under Unreleased or without its version's section, a released mod
 built for another loader than the one `[workspace.metadata.release]` names,
@@ -137,6 +139,10 @@ a section whose `Built for Enshwick` line names another loader, and a
 loader no release of the platform tags. With `--pinned`, as `release` and
 `build` run it, it also refuses a platform pinned to another loader.
 `release` stops on a refusal before it tags anything.
+
+The mods release after the loader. For the first release on Enshwick 1.0,
+`loader` under `[workspace.metadata.release]` moves to the loader's 1.0 tag
+once that release exists, and `release-pr` and `release` run with that tag.
 
 A new mod is added in two places: the `members` list of the root
 `Cargo.toml` and a `[[package]]` entry in `release-plz.toml`. A mod made

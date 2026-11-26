@@ -1,6 +1,6 @@
 //! `cargo xtask notes`: the release notes of a mod, written before it is
-//! released: the warning that anything may change before 1.0, the loader
-//! alpha the mod builds on, how to install it, and the hand-written section
+//! released: on a loader alpha the warning that anything may change before
+//! 1.0, the loader release the mod builds on, how to install it, and the hand-written section
 //! of its version in the mod's `CHANGELOG.md`. A mod is about to be released
 //! when its tag `<package>-v<version>` is not on the remote yet; with
 //! `--unfinished`, also when its tag has no GitHub release with every file
@@ -84,7 +84,7 @@ const MAX_BODY: usize = 125_000;
 /// files there are the mods a release takes, so a run that refuses one
 /// writes none. With either flag, a released mod built for another loader
 /// than the one `[workspace.metadata.release]` names is refused too: a
-/// loader alpha releases every mod of the release set.
+/// loader release releases every mod of the release set.
 pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let root = root();
     let out = args
@@ -141,6 +141,7 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
                 "package_name": package.name,
                 "version": package.version,
                 "loader": loader,
+                "prerelease": prerelease(loader),
                 "title": title(&config, package)?,
                 "files": built_files(&package.name),
                 "sums": SUMS,
@@ -553,7 +554,7 @@ fn loader_tag(rev: &str) -> Result<String, String> {
     let listing = git(&["ls-remote", "--tags", PLATFORM, "refs/tags/v*"])?;
     release_at(&listing, rev).map(str::to_owned).ok_or_else(|| {
         format!(
-            "{API} is pinned to {rev}, which no loader release tags; pin the loader alpha the mods are built for with `cargo xtask pin <loader tag>`"
+            "{API} is pinned to {rev}, which no loader release tags; pin the loader release the mods are built for with `cargo xtask pin <loader tag>`"
         )
     })
 }
@@ -613,6 +614,12 @@ fn version_of(tag: &str) -> Option<VersionKey<'_>> {
     Some((major, minor, patch, pre.is_none(), identifiers))
 }
 
+/// Whether a mod built for the `loader` tag warns and is a GitHub
+/// prerelease: from 1.0 a release keeps the API and ABI of its major.
+fn prerelease(loader: &str) -> bool {
+    loader.contains('-')
+}
+
 /// The release notes of `package` built for the `loader` tag; refused when
 /// its `changes` name another loader, which only a hand edit leaves, since
 /// `built-for` refuses to move on while such a version waits.
@@ -623,8 +630,13 @@ fn notes(package: &str, loader: &str, changes: &str) -> Result<String, String> {
             "{package}: its changes say built for Enshwick {named}, but it builds on {loader}; name v{named} in [workspace.metadata.release] to release it on that loader, or correct the line"
         ));
     }
+    let warning = if prerelease(loader) {
+        format!("{ALPHA_WARNING}\n")
+    } else {
+        String::new()
+    };
     let text = format!(
-        "{ALPHA_WARNING}\nBuilt for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
+        "{warning}Built for Enshwick {version}. Extract [enshwick.zip]({PLATFORM}/releases/tag/{loader}) of that release and then `{package}.zip` into the folder that holds `enshrouded.exe` or `enshrouded_server.exe`.\n\n## What's new\n\n{changes}\n"
     );
     let length = text.chars().count();
     if length > MAX_BODY {
@@ -927,6 +939,19 @@ mod tests {
         ));
         assert!(text.contains("`enshwick-game-rates.zip`"));
         assert!(text.ends_with("## What's new\n\n- More loot.\n"));
+    }
+
+    #[test]
+    fn notes_built_for_a_loader_release_carry_no_alpha_warning() {
+        let text = notes("enshwick-game-rates", "v1.0.0", "- More loot.").unwrap();
+        assert!(text.starts_with("Built for Enshwick 1.0.0. Extract"));
+        assert!(!text.contains("alpha"));
+    }
+
+    #[test]
+    fn only_a_mod_built_for_a_loader_alpha_is_a_prerelease() {
+        assert!(prerelease("v1.0.0-alpha.12"));
+        assert!(!prerelease("v1.0.0"));
     }
 
     #[test]

@@ -6,10 +6,9 @@
 //! CI runs it as a step of its own rather than inside `cargo xtask check`.
 
 use std::path::PathBuf;
-use std::process::Command;
 
-use crate::check::mod_rules::platform_revs;
-use crate::commands::notes::{MANIFEST, PLATFORM, git, pinned_rev};
+use crate::check::mod_rules::{full_commit, platform_revs};
+use crate::commands::notes::{MANIFEST, PLATFORM, git, git_answer};
 use crate::{metadata, say};
 
 /// The platform branch every pin is a commit of.
@@ -33,17 +32,15 @@ pub(crate) struct Args {
 pub(crate) fn run(args: &Args) -> Result<bool, String> {
     let root = PathBuf::from(metadata()?["workspace_root"].as_str().unwrap_or("."));
     let path = root.join(MANIFEST);
-    let manifest: toml::Table = std::fs::read_to_string(&path)
-        .map_err(|e| format!("{}: {e}", path.display()))?
-        .parse()
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    let revs = platform_revs(&manifest);
-    let base = match &args.base {
-        Some(base) => pinned_rev(&git(&["show", &format!("{base}:{MANIFEST}")])?),
-        None => None,
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let revs = revs_of(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    let bases = match &args.base {
+        Some(base) => revs_of(&git(&["show", &format!("{base}:{MANIFEST}")])?)
+            .map_err(|e| format!("{base}:{MANIFEST}: {e}"))?,
+        None => Vec::new(),
     };
-    let history = History::fetch(revs.iter().chain(&base))?;
-    let problems = problems(&revs, base.as_deref(), |a, b| history.is_ancestor(a, b))?;
+    let history = History::fetch(revs.iter().chain(&bases).filter(|rev| full_commit(rev)))?;
+    let problems = problems(&revs, &bases, |a, b| history.is_ancestor(a, b))?;
     for problem in &problems {
         say(problem);
     }
@@ -55,26 +52,46 @@ pub(crate) fn run(args: &Args) -> Result<bool, String> {
     Ok(problems.is_empty())
 }
 
-/// What is wrong with the pinned `revs`, given the `base` branch's pin and
-/// whether one commit is an ancestor of another (a commit of itself).
+/// Each platform commit the manifest `text` pins, once.
+fn revs_of(text: &str) -> Result<Vec<String>, String> {
+    let manifest: toml::Table = text.parse().map_err(|e| format!("{e}"))?;
+    Ok(platform_revs(&manifest))
+}
+
+/// What is wrong with the pinned `revs`, given the `bases` the branch the
+/// change merges into pins and whether one commit is an ancestor of another
+/// (a commit of itself). A base pin that is itself off `main` is the fault
+/// the change may be fixing, so a pin need not descend from it.
 fn problems(
     revs: &[String],
-    base: Option<&str>,
+    bases: &[String],
     is_ancestor: impl Fn(&str, &str) -> Result<bool, String>,
 ) -> Result<Vec<String>, String> {
+    let mut on_main = Vec::new();
+    for base in bases.iter().filter(|base| full_commit(base)) {
+        if is_ancestor(base, MAIN)? {
+            on_main.push(base);
+        }
+    }
     let mut problems = Vec::new();
     for rev in revs {
+        if !full_commit(rev) {
+            problems.push(format!(
+                "the platform is pinned to {rev}, which is not a full commit hash; pin a commit of its {MAIN} by its 40-character hash"
+            ));
+            continue;
+        }
         if !is_ancestor(rev, MAIN)? {
             problems.push(format!(
                 "the platform is pinned to {rev}, which is not on its {MAIN}; once its pull request merges, pin the commit it merged as"
             ));
         }
-        if let Some(base) = base
-            && !is_ancestor(base, rev)?
-        {
-            problems.push(format!(
-                "the platform pin moves back from {base} to {rev}, which does not descend from it: the change read a stale {MAIN}; pin its newest commit"
-            ));
+        for base in &on_main {
+            if !is_ancestor(base, rev)? {
+                problems.push(format!(
+                    "the platform pin moves back from {base} to {rev}, which does not descend from it: the change read a stale {MAIN}; pin its newest commit"
+                ));
+            }
         }
     }
     Ok(problems)
@@ -118,23 +135,13 @@ impl History {
 
     /// Whether `ancestor` is `descendant` or one of its ancestors.
     fn is_ancestor(&self, ancestor: &str, descendant: &str) -> Result<bool, String> {
-        let status = Command::new("git")
-            .args([
-                &self.git_dir(),
-                "merge-base",
-                "--is-ancestor",
-                ancestor,
-                descendant,
-            ])
-            .status()
-            .map_err(|error| format!("running git: {error}"))?;
-        match status.code() {
-            Some(0) => Ok(true),
-            Some(1) => Ok(false),
-            _ => Err(format!(
-                "git merge-base --is-ancestor {ancestor} {descendant}: {status}"
-            )),
-        }
+        git_answer(&[
+            &self.git_dir(),
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+        ])
     }
 }
 
@@ -148,16 +155,20 @@ impl Drop for History {
 mod tests {
     use super::*;
 
-    /// A platform whose `main` is `a`, then `b`, with `side` branching off
-    /// `a`: each commit with its ancestors.
+    /// The platform's `main` is `A`, then `B`; `SIDE` branches off `A`.
+    const A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const SIDE: &str = "cccccccccccccccccccccccccccccccccccccccc";
+
+    /// Each commit of that platform with its ancestors.
     fn is_ancestor(ancestor: &str, descendant: &str) -> Result<bool, String> {
-        if !["a", "b", "side"].contains(&ancestor) {
+        if ![A, B, SIDE].contains(&ancestor) {
             return Err(format!("no commit {ancestor}"));
         }
         let line: &[&str] = match descendant {
-            MAIN | "b" => &["a", "b"],
-            "a" => &["a"],
-            "side" => &["a", "side"],
+            MAIN | B => &[A, B],
+            A => &[A],
+            SIDE => &[A, SIDE],
             _ => return Err(format!("no commit {descendant}")),
         };
         Ok(line.contains(&ancestor))
@@ -169,44 +180,38 @@ mod tests {
 
     #[test]
     fn a_pin_on_main_that_stays_or_moves_forward_passes() {
-        assert_eq!(
-            problems(&revs(&["b"]), Some("a"), is_ancestor).unwrap(),
-            Vec::<String>::new()
-        );
-        assert_eq!(
-            problems(&revs(&["b"]), Some("b"), is_ancestor).unwrap(),
-            Vec::<String>::new()
-        );
-        assert_eq!(
-            problems(&revs(&["a"]), None, is_ancestor).unwrap(),
-            Vec::<String>::new()
-        );
+        for (rev, bases) in [(B, &[A][..]), (B, &[B]), (A, &[])] {
+            assert_eq!(
+                problems(&revs(&[rev]), &revs(bases), is_ancestor).unwrap(),
+                Vec::<String>::new()
+            );
+        }
     }
 
     #[test]
     fn a_pin_off_main_is_refused_naming_the_commit() {
         assert_eq!(
-            problems(&revs(&["side"]), Some("a"), is_ancestor).unwrap(),
-            [
-                "the platform is pinned to side, which is not on its main; once its pull request merges, pin the commit it merged as"
-            ]
+            problems(&revs(&[SIDE]), &revs(&[A]), is_ancestor).unwrap(),
+            [format!(
+                "the platform is pinned to {SIDE}, which is not on its main; once its pull request merges, pin the commit it merged as"
+            )]
         );
     }
 
     #[test]
     fn a_pin_moving_back_to_an_older_main_commit_is_refused() {
         assert_eq!(
-            problems(&revs(&["a"]), Some("b"), is_ancestor).unwrap(),
-            [
-                "the platform pin moves back from b to a, which does not descend from it: the change read a stale main; pin its newest commit"
-            ]
+            problems(&revs(&[A]), &revs(&[B]), is_ancestor).unwrap(),
+            [format!(
+                "the platform pin moves back from {B} to {A}, which does not descend from it: the change read a stale main; pin its newest commit"
+            )]
         );
     }
 
     #[test]
-    fn a_pin_beside_the_base_s_is_refused_both_ways() {
+    fn a_pin_on_a_side_branch_of_the_base_pin_is_refused_both_ways() {
         assert_eq!(
-            problems(&revs(&["side"]), Some("b"), is_ancestor)
+            problems(&revs(&[SIDE]), &revs(&[B]), is_ancestor)
                 .unwrap()
                 .len(),
             2
@@ -214,7 +219,44 @@ mod tests {
     }
 
     #[test]
+    fn moving_from_a_base_pin_off_main_to_a_main_commit_passes() {
+        assert_eq!(
+            problems(&revs(&[B]), &revs(&[SIDE]), is_ancestor).unwrap(),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn a_short_hash_or_branch_name_is_refused_without_asking_git() {
+        let never = |a: &str, b: &str| Err(format!("asked git about {a} and {b}"));
+        let problems = problems(&revs(&["21fed9fb", MAIN]), &revs(&[MAIN]), never).unwrap();
+        assert_eq!(problems.len(), 2);
+        assert!(
+            problems
+                .iter()
+                .all(|problem| problem.contains("not a full commit hash"))
+        );
+    }
+
+    #[test]
+    fn every_platform_pin_of_the_base_manifest_counts() {
+        let base = format!(
+            "[workspace.dependencies]\n\
+             enshwick-macros = {{ git = \"{PLATFORM}\", rev = \"{A}\" }}\n\
+             [patch.'{PLATFORM}']\n\
+             enshwick = {{ git = \"{PLATFORM}\", rev = \"{B}\" }}\n"
+        );
+        assert_eq!(revs_of(&base).unwrap(), [A, B]);
+    }
+
+    #[test]
+    fn a_base_manifest_that_does_not_parse_is_an_error() {
+        assert!(revs_of("[workspace\n").is_err());
+    }
+
+    #[test]
     fn an_unknown_commit_is_an_error_not_a_pass() {
-        assert!(problems(&revs(&["gone"]), None, is_ancestor).is_err());
+        let gone = "dddddddddddddddddddddddddddddddddddddddd";
+        assert!(problems(&revs(&[gone]), &[], is_ancestor).is_err());
     }
 }

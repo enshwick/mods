@@ -194,12 +194,17 @@ fn platform_pins(manifest: &toml::Table) -> Vec<String> {
             !spec
                 .get("rev")
                 .and_then(toml::Value::as_str)
-                .is_some_and(|rev| rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit()))
+                .is_some_and(full_commit)
         })
         .map(|(crate_name, _)| {
             format!("{crate_name}: the platform is pinned by `rev` to a full commit hash")
         })
         .collect()
+}
+
+/// Whether `rev` is a full commit hash, not a short one or a branch name.
+pub(crate) fn full_commit(rev: &str) -> bool {
+    rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// Each commit the root `manifest` pins a platform crate to, once, in the

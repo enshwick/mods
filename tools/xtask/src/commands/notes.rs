@@ -538,7 +538,7 @@ pub(crate) fn held_back(config: &[toml::Table]) -> Vec<String> {
 }
 
 /// The commit a root manifest pins the API to.
-pub(crate) fn pinned_rev(manifest: &str) -> Option<String> {
+fn pinned_rev(manifest: &str) -> Option<String> {
     let manifest: toml::Table = toml::from_str(manifest).ok()?;
     manifest
         .get("workspace")?
@@ -560,18 +560,37 @@ fn loader_tag(rev: &str) -> Result<String, String> {
 }
 
 pub(crate) fn git(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .output()
-        .map_err(|error| format!("running git: {error}"))?;
+    let output = git_output(args)?;
     if !output.status.success() {
-        return Err(format!(
-            "git {}: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
+        return Err(git_failure(args, &output));
     }
     String::from_utf8(output.stdout).map_err(|error| format!("git {}: {error}", args.join(" ")))
+}
+
+/// Runs a git command that answers yes or no by its exit code, as
+/// `merge-base --is-ancestor` does: 0 is yes, 1 is no, anything else fails.
+pub(crate) fn git_answer(args: &[&str]) -> Result<bool, String> {
+    let output = git_output(args)?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => Err(git_failure(args, &output)),
+    }
+}
+
+fn git_output(args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|error| format!("running git: {error}"))
+}
+
+fn git_failure(args: &[&str], output: &std::process::Output) -> String {
+    format!(
+        "git {}: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr).trim()
+    )
 }
 
 /// The version tag `git ls-remote --tags` lists at commit `rev`, an

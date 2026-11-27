@@ -71,8 +71,8 @@ alpha.
 Renovate moves. CI runs `cargo xtask pins`, which refuses a pin that is not
 on the platform's `main` (a pull request that waited for a platform one and
 still pins its branch head) or that moves back from the pin of the branch it
-merges into (a Renovate run that read a stale `main`). Only a release builds on a loader alpha: `release` pins the
-platform to it in its own job and tags that commit, which no branch holds,
+merges into (a Renovate run that read a stale `main`). Only a release
+builds on a loader alpha: `release` pins the platform to it in its own job and tags that commit, which no branch holds,
 so no pin ever waits on `main` for a release and Renovate never undoes one.
 
 Each mod's `CHANGELOG.md` is written by hand for players; release-plz never

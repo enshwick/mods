@@ -301,7 +301,7 @@ mod tests {
         let chest = Guid::named("test:chest");
         let settings = format!("chest_template = \"{chest}\"\n");
         let (_, loader) = start_on(on(Side::CLIENT), settings.as_bytes());
-        loader.host_screen(Some(enshwick::Entity::from_engine(512)));
+        loader.host_screen(enshwick::Entity::from_raw(512));
         // A Safe is made from the vanilla chest's template, not its item's.
         loader.read_screen_host(Guid::named("enshwick.personal-safes:safe"), [0.0; 3]);
         assert!(loader.draw_screen(HudScreenType::StorageChest).is_empty());
@@ -339,12 +339,12 @@ mod tests {
 
         let (_, loader) = start(Side::SERVER, false);
         let mut altar = AltarInfo::EMPTY;
-        altar.entity = enshwick::Entity::from_engine(1);
+        altar.entity = enshwick::Entity::from_raw(1).unwrap();
         altar.position = [10.0, 0.0, 0.0];
         loader.set_altars(&[altar]);
         let at = |x: f64| {
             enshwick::abi::headed!(BuildCheck {
-                character: enshwick::Entity::from_engine(2),
+                character: enshwick::Entity::from_raw(2).unwrap(),
                 item: enshwick::ItemId::new(7),
                 position: [x, 0.0, 0.0],
                 reason: core::ptr::null_mut(),

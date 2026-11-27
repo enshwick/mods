@@ -498,7 +498,7 @@ fn a_lookup_from_the_interface_shows_the_changes_in_a_window_with_a_way_there() 
     );
     assert_eq!(whole(&builds), ["who"]);
     let placed = enshwick::abi::headed!(BuildingData {
-        entity: Entity::from_engine(900),
+        entity: Entity::from_raw(900).unwrap(),
         character: bob().entity,
         item: ItemId::new(0),
         kind: BuildingData::PLACED,

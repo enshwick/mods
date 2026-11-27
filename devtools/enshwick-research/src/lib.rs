@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let admin = enshwick::abi::headed!(PlayerInfo {
             slot: 0,
-            entity: enshwick::Entity::from_engine(2),
+            entity: enshwick::Entity::from_raw(2).unwrap(),
             key: enshwick::PlayerKey::new(1),
             permissions: PlayerInfo::CAN_KICK_BAN,
             name_len: 0,

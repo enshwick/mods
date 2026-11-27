@@ -118,8 +118,8 @@ mod tests {
     fn altars_the_game_has_not_levelled_are_named_in_the_log_once() {
         let loader = started(Side::CLIENT, &Settings::template());
         let mut unleveled = AltarInfo::EMPTY;
-        unleveled.entity = Entity::from_engine(2);
-        loader.set_altars(&[altar(Entity::from_engine(1), 0), unleveled]);
+        unleveled.entity = Entity::from_raw(2).unwrap();
+        loader.set_altars(&[altar(Entity::from_raw(1).unwrap(), 0), unleveled]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
         let line = "1 altar has no Flame level yet; it keeps its vanilla zone";
         // The solve the start began may still run, and the line then comes
@@ -334,25 +334,25 @@ mod tests {
         let loader = started(Side::CLIENT, &Settings::template());
         assert_eq!(loader.altars_opened(), (true, true));
         loader.set_altars(&[
-            altar(Entity::from_engine(1), 0),
-            altar(Entity::from_engine(2), 40),
+            altar(Entity::from_raw(1).unwrap(), 0),
+            altar(Entity::from_raw(2).unwrap(), 40),
         ]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
-        wait_for_growth(&loader, Entity::from_engine(1), 1);
-        let (grow, height) = loader.altar_zone(Entity::from_engine(1), 1, 80);
+        wait_for_growth(&loader, Entity::from_raw(1).unwrap(), 1);
+        let (grow, height) = loader.altar_zone(Entity::from_raw(1).unwrap(), 1, 80);
         assert!(grow > 0, "touching altars grow");
         assert_eq!(height, 80);
         assert_eq!(
-            loader.altar_zone(Entity::from_engine(2), 1, 80),
+            loader.altar_zone(Entity::from_raw(2).unwrap(), 1, 80),
             (grow, height)
         );
         assert_eq!(
-            loader.altar_zone(Entity::from_engine(2), 2, 80),
+            loader.altar_zone(Entity::from_raw(2).unwrap(), 2, 80),
             (0, 80),
             "another level: vanilla"
         );
         assert_eq!(
-            loader.altar_zone(Entity::from_engine(3), 1, 80),
+            loader.altar_zone(Entity::from_raw(3).unwrap(), 1, 80),
             (0, 80),
             "unknown altar: vanilla"
         );
@@ -387,29 +387,29 @@ mod tests {
         let off = "[zones]\nclusters = false\n";
         let loader = started(Side::CLIENT, off);
         loader.set_altars(&[
-            altar(Entity::from_engine(1), 0),
-            altar(Entity::from_engine(2), 40),
+            altar(Entity::from_raw(1).unwrap(), 0),
+            altar(Entity::from_raw(2).unwrap(), 40),
         ]);
         assert_eq!(loader.raise::<AltarsChanged>(&()), 1);
         let before = loader.zone_resizes();
         assert_eq!(
-            loader.altar_zone(Entity::from_engine(1), 1, 80),
+            loader.altar_zone(Entity::from_raw(1).unwrap(), 1, 80),
             (0, 80),
             "clusters off: vanilla"
         );
         loader.set_settings("settings", "[zones]\nclusters = true\n");
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
-        wait_for_growth(&loader, Entity::from_engine(1), before + 1);
+        wait_for_growth(&loader, Entity::from_raw(1).unwrap(), before + 1);
         assert_eq!(loader.zone_resizes(), before + 1);
         assert!(
-            loader.altar_zone(Entity::from_engine(1), 1, 80).0 > 0,
+            loader.altar_zone(Entity::from_raw(1).unwrap(), 1, 80).0 > 0,
             "the world turned clusters on"
         );
         loader.set_settings("settings", off);
         assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
         assert_eq!(loader.zone_resizes(), before + 2);
         assert_eq!(
-            loader.altar_zone(Entity::from_engine(1), 1, 80),
+            loader.altar_zone(Entity::from_raw(1).unwrap(), 1, 80),
             (0, 80),
             "the next world turned them off"
         );

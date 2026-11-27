@@ -272,7 +272,7 @@ mod tests {
 
     fn slot(index: u8, item: u32, count: u32) -> Slot {
         Slot::new(
-            SlotRef::new(Entity::from_engine(9), index),
+            SlotRef::new(Entity::from_raw(9).unwrap(), index),
             InventoryCategory::GENERIC,
             ItemId::new(item),
             count,
@@ -282,7 +282,7 @@ mod tests {
 
     fn give(item: u32, count: u32) -> Op {
         Op::Give {
-            to: Entity::from_engine(2),
+            to: Entity::from_raw(2).unwrap(),
             item: ItemId::new(item),
             count,
             fill: None,
@@ -302,7 +302,7 @@ mod tests {
     fn copying_gives_each_stack_s_item_and_count_to_the_other_player() {
         let slots = [slot(0, 7, 3), slot(1, 7, 0), slot(2, 8, 1)];
         assert_eq!(
-            copy_ops(&slots, Entity::from_engine(2)),
+            copy_ops(&slots, Entity::from_raw(2).unwrap()),
             [give(7, 3), give(8, 1)]
         );
     }
@@ -319,7 +319,7 @@ mod tests {
             in_category(1, InventoryCategory::CURRENCY),
             in_category(2, InventoryCategory::EQUIPMENT),
         ];
-        assert_eq!(copy_ops(&slots, Entity::from_engine(2)), [give(7, 1)]);
+        assert_eq!(copy_ops(&slots, Entity::from_raw(2).unwrap()), [give(7, 1)]);
         assert_eq!(clear_ops(&slots).len(), 3, "a clear takes every slot");
     }
 
@@ -327,7 +327,7 @@ mod tests {
     fn what_stayed_out_is_every_operation_s_rest_or_all_of_a_request_turned_down() {
         let ops = [
             give(7, 30),
-            Op::DestroySlot(SlotRef::new(Entity::from_engine(9), 0)),
+            Op::DestroySlot(SlotRef::new(Entity::from_raw(9).unwrap(), 0)),
         ];
         assert_eq!(asked(&ops), 30);
         let rest = |remaining| {

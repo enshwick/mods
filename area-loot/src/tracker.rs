@@ -206,13 +206,13 @@ mod tests {
 
     use super::*;
 
-    const PLAYER: Entity = Entity::from_engine(2);
-    const OTHER: Entity = Entity::from_engine(3);
+    const PLAYER: Entity = Entity::from_raw(2).unwrap();
+    const OTHER: Entity = Entity::from_raw(3).unwrap();
 
     fn corpse(id: u32, x: f64, empty: bool, guest: Option<Entity>, at: i64) -> Container {
         let mut offer = InteractionOfferRuntime::new(at, false);
         offer.guest_id = guest;
-        let mut corpse = Container::new(Entity::from_engine(id), [x, 0.0, 0.0], empty, true);
+        let mut corpse = Container::new(Entity::from_raw(id).unwrap(), [x, 0.0, 0.0], empty, true);
         corpse.area_loot = Some(true);
         corpse.offer = Some(offer);
         corpse
@@ -247,7 +247,7 @@ mod tests {
         let mut t = Tracker::default();
         let now = Duration::ZERO;
         t.observe(&corpse(9, 0.0, false, Some(OTHER), 5), now);
-        t.hold(Entity::from_engine(9), now);
+        t.hold(Entity::from_raw(9).unwrap(), now);
         assert_eq!(t.observe(&corpse(9, 0.0, true, Some(OTHER), 5), now), None);
         let later = now + HOLD;
         t.observe(&corpse(9, 0.0, false, Some(OTHER), 5), later);
@@ -255,8 +255,8 @@ mod tests {
             t.observe(&corpse(9, 0.0, true, Some(OTHER), 5), later),
             Some(OTHER)
         );
-        t.hold(Entity::from_engine(9), later);
-        t.release(Entity::from_engine(9));
+        t.hold(Entity::from_raw(9).unwrap(), later);
+        t.release(Entity::from_raw(9).unwrap());
         t.observe(&corpse(9, 0.0, false, Some(OTHER), 5), later);
         assert_eq!(
             t.observe(&corpse(9, 0.0, true, Some(OTHER), 5), later),
@@ -289,23 +289,23 @@ mod tests {
         let mut t = Tracker::default();
         let now = Duration::ZERO;
         t.observe(&corpse(9, 0.0, false, None, 0), now);
-        t.hold(Entity::from_engine(9), now);
-        assert!(t.still_free(Entity::from_engine(9), PLAYER, now));
+        t.hold(Entity::from_raw(9).unwrap(), now);
+        assert!(t.still_free(Entity::from_raw(9).unwrap(), PLAYER, now));
         // The player's own interaction keeps it.
         t.observe(&corpse(9, 0.0, false, Some(PLAYER), 4), now);
-        assert!(t.still_free(Entity::from_engine(9), PLAYER, now));
+        assert!(t.still_free(Entity::from_raw(9).unwrap(), PLAYER, now));
         // Another player opens it while the take waits its turn.
         t.observe(&corpse(9, 0.0, false, Some(OTHER), 5), now);
-        assert!(!t.still_free(Entity::from_engine(9), PLAYER, now));
+        assert!(!t.still_free(Entity::from_raw(9).unwrap(), PLAYER, now));
         // Emptied meanwhile, or the hold ran out.
         t.observe(&corpse(10, 0.0, false, Some(OTHER), 1), now);
-        t.hold(Entity::from_engine(10), now);
-        assert!(t.still_free(Entity::from_engine(10), PLAYER, now));
-        assert!(!t.still_free(Entity::from_engine(10), PLAYER, now + HOLD));
+        t.hold(Entity::from_raw(10).unwrap(), now);
+        assert!(t.still_free(Entity::from_raw(10).unwrap(), PLAYER, now));
+        assert!(!t.still_free(Entity::from_raw(10).unwrap(), PLAYER, now + HOLD));
         t.observe(&corpse(10, 0.0, true, Some(OTHER), 1), now);
-        assert!(!t.still_free(Entity::from_engine(10), PLAYER, now));
+        assert!(!t.still_free(Entity::from_raw(10).unwrap(), PLAYER, now));
         assert!(
-            !t.still_free(Entity::from_engine(11), PLAYER, now),
+            !t.still_free(Entity::from_raw(11).unwrap(), PLAYER, now),
             "never held"
         );
     }
@@ -316,26 +316,26 @@ mod tests {
         let now = Duration::ZERO;
         t.observe(&corpse(9, 0.0, false, Some(OTHER), 5), now);
         let at = |x: f64| move |_: Entity| Some([x, 0.0, 0.0]);
-        assert!(t.guest_near(Entity::from_engine(9), PLAYER, 4.0, at(3.0)));
+        assert!(t.guest_near(Entity::from_raw(9).unwrap(), PLAYER, 4.0, at(3.0)));
         assert!(
-            !t.guest_near(Entity::from_engine(9), PLAYER, 4.0, at(5.0)),
+            !t.guest_near(Entity::from_raw(9).unwrap(), PLAYER, 4.0, at(5.0)),
             "walked off"
         );
         assert!(
-            !t.guest_near(Entity::from_engine(9), PLAYER, 4.0, |_| None),
+            !t.guest_near(Entity::from_raw(9).unwrap(), PLAYER, 4.0, |_| None),
             "gone"
         );
         assert!(
-            !t.guest_near(Entity::from_engine(9), OTHER, 4.0, at(0.0)),
+            !t.guest_near(Entity::from_raw(9).unwrap(), OTHER, 4.0, at(0.0)),
             "their own"
         );
         t.observe(&corpse(10, 0.0, false, None, 0), now);
         assert!(
-            !t.guest_near(Entity::from_engine(10), PLAYER, 4.0, at(0.0)),
+            !t.guest_near(Entity::from_raw(10).unwrap(), PLAYER, 4.0, at(0.0)),
             "nobody's"
         );
         assert!(
-            !t.guest_near(Entity::from_engine(11), PLAYER, 4.0, at(0.0)),
+            !t.guest_near(Entity::from_raw(11).unwrap(), PLAYER, 4.0, at(0.0)),
             "never seen"
         );
     }
@@ -357,9 +357,12 @@ mod tests {
         let mut tall = corpse(7, 0.0, false, None, 0);
         tall.position = [2.0, 9.0, 0.0];
         t.observe(&tall, now);
-        t.hold(Entity::from_engine(6), now);
-        let found = t.around([0.0; 3], 12.0, 4.0, Entity::from_engine(1), now);
-        assert_eq!(found, vec![Entity::from_engine(3), Entity::from_engine(2)]);
+        t.hold(Entity::from_raw(6).unwrap(), now);
+        let found = t.around([0.0; 3], 12.0, 4.0, Entity::from_raw(1).unwrap(), now);
+        assert_eq!(
+            found,
+            vec![Entity::from_raw(3).unwrap(), Entity::from_raw(2).unwrap()]
+        );
     }
 
     #[test]
@@ -368,14 +371,20 @@ mod tests {
         let now = Duration::ZERO;
         t.observe(&corpse(1, 0.0, false, None, 0), now);
         t.observe(&corpse(2, 0.0, false, None, 0), now + FORGET);
-        t.hold(Entity::from_engine(2), now);
+        t.hold(Entity::from_raw(2).unwrap(), now);
         t.prune(now + FORGET);
         assert_eq!(t.len(), 1);
         assert_eq!(
-            t.around([0.0; 3], 1.0, 1.0, Entity::from_engine(99), now + FORGET),
-            vec![Entity::from_engine(2)]
+            t.around(
+                [0.0; 3],
+                1.0,
+                1.0,
+                Entity::from_raw(99).unwrap(),
+                now + FORGET
+            ),
+            vec![Entity::from_raw(2).unwrap()]
         );
-        t.forget(Entity::from_engine(2));
+        t.forget(Entity::from_raw(2).unwrap());
         t.clear();
         assert_eq!(t.len(), 0);
     }

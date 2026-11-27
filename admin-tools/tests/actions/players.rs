@@ -303,9 +303,9 @@ fn teleports_go_to_bring_and_send_players_and_the_console_has_no_character() {
     assert_eq!(
         moved,
         [
-            enshwick::Entity::from_engine(11),
-            enshwick::Entity::from_engine(10),
-            enshwick::Entity::from_engine(11)
+            enshwick::Entity::from_raw(11).unwrap(),
+            enshwick::Entity::from_raw(10).unwrap(),
+            enshwick::Entity::from_raw(11).unwrap()
         ]
     );
     assert_eq!(

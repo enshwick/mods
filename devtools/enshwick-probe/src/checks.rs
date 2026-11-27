@@ -16,7 +16,7 @@ use enshwick::world::{ContainerKinds, Notice, Placed, World, WritableType};
 use enshwick::{Load, Off, WorldError};
 
 /// An entity id no world holds, for the checks of what a call refuses.
-pub(crate) const NOT_IN_WORLD: Entity = Entity::from_engine(u32::MAX - 1);
+pub(crate) const NOT_IN_WORLD: Entity = Entity::from_raw(u32::MAX - 1).unwrap();
 /// Entities whose stats a check compares.
 const SAMPLE: usize = 5;
 /// How long a destroyed entity may take to leave the world.
@@ -347,6 +347,8 @@ impl Checks {
     /// Raises a ping and checks two refusals: a type off the allow list and
     /// a teleport of an entity not in the world.
     fn effects(&self) {
+        // The engine's 0 on purpose, a ping no player sent: no public Entity names it.
+        // ast-grep-ignore: entities-through-public-calls
         match self.effects.ping(Entity::from_engine(0), PING_AT) {
             Ok(()) => {
                 self.ping_sent.store(true, Ordering::Release);
@@ -517,6 +519,8 @@ impl Checks {
     }
 
     fn refusals(&self) {
+        // The engine's 0 on purpose, to see the call refuse it: no public Entity names it.
+        // ast-grep-ignore: entities-through-public-calls
         match self.world.destroy(Entity::from_engine(0)) {
             Err(WorldError::Refused) => pass("destroy refuses entity 0"),
             other => fail(&format!("destroy of entity 0: {other:?}")),
@@ -632,10 +636,11 @@ impl Checks {
     /// Reads the marks the last check left on entities and marks this
     /// check's: entity data across loads.
     fn entity_data(&self, check: u32, before: &[(u32, u64)], now: &[(u32, u64)]) {
+        let mark = |id: u32| Entity::from_raw(id).and_then(|entity| self.marks.get(entity));
         if !before.is_empty() {
             let kept = before
                 .iter()
-                .filter(|(id, _)| self.marks.get(Entity::from_engine(*id)) == Some(check - 1))
+                .filter(|(id, _)| mark(*id) == Some(check - 1))
                 .count();
             enshwick::info!(
                 "entity data across loads: {kept} of {} marked entities keep their mark",
@@ -644,11 +649,13 @@ impl Checks {
         }
         let marked = now
             .iter()
-            .filter(|(id, _)| self.marks.set(Entity::from_engine(*id), &check).is_ok())
+            .filter(|(id, _)| {
+                Entity::from_raw(*id).is_some_and(|entity| self.marks.set(entity, &check).is_ok())
+            })
             .count();
         let read = now
             .iter()
-            .filter(|(id, _)| self.marks.get(Entity::from_engine(*id)) == Some(check))
+            .filter(|(id, _)| mark(*id) == Some(check))
             .count();
         if marked == now.len() && read == marked {
             pass(&format!(
@@ -780,7 +787,7 @@ mod tests {
             .world()
             .type_hash(NETWORK_HEALTH, 7)
             .type_size(NETWORK_HEALTH, 8)
-            .component(Entity::from_engine(3), 7, &[0; 8])
+            .component(Entity::from_raw(3).unwrap(), 7, &[0; 8])
             .refuse_write(7)
             .install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
@@ -788,7 +795,7 @@ mod tests {
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, copy, _) = RESOLVED.get().unwrap();
-        Checks::copy_write(world, copy, Entity::from_engine(3));
+        Checks::copy_write(world, copy, Entity::from_raw(3).unwrap());
         let logs = loader.logs();
         assert!(
             logs.iter()
@@ -796,7 +803,7 @@ mod tests {
             "{logs:?}"
         );
         assert_eq!(
-            loader.component_bytes(Entity::from_engine(3), 7),
+            loader.component_bytes(Entity::from_raw(3).unwrap(), 7),
             Some(vec![0; 8])
         );
     }
@@ -807,14 +814,14 @@ mod tests {
             .world()
             .type_hash(NETWORK_HEALTH, 7)
             .type_size(NETWORK_HEALTH, 8)
-            .component(Entity::from_engine(3), 7, &[0; 8])
+            .component(Entity::from_raw(3).unwrap(), 7, &[0; 8])
             .install();
         // SAFETY: both functions are the exports of this module's `declare_mod!(Copies)`.
         let status =
             unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
         assert_eq!(status, Status::OK, "{:?}", loader.faults());
         let (world, _, health) = RESOLVED.get().unwrap();
-        Checks::compare(world, health, Entity::from_engine(3));
+        Checks::compare(world, health, Entity::from_raw(3).unwrap());
         let logs = loader.logs();
         assert!(
             logs.iter()
@@ -842,7 +849,7 @@ mod tests {
             .type_size(NETWORK_HEALTH, 8)
             .player(enshwick::abi::headed!(PlayerInfo {
                 slot: 0,
-                entity: Entity::from_engine(10),
+                entity: Entity::from_raw(10).unwrap(),
                 key,
                 permissions: 0,
                 name_len: 3,

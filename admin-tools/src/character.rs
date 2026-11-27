@@ -331,21 +331,21 @@ mod tests {
     fn god_mode_follows_a_player_to_a_new_character_and_waits_while_none_is_found() {
         let (ann, bob, cid) = (PlayerKey::new(1), PlayerKey::new(2), PlayerKey::new(3));
         let gods = [
-            (ann, Entity::from_engine(10)),
-            (bob, Entity::from_engine(11)),
-            (cid, Entity::from_engine(12)),
+            (ann, Entity::from_raw(10).unwrap()),
+            (bob, Entity::from_raw(11).unwrap()),
+            (cid, Entity::from_raw(12).unwrap()),
         ];
         let now = |key| match key {
-            key if key == ann => Some(Entity::from_engine(10)),
-            key if key == bob => Some(Entity::from_engine(40)),
+            key if key == ann => Entity::from_raw(10),
+            key if key == bob => Entity::from_raw(40),
             _ => None,
         };
         assert_eq!(
             current(&gods, now),
             [
-                (ann, Entity::from_engine(10)),
-                (bob, Entity::from_engine(40)),
-                (cid, Entity::from_engine(12))
+                (ann, Entity::from_raw(10).unwrap()),
+                (bob, Entity::from_raw(40).unwrap()),
+                (cid, Entity::from_raw(12).unwrap())
             ]
         );
     }

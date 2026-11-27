@@ -254,7 +254,7 @@ fn a_player_goes_to_the_waypoint_the_caller_set_on_the_map() {
     );
     let moved = loader.teleports();
     assert_eq!(moved.len(), 1);
-    assert_eq!(moved[0].entity, Entity::from_engine(11));
+    assert_eq!(moved[0].entity, Entity::from_raw(11).unwrap());
     assert_eq!(
         run(&loader, &eve, "mark", "p0000000000000002"),
         "0Set a waypoint on your map first."
@@ -269,7 +269,7 @@ fn a_player_goes_to_the_waypoint_the_caller_set_on_the_map() {
 /// A building event by Bob, who stands at 0, 20, 7.
 fn building(kind: u8, position: [f64; 3]) -> BuildingData {
     enshwick::abi::headed!(BuildingData {
-        entity: Entity::from_engine(900),
+        entity: Entity::from_raw(900).unwrap(),
         character: bob().entity,
         item: ItemId::new(0),
         kind,

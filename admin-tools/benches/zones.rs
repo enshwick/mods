@@ -18,10 +18,15 @@ use enshwick::{Entity, ItemId};
 )]
 mod game;
 
+/// Ann's character in the tests' fake game.
+const ANN: Entity = Entity::from_raw(10).unwrap();
+/// Bob's character in the tests' fake game.
+const BOB: Entity = Entity::from_raw(11).unwrap();
+
 /// Bob's placement at `at` metres, as the cursor check hands it over.
 fn check(at: [f64; 3]) -> BuildCheck {
     enshwick::abi::headed!(BuildCheck {
-        character: Entity::from_engine(11),
+        character: BOB,
         item: ItemId::new(7),
         position: at,
         reason: core::ptr::null_mut(),
@@ -51,7 +56,7 @@ fn filter(c: &mut Criterion) {
         b.iter(|| loader.build(black_box(&open)));
     });
     let builder = enshwick::abi::headed!(BuildCheck {
-        character: Entity::from_engine(10),
+        character: ANN,
         account: enshwick::PlayerKey::new(1),
         ..inside
     });

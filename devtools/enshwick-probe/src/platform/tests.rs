@@ -200,7 +200,7 @@ fn placing() -> Installed {
         .unwrap();
     let host = host.placed(
         transform,
-        enshwick::Entity::from_engine(40),
+        enshwick::Entity::from_raw(40).unwrap(),
         [50.0, 40.0, 50.0],
     );
     let (loader, checks) = started(host);

@@ -52,9 +52,9 @@ impl ContainerChecks {
             Err(why) => fail(&format!("prop placement info of {CHEST}: {why}")),
         }
         match self.inventories.show_pickup(NOT_IN_WORLD, self.chest, 1) {
-            Err(WorldError::Refused) => pass("show pickup refuses an entity that is no player"),
+            Err(WorldError::BadArgs) => pass("show pickup refuses an entity that is no player"),
             shown => fail(&format!(
-                "show pickup to an entity that is no player: {shown:?}, not refused"
+                "show pickup to an entity that is no player: {shown:?}, expected BadArgs"
             )),
         }
         let Some(player) = self.world.players().into_iter().next() else {

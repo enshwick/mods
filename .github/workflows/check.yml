@@ -169,6 +169,19 @@ jobs:
         if: needs.scope.outputs.deny == 'true'
         run: cargo deny check bans licenses sources
 
+      # Every platform pin is a commit of the platform's main, and a change
+      # never moves it back from the pin of the branch it merges into.
+      - name: Platform pins
+        env:
+          BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then
+            git fetch -q --depth 1 origin "$BASE"
+            cargo xtask pins --base FETCH_HEAD
+          else
+            cargo xtask pins
+          fi
+
       # The job `windows` runs the Windows-only crates' tests, not Wine here.
       - name: cargo xtask check
         run: |

@@ -3,5 +3,6 @@
 pub(crate) mod check;
 pub(crate) mod dist;
 pub(crate) mod notes;
+pub(crate) mod pins;
 pub(crate) mod release;
 pub(crate) mod wine;

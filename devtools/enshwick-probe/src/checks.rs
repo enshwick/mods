@@ -522,7 +522,7 @@ impl Checks {
         // The engine's 0 on purpose, to see the call refuse it: no public Entity names it.
         // ast-grep-ignore: entities-through-public-calls
         match self.world.destroy(Entity::from_engine(0)) {
-            Err(WorldError::Refused) => pass("destroy refuses entity 0"),
+            Err(WorldError::BadArgs) => pass("destroy refuses entity 0"),
             other => fail(&format!("destroy of entity 0: {other:?}")),
         }
         match self.world.destroy(NOT_IN_WORLD) {

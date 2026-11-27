@@ -83,7 +83,7 @@ fn backup(tools: &Tools, request: &Request<'_>) -> Outcome {
     }
     if let Err(why) = tools.world.hold_saves(true) {
         tools.backing_up.store(false, Ordering::Release);
-        return Tools::failed(request, ids::BACKUP, &why);
+        return Tools::failed(request, &request.say(texts::REPLY_FAILED_BACKUP, &[]), &why);
     }
     let caller = Caller {
         key: request.player.key,

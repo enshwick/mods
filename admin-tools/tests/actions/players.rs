@@ -5,16 +5,17 @@
 use std::time::Duration;
 
 use enshwick::PlayerKey;
-use enshwick::abi::PlayerInfo;
+use enshwick::abi::{ActionCall, PlayerInfo};
 use enshwick::commands::{self, Caller};
 use enshwick::console;
 use enshwick::events::{SettingsReplaced, WorldLoaded};
+use enshwick::i18n::Language;
 use enshwick::test::Installed;
 use enshwick::world::PlayerPermissions;
 
 use super::game::{
     ADMIN, HEALTH, allowed, ann, bob, ends, file_until, joins, player, run, scratch, server,
-    server_with,
+    server_with, without_clock,
 };
 
 /// The players the `banned` action lists in Ann's accounts window, each
@@ -364,6 +365,37 @@ fn the_time_of_day_and_the_weather_change_from_their_actions() {
 }
 
 #[test]
+fn the_time_and_the_weather_name_what_failed_in_the_admin_s_language() {
+    let dir = scratch("no-clock");
+    let loader = without_clock("", &dir);
+    let unavailable = "not available here, or on this loader or game build";
+    assert_eq!(
+        run(&loader, &ann(), "time", "t6.5"),
+        format!("0Time of day: nothing changed: {unavailable}.")
+    );
+    assert_eq!(
+        run(&loader, &ann(), "weather", "c1"),
+        format!("0Weather: nothing changed: {unavailable}.")
+    );
+    let in_ukrainian = |action, args| {
+        loader
+            .ask_actions(ActionCall::RUN, &ann(), Language::UK_UA.0, action, args)
+            .unwrap()
+    };
+    assert!(
+        in_ukrainian("time", "t6.5").starts_with("0Час доби: нічого не змінено: "),
+        "{}",
+        in_ukrainian("time", "t6.5")
+    );
+    assert!(
+        in_ukrainian("weather", "c1").starts_with("0Погода: нічого не змінено: "),
+        "{}",
+        in_ukrainian("weather", "c1")
+    );
+    assert!(loader.forecasts().is_empty());
+}
+
+#[test]
 fn every_change_goes_to_the_audit_log_and_reads_back_and_reads_stay_out() {
     let dir = scratch("audit");
     let loader = server("", &dir);
@@ -398,6 +430,30 @@ fn every_change_goes_to_the_audit_log_and_reads_back_and_reads_stay_out() {
         assert!(read.contains(part), "{part}: {read}");
     }
     assert!(!read.contains("\tonline\t"), "reads stay out: {read}");
+}
+
+#[test]
+fn a_log_that_does_not_read_says_so_in_the_admin_s_language() {
+    let dir = scratch("log-unread");
+    // A folder in each log file's place: opening or reading it fails.
+    for name in ["audit.log", "builds.log"] {
+        std::fs::create_dir_all(dir.join(name)).unwrap();
+    }
+    let loader = server("build_log = true\n", &dir);
+    for (action, args) in [("audit", "n10"), ("who", "n60")] {
+        let reply = run(&loader, &ann(), action, args);
+        assert!(
+            reply.starts_with("0The log does not read now: "),
+            "{action}: {reply}"
+        );
+        let in_ukrainian = loader
+            .ask_actions(ActionCall::RUN, &ann(), Language::UK_UA.0, action, args)
+            .unwrap();
+        assert!(
+            in_ukrainian.starts_with("0Журнал зараз не читається: "),
+            "{action}: {in_ukrainian}"
+        );
+    }
 }
 
 #[test]

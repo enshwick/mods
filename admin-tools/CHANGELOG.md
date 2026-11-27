@@ -48,6 +48,14 @@ Each entry says what players notice; a release's notes show its section.
   when the game cannot read the inventory, and the world's summary tells why
   when the game cannot read the game settings, instead of answering that the
   player carries nothing or that no world is loaded.
+- When the time of day, the weather, a save or a backup cannot change, the
+  admin reads what failed in their own language, such as "Weather: nothing
+  changed", instead of the action's id. The world's summary says the game
+  settings do not read, not that nothing changed. The admin panel and a
+  lookup of who built nearby say when their window cannot open. The audit,
+  chat and build logs say when they do not read, instead of naming their
+  file. A chest placed at a spot with bad values gets the reply for bad
+  values.
 
 ## [0.2.0] - 2026-11-15
 

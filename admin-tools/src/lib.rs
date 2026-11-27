@@ -463,6 +463,12 @@ impl Tools {
             &[(texts::value::NAME, name), (texts::value::WHY, &why)],
         ))
     }
+
+    /// The refusal of text `key`, which names its own subject, with its reason.
+    fn refused_why(request: &Request<'_>, key: &str, why: &dyn core::fmt::Display) -> Outcome {
+        let why = why.to_string();
+        Outcome::refused(request.say(key, &[(texts::value::WHY, &why)]))
+    }
 }
 
 /// The end of a change the game runs after its action replied: the caller

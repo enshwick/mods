@@ -223,6 +223,12 @@ pub(crate) fn without_world_reads(settings: &str, dir: &Path) -> Game {
     world(settings, dir, &[], false, Build::NoWorldReads)
 }
 
+/// [`server`] whose world gave no clock and no weather, so setting the
+/// time or the weather fails.
+pub(crate) fn without_clock(settings: &str, dir: &Path) -> Game {
+    world(settings, dir, &[], false, Build::NoClock)
+}
+
 /// [`server_with`] on a dedicated server, or in a game a player hosts
 /// when `hosted`.
 pub(crate) fn game(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool) -> Game {
@@ -235,6 +241,7 @@ enum Build {
     Full,
     NoInventories,
     NoWorldReads,
+    NoClock,
 }
 
 /// [`game`] on `build`.
@@ -327,26 +334,29 @@ fn world(settings: &str, dir: &Path, more: &[PlayerInfo], hosted: bool, build: B
     if build == Build::NoWorldReads {
         host = host.without_world_reads();
     }
-    start(host.install())
+    start(host.install(), build != Build::NoClock)
 }
 
-/// Starts the mod on `loader` and loads its world, its clock and weather set.
-fn start(loader: Installed) -> Game {
+/// Starts the mod on `loader` and loads its world, with its clock and
+/// weather set when `clock`.
+fn start(loader: Installed, clock: bool) -> Game {
     // Transactions need a world with terrain.
     loader.set_terrain(&[]);
     // SAFETY: the exports of the mod under test.
     let status = unsafe { loader.start(enshwick_mod_query, enshwick_mod_init, enshwick_mod_ready) };
     assert_eq!(status, Status::OK, "{:?}", loader.logs());
-    loader.set_daytime(enshwick::abi::headed!(DaytimeInfo {
-        time_ns: 0,
-        day_start_ns: 6 * 3_600_000_000_000,
-        day_end_ns: 18 * 3_600_000_000_000,
-        day_length_ns: 1_800_000_000_000,
-        night_length_ns: 720_000_000_000,
-        speed: 1.0,
-        flags: 0,
-    }));
-    loader.set_weather([1.0, 0.0, 0.0, 0.0], &[]);
+    if clock {
+        loader.set_daytime(enshwick::abi::headed!(DaytimeInfo {
+            time_ns: 0,
+            day_start_ns: 6 * 3_600_000_000_000,
+            day_end_ns: 18 * 3_600_000_000_000,
+            day_length_ns: 1_800_000_000_000,
+            night_length_ns: 720_000_000_000,
+            speed: 1.0,
+            flags: 0,
+        }));
+        loader.set_weather([1.0, 0.0, 0.0, 0.0], &[]);
+    }
     assert!(loader.raise::<SettingsReplaced>(&()) >= 1);
     assert!(loader.raise::<WorldLoaded>(&()) >= 1);
     Game(loader)

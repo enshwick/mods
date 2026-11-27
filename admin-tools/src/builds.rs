@@ -191,7 +191,7 @@ fn who(tools: &Tools, request: &Request<'_>) -> Outcome {
     };
     let found = match LOG.tail(&dir, MAX_READ) {
         Ok(lines) => near(&lines, centre, *radius),
-        Err(why) => return Tools::failed(request, LOG.now, &why),
+        Err(why) => return Tools::refused_why(request, texts::REPLY_LOG_UNREAD, &why),
     };
     let radius = format!("{radius:.0}");
     if found.is_empty() {
@@ -211,7 +211,7 @@ fn who(tools: &Tools, request: &Request<'_>) -> Outcome {
         // The interface's notice holds one line: the changes go in a window.
         return match tools.show_changes(request, &found) {
             Ok(()) => Outcome::done(head),
-            Err(why) => Tools::failed(request, ids::WHO, &why),
+            Err(why) => Tools::refused_why(request, texts::REPLY_WINDOW_UNSHOWN, &why),
         };
     }
     let rows = found.iter().map(|change| {

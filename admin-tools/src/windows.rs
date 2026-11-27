@@ -242,7 +242,7 @@ impl Tools {
         }
         match self.show(request.player, shown) {
             Ok(()) => Outcome::done(""),
-            Err(why) => Self::failed(request, ids::PANEL, &why),
+            Err(why) => Self::refused_why(request, texts::REPLY_WINDOW_UNSHOWN, &why),
         }
     }
 

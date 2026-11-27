@@ -84,7 +84,7 @@ fn chest_at(tools: &Tools, request: &Request<'_>) -> Outcome {
         Value::Number(count),
     ] = request.args
     else {
-        return Tools::failed(request, ids::CHEST_AT, &WorldError::Refused);
+        return crate::players::bad_args(request);
     };
     let at = format!("{x:.0}, {y:.0}, {z:.0}");
     place(

@@ -2,7 +2,7 @@
 //! panel, its sections, one player's window and the build log's changes.
 
 use enshwick::PlayerKey;
-use enshwick::abi::{BuildingData, PlayerInfo};
+use enshwick::abi::{ActionCall, BuildingData, PlayerInfo};
 use enshwick::actions::Value;
 use enshwick::actions::window::{ButtonView, ItemView, MAX_LINE, View, decode};
 use enshwick::events::BuildingPlaced;
@@ -529,6 +529,42 @@ fn a_lookup_from_the_interface_shows_the_changes_in_a_window_with_a_way_there() 
             Value::Number(20.0),
             Value::Number(7.0)
         ]
+    );
+}
+
+#[test]
+fn the_lookup_and_the_panel_say_why_when_their_window_does_not_open() {
+    let dir = scratch("changes-unshown");
+    let loader = server("build_log = true\n", &dir);
+    let placed = enshwick::abi::headed!(BuildingData {
+        entity: Entity::from_raw(900).unwrap(),
+        character: bob().entity,
+        item: ItemId::new(0),
+        kind: BuildingData::PLACED,
+        replay: 0,
+        template: enshwick::content::Guid([0; 16]),
+        position: [1.0, 20.0, 7.0],
+    });
+    assert!(loader.raise::<BuildingPlaced>(&placed) >= 1);
+    let _log = file_until(&dir, "builds.log", |text| !text.is_empty());
+    // Ann's game takes no window, so the loader's bounded queue fills.
+    let refused = (0..1_000)
+        .map(|_| run(&loader, &ann(), "who", "n60"))
+        .find(|reply| reply.starts_with('0'));
+    assert_eq!(
+        refused.as_deref(),
+        Some("0The window did not open: window changes: refused by the loader.")
+    );
+    assert_eq!(
+        run(&loader, &ann(), "open", "c0"),
+        "0The window did not open: window players: refused by the loader."
+    );
+    let in_ukrainian = loader
+        .ask_actions(ActionCall::RUN, &ann(), Language::UK_UA.0, "panel", "")
+        .unwrap();
+    assert!(
+        in_ukrainian.starts_with("0Вікно не відкрилося: "),
+        "{in_ukrainian}"
     );
 }
 

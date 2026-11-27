@@ -182,7 +182,7 @@ fn time(tools: &Tools, request: &Request<'_>) -> Outcome {
             texts::REPLY_TIME,
             &[(texts::value::TIME, &clock_text(hours))],
         )),
-        Err(why) => Tools::failed(request, ids::TIME, &why),
+        Err(why) => Tools::failed(request, &request.say(texts::REPLY_FAILED_TIME, &[]), &why),
     }
 }
 
@@ -210,7 +210,11 @@ fn weather(tools: &Tools, request: &Request<'_>) -> Outcome {
             let kind = request.say(label, &[]);
             Outcome::done(request.say(texts::REPLY_WEATHER, &[(texts::value::WEATHER, &kind)]))
         }
-        Err(why) => Tools::failed(request, ids::WEATHER, &why),
+        Err(why) => Tools::failed(
+            request,
+            &request.say(texts::REPLY_FAILED_WEATHER, &[]),
+            &why,
+        ),
     }
 }
 
@@ -280,7 +284,7 @@ fn read_log(
     match files.tail(&dir, count) {
         Ok(lines) if lines.is_empty() => Outcome::done(request.say(texts::REPLY_LOG_NONE, &[])),
         Ok(lines) => Outcome::done(lines.join("\n")),
-        Err(why) => Tools::failed(request, files.now, &why),
+        Err(why) => Tools::refused_why(request, texts::REPLY_LOG_UNREAD, &why),
     }
 }
 
@@ -330,7 +334,7 @@ fn save(tools: &Tools, request: &Request<'_>) -> Outcome {
     match tools.world.save() {
         Ok(()) => Outcome::done(request.say(texts::REPLY_SAVED, &[])),
         Err(WorldError::Refused) => Outcome::refused(request.say(texts::REPLY_SAVE_REFUSED, &[])),
-        Err(why) => Tools::failed(request, ids::SAVE, &why),
+        Err(why) => Tools::failed(request, &request.say(texts::REPLY_FAILED_SAVE, &[]), &why),
     }
 }
 
@@ -343,7 +347,7 @@ fn world(tools: &Tools, request: &Request<'_>) -> Outcome {
     // ast-grep-ignore: lock-through-relock
     let read = match game_settings.read() {
         Ok(read) => read,
-        Err(why) => return Tools::failed(request, ids::WORLD, &why),
+        Err(why) => return Tools::refused_why(request, texts::REPLY_WORLD_UNREAD, &why),
     };
     let SettingsRead {
         settings, preset, ..

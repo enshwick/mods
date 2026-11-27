@@ -4,8 +4,8 @@
 
 use std::path::Path;
 
-/// Where the platform crates come from.
-const PLATFORM: &str = "https://github.com/enshwick/enshwick";
+use crate::commands::notes::PLATFORM;
+
 /// The dependency tables of a manifest.
 const DEPENDENCY_TABLES: [&str; 3] = ["dependencies", "dev-dependencies", "build-dependencies"];
 
@@ -167,9 +167,9 @@ fn own_rust_version(name: &str, manifest: &toml::Table) -> Option<String> {
     (!inherited).then(|| format!("{name}: set rust-version.workspace = true in its Cargo.toml"))
 }
 
-/// A platform crate in `[workspace.dependencies]` or a `[patch]` table of
-/// the root `manifest` not pinned to a full commit.
-fn platform_pins(manifest: &toml::Table) -> Vec<String> {
+/// Every platform crate in `[workspace.dependencies]` or a `[patch]` table
+/// of the root `manifest`, by name and spec.
+fn platform_specs(manifest: &toml::Table) -> impl Iterator<Item = (&String, &toml::Value)> {
     let workspace = manifest
         .get("workspace")
         .and_then(|workspace| workspace.get("dependencies"))
@@ -185,16 +185,38 @@ fn platform_pins(manifest: &toml::Table) -> Vec<String> {
         .chain(patches)
         .flatten()
         .filter(|(_, spec)| from_the_platform(spec))
+}
+
+/// A platform crate of the root `manifest` not pinned to a full commit.
+fn platform_pins(manifest: &toml::Table) -> Vec<String> {
+    platform_specs(manifest)
         .filter(|(_, spec)| {
             !spec
                 .get("rev")
                 .and_then(toml::Value::as_str)
-                .is_some_and(|rev| rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit()))
+                .is_some_and(full_commit)
         })
         .map(|(crate_name, _)| {
             format!("{crate_name}: the platform is pinned by `rev` to a full commit hash")
         })
         .collect()
+}
+
+/// Whether `rev` is a full commit hash, not a short one or a branch name.
+pub(crate) fn full_commit(rev: &str) -> bool {
+    rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Each commit the root `manifest` pins a platform crate to, once, in the
+/// order they appear.
+pub(crate) fn platform_revs(manifest: &toml::Table) -> Vec<String> {
+    let mut revs: Vec<String> = Vec::new();
+    for rev in platform_specs(manifest).filter_map(|(_, spec)| spec.get("rev")?.as_str()) {
+        if !revs.iter().any(|seen| seen == rev) {
+            revs.push(rev.to_owned());
+        }
+    }
+    revs
 }
 
 /// Whether the dependency `spec` takes the platform from git, its URL
@@ -515,6 +537,8 @@ mod tests {
                 "enshwick-macros: the platform is pinned by `rev` to a full commit hash",
             ]
         );
+        assert_eq!(platform_revs(&root), ["a".repeat(40).as_str(), "21fed9fb"]);
+        assert_eq!(platform_revs(&suffixed), ["main"]);
         let member: toml::Table = format!(
             "[dependencies]\nenshwick.workspace = true\n\
              [target.'cfg(windows)'.dev-dependencies]\n\

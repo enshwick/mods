@@ -29,6 +29,7 @@ jobs:
       skip: ${{ steps.scope.outputs.skip }}
       pages: ${{ steps.scope.outputs.pages }}
       deny: ${{ steps.scope.outputs.deny }}
+      pins: ${{ steps.scope.outputs.pins }}
       branch: ${{ steps.scope.outputs.branch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -84,6 +85,14 @@ jobs:
             deny=true
           fi
           echo "deny=$deny" >> "$GITHUB_OUTPUT"
+          # Only the root manifest pins the platform; the full suite checks
+          # the pins main holds.
+          pins=false
+          if [ -z "$reason" ] && { [ "$FULL" = true ] ||
+            git diff --name-only "$BASE...HEAD" | grep -qx 'Cargo\.toml'; }; then
+            pins=true
+          fi
+          echo "pins=$pins" >> "$GITHUB_OUTPUT"
 
   # Every player page against the schema and rules the site builds it with,
   # from the site's own checker, so the two never disagree. The site stays at
@@ -168,6 +177,20 @@ jobs:
       - name: cargo deny
         if: needs.scope.outputs.deny == 'true'
         run: cargo deny check bans licenses sources
+
+      # Every platform pin is a commit of the platform's main, and a change
+      # never moves it back from the pin of the branch it merges into.
+      - name: Platform pins
+        if: needs.scope.outputs.pins == 'true'
+        env:
+          BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then
+            git fetch -q --depth 1 origin "$BASE"
+            cargo xtask pins --base FETCH_HEAD
+          else
+            cargo xtask pins
+          fi
 
       # The job `windows` runs the Windows-only crates' tests, not Wine here.
       - name: cargo xtask check

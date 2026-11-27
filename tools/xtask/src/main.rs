@@ -30,6 +30,9 @@ enum Task {
     /// Writes the release notes of each mod about to be released, and
     /// refuses a mod whose notes are not ready.
     Notes(commands::notes::Args),
+    /// Refuses a platform pin that is not on the platform's main or moves
+    /// back from the base branch's pin.
+    Pins(commands::pins::Args),
     /// Pins every platform crate to the commit of a loader tag.
     Pin {
         /// The loader's tag, such as `v1.0.0-alpha.14`.
@@ -59,6 +62,7 @@ fn main() -> ExitCode {
         Task::Check(args) => commands::check::run(args),
         Task::Dist(args) => commands::dist::run(args),
         Task::Notes(args) => commands::notes::run(args),
+        Task::Pins(args) => commands::pins::run(args),
         Task::Pin { tag } => commands::release::pin(tag),
         Task::BuiltFor { tag } => commands::release::built_for_loader(tag),
         Task::Close(args) => commands::release::close(args),

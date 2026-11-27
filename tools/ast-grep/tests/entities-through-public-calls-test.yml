@@ -3,11 +3,14 @@ valid:
   - "fn f() -> Option<Entity> { Entity::from_raw(7) }"
   - "fn f() -> Entity { Entity::from_raw(7).unwrap() }"
   - "// Entity::from_engine(0) in a plain comment."
+  - "fn f(safe: Option<Entity>) -> bool { safe.is_none() }"
 invalid:
   - "fn f() -> Entity { Entity::from_engine(7) }"
   - "fn f() -> Entity { enshwick::Entity::from_engine(7) }"
+  - "fn f(ids: &[u32]) -> Vec<Entity> { ids.iter().copied().map(Entity::from_engine).collect() }"
   - "fn f(safe: Option<Entity>) -> Entity { safe.unwrap_or(Entity::NONE) }"
   - "fn f(e: Entity) -> bool { e == enshwick::Entity::NONE }"
+  - "fn f(e: Entity) -> bool { Entity::is_none(e) }"
   - |
     #[cfg(test)]
     mod tests {

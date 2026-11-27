@@ -350,7 +350,7 @@ impl Access {
             .load()
             .iter()
             .find_map(|(&entity, &(_, kept))| (kept == at).then_some(entity))
-            // The point's `safe` is the engine's 0 while the chest is not in the world: a
+            // The point's `safe` is the engine's 0 while the chest is not seen yet: a
             // language-neutral schema has no `Option`, and no public Entity names 0.
             // ast-grep-ignore: entities-through-public-calls
             .unwrap_or(Entity::NONE);

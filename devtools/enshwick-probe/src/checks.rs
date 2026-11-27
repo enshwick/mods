@@ -348,6 +348,7 @@ impl Checks {
     /// a teleport of an entity not in the world.
     fn effects(&self) {
         // The engine's 0 on purpose, a ping no player sent: no public Entity names it.
+        // ast-grep-ignore: entities-through-public-calls
         match self.effects.ping(Entity::from_engine(0), PING_AT) {
             Ok(()) => {
                 self.ping_sent.store(true, Ordering::Release);
@@ -519,6 +520,7 @@ impl Checks {
 
     fn refusals(&self) {
         // The engine's 0 on purpose, to see the call refuse it: no public Entity names it.
+        // ast-grep-ignore: entities-through-public-calls
         match self.world.destroy(Entity::from_engine(0)) {
             Err(WorldError::Refused) => pass("destroy refuses entity 0"),
             other => fail(&format!("destroy of entity 0: {other:?}")),

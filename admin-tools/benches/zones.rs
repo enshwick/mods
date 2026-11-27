@@ -18,8 +18,9 @@ use enshwick::{Entity, ItemId};
 )]
 mod game;
 
-/// Ann's and Bob's characters in the tests' fake game.
+/// Ann's character in the tests' fake game.
 const ANN: Entity = Entity::from_raw(10).unwrap();
+/// Bob's character in the tests' fake game.
 const BOB: Entity = Entity::from_raw(11).unwrap();
 
 /// Bob's placement at `at` metres, as the cursor check hands it over.

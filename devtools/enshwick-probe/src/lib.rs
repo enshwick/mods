@@ -235,7 +235,7 @@ fn rename_allowed(text: &str) -> bool {
     text != REFUSED_NAME
 }
 
-//// The entity a number argument names, which the platform kept within its
+/// The entity a number argument names, which the platform kept within its
 /// range; `None` for 0, the engine's no entity.
 #[expect(
     clippy::cast_possible_truncation,
@@ -246,9 +246,16 @@ const fn entity_of(value: f64) -> Option<Entity> {
     Entity::from_raw(value as u32)
 }
 
-/// The answer to an action that names entity 0.
-fn no_entity() -> Outcome {
-    Outcome::refused("0 is no entity")
+/// The answer of an action whose one argument is an entity: `then`'s text
+/// for the entity, a refusal for 0 or any other arguments.
+fn on_entity(args: &[Value], then: impl FnOnce(Entity) -> String) -> Outcome {
+    match args {
+        [Value::Number(n)] => entity_of(*n).map_or_else(
+            || Outcome::refused("0 is no entity"),
+            |entity| Outcome::done(then(entity)),
+        ),
+        _ => Outcome::refused(""),
+    }
 }
 
 /// The keys of the actions, as action and default key: Shift with F2 to F6
@@ -284,7 +291,7 @@ fn actions(
         .ok();
     let actions = load.actions(Texts::default())?;
     let admin = |id: &str, label: &str| Action::new(id, label).admins();
-    let entity = || Arg::number("Entity", 0.0..=f64::from(u32::MAX), 1.0);
+    let entity = || Arg::number("Entity", 1.0..=f64::from(u32::MAX), 1.0);
 
     actions.add(admin("census", "Game events counted"), move |_| {
         Outcome::done(census.lines().join("\n"))
@@ -307,31 +314,17 @@ fn actions(
     let vitals = Arc::clone(checks);
     actions.add(
         admin("vitals", "An entity's vitals").arg(entity()),
-        move |request| match request.args {
-            [Value::Number(n)] => entity_of(*n)
-                .map_or_else(no_entity, |entity| Outcome::done(vitals.vitals_of(entity))),
-            _ => Outcome::refused(""),
-        },
+        move |request| on_entity(request.args, |entity| vitals.vitals_of(entity)),
     )?;
     let destroying = Arc::clone(checks);
     actions.add(
         admin("destroy", "Destroy an entity").arg(entity()),
-        move |request| match request.args {
-            [Value::Number(n)] => entity_of(*n).map_or_else(no_entity, |entity| {
-                Outcome::done(destroying.destroy(entity))
-            }),
-            _ => Outcome::refused(""),
-        },
+        move |request| on_entity(request.args, |entity| destroying.destroy(entity)),
     )?;
     let spawning = Arc::clone(checks);
     actions.add(
         admin("spawn", "Spawn a copy of an entity").arg(entity()),
-        move |request| match request.args {
-            [Value::Number(n)] => entity_of(*n).map_or_else(no_entity, |entity| {
-                Outcome::done(spawning.spawn_copy(entity))
-            }),
-            _ => Outcome::refused(""),
-        },
+        move |request| on_entity(request.args, |entity| spawning.spawn_copy(entity)),
     )?;
     let respawns = Arc::clone(checks);
     actions.add(admin("respawn", "Your respawn point"), move |request| {
@@ -524,6 +517,24 @@ mod tests {
         assert!(!rename_allowed(REFUSED_NAME));
         assert!(rename_allowed("Chest"));
         assert!(rename_allowed(""));
+    }
+
+    #[test]
+    fn an_entity_action_refuses_entity_0_without_running() {
+        let mut ran = false;
+        let answer = on_entity(&[Value::Number(0.0)], |_| {
+            ran = true;
+            String::new()
+        });
+        assert_eq!(answer, Outcome::refused("0 is no entity"));
+        assert!(!ran);
+    }
+
+    #[test]
+    fn an_entity_action_runs_on_the_entity_its_argument_names() {
+        let answer = on_entity(&[Value::Number(10.0)], |entity| entity.get().to_string());
+        assert_eq!(answer, Outcome::done("10"));
+        assert_eq!(on_entity(&[], |_| String::new()), Outcome::refused(""));
     }
 
     #[test]

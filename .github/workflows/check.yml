@@ -160,7 +160,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          tools: cargo-nextest@0.9.152,cargo-deny@0.22.0,cargo-machete@0.10.1
+          tools: cargo-nextest@0.9.152,cargo-deny@0.22.1,cargo-machete@0.10.1
           ast-grep: true
           gh: ${{ startsWith(github.head_ref || github.ref_name, 'release-plz-') }}
 
